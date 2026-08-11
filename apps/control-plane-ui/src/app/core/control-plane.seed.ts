@@ -1,0 +1,116 @@
+import { CatalogInstance, SyncConfiguration, TrustGrant } from './control-plane.models';
+
+export const ESTV_CATALOG_ID = '11111111-1111-4111-8111-111111111111';
+export const SG_CATALOG_ID = '22222222-2222-4222-8222-222222222222';
+export const BIT_CATALOG_ID = '33333333-3333-4333-8333-333333333333';
+
+export const FALLBACK_CATALOGS: readonly CatalogInstance[] = [
+  {
+    id: ESTV_CATALOG_ID,
+    name: 'ESTV Data Catalog',
+    organization: 'Eidgenössische Steuerverwaltung ESTV',
+    environment: 'production',
+    endpoint: 'https://catalog.estv.admin.ch',
+    version: '0.1.0-poc',
+    lifecycle: 'active',
+    health: 'healthy',
+    latencyMs: 42,
+    desiredRevision: 12,
+    observedRevision: 12,
+    capabilities: ['metadata', 'lineage', 'provenance', 'policies', 'http-rest', 'postgresql'],
+    lastSeenAt: '2026-08-03T09:14:22Z',
+  },
+  {
+    id: SG_CATALOG_ID,
+    name: 'Kanton St. Gallen Catalog',
+    organization: 'Kanton St. Gallen',
+    environment: 'production',
+    endpoint: 'https://catalog.sg.ch',
+    version: '0.1.0-poc',
+    lifecycle: 'active',
+    health: 'healthy',
+    latencyMs: 58,
+    desiredRevision: 8,
+    observedRevision: 8,
+    capabilities: ['metadata', 'lineage', 'provenance', 'http-rest', 'postgresql'],
+    lastSeenAt: '2026-08-03T09:14:18Z',
+  },
+  {
+    id: BIT_CATALOG_ID,
+    name: 'BIT Integration Catalog',
+    organization: 'Bundesamt für Informatik und Telekommunikation BIT',
+    environment: 'integration',
+    endpoint: 'https://catalog.int.bit.admin.ch',
+    version: '0.1.0-poc',
+    lifecycle: 'active',
+    health: 'degraded',
+    latencyMs: 318,
+    desiredRevision: 21,
+    observedRevision: 20,
+    capabilities: ['metadata', 'lineage', 'provenance', 'policies', 'http-rest', 'postgresql'],
+    lastSeenAt: '2026-08-03T09:13:54Z',
+  },
+];
+
+export const FALLBACK_TRUST_GRANTS: readonly TrustGrant[] = [
+  {
+    id: 'grant-estv-sg',
+    providerId: ESTV_CATALOG_ID,
+    consumerId: SG_CATALOG_ID,
+    state: 'approved',
+    validFrom: '2026-01-01T00:00:00Z',
+    validUntil: '2027-01-01T00:00:00Z',
+    resourceTypes: ['metadata', 'lineage', 'provenance'],
+    ownerFilter: 'ESTV',
+  },
+  {
+    id: 'grant-sg-estv',
+    providerId: SG_CATALOG_ID,
+    consumerId: ESTV_CATALOG_ID,
+    state: 'approved',
+    validFrom: '2026-01-01T00:00:00Z',
+    validUntil: '2027-01-01T00:00:00Z',
+    resourceTypes: ['metadata', 'lineage'],
+  },
+  {
+    id: 'grant-estv-bit',
+    providerId: ESTV_CATALOG_ID,
+    consumerId: BIT_CATALOG_ID,
+    state: 'draft',
+    validFrom: '2026-08-01T00:00:00Z',
+    validUntil: '2026-12-31T23:59:59Z',
+    resourceTypes: ['metadata'],
+    domainFilter: 'Public finance',
+  },
+];
+
+export const FALLBACK_SYNC_CONFIGS: readonly SyncConfiguration[] = [
+  {
+    id: 'sync-estv-sg',
+    name: 'ESTV → SG governance metadata',
+    sourceId: ESTV_CATALOG_ID,
+    targetId: SG_CATALOG_ID,
+    direction: 'push',
+    resourceScopes: ['metadata', 'lineage', 'provenance'],
+    schedule: 'Every 15 minutes',
+    enabled: true,
+    conflictStrategy: 'origin-wins',
+    trustGrantId: 'grant-estv-sg',
+    lastValidation: 'valid',
+    revision: 4,
+  },
+  {
+    id: 'sync-estv-bit',
+    name: 'ESTV → BIT metadata preview',
+    sourceId: ESTV_CATALOG_ID,
+    targetId: BIT_CATALOG_ID,
+    direction: 'push',
+    resourceScopes: ['metadata'],
+    schedule: 'Every hour',
+    enabled: false,
+    conflictStrategy: 'origin-wins',
+    trustGrantId: 'grant-estv-bit',
+    lastValidation: 'blocked',
+    revision: 1,
+  },
+];

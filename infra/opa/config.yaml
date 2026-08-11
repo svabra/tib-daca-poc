@@ -1,0 +1,22 @@
+services:
+  didaca_catalog:
+    url: http://catalog-api:8001
+  didaca_catalog_status:
+    url: http://catalog-api:8001/api/v1/internal/opa
+    credentials:
+      bearer:
+        token: local-development-only
+
+bundles:
+  didaca:
+    service: didaca_catalog
+    resource: api/v1/opa/bundles/catalog.tar.gz
+    polling:
+      min_delay_seconds: 2
+      max_delay_seconds: 5
+
+decision_logs:
+  console: true
+
+status:
+  service: didaca_catalog_status

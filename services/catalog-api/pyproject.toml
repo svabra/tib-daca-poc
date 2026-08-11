@@ -1,0 +1,38 @@
+[project]
+name = "didaca-catalog-api"
+version = "0.1.0"
+description = "Standalone metadata catalog and policy administration API for BIT DiDaCa"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+  "alembic==1.16.5",
+  "fastapi==0.139.2",
+  "httpx==0.28.1",
+  "psycopg[binary]==3.3.4",
+  "pydantic-settings==2.10.1",
+  "sqlalchemy==2.0.51",
+  "uvicorn==0.35.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.4.1,<9",
+  "pytest-cov>=6.2.1,<7",
+]
+
+[project.scripts]
+didaca-catalog-seed = "didaca_catalog.seed:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/didaca_catalog"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["didaca_catalog"]

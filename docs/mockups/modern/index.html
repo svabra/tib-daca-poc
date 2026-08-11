@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="../../../packages/design-system/assets/favicon.ico">
+  <title>BIT DiDaCa — Modern design concepts</title>
+  <style>
+    :root {
+      --red: #d52b1e;
+      --red-dark: #a51e15;
+      --red-soft: #fff0ee;
+      --blue: #0b4479;
+      --blue-bright: #1769aa;
+      --blue-soft: #eaf3fa;
+      --amber: #b96d00;
+      --amber-soft: #fff3db;
+      --green: #14734b;
+      --green-soft: #e7f6ee;
+      --ink: #17212b;
+      --muted: #61707c;
+      --line: #d9e0e5;
+      --paper: #fff;
+      --canvas: #f3f6f8;
+      --shadow: 0 14px 38px rgba(25, 42, 58, .09);
+      --font: "Frutiger", "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
+      --mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { min-width: 1180px; background: var(--canvas); color: var(--ink); font-family: var(--font); }
+    body { margin: 0; min-height: 100vh; background: var(--canvas); }
+    button, input, select, textarea { font: inherit; }
+    a { color: inherit; }
+    button, a, input, select, textarea { outline-offset: 3px; }
+    :focus-visible { outline: 3px solid rgba(11, 68, 121, .38); }
+    .skip { position: fixed; z-index: 30; left: 12px; top: 8px; transform: translateY(-150%); padding: 9px 12px; background: #111; color: #fff; }
+    .skip:focus { transform: none; }
+
+    .authority {
+      height: 30px;
+      border-bottom: 1px solid #d8d8d8;
+      background: #f4f4f4;
+      color: #42484d;
+      font-size: 11px;
+    }
+    .authority__inner, .brand__inner, .viewbar__inner {
+      width: min(100% - 64px, 1536px);
+      height: 100%;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .languages { display: flex; align-self: stretch; }
+    .languages span { display: grid; place-items: center; min-width: 34px; font-weight: 650; }
+    .languages .active { background: #fff; color: #111; }
+    .brand {
+      height: 78px;
+      border-bottom: 4px solid var(--red);
+      background: #fff;
+    }
+    .brand__logo { width: 214px; height: auto; display: block; }
+    .brand__product { display: flex; align-items: center; gap: 18px; margin-left: 38px; padding-left: 38px; border-left: 1px solid var(--line); }
+    .brand__product small { display: block; margin-bottom: 2px; color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+    .brand__product strong { font-size: 18px; letter-spacing: -.01em; }
+    .brand__left { display: flex; align-items: center; }
+    .brand__right { display: flex; align-items: center; gap: 16px; }
+    .environment { display: flex; align-items: center; gap: 8px; color: #43505a; font-size: 12px; }
+    .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px var(--green-soft); }
+    .avatar { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 11px; font-weight: 800; }
+
+    .viewbar { height: 48px; border-bottom: 1px solid var(--line); background: #fff; box-shadow: 0 6px 18px rgba(32, 48, 61, .04); }
+    .viewbar__label { display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 760; }
+    .viewbar__label svg { width: 17px; color: var(--red); }
+    .concepts { display: flex; align-self: stretch; gap: 2px; }
+    .concepts a { position: relative; display: flex; align-items: center; padding: 0 18px; color: var(--muted); font-size: 12px; font-weight: 680; text-decoration: none; }
+    .concepts a:hover { background: #f8fafb; color: var(--ink); }
+    .concepts a.active { color: var(--red); }
+    .concepts a.active::after { content: ""; position: absolute; right: 16px; bottom: -1px; left: 16px; height: 3px; background: var(--red); }
+    .concepts b { margin-right: 7px; color: #98a2aa; font-family: var(--mono); font-size: 10px; }
+
+    main { width: min(100% - 64px, 1536px); margin: 0 auto; padding: 24px 0 30px; }
+    .eyebrow { margin: 0 0 6px; color: var(--red); font-size: 10px; font-weight: 850; letter-spacing: .11em; text-transform: uppercase; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 7px; font-size: 30px; line-height: 1.07; letter-spacing: -.035em; }
+    h2 { font-size: 15px; letter-spacing: -.01em; }
+    h3 { font-size: 13px; }
+    .lede { max-width: 770px; margin-bottom: 0; color: var(--muted); font-size: 13px; line-height: 1.48; }
+    .page-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 22px; margin-bottom: 18px; }
+    .page-actions { display: flex; gap: 8px; }
+    .button { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--line); border-radius: 7px; padding: 7px 13px; background: #fff; color: var(--ink); font-size: 12px; font-weight: 760; cursor: pointer; }
+    .button.primary { border-color: var(--red); background: var(--red); color: #fff; }
+    .button svg { width: 15px; }
+    .button.primary:hover { background: var(--red-dark); }
+    .status { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #b9decf; border-radius: 999px; padding: 3px 8px; background: var(--green-soft); color: var(--green); font-size: 10px; font-weight: 800; white-space: nowrap; }
+    .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .status.amber { border-color: #ead2a8; background: var(--amber-soft); color: #8a5200; }
+    .status.blue { border-color: #b7cfe2; background: var(--blue-soft); color: var(--blue); }
+    .status.red { border-color: #e6b9b5; background: var(--red-soft); color: var(--red-dark); }
+    .card { border: 1px solid var(--line); border-radius: 10px; background: #fff; box-shadow: var(--shadow); overflow: hidden; }
+    .card-head { min-height: 43px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+    .card-head h2, .card-head h3 { margin: 0; }
+    .card-body { padding: 14px; }
+    .kicker { color: var(--muted); font-size: 10px; font-weight: 720; letter-spacing: .06em; text-transform: uppercase; }
+    .mono { font-family: var(--mono); }
+
+    label { display: grid; gap: 5px; color: #46535d; font-size: 10px; font-weight: 780; letter-spacing: .025em; }
+    input, select, textarea { width: 100%; border: 1px solid #cbd4da; border-radius: 6px; padding: 8px 9px; background: #fff; color: var(--ink); font-size: 12px; }
+    input, select { height: 34px; }
+    textarea { min-height: 56px; resize: none; line-height: 1.35; }
+    .form-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 10px 12px; }
+    .span-2 { grid-column: 1 / -1; }
+    .field-note { color: #7b878f; font-size: 9px; font-weight: 500; }
+    .table-wrap { overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+    th { padding: 7px 9px; background: #f4f7f8; color: #687680; font-size: 8px; letter-spacing: .08em; text-align: left; text-transform: uppercase; }
+    td { padding: 8px 9px; border-top: 1px solid #e4e9ec; vertical-align: middle; }
+    code { border-radius: 4px; padding: 2px 5px; background: #f1f4f6; color: #30414f; font-family: var(--mono); font-size: 9px; }
+    .proto { display: inline-flex; min-width: 72px; align-items: center; gap: 5px; font-weight: 800; }
+    .proto::before { content: ""; width: 7px; height: 7px; border-radius: 2px; background: var(--blue); }
+    .proto.pg::before { background: var(--red); }
+    .muted { color: var(--muted); }
+    .legend { display: flex; flex-wrap: wrap; gap: 10px; color: var(--muted); font-size: 9px; }
+    .legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .legend i { width: 8px; height: 8px; border-radius: 2px; }
+    .legend .source { background: var(--blue); }
+    .legend .transform { background: var(--amber); }
+    .legend .product { background: var(--red); }
+    .legend .consumer { background: var(--green); }
+
+    /* Concept 1: Swiss Grid Workspace */
+    .grid-page { position: relative; }
+    .grid-page::before { content: ""; position: fixed; z-index: -1; inset: 156px 0 0; background-image: linear-gradient(rgba(11, 68, 121, .035) 1px, transparent 1px), linear-gradient(90deg, rgba(11, 68, 121, .035) 1px, transparent 1px); background-size: 28px 28px; }
+    .workspace-grid { display: grid; grid-template-columns: 1.02fr 1.42fr .82fr; grid-template-rows: 276px 235px; gap: 14px; }
+    .workspace-grid .metadata { grid-row: 1 / span 2; }
+    .workspace-grid .lineage { grid-column: 2 / span 2; }
+    .workspace-grid .interfaces { grid-column: 2; }
+    .workspace-grid .evidence { grid-column: 3; }
+    .grid-product-id { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 8px 9px; border-left: 3px solid var(--red); background: var(--red-soft); color: #6b302c; font-size: 9px; }
+    .grid-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 11px; }
+    .grid-meta div { padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: #f9fbfc; }
+    .grid-meta b { display: block; margin-bottom: 2px; color: var(--muted); font-size: 8px; text-transform: uppercase; }
+    .grid-meta span { font-size: 10px; font-weight: 740; }
+    .lineage-svg { display: block; width: 100%; height: 174px; }
+    .lineage-svg text { font-family: var(--font); }
+    .activity-list { display: grid; gap: 9px; }
+    .activity { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; }
+    .activity__icon { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: var(--blue-soft); color: var(--blue); font-size: 9px; font-weight: 900; }
+    .activity p { margin: 1px 0 0; color: #3b4853; font-size: 9.5px; line-height: 1.3; }
+    .activity small { display: block; margin-top: 2px; color: #859099; font-size: 8px; }
+
+    /* Concept 2: Alpine Control Canvas */
+    body[data-view="canvas"] { background: #e9eef2; }
+    body[data-view="canvas"] main { width: calc(100% - 42px); max-width: 1570px; padding-top: 18px; }
+    .canvas-page .page-title { margin: 0 0 14px; padding: 0 4px; }
+    .canvas-shell { height: 604px; display: grid; grid-template-columns: 196px 1fr 318px; border: 1px solid #bec8d0; border-radius: 14px; background: #fff; box-shadow: 0 20px 48px rgba(21, 38, 51, .14); overflow: hidden; }
+    .canvas-nav { padding: 16px 12px; background: #112d45; color: #fff; }
+    .canvas-nav__title { display: flex; align-items: center; gap: 9px; margin: 0 5px 18px; font-size: 11px; font-weight: 800; letter-spacing: .04em; }
+    .canvas-nav__mark { width: 22px; height: 22px; border: 5px solid var(--red); border-radius: 50%; }
+    .canvas-nav small { display: block; margin: 16px 7px 7px; color: #80a0ba; font-size: 8px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .canvas-nav a { display: flex; align-items: center; justify-content: space-between; min-height: 34px; margin: 2px 0; border-radius: 7px; padding: 0 9px; color: #d6e2ea; font-size: 10px; font-weight: 650; text-decoration: none; }
+    .canvas-nav a.active { background: #1d4d73; color: #fff; }
+    .canvas-nav em { min-width: 19px; border-radius: 999px; padding: 2px 5px; background: rgba(255,255,255,.12); font-size: 8px; font-style: normal; text-align: center; }
+    .canvas-nav__health { margin-top: 144px; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 10px; background: rgba(255,255,255,.05); }
+    .canvas-nav__health b { display: block; margin-bottom: 5px; font-size: 9px; }
+    .canvas-nav__health p { margin: 0; color: #b8cbd9; font-size: 8px; line-height: 1.35; }
+    .topology { position: relative; overflow: hidden; border-right: 1px solid var(--line); background: radial-gradient(circle at 48% 42%, #fff 0, #f8fafb 52%, #edf2f5 100%); }
+    .topology::before { content: ""; position: absolute; inset: 0; opacity: .35; background-image: radial-gradient(#8396a5 1px, transparent 1px); background-size: 18px 18px; }
+    .topology-head { position: relative; z-index: 2; display: flex; align-items: flex-start; justify-content: space-between; padding: 15px 17px; }
+    .topology-head h2 { margin: 0 0 3px; font-size: 14px; }
+    .topology-head p { margin: 0; color: var(--muted); font-size: 9px; }
+    .topology-tools { display: flex; gap: 5px; }
+    .tool { display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid var(--line); border-radius: 6px; background: rgba(255,255,255,.9); color: #40515f; font-size: 12px; }
+    .topology-svg { position: relative; z-index: 1; display: block; width: 100%; height: 330px; }
+    .topology-svg text { font-family: var(--font); }
+    .canvas-table { position: absolute; z-index: 3; right: 14px; bottom: 13px; left: 14px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.96); box-shadow: 0 10px 25px rgba(27, 46, 60, .08); overflow: hidden; }
+    .canvas-table__title { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; border-bottom: 1px solid var(--line); font-size: 9px; font-weight: 780; }
+    .inspector { display: flex; min-width: 0; flex-direction: column; background: #fff; }
+    .inspector-head { padding: 14px 15px 11px; border-bottom: 1px solid var(--line); }
+    .inspector-head .kicker { margin-bottom: 5px; }
+    .inspector-head h2 { margin: 0 0 6px; }
+    .inspector-body { display: grid; gap: 9px; padding: 12px 15px; overflow: hidden; }
+    .inspector .form-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .inspector input, .inspector select, .inspector textarea { background: #f9fbfc; }
+    .inspector textarea { min-height: 48px; }
+    .provenance-strip { border: 1px solid var(--line); border-radius: 7px; padding: 8px; background: #f7f9fa; }
+    .provenance-strip strong { display: block; margin-bottom: 6px; font-size: 9px; }
+    .provenance-strip ol { position: relative; display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+    .provenance-strip li { display: grid; grid-template-columns: 8px 1fr auto; gap: 6px; align-items: center; font-size: 8px; }
+    .provenance-strip i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+    .provenance-strip time { color: #89949c; font-family: var(--mono); font-size: 7px; }
+    .inspector-actions { display: grid; grid-template-columns: 1fr 1.2fr; gap: 7px; margin-top: auto; }
+
+    /* Concept 3: Federal Evidence Dossier */
+    body[data-view="dossier"] { background: #edece8; }
+    .dossier-page .page-title { margin-bottom: 13px; }
+    .dossier { position: relative; display: grid; grid-template-columns: 52px 1.05fr 1fr; grid-template-rows: 263px 246px; gap: 0; border: 1px solid #c9c7c0; background: #fff; box-shadow: 0 20px 50px rgba(45, 43, 35, .12); }
+    .dossier::before { content: "CONFIDENTIALITY · INTERNAL"; position: absolute; z-index: 4; top: 17px; right: -7px; border: 1px solid #e0b7b2; padding: 4px 9px; background: #fff4f2; color: var(--red); font-family: var(--mono); font-size: 7px; font-weight: 800; letter-spacing: .09em; transform: rotate(2deg); }
+    .dossier-index { grid-row: 1 / span 2; display: flex; align-items: center; justify-content: center; border-right: 1px solid #d8d5ce; background: #f5f3ee; }
+    .dossier-index span { color: #7d7a70; font-family: var(--mono); font-size: 8px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; writing-mode: vertical-rl; transform: rotate(180deg); }
+    .dossier-section { position: relative; min-width: 0; padding: 16px 18px; border-right: 1px solid #dedbd4; border-bottom: 1px solid #dedbd4; }
+    .dossier-section:nth-last-child(-n + 2) { border-bottom: 0; }
+    .dossier-section:last-child { border-right: 0; }
+    .section-number { position: absolute; top: 14px; right: 15px; color: #d7d5cf; font-family: Georgia, serif; font-size: 28px; line-height: 1; }
+    .dossier-section .eyebrow { margin-bottom: 4px; font-size: 8px; }
+    .dossier-section h2 { margin: 0 0 4px; font-family: Georgia, "Times New Roman", serif; font-size: 17px; font-weight: 500; }
+    .dossier-section .intro { max-width: 90%; margin-bottom: 10px; color: #6c6962; font-family: Georgia, "Times New Roman", serif; font-size: 9.5px; line-height: 1.42; }
+    .dossier .form-grid { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .dossier label { font-size: 8px; letter-spacing: .06em; text-transform: uppercase; }
+    .dossier input, .dossier select, .dossier textarea { height: 30px; border-width: 0 0 1px; border-radius: 0; padding: 5px 2px; background: transparent; font-family: Georgia, "Times New Roman", serif; font-size: 10px; }
+    .dossier textarea { min-height: 38px; }
+    .dossier .full { grid-column: 1 / -1; }
+    .dossier-svg { display: block; width: 100%; height: 146px; }
+    .dossier-svg text { font-family: var(--font); }
+    .evidence-ledger { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 7px; }
+    .evidence-ledger p { margin: 0; color: #68665f; font-size: 8px; line-height: 1.35; }
+    .seal { display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid #adc8bc; border-radius: 50%; color: var(--green); font-family: Georgia, serif; font-size: 7px; font-weight: 700; text-align: center; transform: rotate(-7deg); }
+    .manifest table { margin-top: 7px; border: 1px solid #dedbd4; }
+    .manifest th { background: #f4f2ed; color: #6d6961; }
+    .manifest td { padding-block: 7px; border-color: #e5e1d9; }
+    .dossier-timeline { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 11px; border-top: 1px solid #dbd8d0; padding-top: 10px; }
+    .dossier-event { position: relative; padding-left: 11px; color: #66635d; font-size: 8px; line-height: 1.32; }
+    .dossier-event::before { content: ""; position: absolute; left: 0; top: 2px; width: 5px; height: 5px; border-radius: 50%; background: var(--red); }
+    .dossier-event b { display: block; color: var(--ink); font-size: 8px; }
+    .dossier-event time { color: #969189; font-family: var(--mono); font-size: 7px; }
+
+    /* Concept 4: Glass Observatory */
+    body[data-view="glass"] { background: #071b2d; }
+    body[data-view="glass"] .viewbar { border-color: rgba(255,255,255,.4); background: rgba(255,255,255,.94); backdrop-filter: blur(18px); }
+    body[data-view="glass"] main {
+      width: 100%;
+      max-width: none;
+      min-height: 744px;
+      padding: 0;
+      background:
+        radial-gradient(circle at 13% 4%, rgba(39, 151, 255, .42), transparent 29%),
+        radial-gradient(circle at 88% 18%, rgba(229, 43, 61, .36), transparent 33%),
+        radial-gradient(circle at 72% 90%, rgba(110, 60, 210, .32), transparent 34%),
+        linear-gradient(135deg, #061a2c 0%, #0b3d69 46%, #34245f 72%, #631f48 100%);
+      overflow: hidden;
+    }
+    .glass-page { width: min(100% - 64px, 1536px); margin: 0 auto; padding: 17px 0 20px; color: #f8fbff; }
+    .glass-hero {
+      position: relative;
+      height: 112px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      align-items: center;
+      gap: 22px;
+      border: 1px solid rgba(255,255,255,.3);
+      border-radius: 20px;
+      padding: 17px 20px;
+      background:
+        linear-gradient(115deg, rgba(9, 62, 107, .84), rgba(48, 83, 157, .64) 55%, rgba(198, 36, 65, .72)),
+        rgba(255,255,255,.08);
+      box-shadow: 0 22px 55px rgba(0, 11, 28, .34), inset 0 1px 0 rgba(255,255,255,.28);
+      backdrop-filter: blur(24px) saturate(130%);
+      overflow: hidden;
+    }
+    .glass-hero::after { content: ""; position: absolute; width: 310px; height: 310px; right: 8%; top: -245px; border: 1px solid rgba(255,255,255,.24); border-radius: 50%; box-shadow: 0 0 70px rgba(255,255,255,.13); }
+    .glass-hero .eyebrow { margin-bottom: 4px; color: #ffb9b9; }
+    .glass-hero h1 { margin: 0 0 5px; color: #fff; font-size: 29px; }
+    .glass-hero .lede { max-width: 720px; color: rgba(244,250,255,.8); font-size: 11.5px; }
+    .glass-hero-stats { display: flex; gap: 9px; }
+    .glass-stat { min-width: 88px; border: 1px solid rgba(255,255,255,.22); border-radius: 13px; padding: 9px 11px; background: rgba(255,255,255,.11); box-shadow: inset 0 1px 0 rgba(255,255,255,.16); backdrop-filter: blur(12px); }
+    .glass-stat b { display: block; color: #fff; font-size: 16px; }
+    .glass-stat span { color: rgba(238,246,252,.72); font-size: 8px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+    .glass-actions { position: relative; z-index: 1; display: flex; gap: 8px; }
+    .glass-button { min-height: 36px; border: 1px solid rgba(255,255,255,.34); border-radius: 11px; padding: 7px 13px; background: rgba(255,255,255,.12); color: #fff; font-size: 11px; font-weight: 760; box-shadow: inset 0 1px 0 rgba(255,255,255,.18); backdrop-filter: blur(12px); }
+    .glass-button.primary { border-color: rgba(255,255,255,.36); background: rgba(224, 0, 26, .9); box-shadow: 0 10px 26px rgba(113, 0, 19, .28), inset 0 1px 0 rgba(255,255,255,.22); }
+    .glass-layout { height: 548px; display: grid; grid-template-columns: 420px minmax(0, 1fr) 316px; grid-template-rows: 364px 170px; gap: 14px; margin-top: 14px; }
+    .glass-panel { min-width: 0; border: 1px solid rgba(255,255,255,.27); border-radius: 18px; background: rgba(255,255,255,.11); box-shadow: 0 22px 48px rgba(0,12,32,.26), inset 0 1px 0 rgba(255,255,255,.18); backdrop-filter: blur(22px) saturate(125%); overflow: hidden; }
+    .glass-panel-head { min-height: 47px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.18); }
+    .glass-panel-head h2 { margin: 0; color: #fff; font-size: 14px; }
+    .glass-panel-head p { margin: 2px 0 0; color: rgba(235,246,255,.68); font-size: 8.5px; }
+    .glass-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(255,255,255,.28); border-radius: 99px; padding: 4px 8px; background: rgba(255,255,255,.12); color: #fff; font-size: 8px; font-weight: 780; white-space: nowrap; }
+    .glass-chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #57e3a5; box-shadow: 0 0 12px rgba(87,227,165,.8); }
+    .glass-form { grid-row: 1 / span 2; background: linear-gradient(155deg, rgba(255,255,255,.93), rgba(224,239,250,.82)); color: var(--ink); }
+    .glass-form .glass-panel-head { background: linear-gradient(120deg, rgba(11,68,121,.98), rgba(45,101,164,.85), rgba(81,57,143,.82)); }
+    .glass-form-body { padding: 13px 14px; }
+    .glass-form .record-key { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 11px; border-radius: 10px; padding: 8px 9px; background: rgba(11,68,121,.08); color: #31536e; font-size: 8px; }
+    .glass-form .form-grid { gap: 9px 10px; }
+    .glass-form label { color: #435665; font-size: 9px; }
+    .glass-form input, .glass-form select, .glass-form textarea { border-color: rgba(83,115,139,.28); border-radius: 9px; background: rgba(255,255,255,.66); box-shadow: inset 0 1px 2px rgba(20,53,76,.04); }
+    .glass-form textarea { min-height: 52px; }
+    .glass-score-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 11px; }
+    .glass-score { border: 1px solid rgba(73,107,132,.18); border-radius: 11px; padding: 8px 9px; background: rgba(255,255,255,.53); }
+    .glass-score b { display: block; color: var(--ink); font-size: 11px; }
+    .glass-score span { color: #6d7e8b; font-size: 7.5px; font-weight: 760; text-transform: uppercase; }
+    .glass-chart { grid-column: 2 / span 2; background: linear-gradient(135deg, rgba(4,31,55,.62), rgba(22,83,135,.43) 51%, rgba(111,29,91,.44)); }
+    .glass-chart .glass-panel-head { background: linear-gradient(90deg, rgba(21,117,189,.38), rgba(154,42,111,.3)); }
+    .glass-legend { display: flex; gap: 11px; color: rgba(242,248,253,.74); font-size: 8px; }
+    .glass-legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .glass-legend i { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 10px currentColor; }
+    .glass-lineage { display: block; width: 100%; height: 309px; }
+    .glass-lineage text { font-family: var(--font); }
+    .glass-table { grid-column: 2; background: rgba(242,249,253,.84); color: var(--ink); }
+    .glass-table .glass-panel-head { min-height: 43px; background: linear-gradient(100deg, rgba(11,68,121,.96), rgba(43,104,161,.82)); }
+    .glass-table table { font-size: 9.5px; }
+    .glass-table th { padding: 6px 9px; background: rgba(17,63,99,.08); }
+    .glass-table td { padding: 7px 9px; border-color: rgba(64,100,127,.14); }
+    .glass-provenance { grid-column: 3; background: rgba(255,255,255,.15); }
+    .glass-provenance .glass-panel-head { min-height: 43px; background: linear-gradient(100deg, rgba(213,43,30,.9), rgba(185,55,106,.75)); }
+    .glass-events { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; padding: 12px; }
+    .glass-event { min-width: 0; border: 1px solid rgba(255,255,255,.2); border-radius: 11px; padding: 8px; background: rgba(255,255,255,.1); color: rgba(242,248,252,.72); font-size: 7.5px; line-height: 1.35; }
+    .glass-event i { display: block; width: 21px; height: 21px; margin-bottom: 6px; border-radius: 8px; background: rgba(255,255,255,.16); color: #fff; font-style: normal; font-weight: 800; line-height: 21px; text-align: center; }
+    .glass-event b { display: block; margin-bottom: 2px; color: #fff; font-size: 8.5px; }
+    .glass-event time { display: block; margin-top: 4px; color: rgba(227,240,249,.52); font-family: var(--mono); font-size: 6.5px; }
+
+    /* Concept 5: Red Glass Federal Workspace */
+    body[data-view="redglass"] { background: #f2f4f6; }
+    body[data-view="redglass"] main {
+      width: 100%;
+      max-width: none;
+      min-height: 744px;
+      padding: 0;
+      background:
+        radial-gradient(circle at 10% 6%, rgba(213,43,30,.16), transparent 27%),
+        radial-gradient(circle at 88% 28%, rgba(224,0,26,.1), transparent 25%),
+        radial-gradient(circle at 70% 94%, rgba(11,68,121,.06), transparent 28%),
+        linear-gradient(150deg, #fafbfc 0%, #f4f6f8 48%, #eef2f5 100%);
+      overflow: hidden;
+    }
+    .rg-page { width: min(100% - 64px, 1536px); margin: 0 auto; padding: 17px 0 20px; color: var(--ink); }
+    .rg-hero {
+      position: relative;
+      height: 112px;
+      display: grid;
+      grid-template-columns: minmax(0,1fr) auto auto;
+      align-items: center;
+      gap: 20px;
+      border: 1px solid rgba(151,25,34,.26);
+      border-radius: 3px;
+      padding: 17px 20px;
+      background:
+        linear-gradient(118deg, rgba(151,25,34,.69), rgba(213,43,30,.53) 55%, rgba(224,0,26,.37)),
+        rgba(213,43,30,.24);
+      box-shadow: 0 14px 32px rgba(119,21,25,.13), inset 0 1px 0 rgba(255,255,255,.46);
+      backdrop-filter: blur(26px) saturate(118%);
+      overflow: hidden;
+    }
+    .rg-hero::before { content: ""; position: absolute; width: 390px; height: 118px; right: -72px; top: -72px; border: 1px solid rgba(255,255,255,.25); transform: rotate(-11deg); box-shadow: 0 0 55px rgba(255,255,255,.07); }
+    .rg-hero::after { content: ""; position: absolute; width: 220px; height: 64px; left: 55%; bottom: -52px; background: rgba(255,255,255,.07); transform: skewX(-24deg); }
+    .rg-hero .eyebrow { margin-bottom: 4px; color: #ffd6d2; }
+    .rg-hero h1 { margin: 0 0 5px; color: #fff; font-size: 29px; }
+    .rg-hero .lede { max-width: 720px; color: rgba(255,247,246,.84); font-size: 11.5px; }
+    .rg-stats { position: relative; z-index: 1; display: flex; gap: 8px; }
+    .rg-stat { min-width: 88px; border: 1px solid rgba(255,255,255,.86); border-radius: 2px; padding: 9px 11px; background: linear-gradient(145deg, rgba(255,255,255,.92), rgba(255,255,255,.72)); color: #25323b; box-shadow: 0 8px 18px rgba(80,17,20,.09), inset 0 1px 0 #fff; backdrop-filter: blur(18px) saturate(80%); }
+    .rg-stat b { display: block; font-size: 16px; }
+    .rg-stat span { color: #6a747b; font-size: 8px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+    .rg-actions { position: relative; z-index: 1; display: flex; gap: 8px; }
+    .rg-button { min-height: 36px; border: 1px solid rgba(255,255,255,.84); border-radius: 2px; padding: 7px 13px; background: rgba(255,255,255,.7); color: #5f2527; font-size: 11px; font-weight: 780; box-shadow: 0 7px 16px rgba(80,17,20,.08), inset 0 1px 0 #fff; backdrop-filter: blur(18px) saturate(76%); }
+    .rg-button.primary { background: rgba(255,255,255,.94); color: #8e1d17; box-shadow: 0 8px 20px rgba(98,14,19,.11); }
+    .rg-layout { height: 548px; display: grid; grid-template-columns: 420px minmax(0,1fr) 316px; grid-template-rows: 364px 170px; gap: 14px; margin-top: 14px; }
+    .rg-panel { min-width: 0; border: 1px solid rgba(166,181,191,.58); border-radius: 3px; background: rgba(255,255,255,.7); box-shadow: 0 13px 30px rgba(17,33,51,.07); backdrop-filter: blur(18px) saturate(112%); overflow: hidden; }
+    .rg-titlebar { min-height: 47px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.31); background: linear-gradient(108deg, rgba(165,29,19,.7), rgba(213,43,30,.49)); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.3); backdrop-filter: blur(20px); }
+    .rg-titlebar h2 { margin: 0; color: #fff; font-size: 14px; }
+    .rg-titlebar p { margin: 2px 0 0; color: rgba(255,245,244,.74); font-size: 8.5px; }
+    .rg-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(255,255,255,.4); border-radius: 2px; padding: 4px 8px; background: rgba(255,255,255,.1); color: #fff; font-size: 8px; font-weight: 780; white-space: nowrap; }
+    .rg-chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #70efb5; box-shadow: 0 0 9px rgba(112,239,181,.75); }
+    .rg-metadata { grid-row: 1 / span 2; background: rgba(255,255,255,.76); }
+    .rg-form-body { padding: 13px 14px; }
+    .rg-key { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 11px; border: 1px solid rgba(190,202,211,.68); border-radius: 2px; padding: 8px 9px; background: rgba(245,247,249,.55); color: #526776; font-size: 8px; }
+    .rg-metadata .form-grid { gap: 9px 10px; }
+    .rg-metadata label { color: #43535f; font-size: 9px; }
+    .rg-metadata input, .rg-metadata select, .rg-metadata textarea { border-color: rgba(173,189,200,.76); border-radius: 1px; background: rgba(255,255,255,.74); }
+    .rg-metadata textarea { min-height: 52px; }
+    .rg-score-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-top: 11px; }
+    .rg-score { border: 1px solid rgba(198,208,215,.65); border-radius: 2px; padding: 8px 9px; background: rgba(247,249,250,.52); }
+    .rg-score b { display: block; font-size: 11px; }
+    .rg-score span { color: #72808a; font-size: 7.5px; font-weight: 760; text-transform: uppercase; }
+    .rg-chart { grid-column: 2 / span 2; border-color: rgba(175,189,199,.62); background:
+      radial-gradient(circle at 67% 58%, rgba(213,43,30,.045), transparent 34%),
+      linear-gradient(135deg, rgba(255,255,255,.9), rgba(247,249,250,.82));
+      box-shadow: 0 14px 30px rgba(17,33,51,.07), inset 0 1px 0 rgba(255,255,255,.9);
+      backdrop-filter: blur(20px) saturate(92%);
+    }
+    .rg-chart .rg-titlebar { border-bottom-color: rgba(185,196,204,.55); background: rgba(255,255,255,.72); color: #1d2a33; box-shadow: inset 0 1px 0 #fff; }
+    .rg-chart .rg-titlebar h2 { color: #711b20; }
+    .rg-chart .rg-titlebar p { color: #6d7a83; }
+    .rg-legend { display: flex; gap: 11px; color: #586772; font-size: 8px; }
+    .rg-legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .rg-legend i { width: 7px; height: 7px; border-radius: 50%; }
+    .rg-lineage { display: block; width: 100%; height: 309px; }
+    .rg-lineage text { font-family: var(--font); }
+    .rg-table { grid-column: 2; background: rgba(255,255,255,.74); }
+    .rg-table .rg-titlebar { min-height: 43px; }
+    .rg-table table { font-size: 10px; }
+    .rg-table th { padding: 6px 9px; background: #f4f6f8; }
+    .rg-table td { padding: 7px 9px; border-color: #e1e6ea; }
+    .rg-provenance { grid-column: 3; border-color: rgba(190,42,40,.24); background: linear-gradient(135deg, rgba(154,25,34,.62), rgba(213,43,30,.4)); box-shadow: 0 14px 30px rgba(119,21,25,.12), inset 0 1px 0 rgba(255,255,255,.34); backdrop-filter: blur(25px); }
+    .rg-provenance .rg-titlebar { min-height: 43px; background: rgba(255,255,255,.08); }
+    .rg-events { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; padding: 12px; }
+    .rg-event { min-width: 0; border: 1px solid rgba(255,255,255,.32); border-radius: 2px; padding: 8px; background: rgba(255,255,255,.09); color: rgba(255,244,243,.8); font-size: 7.5px; line-height: 1.35; box-shadow: inset 0 1px 0 rgba(255,255,255,.17); }
+    .rg-event i { display: block; width: 21px; height: 21px; margin-bottom: 6px; border-radius: 2px; background: rgba(255,255,255,.13); color: #fff; font-style: normal; font-weight: 800; line-height: 21px; text-align: center; }
+    .rg-event b { display: block; margin-bottom: 2px; color: #fff; font-size: 8.5px; }
+    .rg-event time { display: block; margin-top: 4px; color: rgba(255,235,233,.58); font-family: var(--mono); font-size: 6.5px; }
+
+    .unknown { display: grid; min-height: 560px; place-items: center; text-align: center; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main-content">Skip to workspace</a>
+  <div class="authority">
+    <div class="authority__inner">
+      <span>The federal authorities of the Swiss Confederation</span>
+      <div class="languages" aria-label="Language selection"><span>DE</span><span>FR</span><span>IT</span><span>RM</span><span class="active">EN</span></div>
+    </div>
+  </div>
+  <header class="brand">
+    <div class="brand__inner">
+      <div class="brand__left">
+        <img class="brand__logo" src="../../../packages/design-system/assets/swiss-confederation-logo.png" alt="Swiss Confederation">
+        <div class="brand__product"><div><small>Federal Office of Information Technology</small><strong>BIT DiDaCa</strong></div></div>
+      </div>
+      <div class="brand__right"><span class="environment"><i class="pulse"></i>Catalog CH-001 live</span><span class="avatar">BK</span></div>
+    </div>
+  </header>
+  <nav class="viewbar" aria-label="Design concept selector">
+    <div class="viewbar__inner">
+      <span class="viewbar__label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>
+        Product workspace <span class="muted">/ ESTV tax statistics</span>
+      </span>
+      <div class="concepts">
+        <a data-view-link="grid" href="?view=grid"><b>01</b>Swiss Grid</a>
+        <a data-view-link="canvas" href="?view=canvas"><b>02</b>Alpine Canvas</a>
+        <a data-view-link="dossier" href="?view=dossier"><b>03</b>Evidence Dossier</a>
+        <a data-view-link="glass" href="?view=glass"><b>04</b>Glass Observatory</a>
+        <a data-view-link="redglass" href="?view=redglass"><b>05</b>Red Glass</a>
+      </div>
+    </div>
+  </nav>
+  <main id="main-content"></main>
+
+  <template id="grid-view">
+    <div class="grid-page">
+      <header class="page-title">
+        <div><p class="eyebrow">Concept 01 · Swiss Grid Workspace</p><h1>Shape the product. See the evidence.</h1><p class="lede">A modular editing desk keeps metadata, delivery interfaces, lineage and evidence in one scan. Every saved field advances a traceable catalog revision.</p></div>
+        <div class="page-actions"><button class="button">Preview record</button><button class="button primary">Save revision 18</button></div>
+      </header>
+      <section class="workspace-grid" aria-label="Product editing workspace">
+        <article class="card metadata">
+          <div class="card-head"><h2>Metadata record</h2><span class="status amber">Draft changes</span></div>
+          <div class="card-body">
+            <div class="grid-product-id"><strong class="mono">urn:didaca:product:estv:tax-statistics</strong><span>·</span><span>Origin ESTV</span></div>
+            <form class="form-grid">
+              <label class="span-2">Product title<input value="ESTV tax statistics by canton"></label>
+              <label>Owner<select><option>ESTV</option></select></label>
+              <label>Domain<select><option>Public finance</option></select></label>
+              <label>Classification<select><option>Internal · aggregate</option></select></label>
+              <label>Update frequency<select><option>Quarterly</option></select></label>
+              <label class="span-2">Description<textarea>Aggregated tax statistics by canton, year and tax category. Synthetic records only; no personal data.</textarea></label>
+              <label>Contact<input value="data-products@estv.admin.ch"></label>
+              <label>Keywords<input value="tax, canton, statistics"></label>
+            </form>
+            <div class="grid-meta"><div><b>Revision</b><span>17 published</span></div><div><b>Policy</b><span>PBAC r7</span></div><div><b>Quality</b><span>98 / 100</span></div></div>
+          </div>
+        </article>
+        <article class="card lineage">
+          <div class="card-head"><div><h2>Lineage & provenance</h2><span class="kicker">Verified path · 4 stages</span></div><div class="legend"><span><i class="source"></i>Source</span><span><i class="transform"></i>Transform</span><span><i class="product"></i>Product</span><span><i class="consumer"></i>Consumer</span></div></div>
+          <div class="card-body" style="padding-top:6px">
+            <svg class="lineage-svg" viewBox="0 0 800 180" role="img" aria-label="Lineage from cantonal source data through aggregation to the ESTV product and St. Gallen consumer">
+              <defs><marker id="grid-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0l10 5-10 5z" fill="#9aabb7"/></marker></defs>
+              <path d="M132 74H238M375 74H475M602 74H689" fill="none" stroke="#9aabb7" stroke-width="2" marker-end="url(#grid-arrow)"/>
+              <path d="M303 111v29h236v-29" fill="none" stroke="#b6c0c7" stroke-dasharray="4 4"/>
+              <g transform="translate(20 42)"><rect width="112" height="64" rx="9" fill="#0b4479"/><text x="14" y="23" fill="#cbe4f5" font-size="8" font-weight="700">SOURCE</text><text x="14" y="41" fill="#fff" font-size="12" font-weight="800">Canton filings</text><text x="14" y="54" fill="#cbe4f5" font-size="8">26 extracts · 2025</text></g>
+              <g transform="translate(238 42)"><rect width="137" height="64" rx="9" fill="#b96d00"/><text x="14" y="23" fill="#fff0d0" font-size="8" font-weight="700">TRANSFORM</text><text x="14" y="41" fill="#fff" font-size="12" font-weight="800">Aggregate & mask</text><text x="14" y="54" fill="#fff0d0" font-size="8">job estv_agg_v4</text></g>
+              <g transform="translate(475 42)"><rect width="127" height="64" rx="9" fill="#d52b1e"/><text x="14" y="23" fill="#ffe0dc" font-size="8" font-weight="700">DATA PRODUCT</text><text x="14" y="41" fill="#fff" font-size="12" font-weight="800">Tax statistics</text><text x="14" y="54" fill="#ffe0dc" font-size="8">revision 17</text></g>
+              <g transform="translate(689 42)"><rect width="91" height="64" rx="9" fill="#14734b"/><text x="12" y="23" fill="#d4f2e3" font-size="8" font-weight="700">CONSUMER</text><text x="12" y="41" fill="#fff" font-size="11" font-weight="800">St. Gallen</text><text x="12" y="54" fill="#d4f2e3" font-size="8">PBAC allow</text></g>
+              <g transform="translate(326 136)"><rect width="187" height="28" rx="14" fill="#f3f6f8" stroke="#ced7dd"/><circle cx="16" cy="14" r="5" fill="#14734b"/><text x="29" y="17" fill="#52626e" font-size="8">Evidence hash verified · 09:42 CET</text></g>
+            </svg>
+          </div>
+        </article>
+        <article class="card interfaces">
+          <div class="card-head"><h2>Endpoints & schema</h2><span class="status blue">2 active</span></div>
+          <div class="table-wrap"><table><thead><tr><th>Protocol</th><th>Endpoint</th><th>Schema / operation</th><th>Guard</th></tr></thead><tbody><tr><td><span class="proto">REST</span></td><td><code>/api/v1/estv/tax-statistics</code></td><td>GET · TaxStatistic[]</td><td>OPA / PBAC</td></tr><tr><td><span class="proto pg">PostgreSQL</span></td><td><code>estv_product:5432</code></td><td>public.tax_statistics</td><td>ACL + FORCE RLS</td></tr><tr><td colspan="4" class="muted">Shared fields · canton_code · tax_year · category · aggregate_amount_chf</td></tr></tbody></table></div>
+        </article>
+        <aside class="card evidence">
+          <div class="card-head"><h2>Evidence trail</h2><span class="kicker">Append-only</span></div>
+          <div class="card-body activity-list"><div class="activity"><span class="activity__icon">✓</span><p><b>Quality gate passed</b><small>Profiler · 09:42 today</small></p></div><div class="activity"><span class="activity__icon">17</span><p><b>Metadata published</b><small>Anna Keller · 02 Aug</small></p></div><div class="activity"><span class="activity__icon">P</span><p><b>Policy deployed</b><small>OPA + PostgreSQL · r7</small></p></div><div class="activity"><span class="activity__icon">#</span><p><b>Checksum anchored</b><small class="mono">6a17…f02c</small></p></div></div>
+        </aside>
+      </section>
+    </div>
+  </template>
+
+  <template id="canvas-view">
+    <div class="canvas-page">
+      <header class="page-title"><div><p class="eyebrow">Concept 02 · Alpine Control Canvas</p><h1>Explore the flow. Tune the record.</h1><p class="lede">A topology-first workspace makes dependencies the primary object; metadata and interfaces stay editable in a persistent inspector.</p></div><div class="page-actions"><button class="button">Compare revisions</button><button class="button primary">Publish draft</button></div></header>
+      <section class="canvas-shell">
+        <aside class="canvas-nav"><div class="canvas-nav__title"><i class="canvas-nav__mark"></i>Product map</div><small>Layers</small><a class="active" href="#">Lineage <em>7</em></a><a href="#">Provenance <em>12</em></a><a href="#">Interfaces <em>2</em></a><a href="#">Policies <em>1</em></a><small>Overlays</small><a href="#">Quality signals <em>5</em></a><a href="#">Access paths <em>2</em></a><div class="canvas-nav__health"><b>Graph health · 100%</b><p>All nodes resolve to a registered catalog resource and current policy revision.</p></div></aside>
+        <section class="topology">
+          <header class="topology-head"><div><h2>ESTV tax statistics · dependency map</h2><p>Last computed 04 Aug 2026, 09:42 CET · provenance depth 3</p></div><div class="topology-tools"><button class="tool" title="Zoom out">−</button><button class="tool" title="Fit view">⌗</button><button class="tool" title="Zoom in">+</button></div></header>
+          <svg class="topology-svg" viewBox="0 0 700 355" role="img" aria-label="Topology graph showing sources, transformation, product and consumers">
+            <defs><filter id="node-shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#203648" flood-opacity=".14"/></filter><marker id="canvas-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0l10 5-10 5z" fill="#7e94a4"/></marker></defs>
+            <path d="M130 92C210 92 197 171 271 171M130 257c80 0 65-86 141-86M397 171h86M585 171c45 0 33-91 78-91M585 171c45 0 33 89 78 89" fill="none" stroke="#8398a8" stroke-width="2" marker-end="url(#canvas-arrow)"/>
+            <path d="M68 131v86" stroke="#9eb0bc" stroke-dasharray="4 4"/>
+            <g filter="url(#node-shadow)" transform="translate(28 57)"><rect width="102" height="70" rx="12" fill="#fff" stroke="#0b4479" stroke-width="2"/><rect width="8" height="70" rx="4" fill="#0b4479"/><text x="23" y="25" fill="#0b4479" font-size="8" font-weight="800">SOURCE · FILE</text><text x="23" y="44" fill="#17212b" font-size="11" font-weight="800">Canton extracts</text><text x="23" y="57" fill="#71808b" font-size="8">26 / 26 current</text></g>
+            <g filter="url(#node-shadow)" transform="translate(28 222)"><rect width="102" height="70" rx="12" fill="#fff" stroke="#0b4479" stroke-width="2"/><rect width="8" height="70" rx="4" fill="#0b4479"/><text x="23" y="25" fill="#0b4479" font-size="8" font-weight="800">SOURCE · REF</text><text x="23" y="44" fill="#17212b" font-size="11" font-weight="800">Canton codes</text><text x="23" y="57" fill="#71808b" font-size="8">eCH-0007</text></g>
+            <g filter="url(#node-shadow)" transform="translate(271 135)"><rect width="126" height="73" rx="12" fill="#b96d00"/><text x="17" y="26" fill="#fff0d0" font-size="8" font-weight="800">TRANSFORM · SQL</text><text x="17" y="46" fill="#fff" font-size="12" font-weight="800">Aggregate & mask</text><text x="17" y="61" fill="#fff0d0" font-size="8">estv_agg_v4 · passed</text></g>
+            <g filter="url(#node-shadow)" transform="translate(483 129)"><rect width="102" height="84" rx="14" fill="#d52b1e"/><circle cx="86" cy="17" r="7" fill="#fff" opacity=".95"/><path d="M83 17l2 2 4-5" fill="none" stroke="#14734b" stroke-width="2"/><text x="15" y="29" fill="#ffe1de" font-size="8" font-weight="800">PRODUCT · r17</text><text x="15" y="49" fill="#fff" font-size="12" font-weight="800">Tax statistics</text><text x="15" y="65" fill="#ffe1de" font-size="8">REST + PostgreSQL</text></g>
+            <g filter="url(#node-shadow)" transform="translate(620 44)"><rect width="68" height="70" rx="12" fill="#14734b"/><text x="11" y="25" fill="#d3f1e3" font-size="8" font-weight="800">CONSUMER</text><text x="11" y="43" fill="#fff" font-size="10" font-weight="800">St. Gallen</text><text x="11" y="57" fill="#d3f1e3" font-size="8">allowed</text></g>
+            <g filter="url(#node-shadow)" transform="translate(620 225)"><rect width="68" height="70" rx="12" fill="#fff" stroke="#14734b" stroke-width="2"/><text x="11" y="25" fill="#14734b" font-size="8" font-weight="800">CONSUMER</text><text x="11" y="43" fill="#17212b" font-size="10" font-weight="800">Research</text><text x="11" y="57" fill="#6f7e88" font-size="8">aggregate</text></g>
+          </svg>
+          <div class="canvas-table"><div class="canvas-table__title"><span>Delivery interface registry</span><span class="status blue">Schema aligned</span></div><table><thead><tr><th>Kind</th><th>Location</th><th>Schema / operation</th><th>Enforcement</th></tr></thead><tbody><tr><td><span class="proto">REST</span></td><td><code>/api/v1/estv/tax-statistics</code></td><td>GET · TaxStatistic[]</td><td>OPA decision</td></tr><tr><td><span class="proto pg">PostgreSQL</span></td><td><code>estv_product:5432</code></td><td>public.tax_statistics</td><td>ACL + RLS</td></tr></tbody></table></div>
+        </section>
+        <aside class="inspector">
+          <header class="inspector-head"><p class="kicker">Selected product node</p><h2>ESTV tax statistics</h2><span class="status amber">3 unsaved fields</span></header>
+          <div class="inspector-body"><form class="form-grid"><label class="span-2">Title<input value="ESTV tax statistics by canton"></label><label>Owner<select><option>ESTV</option></select></label><label>Class<select><option>Internal</option></select></label><label>Domain<input value="Public finance"></label><label>Refresh<select><option>Quarterly</option></select></label><label class="span-2">Description<textarea>Aggregated tax statistics by canton and year. Synthetic records; no personal data.</textarea></label><label class="span-2">Keywords<input value="tax · canton · statistics"></label></form><div class="provenance-strip"><strong>Recent provenance</strong><ol><li><i></i><span>Quality evidence signed</span><time>09:42</time></li><li><i></i><span>Aggregation completed</span><time>09:37</time></li><li><i></i><span>26 sources received</span><time>08:55</time></li></ol></div><div class="inspector-actions"><button class="button">Discard</button><button class="button primary">Save metadata</button></div></div>
+        </aside>
+      </section>
+    </div>
+  </template>
+
+  <template id="dossier-view">
+    <div class="dossier-page">
+      <header class="page-title"><div><p class="eyebrow">Concept 03 · Federal Evidence Dossier</p><h1>A catalog record that reads like proof.</h1><p class="lede">An editorial dossier pairs every claim with its origin, transformation and delivery contract—designed for stewards, auditors and policy owners.</p></div><div class="page-actions"><button class="button">Export evidence</button><button class="button primary">Sign & save r18</button></div></header>
+      <article class="dossier">
+        <aside class="dossier-index"><span>Data product dossier · ESTV · CH-001 · revision 18</span></aside>
+        <section class="dossier-section"><span class="section-number">01</span><p class="eyebrow">Record statement</p><h2>Identity & stewardship</h2><p class="intro">The binding catalog statement, maintained by the accountable product owner and preserved by revision.</p><form class="form-grid"><label class="full">Official title<input value="ESTV tax statistics by canton"></label><label>Owner<input value="ESTV"></label><label>Domain<input value="Public finance"></label><label>Class<select><option>Internal</option></select></label><label class="full">Purpose<textarea>Comparable aggregate tax statistics for cantonal analysis.</textarea></label></form></section>
+        <section class="dossier-section"><span class="section-number">02</span><p class="eyebrow">Chain of evidence</p><h2>Lineage & provenance</h2><p class="intro">Solid paths are verified lineage; numbered marks reference append-only provenance records.</p><svg class="dossier-svg" viewBox="0 0 620 150" role="img" aria-label="Evidence lineage from source to consumers"><defs><marker id="dossier-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0l10 5-10 5z" fill="#807d75"/></marker></defs><path d="M120 68h66M303 68h68M478 68h61" stroke="#807d75" stroke-width="1.5" marker-end="url(#dossier-arrow)"/><g transform="translate(12 40)"><rect width="108" height="56" fill="#0b4479"/><text x="12" y="22" fill="#cde4f4" font-size="8">E-01 · SOURCE</text><text x="12" y="39" fill="#fff" font-size="11" font-weight="800">Canton filings</text></g><g transform="translate(186 40)"><rect width="117" height="56" fill="#b96d00"/><text x="12" y="22" fill="#fff1d1" font-size="8">E-02 · TRANSFORM</text><text x="12" y="39" fill="#fff" font-size="11" font-weight="800">Aggregate & mask</text></g><g transform="translate(371 34)"><rect width="107" height="68" fill="#d52b1e"/><text x="12" y="25" fill="#ffe0dd" font-size="8">E-03 · PRODUCT</text><text x="12" y="43" fill="#fff" font-size="11" font-weight="800">Tax statistics</text><text x="12" y="56" fill="#ffe0dd" font-size="8">r17 · signed</text></g><g transform="translate(539 40)"><rect width="69" height="56" fill="#14734b"/><text x="9" y="22" fill="#d4f1e4" font-size="8">E-05</text><text x="9" y="39" fill="#fff" font-size="10" font-weight="800">St. Gallen</text></g><text x="12" y="126" fill="#77736b" font-size="8">SHA-256 · 6a17e82b…f02c</text><text x="371" y="126" fill="#14734b" font-size="8" font-weight="800">✓ Evidence chain complete</text></svg></section>
+        <section class="dossier-section manifest"><span class="section-number">03</span><p class="eyebrow">Delivery manifest</p><h2>Endpoints & schema</h2><p class="intro">Two delivery contracts expose the same governed aggregate schema through the permitted protocols.</p><table><thead><tr><th>Interface</th><th>Endpoint</th><th>Schema / operation</th><th>Control</th></tr></thead><tbody><tr><td><span class="proto">REST</span></td><td><code>/api/v1/estv/tax-statistics</code></td><td>GET · TaxStatistic[]</td><td>OPA PBAC r7</td></tr><tr><td><span class="proto pg">PostgreSQL</span></td><td><code>estv_product:5432</code></td><td>public.tax_statistics</td><td>ACL + FORCE RLS</td></tr></tbody></table><div class="evidence-ledger"><p><b>Canonical fields</b><br>canton_code · tax_year · category · aggregate_amount_chf</p><div class="seal">SCHEMA<br>VERIFIED</div></div></section>
+        <section class="dossier-section"><span class="section-number">04</span><p class="eyebrow">Stewardship evidence</p><h2>Revision & provenance ledger</h2><p class="intro">Each event is append-only, attributable and linked to the product revision active at that time.</p><div class="dossier-timeline"><div class="dossier-event"><b>Sources accepted</b>26 canton extracts matched contract.<br><time>04 AUG · 08:55</time></div><div class="dossier-event"><b>Quality attested</b>Completeness 100%; score 98.<br><time>04 AUG · 09:42</time></div><div class="dossier-event"><b>Policy converged</b>OPA and PostgreSQL report r7.<br><time>04 AUG · 09:51</time></div></div><div style="display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding-top:12px;border-top:1px solid #dbd8d0"><div><span class="status">Evidence current</span> <span class="status blue">2 endpoints</span></div><span class="mono muted" style="font-size:8px">urn:didaca:product:estv:tax-statistics</span></div></section>
+      </article>
+    </div>
+  </template>
+
+  <template id="glass-view">
+    <div class="glass-page">
+      <header class="glass-hero">
+        <div><p class="eyebrow">Concept 04 · Glass Observatory</p><h1>See the product through its evidence.</h1><p class="lede">A luminous governance workspace layers trusted metadata, delivery contracts and provenance over the live data journey—without losing the clarity of the federal identity.</p></div>
+        <div class="glass-hero-stats" aria-label="Product health summary"><div class="glass-stat"><b>98</b><span>Quality score</span></div><div class="glass-stat"><b>r17</b><span>Active revision</span></div><div class="glass-stat"><b>2</b><span>Interfaces</span></div></div>
+        <div class="glass-actions"><button class="glass-button">Compare</button><button class="glass-button primary">Save revision 18</button></div>
+      </header>
+
+      <section class="glass-layout" aria-label="Glassy data product workspace">
+        <article class="glass-panel glass-form">
+          <header class="glass-panel-head"><div><h2>Metadata studio</h2><p>Authoritative catalog statement</p></div><span class="glass-chip">Draft protected</span></header>
+          <div class="glass-form-body">
+            <div class="record-key"><strong class="mono">urn:didaca:product:estv:tax-statistics</strong><span>ESTV · CH-001</span></div>
+            <form class="form-grid">
+              <label class="span-2">Product title<input value="ESTV tax statistics by canton"></label>
+              <label>Owner<select><option>ESTV</option></select></label>
+              <label>Domain<select><option>Public finance</option></select></label>
+              <label>Classification<select><option>Internal · aggregate</option></select></label>
+              <label>Update cycle<select><option>Quarterly</option></select></label>
+              <label class="span-2">Description<textarea>Aggregated tax statistics by canton, year and tax category. Synthetic records only; no personal data.</textarea></label>
+              <label>Contact<input value="data-products@estv.admin.ch"></label>
+              <label>Keywords<input value="tax · canton · statistics"></label>
+            </form>
+            <div class="glass-score-row"><div class="glass-score"><b>Published</b><span>Lifecycle</span></div><div class="glass-score"><b>PBAC r7</b><span>Policy</span></div><div class="glass-score"><b>Signed</b><span>Evidence</span></div></div>
+          </div>
+        </article>
+
+        <article class="glass-panel glass-chart">
+          <header class="glass-panel-head"><div><h2>Lineage & provenance constellation</h2><p>Verified flow · evidence depth 3 · updated 09:51 CET</p></div><div class="glass-legend"><span><i style="background:#38a1ff;color:#38a1ff"></i>Source</span><span><i style="background:#ffb44d;color:#ffb44d"></i>Transform</span><span><i style="background:#ff5a5f;color:#ff5a5f"></i>Product</span><span><i style="background:#46d798;color:#46d798"></i>Consumer</span></div></header>
+          <svg class="glass-lineage" viewBox="0 0 980 300" role="img" aria-label="Glassy lineage chart from canton sources through transformation and ESTV product to St. Gallen">
+            <defs>
+              <linearGradient id="glass-flow" x1="0" x2="1"><stop offset="0" stop-color="#38a1ff"/><stop offset=".48" stop-color="#d0deff"/><stop offset=".72" stop-color="#ff6b7a"/><stop offset="1" stop-color="#46d798"/></linearGradient>
+              <linearGradient id="glass-source" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#2398ef" stop-opacity=".58"/><stop offset="1" stop-color="#0d4b86" stop-opacity=".36"/></linearGradient>
+              <linearGradient id="glass-transform" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffb44d" stop-opacity=".7"/><stop offset="1" stop-color="#8d5700" stop-opacity=".38"/></linearGradient>
+              <linearGradient id="glass-product" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff6970" stop-opacity=".8"/><stop offset="1" stop-color="#b51743" stop-opacity=".44"/></linearGradient>
+              <linearGradient id="glass-consumer" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#46d798" stop-opacity=".7"/><stop offset="1" stop-color="#116b4b" stop-opacity=".42"/></linearGradient>
+              <filter id="glass-glow" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              <filter id="glass-node-shadow" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="9" stdDeviation="10" flood-color="#001326" flood-opacity=".4"/></filter>
+              <marker id="glass-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0l10 5-10 5z" fill="#dff5ff"/></marker>
+            </defs>
+            <path d="M172 91C270 91 260 147 338 147M172 226c98 0 88-79 166-79M488 147h92M727 147c69 0 62-75 116-75M727 147c69 0 62 77 116 77" fill="none" stroke="url(#glass-flow)" stroke-width="2.5" stroke-linecap="round" marker-end="url(#glass-arrow)" filter="url(#glass-glow)"/>
+            <path d="M102 128v61" fill="none" stroke="rgba(208,235,255,.42)" stroke-dasharray="4 5"/>
+            <g transform="translate(38 54)" filter="url(#glass-node-shadow)"><rect width="134" height="74" rx="17" fill="url(#glass-source)" stroke="rgba(255,255,255,.55)"/><path d="M1 18Q1 1 18 1h98" fill="none" stroke="rgba(255,255,255,.38)"/><text x="17" y="25" fill="#bde6ff" font-size="8" font-weight="800">SOURCE · FILE</text><text x="17" y="46" fill="#fff" font-size="13" font-weight="800">Canton extracts</text><text x="17" y="61" fill="#c8e7fa" font-size="8">26 / 26 verified</text></g>
+            <g transform="translate(38 189)" filter="url(#glass-node-shadow)"><rect width="134" height="74" rx="17" fill="url(#glass-source)" stroke="rgba(255,255,255,.55)"/><path d="M1 18Q1 1 18 1h98" fill="none" stroke="rgba(255,255,255,.38)"/><text x="17" y="25" fill="#bde6ff" font-size="8" font-weight="800">SOURCE · REFERENCE</text><text x="17" y="46" fill="#fff" font-size="13" font-weight="800">Canton codes</text><text x="17" y="61" fill="#c8e7fa" font-size="8">eCH-0007 current</text></g>
+            <g transform="translate(338 105)" filter="url(#glass-node-shadow)"><rect width="150" height="84" rx="18" fill="url(#glass-transform)" stroke="rgba(255,255,255,.62)"/><path d="M1 20Q1 1 20 1h110" fill="none" stroke="rgba(255,255,255,.42)"/><text x="19" y="28" fill="#fff2d1" font-size="8" font-weight="800">TRANSFORM · SQL</text><text x="19" y="52" fill="#fff" font-size="14" font-weight="800">Aggregate & mask</text><text x="19" y="68" fill="#fff2d1" font-size="8">estv_agg_v4 · attested</text></g>
+            <g transform="translate(580 97)" filter="url(#glass-node-shadow)"><rect width="147" height="100" rx="21" fill="url(#glass-product)" stroke="rgba(255,255,255,.68)" stroke-width="1.5"/><path d="M1 22Q1 1 22 1h103" fill="none" stroke="rgba(255,255,255,.48)"/><circle cx="125" cy="22" r="9" fill="rgba(255,255,255,.9)"/><path d="M121 22l3 3 6-8" fill="none" stroke="#14734b" stroke-width="2"/><text x="19" y="30" fill="#ffe3e4" font-size="8" font-weight="800">DATA PRODUCT · r17</text><text x="19" y="56" fill="#fff" font-size="15" font-weight="800">Tax statistics</text><text x="19" y="74" fill="#ffe3e4" font-size="8">REST + PostgreSQL</text><text x="19" y="87" fill="#ffe3e4" font-size="8">PBAC policy r7</text></g>
+            <g transform="translate(843 34)" filter="url(#glass-node-shadow)"><rect width="105" height="76" rx="17" fill="url(#glass-consumer)" stroke="rgba(255,255,255,.58)"/><text x="15" y="27" fill="#d7ffeb" font-size="8" font-weight="800">CONSUMER</text><text x="15" y="48" fill="#fff" font-size="12" font-weight="800">St. Gallen</text><text x="15" y="63" fill="#d7ffeb" font-size="8">allow · current</text></g>
+            <g transform="translate(843 186)" filter="url(#glass-node-shadow)"><rect width="105" height="76" rx="17" fill="rgba(255,255,255,.12)" stroke="rgba(70,215,152,.72)"/><text x="15" y="27" fill="#baf4d7" font-size="8" font-weight="800">CONSUMER</text><text x="15" y="48" fill="#fff" font-size="12" font-weight="800">Research</text><text x="15" y="63" fill="#c9e4da" font-size="8">aggregate view</text></g>
+            <g transform="translate(525 245)"><rect width="238" height="31" rx="15.5" fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.28)"/><circle cx="17" cy="15.5" r="5" fill="#57e3a5" filter="url(#glass-glow)"/><text x="31" y="19" fill="#e9f8ff" font-size="8">Provenance chain signed · 6a17…f02c</text></g>
+          </svg>
+        </article>
+
+        <article class="glass-panel glass-table">
+          <header class="glass-panel-head"><div><h2>Delivery contracts</h2><p>One schema · two permitted protocols</p></div><span class="glass-chip">Aligned</span></header>
+          <table><thead><tr><th>Protocol</th><th>Endpoint</th><th>Operation / schema</th><th>Enforcement</th></tr></thead><tbody><tr><td><span class="proto">REST</span></td><td><code>/api/v1/estv/tax-statistics</code></td><td>GET · TaxStatistic[]</td><td>OPA / PBAC</td></tr><tr><td><span class="proto pg">PostgreSQL</span></td><td><code>estv_product:5432</code></td><td>public.tax_statistics</td><td>ACL + FORCE RLS</td></tr></tbody></table>
+        </article>
+
+        <aside class="glass-panel glass-provenance">
+          <header class="glass-panel-head"><div><h2>Provenance pulse</h2><p>Append-only evidence</p></div><span class="glass-chip">Live</span></header>
+          <div class="glass-events"><div class="glass-event"><i>26</i><b>Sources accepted</b>All canton extracts matched.<time>08:55</time></div><div class="glass-event"><i>✓</i><b>Quality signed</b>Completeness 100%.<time>09:42</time></div><div class="glass-event"><i>P</i><b>Policy converged</b>OPA + PG report r7.<time>09:51</time></div></div>
+        </aside>
+      </section>
+    </div>
+  </template>
+
+  <template id="redglass-view">
+    <div class="rg-page">
+      <header class="rg-hero">
+        <div><p class="eyebrow">Concept 05 · Red Glass Federal Workspace</p><h1>Trusted data. Visible evidence.</h1><p class="lede">The familiar light federal workspace stays calm and precise, while red glass surfaces mark the governed moments: product identity, lineage and provenance.</p></div>
+        <div class="rg-stats" aria-label="Product summary"><div class="rg-stat"><b>98</b><span>Quality</span></div><div class="rg-stat"><b>r17</b><span>Revision</span></div><div class="rg-stat"><b>2</b><span>Interfaces</span></div></div>
+        <div class="rg-actions"><button class="rg-button">Preview</button><button class="rg-button primary">Save revision 18</button></div>
+      </header>
+
+      <section class="rg-layout" aria-label="Red glass data product workspace">
+        <article class="rg-panel rg-metadata">
+          <header class="rg-titlebar"><div><h2>Metadata studio</h2><p>Authoritative product record</p></div><span class="rg-chip">Draft protected</span></header>
+          <div class="rg-form-body">
+            <div class="rg-key"><strong class="mono">urn:didaca:product:estv:tax-statistics</strong><span>ESTV · CH-001</span></div>
+            <form class="form-grid">
+              <label class="span-2">Product title<input value="ESTV tax statistics by canton"></label>
+              <label>Owner<select><option>ESTV</option></select></label>
+              <label>Domain<select><option>Public finance</option></select></label>
+              <label>Classification<select><option>Internal · aggregate</option></select></label>
+              <label>Update cycle<select><option>Quarterly</option></select></label>
+              <label class="span-2">Description<textarea>Aggregated tax statistics by canton, year and tax category. Synthetic records only; no personal data.</textarea></label>
+              <label>Contact<input value="data-products@estv.admin.ch"></label>
+              <label>Keywords<input value="tax · canton · statistics"></label>
+            </form>
+            <div class="rg-score-row"><div class="rg-score"><b>Published</b><span>Lifecycle</span></div><div class="rg-score"><b>PBAC r7</b><span>Policy</span></div><div class="rg-score"><b>Signed</b><span>Evidence</span></div></div>
+          </div>
+        </article>
+
+        <article class="rg-panel rg-chart">
+          <header class="rg-titlebar"><div><h2>Lineage & provenance</h2><p>Verified path · evidence depth 3 · updated 09:51 CET</p></div><div class="rg-legend"><span><i style="background:#65b7ee"></i>Source</span><span><i style="background:#ffc46b"></i>Transform</span><span><i style="background:#a8242c"></i>Product</span><span><i style="background:#62d9a1"></i>Consumer</span></div></header>
+          <svg class="rg-lineage" viewBox="0 0 980 300" role="img" aria-label="Red glass lineage chart from canton sources through ESTV transformation to consumers">
+            <defs>
+              <linearGradient id="rg-flow" x1="0" x2="1"><stop stop-color="#d76f70"/><stop offset=".5" stop-color="#a8242c"/><stop offset="1" stop-color="#d76f70"/></linearGradient>
+              <linearGradient id="rg-source" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff" stop-opacity=".78"/><stop offset="1" stop-color="#d52b1e" stop-opacity=".22"/></linearGradient>
+              <linearGradient id="rg-transform" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff" stop-opacity=".68"/><stop offset="1" stop-color="#e0001a" stop-opacity=".31"/></linearGradient>
+              <linearGradient id="rg-product" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#8f101c" stop-opacity=".76"/><stop offset="1" stop-color="#d52b1e" stop-opacity=".5"/></linearGradient>
+              <linearGradient id="rg-consumer" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff" stop-opacity=".76"/><stop offset="1" stop-color="#d52b1e" stop-opacity=".2"/></linearGradient>
+              <filter id="rg-glow" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              <filter id="rg-shadow" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#74151b" flood-opacity=".16"/></filter>
+              <marker id="rg-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0l10 5-10 5z" fill="#b92a31"/></marker>
+            </defs>
+            <path d="M172 91C270 91 260 147 338 147M172 226c98 0 88-79 166-79M488 147h92M727 147c69 0 62-75 116-75M727 147c69 0 62 77 116 77" fill="none" stroke="url(#rg-flow)" stroke-width="2.4" stroke-linecap="round" marker-end="url(#rg-arrow)" filter="url(#rg-glow)"/>
+            <path d="M102 128v61" fill="none" stroke="rgba(109,126,138,.42)" stroke-dasharray="4 5"/>
+            <g transform="translate(38 54)" filter="url(#rg-shadow)"><rect width="134" height="74" rx="3" fill="url(#rg-source)" stroke="rgba(183,41,46,.34)"/><rect width="7" height="74" fill="#0b4479"/><text x="19" y="25" fill="#8f2026" font-size="8" font-weight="800">SOURCE · FILE</text><text x="19" y="46" fill="#17212b" font-size="13" font-weight="800">Canton extracts</text><text x="19" y="61" fill="#647684" font-size="8">26 / 26 verified</text></g>
+            <g transform="translate(38 189)" filter="url(#rg-shadow)"><rect width="134" height="74" rx="3" fill="url(#rg-source)" stroke="rgba(183,41,46,.34)"/><rect width="7" height="74" fill="#0b4479"/><text x="19" y="25" fill="#8f2026" font-size="8" font-weight="800">SOURCE · REFERENCE</text><text x="19" y="46" fill="#17212b" font-size="13" font-weight="800">Canton codes</text><text x="19" y="61" fill="#647684" font-size="8">eCH-0007 current</text></g>
+            <g transform="translate(338 105)" filter="url(#rg-shadow)"><rect width="150" height="84" rx="3" fill="url(#rg-transform)" stroke="rgba(183,41,46,.38)"/><rect width="7" height="84" fill="#b96d00"/><text x="20" y="28" fill="#8f2026" font-size="8" font-weight="800">TRANSFORM · SQL</text><text x="20" y="52" fill="#17212b" font-size="14" font-weight="800">Aggregate & mask</text><text x="20" y="68" fill="#765526" font-size="8">estv_agg_v4 · attested</text></g>
+            <g transform="translate(580 97)" filter="url(#rg-shadow)"><rect width="147" height="100" rx="4" fill="url(#rg-product)" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/><path d="M1 20Q1 1 20 1h105" fill="none" stroke="rgba(255,255,255,.43)"/><circle cx="125" cy="22" r="9" fill="#fff"/><path d="M121 22l3 3 6-8" fill="none" stroke="#14734b" stroke-width="2"/><text x="19" y="30" fill="#ffe2df" font-size="8" font-weight="800">DATA PRODUCT · r17</text><text x="19" y="56" fill="#fff" font-size="15" font-weight="800">Tax statistics</text><text x="19" y="74" fill="#ffe2df" font-size="8">REST + PostgreSQL</text><text x="19" y="87" fill="#ffe2df" font-size="8">PBAC policy r7</text></g>
+            <g transform="translate(843 34)" filter="url(#rg-shadow)"><rect width="105" height="76" rx="3" fill="url(#rg-consumer)" stroke="rgba(183,41,46,.32)"/><rect width="7" height="76" fill="#14734b"/><text x="19" y="27" fill="#8f2026" font-size="8" font-weight="800">CONSUMER</text><text x="19" y="48" fill="#17212b" font-size="12" font-weight="800">St. Gallen</text><text x="19" y="63" fill="#527264" font-size="8">allow · current</text></g>
+            <g transform="translate(843 186)" filter="url(#rg-shadow)"><rect width="105" height="76" rx="3" fill="url(#rg-consumer)" stroke="rgba(183,41,46,.32)"/><rect width="7" height="76" fill="#14734b"/><text x="19" y="27" fill="#8f2026" font-size="8" font-weight="800">CONSUMER</text><text x="19" y="48" fill="#17212b" font-size="12" font-weight="800">Research</text><text x="19" y="63" fill="#527264" font-size="8">aggregate view</text></g>
+            <g transform="translate(525 245)"><rect width="238" height="31" rx="3" fill="url(#rg-source)" stroke="rgba(183,41,46,.3)"/><circle cx="17" cy="15.5" r="5" fill="#27b57a"/><text x="31" y="19" fill="#4b5963" font-size="8">Provenance chain signed · 6a17…f02c</text></g>
+          </svg>
+        </article>
+
+        <article class="rg-panel rg-table">
+          <header class="rg-titlebar"><div><h2>Delivery contracts</h2><p>One schema · two permitted protocols</p></div><span class="rg-chip">Aligned</span></header>
+          <table><thead><tr><th>Protocol</th><th>Endpoint</th><th>Operation / schema</th><th>Enforcement</th></tr></thead><tbody><tr><td><span class="proto">REST</span></td><td><code>/api/v1/estv/tax-statistics</code></td><td>GET · TaxStatistic[]</td><td>OPA / PBAC</td></tr><tr><td><span class="proto pg">PostgreSQL</span></td><td><code>estv_product:5432</code></td><td>public.tax_statistics</td><td>ACL + FORCE RLS</td></tr></tbody></table>
+        </article>
+
+        <aside class="rg-panel rg-provenance">
+          <header class="rg-titlebar"><div><h2>Provenance pulse</h2><p>Append-only evidence</p></div><span class="rg-chip">Live</span></header>
+          <div class="rg-events"><div class="rg-event"><i>26</i><b>Sources accepted</b>All extracts matched.<time>08:55</time></div><div class="rg-event"><i>✓</i><b>Quality signed</b>Completeness 100%.<time>09:42</time></div><div class="rg-event"><i>P</i><b>Policy converged</b>OPA + PG r7.<time>09:51</time></div></div>
+        </aside>
+      </section>
+    </div>
+  </template>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get('view') || 'grid';
+    const supported = ['grid', 'canvas', 'dossier', 'glass', 'redglass'];
+    const view = supported.includes(requested) ? requested : 'grid';
+    document.body.dataset.view = view;
+    document.querySelectorAll('[data-view-link]').forEach((link) => {
+      if (link.dataset.viewLink === view) link.classList.add('active');
+    });
+    const template = document.getElementById(`${view}-view`);
+    document.getElementById('main-content').append(template.content.cloneNode(true));
+    const titles = { grid: 'Swiss Grid Workspace', canvas: 'Alpine Control Canvas', dossier: 'Federal Evidence Dossier', glass: 'Glass Observatory', redglass: 'Red Glass Federal Workspace' };
+    document.title = `${titles[view]} — BIT DiDaCa`;
+  </script>
+</body>
+</html>

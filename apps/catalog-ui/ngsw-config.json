@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/@angular/service-worker/config/schema.json",
+  "index": "/index.html",
+  "assetGroups": [
+    {
+      "name": "app-shell",
+      "installMode": "prefetch",
+      "resources": { "files": ["/favicon.ico", "/index.html", "/styles-*.css", "/main-*.js", "/manifest.webmanifest", "/assets/**"] }
+    },
+    {
+      "name": "lazy-features",
+      "installMode": "lazy",
+      "updateMode": "prefetch",
+      "resources": { "files": ["/chunk-*.js"] }
+    }
+  ],
+  "dataGroups": [
+    {
+      "name": "catalog-read-model",
+      "urls": ["/api/v1/data-products", "/api/v1/data-products/**"],
+      "cacheConfig": { "strategy": "freshness", "maxSize": 40, "maxAge": "5m", "timeout": "2s" },
+      "cacheQueryOptions": { "ignoreSearch": false }
+    }
+  ],
+  "navigationUrls": ["/**", "!/**/*.*", "!/api/**"]
+}
