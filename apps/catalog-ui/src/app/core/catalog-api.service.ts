@@ -172,7 +172,7 @@ export class CatalogApiService {
     const current = this.productState();
     const headers = new HttpHeaders({
       'If-Match': this.etag(),
-      'X-DiDaCa-User': this.identity.userId(),
+      'X-DaCa-User': this.identity.userId(),
     });
     const body = {
       title: patch.title,
@@ -519,7 +519,7 @@ export class CatalogApiService {
       id: endpoint.id,
       protocol: 'postgresql',
       title: endpoint.name,
-      host: String(connection['host'] ?? 'localhost'),
+      host: String(connection['host'] ?? 'postgres'),
       port: Number(connection['port'] ?? 5432),
       database: String(connection['database'] ?? ''),
       schema: String(connection['schema'] ?? ''),

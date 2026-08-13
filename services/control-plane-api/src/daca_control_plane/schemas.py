@@ -56,7 +56,7 @@ class Problem(ApiModel):
 
 class CatalogCreate(ApiModel):
     urn: Annotated[
-        str, Field(pattern=r"^urn:didaca:[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=-]+$", max_length=255)
+        str, Field(pattern=r"^urn:daca:[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=-]+$", max_length=255)
     ]
     name: Annotated[str, Field(min_length=1, max_length=200)]
     organization: Annotated[str, Field(min_length=1, max_length=200)]

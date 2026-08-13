@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="../../../packages/design-system/assets/favicon.ico">
-  <title>BIT DiDaCa — Modern design concepts</title>
+  <title>BIT DaCa — Modern design concepts</title>
   <style>
     :root {
       --red: #d52b1e;
@@ -413,7 +413,7 @@
     <div class="brand__inner">
       <div class="brand__left">
         <img class="brand__logo" src="../../../packages/design-system/assets/swiss-confederation-logo.png" alt="Swiss Confederation">
-        <div class="brand__product"><div><small>Federal Office of Information Technology</small><strong>BIT DiDaCa</strong></div></div>
+        <div class="brand__product"><div><small>Federal Office of Information Technology</small><strong>BIT DaCa</strong></div></div>
       </div>
       <div class="brand__right"><span class="environment"><i class="pulse"></i>Catalog CH-001 live</span><span class="avatar">BK</span></div>
     </div>
@@ -445,7 +445,7 @@
         <article class="card metadata">
           <div class="card-head"><h2>Metadata record</h2><span class="status amber">Draft changes</span></div>
           <div class="card-body">
-            <div class="grid-product-id"><strong class="mono">urn:didaca:product:estv:tax-statistics</strong><span>·</span><span>Origin ESTV</span></div>
+            <div class="grid-product-id"><strong class="mono">urn:daca:product:estv:tax-statistics</strong><span>·</span><span>Origin ESTV</span></div>
             <form class="form-grid">
               <label class="span-2">Product title<input value="ESTV tax statistics by canton"></label>
               <label>Owner<select><option>ESTV</option></select></label>
@@ -522,7 +522,7 @@
         <section class="dossier-section"><span class="section-number">01</span><p class="eyebrow">Record statement</p><h2>Identity & stewardship</h2><p class="intro">The binding catalog statement, maintained by the accountable product owner and preserved by revision.</p><form class="form-grid"><label class="full">Official title<input value="ESTV tax statistics by canton"></label><label>Owner<input value="ESTV"></label><label>Domain<input value="Public finance"></label><label>Class<select><option>Internal</option></select></label><label class="full">Purpose<textarea>Comparable aggregate tax statistics for cantonal analysis.</textarea></label></form></section>
         <section class="dossier-section"><span class="section-number">02</span><p class="eyebrow">Chain of evidence</p><h2>Lineage & provenance</h2><p class="intro">Solid paths are verified lineage; numbered marks reference append-only provenance records.</p><svg class="dossier-svg" viewBox="0 0 620 150" role="img" aria-label="Evidence lineage from source to consumers"><defs><marker id="dossier-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0l10 5-10 5z" fill="#807d75"/></marker></defs><path d="M120 68h66M303 68h68M478 68h61" stroke="#807d75" stroke-width="1.5" marker-end="url(#dossier-arrow)"/><g transform="translate(12 40)"><rect width="108" height="56" fill="#0b4479"/><text x="12" y="22" fill="#cde4f4" font-size="8">E-01 · SOURCE</text><text x="12" y="39" fill="#fff" font-size="11" font-weight="800">Canton filings</text></g><g transform="translate(186 40)"><rect width="117" height="56" fill="#b96d00"/><text x="12" y="22" fill="#fff1d1" font-size="8">E-02 · TRANSFORM</text><text x="12" y="39" fill="#fff" font-size="11" font-weight="800">Aggregate & mask</text></g><g transform="translate(371 34)"><rect width="107" height="68" fill="#d52b1e"/><text x="12" y="25" fill="#ffe0dd" font-size="8">E-03 · PRODUCT</text><text x="12" y="43" fill="#fff" font-size="11" font-weight="800">Tax statistics</text><text x="12" y="56" fill="#ffe0dd" font-size="8">r17 · signed</text></g><g transform="translate(539 40)"><rect width="69" height="56" fill="#14734b"/><text x="9" y="22" fill="#d4f1e4" font-size="8">E-05</text><text x="9" y="39" fill="#fff" font-size="10" font-weight="800">St. Gallen</text></g><text x="12" y="126" fill="#77736b" font-size="8">SHA-256 · 6a17e82b…f02c</text><text x="371" y="126" fill="#14734b" font-size="8" font-weight="800">✓ Evidence chain complete</text></svg></section>
         <section class="dossier-section manifest"><span class="section-number">03</span><p class="eyebrow">Delivery manifest</p><h2>Endpoints & schema</h2><p class="intro">Two delivery contracts expose the same governed aggregate schema through the permitted protocols.</p><table><thead><tr><th>Interface</th><th>Endpoint</th><th>Schema / operation</th><th>Control</th></tr></thead><tbody><tr><td><span class="proto">REST</span></td><td><code>/api/v1/estv/tax-statistics</code></td><td>GET · TaxStatistic[]</td><td>OPA PBAC r7</td></tr><tr><td><span class="proto pg">PostgreSQL</span></td><td><code>estv_product:5432</code></td><td>public.tax_statistics</td><td>ACL + FORCE RLS</td></tr></tbody></table><div class="evidence-ledger"><p><b>Canonical fields</b><br>canton_code · tax_year · category · aggregate_amount_chf</p><div class="seal">SCHEMA<br>VERIFIED</div></div></section>
-        <section class="dossier-section"><span class="section-number">04</span><p class="eyebrow">Stewardship evidence</p><h2>Revision & provenance ledger</h2><p class="intro">Each event is append-only, attributable and linked to the product revision active at that time.</p><div class="dossier-timeline"><div class="dossier-event"><b>Sources accepted</b>26 canton extracts matched contract.<br><time>04 AUG · 08:55</time></div><div class="dossier-event"><b>Quality attested</b>Completeness 100%; score 98.<br><time>04 AUG · 09:42</time></div><div class="dossier-event"><b>Policy converged</b>OPA and PostgreSQL report r7.<br><time>04 AUG · 09:51</time></div></div><div style="display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding-top:12px;border-top:1px solid #dbd8d0"><div><span class="status">Evidence current</span> <span class="status blue">2 endpoints</span></div><span class="mono muted" style="font-size:8px">urn:didaca:product:estv:tax-statistics</span></div></section>
+        <section class="dossier-section"><span class="section-number">04</span><p class="eyebrow">Stewardship evidence</p><h2>Revision & provenance ledger</h2><p class="intro">Each event is append-only, attributable and linked to the product revision active at that time.</p><div class="dossier-timeline"><div class="dossier-event"><b>Sources accepted</b>26 canton extracts matched contract.<br><time>04 AUG · 08:55</time></div><div class="dossier-event"><b>Quality attested</b>Completeness 100%; score 98.<br><time>04 AUG · 09:42</time></div><div class="dossier-event"><b>Policy converged</b>OPA and PostgreSQL report r7.<br><time>04 AUG · 09:51</time></div></div><div style="display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding-top:12px;border-top:1px solid #dbd8d0"><div><span class="status">Evidence current</span> <span class="status blue">2 endpoints</span></div><span class="mono muted" style="font-size:8px">urn:daca:product:estv:tax-statistics</span></div></section>
       </article>
     </div>
   </template>
@@ -539,7 +539,7 @@
         <article class="glass-panel glass-form">
           <header class="glass-panel-head"><div><h2>Metadata studio</h2><p>Authoritative catalog statement</p></div><span class="glass-chip">Draft protected</span></header>
           <div class="glass-form-body">
-            <div class="record-key"><strong class="mono">urn:didaca:product:estv:tax-statistics</strong><span>ESTV · CH-001</span></div>
+            <div class="record-key"><strong class="mono">urn:daca:product:estv:tax-statistics</strong><span>ESTV · CH-001</span></div>
             <form class="form-grid">
               <label class="span-2">Product title<input value="ESTV tax statistics by canton"></label>
               <label>Owner<select><option>ESTV</option></select></label>
@@ -604,7 +604,7 @@
         <article class="rg-panel rg-metadata">
           <header class="rg-titlebar"><div><h2>Metadata studio</h2><p>Authoritative product record</p></div><span class="rg-chip">Draft protected</span></header>
           <div class="rg-form-body">
-            <div class="rg-key"><strong class="mono">urn:didaca:product:estv:tax-statistics</strong><span>ESTV · CH-001</span></div>
+            <div class="rg-key"><strong class="mono">urn:daca:product:estv:tax-statistics</strong><span>ESTV · CH-001</span></div>
             <form class="form-grid">
               <label class="span-2">Product title<input value="ESTV tax statistics by canton"></label>
               <label>Owner<select><option>ESTV</option></select></label>
@@ -669,7 +669,7 @@
     const template = document.getElementById(`${view}-view`);
     document.getElementById('main-content').append(template.content.cloneNode(true));
     const titles = { grid: 'Swiss Grid Workspace', canvas: 'Alpine Control Canvas', dossier: 'Federal Evidence Dossier', glass: 'Glass Observatory', redglass: 'Red Glass Federal Workspace' };
-    document.title = `${titles[view]} — BIT DiDaCa`;
+    document.title = `${titles[view]} — BIT DaCa`;
   </script>
 </body>
 </html>

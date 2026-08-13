@@ -1,4 +1,4 @@
-# BIT DiDaCa architecture and PBAC diagrams
+# BIT DaCa architecture and PBAC diagrams
 
 These diagrams distinguish the components that are implemented in the POC from the proposed
 WSO2 and federation extensions. Solid lines are implemented. Dashed lines are proposed or record
@@ -13,7 +13,7 @@ flowchart LR
   RestConsumer["REST consumer"]
   PgConsumer["PostgreSQL consumer"]
 
-  subgraph Catalog["Standalone DiDaCa catalog"]
+  subgraph Catalog["Standalone DaCa catalog"]
     CatalogUI["Catalog UI<br/>Angular PWA"]
     CatalogAPI["Catalog API<br/>FastAPI<br/>metadata + PAP + PIP + compiler"]
     OPA["Local OPA<br/>PDP"]
@@ -22,7 +22,7 @@ flowchart LR
     OPA -->|"HTTP POST<br/>activation status"| CatalogAPI
   end
 
-  subgraph Control["DiDaCa control plane - not on the authorization path"]
+  subgraph Control["DaCa control plane - not on the authorization path"]
     ControlUI["Control-plane UI<br/>Angular PWA"]
     ControlAPI["Control-plane API<br/>FastAPI<br/>instances + trust + sync intent + health"]
     ControlUI -->|"HTTP REST + SSE"| ControlAPI
@@ -34,12 +34,12 @@ flowchart LR
   end
 
   subgraph CatalogStorage["Catalog-owned POC storage"]
-    CatalogDB[("SQLite volume<br/>metadata + policy + provenance + audit")]
+    CatalogDB[("PostgreSQL · daca_catalog<br/>metadata + policy + provenance + audit")]
   end
 
   subgraph Storage["PostgreSQL 18.4 - isolated logical databases and roles"]
-    ControlDB[("didaca_control_plane<br/>registrations + trust + sync intent")]
-    ProductDB[("didaca_sample<br/>ESTV rows + entitlements<br/>ACL + FORCE RLS PEP")]
+    ControlDB[("daca_control_plane<br/>registrations + trust + sync intent")]
+    ProductDB[("daca_sample<br/>ESTV rows + entitlements<br/>ACL + FORCE RLS PEP")]
   end
 
   FutureFederation["Federation adapter<br/>future - no sync traffic"]
@@ -111,7 +111,7 @@ flowchart LR
   subgraph PgEnforcement["PostgreSQL enforcement"]
     PAP -->|"canonical structured policy subset"| Adapter["Policy projection adapter / translator"]
     Adapter -->|"idempotent revision projection"| Entitlements[("policy_entitlements")]
-    Entitlements --> RLS["Static ACL + FORCE RLS<br/>didaca_can_read"]
+    Entitlements --> RLS["Static ACL + FORCE RLS<br/>daca_can_read"]
     PgClient["Direct PostgreSQL client"] -->|"SESSION_USER"| RLS
   end
 
@@ -137,10 +137,10 @@ compiler emits Rego for OPA and the PostgreSQL projection adapter emits entitlem
 supported relational subset. Arbitrary Rego-to-SQL translation is intentionally not attempted.
 
 WSO2 does not load or evaluate Rego. In the proposed integration, its request-flow **Validate
-Request with OPA Policy** acts as the PEP and calls the external OPA PDP. DiDaCa's current decision
+Request with OPA Policy** acts as the PEP and calls the external OPA PDP. DaCa's current decision
 is an object such as `{"allow": true, "reason": "policy_allow"}`, while WSO2's default adapter
 expects a Boolean result. A small `OPARequestGenerator` adapter therefore maps authenticated WSO2
-context to the DiDaCa input and reads `result.allow`; alternatively, the compiler could add a
+context to the DaCa input and reads `result.allow`; alternatively, the compiler could add a
 Boolean `allow` compatibility rule. Authoritative owner, classification, origin, and resource
 attributes stay in the OPA bundle/PIP data rather than caller-controlled headers.
 
@@ -208,14 +208,14 @@ flowchart TB
 
   subgraph C["C. Apply the policy at WSO2 - proposed"]
     C1["WSO2 Gateway authenticates request"] --> C2["Request-flow policy:<br/>Validate Request with OPA Policy"]
-    C2 --> C3["DiDaCa OPARequestGenerator adapter<br/>builds trusted input and validates response"]
-    C3 -->|"POST /v1/data/didaca/authz/decision"| C4{"result.allow?"}
+    C2 --> C3["DaCa OPARequestGenerator adapter<br/>builds trusted input and validates response"]
+    C3 -->|"POST /v1/data/daca/authz/decision"| C4{"result.allow?"}
     C4 -- "true" --> C5["WSO2 forwards trusted identity<br/>to the inner FastAPI PEP"]
   end
 
   subgraph DRequest["PostgreSQL runtime PEP"]
     D5["Authenticate direct database role<br/>and preserve SESSION_USER"] --> D6["Static ACL permits only intended objects"]
-    D6 --> D7["FORCE RLS calls didaca_can_read<br/>against current entitlements"]
+    D6 --> D7["FORCE RLS calls daca_can_read<br/>against current entitlements"]
     H4 --> D8["Service role sets transaction-local<br/>trusted subject + protocol context"]
     D8 --> D7
     D7 --> D9{"Matching active entitlement?"}

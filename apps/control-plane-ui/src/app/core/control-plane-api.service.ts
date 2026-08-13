@@ -102,7 +102,7 @@ export class ControlPlaneApiService {
     this.mutationError.set('');
     const headers = new HttpHeaders({
       'If-Match': `"${config.revision}"`,
-      'X-DiDaCa-Actor': 'demo-control-admin',
+      'X-DaCa-Actor': 'demo-control-admin',
     });
     this.http
       .patch<SyncWire>(`/api/v1/sync-configurations/${encodeURIComponent(config.id)}`, { enabled }, { headers })

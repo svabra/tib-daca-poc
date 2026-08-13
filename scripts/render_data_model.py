@@ -83,9 +83,9 @@ CONTEXTS = (
     ContextSpec(
         key="catalog",
         title="Catalog data model",
-        model_path="services/catalog-api/src/didaca_catalog/models.py",
+        model_path="services/catalog-api/src/daca_catalog/models.py",
         migrations_path="services/catalog-api/alembic/versions",
-        database="SQLite in the PoC (`/data/didaca-catalog.db`); PostgreSQL is a future target",
+        database="PostgreSQL (`daca_catalog`; 18.4 local, 17 production)",
         boundary="The standalone catalog owns product metadata, workflows, access governance and semantic evidence.",
         table_descriptions=CATALOG_TABLES,
         json_notes=(
@@ -110,9 +110,9 @@ CONTEXTS = (
     ContextSpec(
         key="control-plane",
         title="Control-plane data model",
-        model_path="services/control-plane-api/src/didaca_control_plane/models.py",
+        model_path="services/control-plane-api/src/daca_control_plane/models.py",
         migrations_path="services/control-plane-api/alembic/versions",
-        database="PostgreSQL (`didaca_control_plane`)",
+        database="PostgreSQL (`daca_control_plane`)",
         boundary="The optional control plane observes catalogs and records desired federation configuration without becoming their runtime dependency.",
         table_descriptions=CONTROL_PLANE_TABLES,
         json_notes=(
@@ -132,7 +132,7 @@ CONTEXTS = (
         title="Sample data-product model",
         model_path="services/sample-data-product/app/models.py",
         migrations_path="services/sample-data-product/alembic/versions",
-        database="PostgreSQL (`didaca_sample`)",
+        database="PostgreSQL (`daca_sample`)",
         boundary="The sample ESTV product owns synthetic product rows and the local PostgreSQL authorization projection.",
         table_descriptions=SAMPLE_PRODUCT_TABLES,
         json_notes=(
@@ -148,17 +148,19 @@ CONTEXTS = (
 
 
 ROLE_DESCRIPTIONS = {
-    "didaca_control": "Owns and runs the control-plane schema.",
-    "didaca_sample_owner": "Migration/schema owner for the sample product; never used by consumers.",
-    "didaca_sample_api": "HTTP PEP database role; subject and protocol are set in the transaction.",
-    "didaca_policy_projector": "Writes projected entitlements and deployment revisions only.",
+    "daca_catalog": "Owns and runs the standalone catalog schema.",
+    "daca_control": "Owns and runs the control-plane schema.",
+    "daca_sample_owner": "Migration/schema owner for the sample product; never used by consumers.",
+    "daca_sample_api": "HTTP PEP database role; subject and protocol are set in the transaction.",
+    "daca_policy_projector": "Writes projected entitlements and deployment revisions only.",
     "kanton-st-gallen": "Synthetic direct PostgreSQL consumer used for an allowed PoC path.",
     "kanton-bern": "Synthetic direct PostgreSQL consumer used for a denied PoC path.",
 }
 
 DATABASE_DESCRIPTIONS = {
-    "didaca_control_plane": "Control-plane registry, trust, desired sync state and observations.",
-    "didaca_sample": "Protected sample product data and the policy projection used by RLS.",
+    "daca_catalog": "Standalone product metadata, workflow, policy and semantic evidence.",
+    "daca_control_plane": "Control-plane registry, trust, desired sync state and observations.",
+    "daca_sample": "Protected sample product data and the policy projection used by RLS.",
 }
 
 
@@ -512,7 +514,7 @@ def render_overview_region(root: Path) -> str:
         "",
         "```mermaid",
         "flowchart LR",
-        '    DAAIF["DAAIF (external)"] -->|metadata publication| CATALOG["Standalone DaCa catalog\\nSQLite"]',
+        '    DAAIF["DAAIF (external)"] -->|metadata publication| CATALOG["Standalone DaCa catalog\\nPostgreSQL"]',
         '    CATALOG -->|published PBAC projection| OPA["OPA bundle"]',
         '    CATALOG -->|entitlements + revision| SAMPLE["Sample data product\\nPostgreSQL"]',
         '    CONTROL["Optional control plane\\nPostgreSQL"] -.->|health and desired configuration| CATALOG',

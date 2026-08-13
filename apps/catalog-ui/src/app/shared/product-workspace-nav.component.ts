@@ -5,7 +5,7 @@ export type ProductWorkspaceSection = 'overview' | 'metadata' | 'access' | 'line
 export type ProductAccessView = 'overview' | 'grant' | 'technical' | null;
 
 @Component({
-  selector: 'didaca-product-workspace-nav',
+  selector: 'daca-product-workspace-nav',
   standalone: true,
   imports: [RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,

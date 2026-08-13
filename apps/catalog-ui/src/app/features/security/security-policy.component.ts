@@ -2,7 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { DidacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-didaca/design-system';
+import { DacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-daca/design-system';
 import { finalize } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService } from '../../core/demo-identity.service';
@@ -11,37 +11,37 @@ import { PolicyDefinition } from '../../core/catalog.models';
 import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav.component';
 
 @Component({
-  selector: 'didaca-security-policy',
+  selector: 'daca-security-policy',
   standalone: true,
-  imports: [FormsModule, ProductWorkspaceNavComponent, StatusBadgeComponent, DidacaGlossaryTermComponent],
+  imports: [FormsModule, ProductWorkspaceNavComponent, StatusBadgeComponent, DacaGlossaryTermComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <didaca-product-workspace-nav
+    <daca-product-workspace-nav
       [productId]="api.product().id"
       [productTitle]="api.product().title"
       activeSection="access"
       accessView="technical"
     />
 
-    <section class="didaca-page-heading">
+    <section class="daca-page-heading">
       <div>
-        <p class="didaca-eyebrow">Freigaben · Erweiterte Kontrolle</p>
+        <p class="daca-eyebrow">Freigaben · Erweiterte Kontrolle</p>
         <h1>Technische Durchsetzung</h1>
-        <p>Prüfen Sie <didaca-glossary-term term="PBAC" />-Regeln sowie deren Durchsetzung über <didaca-glossary-term term="OPA" />, REST und PostgreSQL.</p>
+        <p>Prüfen Sie <daca-glossary-term term="PBAC" />-Regeln sowie deren Durchsetzung über <daca-glossary-term term="OPA" />, REST und PostgreSQL.</p>
       </div>
-      <didaca-status-badge [tone]="api.policyUsingFallback() ? 'orange' : deploymentsAligned() ? 'green' : 'red'">
+      <daca-status-badge [tone]="api.policyUsingFallback() ? 'orange' : deploymentsAligned() ? 'green' : 'red'">
         {{ api.policyUsingFallback() ? 'Demo policy preview' : 'Policy revision ' + policy().revision + ' · ' + policy().state }}
-      </didaca-status-badge>
+      </daca-status-badge>
     </section>
 
     @if (api.policyUsingFallback()) {
-      <p class="didaca-alert is-warning" role="status">The policy API is unavailable. The clearly labelled deterministic demo definition below is not deployment evidence.</p>
+      <p class="daca-alert is-warning" role="status">The policy API is unavailable. The clearly labelled deterministic demo definition below is not deployment evidence.</p>
     }
 
     <div class="security-layout">
-      <section class="didaca-card policy-editor" aria-labelledby="policy-definition-title">
-        <div class="didaca-card-header"><div><p class="didaca-eyebrow">Canonical definition</p><h2 id="policy-definition-title">Who may access this product?</h2></div><span class="policy-readonly">Structured policy</span></div>
-        <div class="didaca-card-body">
+      <section class="daca-card policy-editor" aria-labelledby="policy-definition-title">
+        <div class="daca-card-header"><div><p class="daca-eyebrow">Canonical definition</p><h2 id="policy-definition-title">Who may access this product?</h2></div><span class="policy-readonly">Structured policy</span></div>
+        <div class="daca-card-body">
           <div class="policy-sentence" aria-label="Readable policy summary">
             <span>{{ policy().grants?.length ? 'ALLOW' : 'DENY' }}</span>
             <p>{{ policySummary() }}</p>
@@ -54,13 +54,13 @@ import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav
             <div><span>Protokolle</span><strong>{{ policy().protocols.join(' · ').toUpperCase() }}</strong></div>
             <div><span>Default</span><strong class="is-deny">Deny all unmatched requests</strong></div>
           </div>
-          <p class="didaca-alert">Resource owner and classification are enriched from the trusted catalog PIP; callers cannot override them.</p>
+          <p class="daca-alert">Resource owner and classification are enriched from the trusted catalog PIP; callers cannot override them.</p>
         </div>
       </section>
 
-      <aside class="didaca-card policy-test-panel" aria-labelledby="policy-test-title">
-        <div class="didaca-card-header"><h2 id="policy-test-title">Live decision test</h2><span class="demo-badge">Demo identity</span></div>
-        <div class="didaca-card-body">
+      <aside class="daca-card policy-test-panel" aria-labelledby="policy-test-title">
+        <div class="daca-card-header"><h2 id="policy-test-title">Live decision test</h2><span class="demo-badge">Demo identity</span></div>
+        <div class="daca-card-body">
           <label>Demo-Identität
             <select [ngModel]="selectedUser()" (ngModelChange)="selectedUser.set($event); testState.set('idle')">
               @for (user of identity.users(); track user.id) {
@@ -74,21 +74,21 @@ import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav
             <span>{{ expectedAllowed() ? 'ALLOW' : 'DENY' }}</span>
             <strong>{{ expectedAllowed() ? 'Policy selectors match' : 'Default-deny applies' }}</strong>
           </div>
-          <button class="didaca-button" type="button" [disabled]="testing() || !runtimeAvailable()" (click)="testEndpoint()">
+          <button class="daca-button" type="button" [disabled]="testing() || !runtimeAvailable()" (click)="testEndpoint()">
             {{ testing() ? 'PEP wird aufgerufen…' : runtimeAvailable() ? 'Geschützten REST-Zugriff testen' : 'Für dieses Produkt nur Metadaten-PoC' }}
           </button>
           @if (testMessage()) {
-            <p class="didaca-alert" [class.is-error]="testState() === 'denied' || testState() === 'error'">{{ testMessage() }}</p>
+            <p class="daca-alert" [class.is-error]="testState() === 'denied' || testState() === 'error'">{{ testMessage() }}</p>
           }
-          <a class="policy-endpoint-link" href="http://localhost:8003/docs" target="_blank" rel="noreferrer">Open sample product API docs ↗</a>
-          <small class="policy-demo-warning">The X-DiDaCa-User header is for local demonstration only, never production identity.</small>
+          <a class="policy-endpoint-link" href="/sample-api/docs" target="_blank" rel="noreferrer">Open sample product API docs ↗</a>
+          <small class="policy-demo-warning">The X-DaCa-User header is for local demonstration only, never production identity.</small>
         </div>
       </aside>
     </div>
 
-    <section class="didaca-card policy-flow-card" aria-labelledby="policy-flow-title">
-      <div class="didaca-card-header"><div><p class="didaca-eyebrow">PBAC runtime</p><h2 id="policy-flow-title">Publication and enforcement flow</h2></div><didaca-status-badge [tone]="api.policyUsingFallback() ? 'orange' : deploymentsAligned() ? 'green' : 'red'">{{ api.policyUsingFallback() ? 'Preview only' : deploymentsAligned() ? 'Targets aligned' : 'Deployment drift' }}</didaca-status-badge></div>
-      <div class="didaca-card-body policy-flow">
+    <section class="daca-card policy-flow-card" aria-labelledby="policy-flow-title">
+      <div class="daca-card-header"><div><p class="daca-eyebrow">PBAC runtime</p><h2 id="policy-flow-title">Publication and enforcement flow</h2></div><daca-status-badge [tone]="api.policyUsingFallback() ? 'orange' : deploymentsAligned() ? 'green' : 'red'">{{ api.policyUsingFallback() ? 'Preview only' : deploymentsAligned() ? 'Targets aligned' : 'Deployment drift' }}</daca-status-badge></div>
+      <div class="daca-card-body policy-flow">
         <div><span>PAP</span><strong>Data owner</strong><small>structured intent</small></div><i>→</i>
         <div><span>PIP</span><strong>DaCa catalog</strong><small>owner · product · class</small></div><i>→</i>
         <div><span>PDP</span><strong>OPA bundle</strong><small>revision {{ policy().opaRevision }}</small></div><i>→</i>
@@ -97,23 +97,23 @@ import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav
     </section>
 
     <div class="security-bottom-grid">
-      <section class="didaca-card">
-        <div class="didaca-card-header"><h2>Generated Rego</h2><span>Read-only compiler output</span></div>
+      <section class="daca-card">
+        <div class="daca-card-header"><h2>Generated Rego</h2><span>Read-only compiler output</span></div>
         <pre class="policy-code"><code>{{ policy().generatedRego }}</code></pre>
         @if (policy().state === 'draft') {
-          <div class="didaca-card-body">
-            <p class="didaca-alert is-warning">Der Entwurf gewährt noch keinen Zugriff. Erst die Publikation projiziert dieselbe Revision nach OPA und PostgreSQL.</p>
-            <button class="didaca-button" type="button" [disabled]="publishing()" (click)="publishDraft()">{{ publishing() ? 'Policy wird publiziert…' : 'Policy bewusst publizieren' }}</button>
-            @if (publishMessage()) { <p class="didaca-alert" [class.is-error]="publishFailed()">{{ publishMessage() }}</p> }
+          <div class="daca-card-body">
+            <p class="daca-alert is-warning">Der Entwurf gewährt noch keinen Zugriff. Erst die Publikation projiziert dieselbe Revision nach OPA und PostgreSQL.</p>
+            <button class="daca-button" type="button" [disabled]="publishing()" (click)="publishDraft()">{{ publishing() ? 'Policy wird publiziert…' : 'Policy bewusst publizieren' }}</button>
+            @if (publishMessage()) { <p class="daca-alert" [class.is-error]="publishFailed()">{{ publishMessage() }}</p> }
           </div>
         }
       </section>
-      <section class="didaca-card">
-        <div class="didaca-card-header"><h2>Deployment status</h2><span>Desired revision {{ policy().revision }}</span></div>
-        <div class="didaca-card-body policy-targets">
-          <article><span class="policy-target-icon">OPA</span><div><strong>HTTP policy decision point</strong><small>{{ api.policyUsingFallback() ? 'No live deployment observation' : 'Bundle deployment observation' }}</small></div><didaca-status-badge [tone]="deploymentTone(policy().opaRevision)">{{ deploymentLabel(policy().opaRevision) }}</didaca-status-badge></article>
-          <article><span class="policy-target-icon">PG</span><div><strong>PostgreSQL enforcement</strong><small>{{ api.policyUsingFallback() ? 'No live deployment observation' : 'ACL + FORCE ROW LEVEL SECURITY' }}</small></div><didaca-status-badge [tone]="deploymentTone(policy().postgresRevision)">{{ deploymentLabel(policy().postgresRevision) }}</didaca-status-badge></article>
-          <p class="didaca-alert is-warning">Publishing is complete only when both targets acknowledge the desired revision. Drift fails closed.</p>
+      <section class="daca-card">
+        <div class="daca-card-header"><h2>Deployment status</h2><span>Desired revision {{ policy().revision }}</span></div>
+        <div class="daca-card-body policy-targets">
+          <article><span class="policy-target-icon">OPA</span><div><strong>HTTP policy decision point</strong><small>{{ api.policyUsingFallback() ? 'No live deployment observation' : 'Bundle deployment observation' }}</small></div><daca-status-badge [tone]="deploymentTone(policy().opaRevision)">{{ deploymentLabel(policy().opaRevision) }}</daca-status-badge></article>
+          <article><span class="policy-target-icon">PG</span><div><strong>PostgreSQL enforcement</strong><small>{{ api.policyUsingFallback() ? 'No live deployment observation' : 'ACL + FORCE ROW LEVEL SECURITY' }}</small></div><daca-status-badge [tone]="deploymentTone(policy().postgresRevision)">{{ deploymentLabel(policy().postgresRevision) }}</daca-status-badge></article>
+          <p class="daca-alert is-warning">Publishing is complete only when both targets acknowledge the desired revision. Drift fails closed.</p>
         </div>
       </section>
     </div>
@@ -190,12 +190,12 @@ export class SecurityPolicyComponent {
 
   testEndpoint(): void {
     const user = this.selectedUser();
-    const headers: Record<string, string> = user === 'anonymous' ? {} : { 'X-DiDaCa-User': user };
+    const headers: Record<string, string> = user === 'anonymous' ? {} : { 'X-DaCa-User': user };
     this.testing.set(true);
     this.testMessage.set('');
     const endpoint = this.api.product().id === '9c9a0112-d4ef-57d0-862c-0d27872c82c2'
-      ? 'http://localhost:8003/api/v1/daaif/estv.direct-tax-assessments.v1'
-      : 'http://localhost:8003/api/v1/estv/tax-statistics';
+      ? '/sample-api/api/v1/daaif/estv.direct-tax-assessments.v1'
+      : '/sample-api/api/v1/estv/tax-statistics';
     this.http
       .get<unknown>(endpoint, { headers, observe: 'response' })
       .pipe(finalize(() => this.testing.set(false)))

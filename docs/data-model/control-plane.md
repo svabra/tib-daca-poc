@@ -2,14 +2,14 @@
 
 The optional control plane observes catalogs and records desired federation configuration without becoming their runtime dependency.
 
-**Storage:** PostgreSQL (`didaca_control_plane`).
+**Storage:** PostgreSQL (`daca_control_plane`).
 
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
-- SQLAlchemy source: [`services/control-plane-api/src/didaca_control_plane/models.py`](../../services/control-plane-api/src/didaca_control_plane/models.py)
+- SQLAlchemy source: [`services/control-plane-api/src/daca_control_plane/models.py`](../../services/control-plane-api/src/daca_control_plane/models.py)
 - Alembic head: `20260803_0001`
 - Schema fingerprint: `036db12c708dd656`
-- Migration fingerprint: `e3a2b4cdfcec290a`
+- Migration fingerprint: `ff3a5ea9ca863788`
 - Tables: `6`
 
 ## Domain status vocabulary

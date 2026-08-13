@@ -1,4 +1,4 @@
-package didaca.authz
+package daca.authz
 
 import rego.v1
 

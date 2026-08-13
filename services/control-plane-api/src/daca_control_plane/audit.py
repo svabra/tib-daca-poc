@@ -6,7 +6,7 @@ from .problems import request_id
 
 
 def actor_from(request: Request) -> str:
-    return request.headers.get("X-DiDaCa-Actor", "").strip()[:200]
+    return request.headers.get("X-DaCa-Actor", "").strip()[:200]
 
 
 def record_audit(

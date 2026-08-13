@@ -4,10 +4,10 @@ requires-python = ">=3.14"
 
 [manifest]
 members = [
-    "bit-didaca-monorepo",
-    "didaca-catalog-api",
-    "didaca-control-plane-api",
-    "didaca-sample-data-product",
+    "bit-daca-monorepo",
+    "daca-catalog-api",
+    "daca-control-plane-api",
+    "daca-sample-data-product",
 ]
 
 [[package]]
@@ -55,7 +55,7 @@ wheels = [
 ]
 
 [[package]]
-name = "bit-didaca-monorepo"
+name = "bit-daca-monorepo"
 version = "0.1.0"
 source = { virtual = "." }
 
@@ -147,7 +147,7 @@ wheels = [
 ]
 
 [[package]]
-name = "didaca-catalog-api"
+name = "daca-catalog-api"
 version = "0.1.0"
 source = { editable = "services/catalog-api" }
 dependencies = [
@@ -181,7 +181,7 @@ requires-dist = [
 provides-extras = ["test"]
 
 [[package]]
-name = "didaca-control-plane-api"
+name = "daca-control-plane-api"
 version = "0.1.0"
 source = { editable = "services/control-plane-api" }
 dependencies = [
@@ -215,7 +215,7 @@ requires-dist = [
 provides-extras = ["test"]
 
 [[package]]
-name = "didaca-sample-data-product"
+name = "daca-sample-data-product"
 version = "0.1.0"
 source = { editable = "services/sample-data-product" }
 dependencies = [

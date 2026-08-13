@@ -36,15 +36,16 @@ class ProblemError(Exception):
 
 
 app = FastAPI(
-    title="BIT DiDaCa Synthetic ESTV Data Product",
+    title="BIT DaCa Synthetic ESTV Data Product",
     version="0.1.0",
     description="HTTP PEP for a synthetic aggregate ESTV tax-statistics product.",
+    root_path=settings.root_path,
 )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:8080", "http://127.0.0.1:8080"],
     allow_methods=["GET", "PUT", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-DiDaCa-User", "X-DiDaCa-Machine", "X-Request-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-DaCa-User", "X-DaCa-Machine", "X-Request-ID"],
 )
 
 
@@ -68,7 +69,7 @@ def problem_response(
     headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     content: dict[str, Any] = {
-        "type": f"https://didaca.bit.admin.ch/problems/{problem_type}",
+        "type": f"https://daca.bit.admin.ch/problems/{problem_type}",
         "title": title,
         "status": status,
         "detail": detail,
@@ -190,7 +191,7 @@ async def evaluate_opa(input_document: dict[str, Any]) -> tuple[bool, str, str |
         raise ProblemError(
             503,
             "Policy decision undefined",
-            "OPA returned no defined DiDaCa decision; access failed closed.",
+            "OPA returned no defined DaCa decision; access failed closed.",
             "pdp-undefined",
         )
     result = body["result"]
@@ -263,18 +264,18 @@ def ready() -> dict[str, str]:
 @app.get("/api/v1/estv/tax-statistics", tags=["data products"])
 async def read_tax_statistics(
     request: Request,
-    x_didaca_user: str | None = Header(default=None, alias="X-DiDaCa-User"),
+    x_daca_user: str | None = Header(default=None, alias="X-DaCa-User"),
 ) -> dict[str, Any]:
-    if not settings.didaca_demo_auth:
+    if not settings.daca_demo_auth:
         raise ProblemError(
             503,
             "Production identity provider not configured",
             "Demo identity is disabled and no OIDC provider is configured for this POC.",
             "identity-unavailable",
         )
-    if not x_didaca_user or not x_didaca_user.strip():
-        raise ProblemError(401, "Identity required", "Provide X-DiDaCa-User.", "identity-required")
-    subject_id = x_didaca_user.strip()
+    if not x_daca_user or not x_daca_user.strip():
+        raise ProblemError(401, "Identity required", "Provide X-DaCa-User.", "identity-required")
+    subject_id = x_daca_user.strip()
     allow, reason, decision_id = await evaluate_opa(decision_input(subject_id, request))
     if not allow:
         raise ProblemError(403, "Access denied", reason, "access-denied")
@@ -307,18 +308,18 @@ DAAIF_REFERENCE_PRODUCT_ID = "9c9a0112-d4ef-57d0-862c-0d27872c82c2"
 async def read_daaif_reference_product(
     source_product_id: str,
     request: Request,
-    x_didaca_user: str | None = Header(default=None, alias="X-DiDaCa-User"),
-    x_didaca_machine: str | None = Header(default=None, alias="X-DiDaCa-Machine"),
+    x_daca_user: str | None = Header(default=None, alias="X-DaCa-User"),
+    x_daca_machine: str | None = Header(default=None, alias="X-DaCa-Machine"),
 ) -> dict[str, Any]:
     if source_product_id != "estv.direct-tax-assessments.v1":
         raise ProblemError(404, "Data product not found", "This fixture has metadata only.", "not-found")
-    if not settings.didaca_demo_auth:
+    if not settings.daca_demo_auth:
         raise ProblemError(503, "Production identity provider not configured", "Demo identity is disabled.", "identity-unavailable")
-    identities = [value.strip() for value in (x_didaca_user, x_didaca_machine) if value and value.strip()]
+    identities = [value.strip() for value in (x_daca_user, x_daca_machine) if value and value.strip()]
     if len(identities) != 1:
         raise ProblemError(401, "Identity required", "Provide exactly one demo person or machine identity.", "identity-required")
     subject_id = identities[0]
-    subject_type = "machine" if x_didaca_machine and x_didaca_machine.strip() else "person"
+    subject_type = "machine" if x_daca_machine and x_daca_machine.strip() else "person"
     allow, reason, decision_id = await evaluate_opa(
         decision_input(subject_id, request, subject_type=subject_type, product_id=DAAIF_REFERENCE_PRODUCT_ID)
     )
@@ -409,7 +410,7 @@ def deploy_policy_projection(
     projection: PolicyProjection,
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> dict[str, Any]:
-    expected = f"Bearer {settings.didaca_policy_deployment_token}"
+    expected = f"Bearer {settings.daca_policy_deployment_token}"
     if not authorization or not hmac.compare_digest(authorization, expected):
         raise ProblemError(401, "Invalid deployment identity", "Bearer token required.", "invalid-token")
     return apply_projection(product_id, projection)

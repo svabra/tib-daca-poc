@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: daca-catalog-ui
+  namespace: daai-brs-d
+  labels:
+    app.kubernetes.io/name: daca-catalog-ui
+    app.kubernetes.io/part-of: tib-daca-poc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: daca-catalog-ui
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: daca-catalog-ui
+        app.kubernetes.io/part-of: tib-daca-poc
+    spec:
+      containers:
+        - name: catalog-ui
+          image: docker-hub.nexus.bit.admin.ch/svabra/tib-daca-catalog-ui:0.1.0
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: daca-catalog-ui
+  namespace: daai-brs-d
+  labels:
+    app.kubernetes.io/name: daca-catalog-ui
+spec:
+  selector:
+    app.kubernetes.io/name: daca-catalog-ui
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: daca-catalog
+  namespace: daai-brs-d
+  labels:
+    app.kubernetes.io/name: daca-catalog-ui
+    app.kubernetes.io/part-of: tib-daca-poc
+    ros.bit.admin.ch/ingress: extern
+  annotations:
+    openshift.io/host.generated: "true"
+spec:
+  path: /
+  to:
+    kind: Service
+    name: daca-catalog-ui
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None

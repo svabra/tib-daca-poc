@@ -1,8 +1,8 @@
-# BIT DiDaCa AI Harness
+# BIT DaCa AI Harness
 
 ## Mission
 
-BIT DiDaCa (Distributed Data Catalog) is a federation-ready catalog ecosystem. A catalog is
+BIT DaCa (Distributed Data Catalog) is a federation-ready catalog ecosystem. A catalog is
 usable on its own and owns metadata about data products, endpoint descriptions, lineage,
 provenance, and access policies. The control plane observes and configures relationships; it
 must never become a runtime dependency for a standalone catalog.
@@ -27,7 +27,7 @@ another product-delivery protocol without an explicit architecture decision.
 ## Future federation capability (not implemented)
 
 Catalogs may eventually exchange metadata, lineage, provenance, endpoint descriptions, and
-access-policy settings. Future resources must retain a stable `urn:didaca:*` URI,
+access-policy settings. Future resources must retain a stable `urn:daca:*` URI,
 `originCatalogId`, monotonic revision, content hash, and tombstone/retirement information.
 Synchronization must require directed trust, declare resource scopes, preserve origin ownership,
 be idempotent, expose desired/observed revisions, and define conflict handling. The POC records
@@ -39,8 +39,8 @@ opt-in and disabled by default because it carries a higher trust requirement tha
 - Default deny. Missing, undefined, malformed, or unavailable PDP decisions expose no data.
 - Product owner/classification attributes are loaded from trusted catalog/PIP data, never from a
   caller-controlled request body or header.
-- Demo identity headers are accepted only when `DIDACA_DEMO_AUTH=true` (catalog/product) or
-  `DIDACA_CONTROL_DEMO_AUTH=true` (control plane), and are not production authentication.
+- Demo identity headers are accepted only when `DACA_DEMO_AUTH=true` (catalog/product) or
+  `DACA_CONTROL_DEMO_AUTH=true` (control plane), and are not production authentication.
 - Control-plane health polling accepts only SSRF-validated HTTP(S) catalog endpoints; private,
   loopback, link-local, reserved, credential-bearing, and unresolvable targets are blocked unless
   the hostname is explicitly allowlisted for the local Compose network.

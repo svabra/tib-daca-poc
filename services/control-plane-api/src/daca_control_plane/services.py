@@ -17,7 +17,7 @@ def get_catalog(session: Session, identifier: str) -> CatalogInstance:
             404,
             "Catalog not found",
             f"No catalog instance exists with id '{identifier}'.",
-            problem_type="urn:didaca:problem:catalog-not-found",
+            problem_type="urn:daca:problem:catalog-not-found",
         )
     return catalog
 
@@ -29,7 +29,7 @@ def get_trust_grant(session: Session, identifier: str) -> TrustGrant:
             404,
             "Trust grant not found",
             f"No trust grant exists with id '{identifier}'.",
-            problem_type="urn:didaca:problem:trust-grant-not-found",
+            problem_type="urn:daca:problem:trust-grant-not-found",
         )
     return grant
 
@@ -41,7 +41,7 @@ def get_sync_configuration(session: Session, identifier: str) -> SyncConfigurati
             404,
             "Sync configuration not found",
             f"No sync configuration exists with id '{identifier}'.",
-            problem_type="urn:didaca:problem:sync-configuration-not-found",
+            problem_type="urn:daca:problem:sync-configuration-not-found",
         )
     return configuration
 
@@ -56,7 +56,7 @@ def require_revision(if_match: str | None, actual: int) -> None:
             428,
             "Precondition required",
             "Supply the current resource ETag in the If-Match header.",
-            problem_type="urn:didaca:problem:precondition-required",
+            problem_type="urn:daca:problem:precondition-required",
         )
     candidate = if_match.strip().removeprefix("W/")
     if candidate != etag(actual):
@@ -64,7 +64,7 @@ def require_revision(if_match: str | None, actual: int) -> None:
             412,
             "Precondition failed",
             "The resource changed after it was read; reload it and retry the edit.",
-            problem_type="urn:didaca:problem:stale-revision",
+            problem_type="urn:daca:problem:stale-revision",
         )
 
 
@@ -74,7 +74,7 @@ def validate_grant_window(valid_from: datetime | None, valid_until: datetime | N
             422,
             "Invalid validity window",
             "validUntil must be after validFrom.",
-            problem_type="urn:didaca:problem:invalid-trust-window",
+            problem_type="urn:daca:problem:invalid-trust-window",
         )
 
 
@@ -113,7 +113,7 @@ def validate_enabled_sync(
             422,
             "Policy sync is disabled",
             "Policy sharing is opt-in and is disabled for this control-plane deployment.",
-            problem_type="urn:didaca:problem:policy-sync-disabled",
+            problem_type="urn:daca:problem:policy-sync-disabled",
         )
 
     _validate_filter_scope("product", configuration.product_filters, grant.product_filters)
@@ -162,7 +162,7 @@ def _invalid_trust(detail: str) -> ApiProblem:
         422,
         "Sync is not trusted",
         detail,
-        problem_type="urn:didaca:problem:sync-not-trusted",
+        problem_type="urn:daca:problem:sync-not-trusted",
     )
 
 

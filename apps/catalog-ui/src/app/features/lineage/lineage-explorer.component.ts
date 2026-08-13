@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
-import { StatusBadgeComponent } from '@bit-didaca/design-system';
+import { StatusBadgeComponent } from '@bit-daca/design-system';
 import dagre from '@dagrejs/dagre';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { FALLBACK_EDGES, FALLBACK_NODES, FALLBACK_PROVENANCE } from '../../core/catalog.seed';
@@ -12,38 +12,38 @@ interface PositionedNode extends LineageNode { x: number; y: number; }
 interface PositionedEdge extends LineageEdge { path: string; labelX: number; labelY: number; }
 
 @Component({
-  selector: 'didaca-lineage-explorer',
+  selector: 'daca-lineage-explorer',
   standalone: true,
   imports: [DatePipe, ProductWorkspaceNavComponent, StatusBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <didaca-product-workspace-nav
+    <daca-product-workspace-nav
       [productId]="api.product().id"
       [productTitle]="api.product().title"
       activeSection="lineage"
     />
 
-    <section class="didaca-page-heading">
+    <section class="daca-page-heading">
       <div>
-        <p class="didaca-eyebrow">Datenprodukt · Herkunft</p>
+        <p class="daca-eyebrow">Datenprodukt · Herkunft</p>
         <h1>Lineage & Provenienz</h1>
         <p>Nachvollziehbare Quellen, Transformationen und deklarierte Konsumenten über Kataloggrenzen hinweg.</p>
       </div>
-      <didaca-status-badge tone="green">{{ edges().length }} relations · current</didaca-status-badge>
+      <daca-status-badge tone="green">{{ edges().length }} relations · current</daca-status-badge>
     </section>
 
-    <div class="lineage-toolbar didaca-card">
+    <div class="lineage-toolbar daca-card">
       <div class="lineage-legend" aria-label="Lineage legend">
         <span><i class="is-source"></i>Source</span><span><i class="is-transform"></i>Transform</span>
         <span><i class="is-product"></i>Product</span><span><i class="is-consumer"></i>Consumer</span>
         <span><b></b>Verified</span><span><b class="is-declared"></b>Declared</span>
       </div>
-      <div class="lineage-controls"><button type="button" class="didaca-button is-secondary" (click)="focusProduct()">Focus product</button><span>Layout: left → right</span></div>
+      <div class="lineage-controls"><button type="button" class="daca-button is-secondary" (click)="focusProduct()">Focus product</button><span>Layout: left → right</span></div>
     </div>
 
     <div class="lineage-layout">
-      <section class="didaca-card lineage-canvas-card" aria-labelledby="lineage-graph-title">
-        <div class="didaca-card-header"><div><p class="didaca-eyebrow">Cross-catalog graph</p><h2 id="lineage-graph-title">{{ api.product().title }}</h2></div><span>Native SVG · Dagre layout</span></div>
+      <section class="daca-card lineage-canvas-card" aria-labelledby="lineage-graph-title">
+        <div class="daca-card-header"><div><p class="daca-eyebrow">Cross-catalog graph</p><h2 id="lineage-graph-title">{{ api.product().title }}</h2></div><span>Native SVG · Dagre layout</span></div>
         <div class="lineage-canvas">
           <svg viewBox="0 0 1000 430" role="img" aria-labelledby="lineage-graph-title lineage-graph-description">
             <desc id="lineage-graph-description">Data flows from cantonal aggregates through ESTV harmonisation to the tax statistics product and the authorised St. Gallen consumer.</desc>
@@ -77,24 +77,24 @@ interface PositionedEdge extends LineageEdge { path: string; labelX: number; lab
         </div>
       </section>
 
-      <aside class="didaca-card lineage-detail">
-        <div class="didaca-card-header"><h2>Selected asset</h2><didaca-status-badge tone="blue">{{ selectedNode().kind }}</didaca-status-badge></div>
-        <div class="didaca-card-body">
+      <aside class="daca-card lineage-detail">
+        <div class="daca-card-header"><h2>Selected asset</h2><daca-status-badge tone="blue">{{ selectedNode().kind }}</daca-status-badge></div>
+        <div class="daca-card-body">
           <div class="lineage-detail-icon">{{ selectedNode().kind.slice(0, 1).toUpperCase() }}</div>
           <h3>{{ selectedNode().label }}</h3>
           <p>{{ selectedNode().detail }}</p>
           <dl class="metadata-definition-list">
             <div><dt>Catalog</dt><dd>{{ selectedNode().catalog }}</dd></div>
-            <div><dt>Stable ID</dt><dd class="didaca-code">urn:didaca:lineage:{{ selectedNode().id }}</dd></div>
+            <div><dt>Stable ID</dt><dd class="daca-code">urn:daca:lineage:{{ selectedNode().id }}</dd></div>
             <div><dt>Trust</dt><dd>Origin attested</dd></div>
           </dl>
         </div>
       </aside>
     </div>
 
-    <section class="didaca-card provenance-card" aria-labelledby="provenance-title">
-      <div class="didaca-card-header"><div><p class="didaca-eyebrow">Append-only evidence</p><h2 id="provenance-title">Provenance timeline</h2></div><didaca-status-badge tone="green">Signed chain intact</didaca-status-badge></div>
-      <div class="didaca-card-body provenance-timeline">
+    <section class="daca-card provenance-card" aria-labelledby="provenance-title">
+      <div class="daca-card-header"><div><p class="daca-eyebrow">Append-only evidence</p><h2 id="provenance-title">Provenance timeline</h2></div><daca-status-badge tone="green">Signed chain intact</daca-status-badge></div>
+      <div class="daca-card-body provenance-timeline">
         @for (event of provenance(); track event.id; let first = $first) {
           <article [class.is-latest]="first">
             <div class="provenance-marker"></div>

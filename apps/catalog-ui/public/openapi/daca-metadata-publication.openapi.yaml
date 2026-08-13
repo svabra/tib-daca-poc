@@ -3,7 +3,7 @@ openapi: "3.1.0"
 info:
   title: "DaCa Metadata Publication API"
   version: "0.1.0"
-  description: "Focused integration contract for publishing REST metadata from DAAIF into DaCa. Set DIDACA_OPEN_METADATA_PUBLICATION=true on the Catalog API. The endpoint accepts metadata only, never credentials or product records, and does not grant access."
+  description: "Focused integration contract for publishing REST metadata from DAAIF into DaCa. Set DACA_OPEN_METADATA_PUBLICATION=true on the Catalog API. The endpoint accepts metadata only, never credentials or product records, and does not grant access."
 servers:
   - url: "http://localhost:8080"
     description: "Local DaCa PoC via Compose"
@@ -13,7 +13,7 @@ paths:
       tags:
         - "metadata publication"
       summary: "Publish REST metadata from an external curation platform"
-      description: "Accepts catalog metadata only. No credentials, secrets or product payloads are stored. Publication never grants data access; PBAC remains default deny until a policy is published. The endpoint is enabled only when DIDACA_OPEN_METADATA_PUBLICATION=true."
+      description: "Accepts catalog metadata only. No credentials, secrets or product payloads are stored. Publication never grants data access; PBAC remains default deny until a policy is published. The endpoint is enabled only when DACA_OPEN_METADATA_PUBLICATION=true."
       operationId: "publish_metadata_api_v1_metadata_publications_post"
       requestBody:
         content:

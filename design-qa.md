@@ -3,7 +3,7 @@
 ## Comparison target
 
 - Source visual truth: `docs/mockups/01-product-360-desktop.png`.
-- Rendered implementation: `output/playwright/didaca-exposure/.playwright-cli/page-2026-08-10T10-46-02-639Z.png`.
+- Rendered implementation: `output/playwright/daca-exposure/.playwright-cli/page-2026-08-10T10-46-02-639Z.png`.
 - Canonical implementation capture: `docs/mockups/04-data-product-exposure-desktop.png`.
 - Mobile implementation capture: `docs/mockups/04-data-product-exposure-mobile.png`.
 - Desktop comparison viewport: 1440 × 1000 CSS pixels. Source and implementation are both 1440 × 1000 PNGs, captured at CSS scale / device density 1, so no density normalization was required.
@@ -37,7 +37,7 @@
 
 1. Initial interaction pass found a P1 content-state issue: an invalid end date switched the preview to `DENY` but the sentence still used permissive wording and displayed the reversed dates.
 2. The preview conditional was changed so an invalid range explicitly says that selected groups remain blocked until valid dates are provided.
-3. Post-fix evidence: `output/playwright/didaca-exposure/.playwright-cli/page-2026-08-10T10-46-50-731Z.png` shows the error alert, `DENY` explanation, `Ungültig` summary, and disabled publication button together. The final default-state captures were then regenerated.
+3. Post-fix evidence: `output/playwright/daca-exposure/.playwright-cli/page-2026-08-10T10-46-50-731Z.png` shows the error alert, `DENY` explanation, `Ungültig` summary, and disabled publication button together. The final default-state captures were then regenerated.
 
 ## Primary interactions and runtime checks
 

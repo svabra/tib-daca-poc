@@ -2,7 +2,7 @@
 
 The standalone catalog owns product metadata, workflows, access governance and semantic evidence.
 
-**Storage:** SQLite in the PoC (`/data/didaca-catalog.db`); PostgreSQL is a future target.
+**Storage:** PostgreSQL (`daca_catalog`), version 18.4 locally and version 17 in production.
 
 ## DAAIF boundary
 
@@ -10,10 +10,10 @@ DAAIF is an external source system and its internal data model is outside this r
 
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
-- SQLAlchemy source: [`services/catalog-api/src/didaca_catalog/models.py`](../../services/catalog-api/src/didaca_catalog/models.py)
+- SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
 - Alembic head: `0006_org_custom_groups`
 - Schema fingerprint: `44381a5a4f11afe1`
-- Migration fingerprint: `fc24a027f4cd9a0d`
+- Migration fingerprint: `f0682139c7ea412c`
 - Tables: `26`
 
 ## Domain status vocabulary

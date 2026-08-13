@@ -1,27 +1,27 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { StatusBadgeComponent } from '@bit-didaca/design-system';
+import { StatusBadgeComponent } from '@bit-daca/design-system';
 import { ControlPlaneApiService } from '../../core/control-plane-api.service';
 
 @Component({
-  selector: 'didaca-federation-dashboard',
+  selector: 'daca-federation-dashboard',
   standalone: true,
   imports: [RouterLink, StatusBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="didaca-page-heading">
+    <section class="daca-page-heading">
       <div>
-        <p class="didaca-eyebrow">Mockup 03 · Security & federation control</p>
+        <p class="daca-eyebrow">Mockup 03 · Security & federation control</p>
         <h1>Catalog federation overview</h1>
         <p>Register autonomous catalogs, govern directed trust and declare future synchronization intent without centralizing their data.</p>
       </div>
-      <didaca-status-badge [tone]="api.eventStreamConnected() ? 'green' : api.usingFallback() ? 'orange' : 'blue'">
+      <daca-status-badge [tone]="api.eventStreamConnected() ? 'green' : api.usingFallback() ? 'orange' : 'blue'">
         {{ api.eventStreamConnected() ? 'Health SSE connected' : api.usingFallback() ? 'Preview topology' : 'Health polling active' }}
-      </didaca-status-badge>
+      </daca-status-badge>
     </section>
 
     @if (api.usingFallback()) {
-      <p class="didaca-alert is-warning">The control-plane API is starting or unavailable. A deterministic federation preview is displayed and controls do not mutate local data.</p>
+      <p class="daca-alert is-warning">The control-plane API is starting or unavailable. A deterministic federation preview is displayed and controls do not mutate local data.</p>
     }
 
     <section class="control-kpis" aria-label="Federation status">
@@ -32,9 +32,9 @@ import { ControlPlaneApiService } from '../../core/control-plane-api.service';
     </section>
 
     <div class="federation-main-grid">
-      <section class="didaca-card topology-card" aria-labelledby="topology-title">
-        <div class="didaca-card-header">
-          <div><p class="didaca-eyebrow">Directed trust topology</p><h2 id="topology-title">Swiss catalog ecosystem</h2></div>
+      <section class="daca-card topology-card" aria-labelledby="topology-title">
+        <div class="daca-card-header">
+          <div><p class="daca-eyebrow">Directed trust topology</p><h2 id="topology-title">Swiss catalog ecosystem</h2></div>
           <div class="topology-legend"><span><i></i>Approved</span><span><i class="is-draft"></i>Draft</span></div>
         </div>
         <div class="topology-canvas">
@@ -75,16 +75,16 @@ import { ControlPlaneApiService } from '../../core/control-plane-api.service';
       </section>
 
       <aside class="federation-side-stack">
-        <section class="didaca-card">
-          <div class="didaca-card-header"><h2>Attention required</h2><span class="attention-count">2</span></div>
-          <div class="didaca-card-body attention-list">
+        <section class="daca-card">
+          <div class="daca-card-header"><h2>Attention required</h2><span class="attention-count">2</span></div>
+          <div class="daca-card-body attention-list">
             <article><span class="attention-icon is-warning">!</span><div><strong>BIT configuration drift</strong><p>Observed revision 20, desired 21.</p><small>Detected 20 minutes ago</small></div></article>
             <article><span class="attention-icon is-info">i</span><div><strong>Trust approval pending</strong><p>ESTV → BIT metadata grant is draft.</p><small>No sync can be enabled yet</small></div></article>
           </div>
         </section>
-        <section class="didaca-card">
-          <div class="didaca-card-header"><h2>Federation guardrails</h2><didaca-status-badge [tone]="api.usingFallback() ? 'orange' : 'green'">{{ api.usingFallback() ? 'Preview rules' : 'Enforced' }}</didaca-status-badge></div>
-          <div class="didaca-card-body guardrail-list">
+        <section class="daca-card">
+          <div class="daca-card-header"><h2>Federation guardrails</h2><daca-status-badge [tone]="api.usingFallback() ? 'orange' : 'green'">{{ api.usingFallback() ? 'Preview rules' : 'Enforced' }}</daca-status-badge></div>
+          <div class="daca-card-body guardrail-list">
             <p><span>✓</span><strong>Directed trust required</strong><small>Every route needs a matching approved grant.</small></p>
             <p><span>✓</span><strong>Origin always wins</strong><small>Consumers cannot overwrite origin records.</small></p>
             <p><span>✓</span><strong>Policies excluded by default</strong><small>Explicit opt-in is required per grant and route.</small></p>
@@ -93,15 +93,15 @@ import { ControlPlaneApiService } from '../../core/control-plane-api.service';
       </aside>
     </div>
 
-    <section class="didaca-card control-activity-card" aria-labelledby="control-activity-title">
-      <div class="didaca-card-header"><h2 id="control-activity-title">Recent control-plane observations</h2><span>{{ api.usingFallback() ? 'Deterministic preview · not operational evidence' : 'Read-only operational evidence' }}</span></div>
-      <div class="didaca-table-wrap">
-        <table class="didaca-table">
+    <section class="daca-card control-activity-card" aria-labelledby="control-activity-title">
+      <div class="daca-card-header"><h2 id="control-activity-title">Recent control-plane observations</h2><span>{{ api.usingFallback() ? 'Deterministic preview · not operational evidence' : 'Read-only operational evidence' }}</span></div>
+      <div class="daca-table-wrap">
+        <table class="daca-table">
           <thead><tr><th>Time</th><th>Instance</th><th>Observation</th><th>Revision</th><th>Status</th></tr></thead>
           <tbody>
-            <tr><td>09:14:22</td><td>ESTV Data Catalog</td><td>Health probe completed</td><td>12 / 12</td><td><didaca-status-badge [tone]="api.usingFallback() ? 'orange' : 'green'">{{ api.usingFallback() ? 'Preview healthy' : 'Healthy' }}</didaca-status-badge></td></tr>
-            <tr><td>09:13:54</td><td>BIT Integration Catalog</td><td>Desired configuration not observed</td><td>20 / 21</td><td><didaca-status-badge tone="orange">{{ api.usingFallback() ? 'Preview drift' : 'Drift' }}</didaca-status-badge></td></tr>
-            <tr><td>08:30:05</td><td>ESTV Data Catalog</td><td>Policy deployment acknowledged</td><td>3 / 3</td><td><didaca-status-badge [tone]="api.usingFallback() ? 'orange' : 'green'">{{ api.usingFallback() ? 'Preview aligned' : 'Aligned' }}</didaca-status-badge></td></tr>
+            <tr><td>09:14:22</td><td>ESTV Data Catalog</td><td>Health probe completed</td><td>12 / 12</td><td><daca-status-badge [tone]="api.usingFallback() ? 'orange' : 'green'">{{ api.usingFallback() ? 'Preview healthy' : 'Healthy' }}</daca-status-badge></td></tr>
+            <tr><td>09:13:54</td><td>BIT Integration Catalog</td><td>Desired configuration not observed</td><td>20 / 21</td><td><daca-status-badge tone="orange">{{ api.usingFallback() ? 'Preview drift' : 'Drift' }}</daca-status-badge></td></tr>
+            <tr><td>08:30:05</td><td>ESTV Data Catalog</td><td>Policy deployment acknowledged</td><td>3 / 3</td><td><daca-status-badge [tone]="api.usingFallback() ? 'orange' : 'green'">{{ api.usingFallback() ? 'Preview aligned' : 'Aligned' }}</daca-status-badge></td></tr>
           </tbody>
         </table>
       </div>

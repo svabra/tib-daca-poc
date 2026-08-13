@@ -4,8 +4,8 @@ import io
 import json
 import tarfile
 
-from didaca_catalog.policy import GENERATED_REGO, ProjectionResult
-from didaca_catalog.seed import ESTV_PRODUCT_ID, ESTV_PRODUCT_URN
+from daca_catalog.policy import GENERATED_REGO, ProjectionResult
+from daca_catalog.seed import ESTV_PRODUCT_ID, ESTV_PRODUCT_URN
 
 
 def product_url() -> str:
@@ -28,7 +28,7 @@ def test_seed_policy_is_structured_and_rego_is_generated(client):
     assert latest.headers["etag"] == '"1"'
     assert latest.json()["definition"]["subjects"]["userIds"] == ["kanton-st-gallen"]
     assert latest.json()["generatedRego"] == GENERATED_REGO
-    assert "data.didaca.policies" in latest.json()["generatedRego"]
+    assert "data.daca.policies" in latest.json()["generatedRego"]
 
 
 def test_policy_edit_requires_etag_and_publish_creates_immutable_revision(client, monkeypatch):
@@ -40,7 +40,7 @@ def test_policy_edit_requires_etag_and_publish_creates_immutable_revision(client
 
     draft = client.post(
         f"{product_url()}/policies",
-        headers={"If-Match": '"1"', "X-DiDaCa-User": "estv-owner"},
+        headers={"If-Match": '"1"', "X-DaCa-User": "estv-owner"},
         json={"definition": policy_definition()},
     )
     assert draft.status_code == 201
@@ -56,7 +56,7 @@ def test_policy_edit_requires_etag_and_publish_creates_immutable_revision(client
     assert stale.status_code == 412
 
     monkeypatch.setattr(
-        "didaca_catalog.main.project_to_postgresql",
+        "daca_catalog.main.project_to_postgresql",
         lambda settings, product_id, revision, definition: ProjectionResult(
             "deployed", observed_revision=revision
         ),
@@ -64,7 +64,7 @@ def test_policy_edit_requires_etag_and_publish_creates_immutable_revision(client
 
     published = client.post(
         f"{product_url()}/policies/{draft_id}/publish",
-        headers={"If-Match": '"2"', "X-DiDaCa-User": "estv-owner"},
+        headers={"If-Match": '"2"', "X-DaCa-User": "estv-owner"},
     )
     assert published.status_code == 201
     assert published.headers["etag"] == '"3"'
@@ -116,15 +116,15 @@ def test_opa_bundle_is_etagged_and_contains_policy_plus_pip_data(client):
 
     with tarfile.open(fileobj=io.BytesIO(response.content), mode="r:gz") as bundle:
         names = set(bundle.getnames())
-        assert names == {".manifest", "data.json", "didaca/authz/policy.rego"}
+        assert names == {".manifest", "data.json", "daca/authz/policy.rego"}
         data = json.load(bundle.extractfile("data.json"))
-        rego = bundle.extractfile("didaca/authz/policy.rego").read().decode()
+        rego = bundle.extractfile("daca/authz/policy.rego").read().decode()
         manifest = json.load(bundle.extractfile(".manifest"))
-    assert data["didaca"]["policies"][0]["subjects"]["userIds"] == ["kanton-st-gallen"]
-    assert data["didaca"]["resources"][ESTV_PRODUCT_URN]["owner"] == "ESTV"
-    assert data["didaca"]["resourcesById"][str(ESTV_PRODUCT_ID)]["urn"] == ESTV_PRODUCT_URN
+    assert data["daca"]["policies"][0]["subjects"]["userIds"] == ["kanton-st-gallen"]
+    assert data["daca"]["resources"][ESTV_PRODUCT_URN]["owner"] == "ESTV"
+    assert data["daca"]["resourcesById"][str(ESTV_PRODUCT_ID)]["urn"] == ESTV_PRODUCT_URN
     assert "decision :=" in rego
-    assert manifest["roots"] == ["didaca"]
+    assert manifest["roots"] == ["daca"]
 
     cached = client.get(
         "/api/v1/opa/bundles/catalog.tar.gz",
@@ -157,7 +157,7 @@ def test_opa_status_acknowledges_the_active_bundle(client):
     observed = client.post(
         "/api/v1/internal/opa/status",
         headers={"Authorization": "Bearer test-internal-token"},
-        json={"bundles": {"didaca": {"active_revision": revision}}},
+        json={"bundles": {"daca": {"active_revision": revision}}},
     )
     assert observed.status_code == 200
     assert observed.json()["deploymentsAcknowledged"] == 1

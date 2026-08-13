@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from didaca_catalog.models import PolicyDeployment
-from didaca_catalog.policy import GENERATED_REGO, definition_as_camel, project_to_postgresql
-from didaca_catalog.seed import ESTV_PRODUCT_ID, seed_catalog
-from didaca_catalog.settings import Settings
+from daca_catalog.models import PolicyDeployment
+from daca_catalog.policy import GENERATED_REGO, definition_as_camel, project_to_postgresql
+from daca_catalog.seed import ESTV_PRODUCT_ID, seed_catalog
+from daca_catalog.settings import Settings
 from sqlalchemy import select
 
 
@@ -58,7 +58,7 @@ def test_projection_maps_canonical_http_to_http_rest(monkeypatch):
         captured.update(url=url, json=json, headers=headers, timeout=timeout)
         return SuccessfulResponse()
 
-    monkeypatch.setattr("didaca_catalog.policy.httpx.put", fake_put)
+    monkeypatch.setattr("daca_catalog.policy.httpx.put", fake_put)
     result = project_to_postgresql(
         Settings(
             database_url="sqlite+pysqlite://",
@@ -93,7 +93,7 @@ def test_projection_rejects_mismatched_acknowledgement(monkeypatch):
         def json(self):
             return {"productId": str(ESTV_PRODUCT_ID), "revision": 99, "status": "deployed"}
 
-    monkeypatch.setattr("didaca_catalog.policy.httpx.put", lambda *args, **kwargs: MismatchedResponse())
+    monkeypatch.setattr("daca_catalog.policy.httpx.put", lambda *args, **kwargs: MismatchedResponse())
     result = project_to_postgresql(
         Settings(
             database_url="sqlite+pysqlite://",

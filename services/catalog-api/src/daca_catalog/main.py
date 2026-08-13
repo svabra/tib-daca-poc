@@ -109,15 +109,15 @@ endpoint_adapter = TypeAdapter(EndpointResponse)
 
 def require_demo_actor(
     request: Request,
-    x_didaca_user: Annotated[str | None, Header(alias="X-DiDaCa-User")] = None,
+    x_daca_user: Annotated[str | None, Header(alias="X-DaCa-User")] = None,
 ) -> str:
     """Resolve the local demo actor without accepting caller headers in production mode."""
     settings: Settings = request.app.state.settings
-    if not settings.didaca_demo_auth:
+    if not settings.daca_demo_auth:
         raise HTTPException(503, "Demo identity is disabled and no production identity provider is configured")
-    if x_didaca_user is None or not x_didaca_user.strip():
-        raise HTTPException(401, "Provide X-DiDaCa-User for this local demo mutation")
-    actor = x_didaca_user.strip()[:200]
+    if x_daca_user is None or not x_daca_user.strip():
+        raise HTTPException(401, "Provide X-DaCa-User for this local demo mutation")
+    actor = x_daca_user.strip()[:200]
     with request.app.state.session_factory() as session:
         user = session.get(DemoUser, actor)
         if user is None or not user.active:
@@ -130,11 +130,11 @@ ActorDep = Annotated[str, Depends(require_demo_actor)]
 
 def optional_demo_actor(
     request: Request,
-    x_didaca_user: Annotated[str | None, Header(alias="X-DiDaCa-User")] = None,
+    x_daca_user: Annotated[str | None, Header(alias="X-DaCa-User")] = None,
 ) -> str | None:
-    if x_didaca_user is None or not x_didaca_user.strip():
+    if x_daca_user is None or not x_daca_user.strip():
         return None
-    return require_demo_actor(request, x_didaca_user)
+    return require_demo_actor(request, x_daca_user)
 
 
 OptionalActorDep = Annotated[str | None, Depends(optional_demo_actor)]
@@ -974,7 +974,7 @@ def create_router() -> APIRouter:
         description=(
             "Accepts catalog metadata only. No credentials, secrets or product payloads are stored. "
             "Publication never grants data access; PBAC remains default deny until a policy is published. "
-            "The endpoint is enabled only when DIDACA_OPEN_METADATA_PUBLICATION=true."
+            "The endpoint is enabled only when DACA_OPEN_METADATA_PUBLICATION=true."
         ),
         responses={
             404: {"description": "Open metadata publication is disabled."},
@@ -989,7 +989,7 @@ def create_router() -> APIRouter:
         response: Response,
         session: SessionDep,
     ) -> MetadataPublicationResponse:
-        if not request.app.state.settings.didaca_open_metadata_publication:
+        if not request.app.state.settings.daca_open_metadata_publication:
             raise HTTPException(404, "The open metadata publication POC endpoint is disabled")
         owner = session.get(DemoUser, body.owner_user_id)
         if owner is None or not owner.active:
@@ -1024,8 +1024,8 @@ def create_router() -> APIRouter:
         business = body.business_metadata
         product = DataProduct(
             id=product_id,
-            urn=f"urn:didaca:source:{body.source_system.lower()}:{body.source_product_id}",
-            origin_catalog=f"urn:didaca:source:{body.source_system.lower()}",
+            urn=f"urn:daca:source:{body.source_system.lower()}:{body.source_product_id}",
+            origin_catalog=f"urn:daca:source:{body.source_system.lower()}",
             revision=1,
             active_policy_revision=None,
             owner_user_id=owner.id,
@@ -1460,7 +1460,7 @@ def create_router() -> APIRouter:
             .where(ProvenanceEvent.data_product_id == product.id)
             .values(data_product_id=None)
         )
-        # Keep the reset deterministic even when a local SQLite connection has
+        # Keep the reset deterministic even when an isolated test connection has
         # foreign-key cascades disabled. Order matters for semantic mappings.
         session.execute(
             delete(ProductSemanticMapping).where(
@@ -2541,7 +2541,8 @@ def create_app(
     app = FastAPI(
         title=resolved_settings.app_name,
         version=__version__,
-        summary="Metadata catalog and policy administration point for BIT DiDaCa",
+        summary="Metadata catalog and policy administration point for BIT DaCa",
+        root_path=resolved_settings.root_path,
         lifespan=lifespan,
     )
     app.state.settings = resolved_settings
@@ -2551,7 +2552,7 @@ def create_app(
         allow_origins=resolved_settings.cors_origins,
         allow_credentials=False,
         allow_methods=["GET", "POST", "PATCH", "PUT", "OPTIONS"],
-        allow_headers=["Content-Type", "If-Match", "If-None-Match", "X-DiDaCa-User", "X-Request-ID"],
+        allow_headers=["Content-Type", "If-Match", "If-None-Match", "X-DaCa-User", "X-Request-ID"],
         expose_headers=["ETag", "X-Request-ID"],
     )
 
@@ -2638,7 +2639,7 @@ def create_app(
         if authorization is None or not secrets.compare_digest(authorization, expected_token):
             raise HTTPException(401, "A valid internal status token is required")
 
-        bundle_status = status_payload.get("bundles", {}).get("didaca", {})
+        bundle_status = status_payload.get("bundles", {}).get("daca", {})
         observed_bundle_revision = bundle_status.get("active_revision")
         _active, expected_bundle_revision = active_bundle_state(session)
         if observed_bundle_revision != expected_bundle_revision:

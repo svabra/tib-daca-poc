@@ -11,7 +11,7 @@ other combination are denied by default.
 - **PIP** — product ownership, classification, origin, and endpoint details come from the trusted
   catalog database and are placed in the OPA bundle. Request method/action and the development
   subject identity are supplied by the PEP.
-- **PDP** — OPA evaluates `data.didaca.authz.decision` locally.
+- **PDP** — OPA evaluates `data.daca.authz.decision` locally.
 - **HTTP PEP** — the sample FastAPI dependency rejects before it reads PostgreSQL.
 - **PostgreSQL PEP** — ACLs plus `FORCE ROW LEVEL SECURITY` consult the projected entitlement by
   `SESSION_USER`; the service login may supply request context only for its own session.
@@ -57,7 +57,7 @@ sequenceDiagram
   OPA-->>Catalog: Report activated bundle revision
   Catalog->>Audit: Record publication and target status
 
-  Consumer->>Product: GET product + X-DiDaCa-User
+  Consumer->>Product: GET product + X-DaCa-User
   Product->>OPA: subject + action + trusted resource + protocol
   OPA-->>Product: allow/deny + reason + decision ID
   OPA->>Audit: Emit decision log without product rows

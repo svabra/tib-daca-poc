@@ -1,13 +1,13 @@
 import asyncio
 
-from didaca_control_plane.events import HealthEventBroker, sse_stream
-from didaca_control_plane.models import (
+from daca_control_plane.events import HealthEventBroker, sse_stream
+from daca_control_plane.models import (
     AuditEvent,
     CatalogInstance,
     HealthObservation,
     SyncConfiguration,
 )
-from didaca_control_plane.seed import seed_database
+from daca_control_plane.seed import seed_database
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -67,7 +67,7 @@ def test_active_health_check_records_probe_result(
             message="maintenance",
         )
 
-    monkeypatch.setattr("didaca_control_plane.api.check_catalog_health", fake_check)
+    monkeypatch.setattr("daca_control_plane.api.check_catalog_health", fake_check)
     response = client.post(f"/api/v1/catalogs/{catalog['id']}/health-checks")
     assert response.status_code == 201
     assert response.json()["status"] == "degraded"

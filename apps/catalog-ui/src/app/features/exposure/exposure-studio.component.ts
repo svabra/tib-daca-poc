@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { DidacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-didaca/design-system';
+import { DacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-daca/design-system';
 import { Subscription } from 'rxjs';
 import { CatalogApiService, PolicyWire } from '../../core/catalog-api.service';
 import {
@@ -26,45 +26,45 @@ type PublicationState = 'draft' | 'activating' | 'active';
 const DIRECTORY_SEARCH_DEBOUNCE_MS = 250;
 
 @Component({
-  selector: 'didaca-exposure-studio',
+  selector: 'daca-exposure-studio',
   standalone: true,
-  imports: [ProductWorkspaceNavComponent, RouterLink, StatusBadgeComponent, DidacaGlossaryTermComponent],
+  imports: [ProductWorkspaceNavComponent, RouterLink, StatusBadgeComponent, DacaGlossaryTermComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <didaca-product-workspace-nav
+    <daca-product-workspace-nav
       [productId]="product().id"
       [productTitle]="product().title"
       activeSection="access"
       accessView="grant"
     />
 
-    <section class="didaca-page-heading exposure-heading">
+    <section class="daca-page-heading exposure-heading">
       <div>
-        <p class="didaca-eyebrow">Zugriff · Neue Einstellung</p>
+        <p class="daca-eyebrow">Zugriff · Neue Einstellung</p>
         <h1>Zugriffseinstellung erstellen</h1>
         <p>Wählen Sie genau eine vertrauenswürdige Person, Machine ID oder Gruppe und bestimmen Sie Zeitraum sowie Metadatenkanäle.</p>
       </div>
-      <didaca-status-badge [tone]="publicationState() === 'active' ? 'green' : publicationState() === 'activating' ? 'orange' : 'orange'">
+      <daca-status-badge [tone]="publicationState() === 'active' ? 'green' : publicationState() === 'activating' ? 'orange' : 'orange'">
         {{ publicationState() === 'active' ? 'Zugriffseinstellung aktiv' : publicationState() === 'activating' ? 'Aktivierung läuft' : 'Entwurf' }}
-      </didaca-status-badge>
+      </daca-status-badge>
     </section>
 
-    <section class="didaca-card exposure-product" aria-labelledby="exposure-product-title">
+    <section class="daca-card exposure-product" aria-labelledby="exposure-product-title">
       <div class="exposure-product-mark" aria-hidden="true">ESTV</div>
       <div class="exposure-product-copy">
         <span>Ausgewähltes Datenprodukt</span>
         <h2 id="exposure-product-title">{{ product().title }}</h2>
-        <small>Eigentümerin: {{ product().owner }} · <span class="didaca-code">{{ product().globalId }}</span></small>
+        <small>Eigentümerin: {{ product().owner }} · <span class="daca-code">{{ product().globalId }}</span></small>
       </div>
-      <didaca-status-badge tone="red">Eingeschränkt</didaca-status-badge>
+      <daca-status-badge tone="red">Eingeschränkt</daca-status-badge>
       <a [routerLink]="['/products', product().id, 'metadata']">Metadaten ansehen</a>
     </section>
 
     <div class="exposure-layout">
-      <form id="exposure-form" class="didaca-card exposure-form" (submit)="$event.preventDefault(); activate()">
+      <form id="exposure-form" class="daca-card exposure-form" (submit)="$event.preventDefault(); activate()">
         <section class="exposure-rule-section" aria-labelledby="audience-title">
           <div class="exposure-section-heading">
-            <div><p class="didaca-eyebrow">Schritt 1</p><h2 id="audience-title">Wer darf die Daten nutzen?</h2></div>
+            <div><p class="daca-eyebrow">Schritt 1</p><h2 id="audience-title">Wer darf die Daten nutzen?</h2></div>
             <span>{{ subjectTypeLabel() }}</span>
           </div>
 
@@ -106,11 +106,11 @@ const DIRECTORY_SEARCH_DEBOUNCE_MS = 250;
                     }
                   </select>
                 </label>
-                <button class="didaca-button is-secondary" type="button" (click)="searchPeople()">Suchen</button>
+                <button class="daca-button is-secondary" type="button" (click)="searchPeople()">Suchen</button>
               </div>
               <p class="exposure-help">Die Trefferliste aktualisiert sich während der Eingabe. Erst die bewusste Auswahl eines Suchresultats erzeugt ein gültiges Zugriffsziel.</p>
               @if (directoryLoading()) { <p class="exposure-directory-state" role="status">Verzeichnis wird durchsucht …</p> }
-              @else if (directoryError()) { <p class="didaca-alert is-error" role="alert">{{ directoryError() }}</p> }
+              @else if (directoryError()) { <p class="daca-alert is-error" role="alert">{{ directoryError() }}</p> }
               @else if (!people().length) { <p class="exposure-directory-state">Keine passenden aktiven Personen gefunden.</p> }
               @else {
                 <div class="exposure-directory-results" role="listbox" aria-label="Gefundene Personen">
@@ -141,10 +141,10 @@ const DIRECTORY_SEARCH_DEBOUNCE_MS = 250;
                     <option value="federal">Bund</option><option value="cantonal">Kantone</option><option value="municipal">Gemeinden</option><option value="federal_related">Bundesnahe Betriebe</option>
                   </select>
                 </label>
-                <button class="didaca-button is-secondary" type="button" (click)="searchGroups()">Suchen</button>
+                <button class="daca-button is-secondary" type="button" (click)="searchGroups()">Suchen</button>
               </div>
               @if (directoryLoading()) { <p class="exposure-directory-state" role="status">Gruppen werden durchsucht …</p> }
-              @else if (directoryError()) { <p class="didaca-alert is-error" role="alert">{{ directoryError() }}</p> }
+              @else if (directoryError()) { <p class="daca-alert is-error" role="alert">{{ directoryError() }}</p> }
               @else if (!groups().length) { <p class="exposure-directory-state">Keine passende aktive Gruppe gefunden.</p> }
               @else {
                 <div class="exposure-directory-results" role="listbox" aria-label="Gefundene Gruppen">
@@ -162,12 +162,12 @@ const DIRECTORY_SEARCH_DEBOUNCE_MS = 250;
                   <ul>@for (member of detail.members; track member.id) { <li><strong>{{ member.displayName }}</strong><span>{{ member.organization }} · <code>{{ member.id }}</code></span></li> }</ul>
                 </details>
               }
-              <button class="didaca-button is-secondary exposure-group-create-toggle" type="button" (click)="toggleGroupBuilder()">
+              <button class="daca-button is-secondary exposure-group-create-toggle" type="button" (click)="toggleGroupBuilder()">
                 {{ groupBuilderOpen() ? 'Gruppenerstellung schliessen' : 'Eigene Gruppe erstellen' }}
               </button>
               @if (groupBuilderOpen()) {
                 <section class="exposure-group-builder" aria-labelledby="group-builder-title">
-                  <div><p class="didaca-eyebrow">Eigene Gruppe</p><h3 id="group-builder-title">Identitäten zusammenfassen</h3></div>
+                  <div><p class="daca-eyebrow">Eigene Gruppe</p><h3 id="group-builder-title">Identitäten zusammenfassen</h3></div>
                   <div class="exposure-group-builder-fields">
                     <label>Gruppenname *<input [value]="newGroupLabel()" (input)="newGroupLabel.set($any($event.target).value)" placeholder="z. B. BFS Datenanalyse"></label>
                     <label>Beschreibung *<input [value]="newGroupDescription()" (input)="newGroupDescription.set($any($event.target).value)" placeholder="Zweck und verantwortlicher Personenkreis"></label>
@@ -185,9 +185,9 @@ const DIRECTORY_SEARCH_DEBOUNCE_MS = 250;
                   </div>
                   <div class="exposure-group-builder-actions">
                     <span>{{ newGroupMemberIds().length }} Identitäten ausgewählt</span>
-                    <button class="didaca-button" type="button" [disabled]="!canCreateGroup() || groupCreating()" (click)="createGroup()">{{ groupCreating() ? 'Gruppe wird erstellt …' : 'Gruppe erstellen und auswählen' }}</button>
+                    <button class="daca-button" type="button" [disabled]="!canCreateGroup() || groupCreating()" (click)="createGroup()">{{ groupCreating() ? 'Gruppe wird erstellt …' : 'Gruppe erstellen und auswählen' }}</button>
                   </div>
-                  @if (groupCreateError()) { <p class="didaca-alert is-error" role="alert">{{ groupCreateError() }}</p> }
+                  @if (groupCreateError()) { <p class="daca-alert is-error" role="alert">{{ groupCreateError() }}</p> }
                 </section>
               }
               <p class="exposure-help">Bei der Aktivierung speichert DaCa einen serverseitigen Snapshot. Spätere Gruppenänderungen erweitern diesen Zugriff nicht automatisch.</p>
@@ -196,35 +196,35 @@ const DIRECTORY_SEARCH_DEBOUNCE_MS = 250;
         </section>
 
         <section class="exposure-rule-section" aria-labelledby="period-title">
-          <div class="exposure-section-heading"><div><p class="didaca-eyebrow">Schritt 2</p><h2 id="period-title">Wie lange gilt die Zugriffseinstellung?</h2></div>@if (dateValid()) { <span>{{ durationDays() }} Kalendertage</span> }</div>
+          <div class="exposure-section-heading"><div><p class="daca-eyebrow">Schritt 2</p><h2 id="period-title">Wie lange gilt die Zugriffseinstellung?</h2></div>@if (dateValid()) { <span>{{ durationDays() }} Kalendertage</span> }</div>
           <div class="exposure-period-grid">
             <label>Gültig ab *<input type="date" [value]="startDate()" (input)="setStartDate($any($event.target).value)"></label>
             <label>Gültig bis *<input type="date" [value]="endDate()" [min]="startDate()" (input)="setEndDate($any($event.target).value)"></label>
             <div class="exposure-timezone"><span>Zeitzone</span><strong>Europe/Zurich</strong><small>MEZ / MESZ</small></div>
           </div>
-          @if (!dateValid()) { <p class="didaca-alert is-error" role="alert">Das Enddatum muss am oder nach dem Startdatum liegen.</p> }
+          @if (!dateValid()) { <p class="daca-alert is-error" role="alert">Das Enddatum muss am oder nach dem Startdatum liegen.</p> }
           @else { <p class="exposure-help">Vor Beginn und nach Ablauf werden Datenzugriff sowie gewählte Metadatenkanäle automatisch unwirksam.</p> }
         </section>
 
         <section id="koby" class="exposure-rule-section" aria-labelledby="metadata-channels-title">
-          <div class="exposure-section-heading"><div><p class="didaca-eyebrow">Schritt 3 · Explizite Opt-ins</p><h2 id="metadata-channels-title">Metadaten bereitstellen</h2></div><span>{{ metadataChannelCount() }} von 2 gewählt</span></div>
+          <div class="exposure-section-heading"><div><p class="daca-eyebrow">Schritt 3 · Explizite Opt-ins</p><h2 id="metadata-channels-title">Metadaten bereitstellen</h2></div><span>{{ metadataChannelCount() }} von 2 gewählt</span></div>
           <div class="exposure-channel-grid">
             <label class="exposure-koby-consent" [class.is-selected]="kobyAllowed()">
               <input type="checkbox" role="switch" [checked]="kobyAllowed()" (change)="setKobyAllowed($any($event.target).checked)">
-              <span><strong>KOBY den Metadatenzugriff über <didaca-glossary-term term="MCP" /> erlauben</strong><small>Titel, Schema, Qualität, Lineage und Provenienz – keine Produktdaten oder Secrets.</small></span><b>MCP</b>
+              <span><strong>KOBY den Metadatenzugriff über <daca-glossary-term term="MCP" /> erlauben</strong><small>Titel, Schema, Qualität, Lineage und Provenienz – keine Produktdaten oder Secrets.</small></span><b>MCP</b>
             </label>
             <label class="exposure-koby-consent" [class.is-selected]="i14yAllowed()">
               <input type="checkbox" role="switch" [checked]="i14yAllowed()" (change)="setI14yAllowed($any($event.target).checked)">
-              <span><strong>Metadaten und künftige Aktualisierungen an <didaca-glossary-term term="I14Y" /> liefern</strong><small>Lokale PoC-Simulation: Beschreibung von Datensätzen und APIs, keine Produktdaten; kein externer Netzwerkaufruf.</small></span><b>I14Y</b>
+              <span><strong>Metadaten und künftige Aktualisierungen an <daca-glossary-term term="I14Y" /> liefern</strong><small>Lokale PoC-Simulation: Beschreibung von Datensätzen und APIs, keine Produktdaten; kein externer Netzwerkaufruf.</small></span><b>I14Y</b>
             </label>
           </div>
           <p class="exposure-help">Beide Kanäle sind voneinander unabhängig und gelten exakt im Zeitraum dieser Zugriffseinstellung. MCP und I14Y sind keine Produktauslieferungsprotokolle.</p>
         </section>
       </form>
 
-      <aside class="didaca-card exposure-review" aria-labelledby="review-title">
-        <div class="didaca-card-header"><div><p class="didaca-eyebrow">Live-Vorschau</p><h2 id="review-title">Zugriffseinstellung prüfen</h2></div><didaca-status-badge [tone]="canActivate() ? 'blue' : 'red'">{{ canActivate() ? 'Vollständig' : 'Unvollständig' }}</didaca-status-badge></div>
-        <div class="didaca-card-body">
+      <aside class="daca-card exposure-review" aria-labelledby="review-title">
+        <div class="daca-card-header"><div><p class="daca-eyebrow">Live-Vorschau</p><h2 id="review-title">Zugriffseinstellung prüfen</h2></div><daca-status-badge [tone]="canActivate() ? 'blue' : 'red'">{{ canActivate() ? 'Vollständig' : 'Unvollständig' }}</daca-status-badge></div>
+        <div class="daca-card-body">
           <div class="exposure-policy-sentence" [class.is-blocked]="!canActivate()">
             <span>{{ canActivate() ? 'ALLOW' : 'DENY' }}</span>
             @if (canActivate()) { <p><strong>{{ subjectSummary() }}</strong> darf dieses Datenprodukt vom <strong>{{ formatDate(startDate()) }}</strong> bis <strong>{{ formatDate(endDate()) }}</strong> über {{ protocolLabel() }} lesen.</p> }
@@ -241,11 +241,11 @@ const DIRECTORY_SEARCH_DEBOUNCE_MS = 250;
             <div><dt>I14Y</dt><dd [class.is-positive]="i14yAllowed()">{{ i14yAllowed() ? 'Lieferung simuliert' : 'Nicht liefern' }}</dd></div>
           </dl>
           <div class="exposure-guardrail"><strong>Default deny bleibt aktiv</strong><p>Alle anderen Identitäten, Zeitpunkte und Nutzungsarten werden abgewiesen. Aktiv wird die Einstellung erst, wenn OPA und PostgreSQL dieselbe Revision bestätigen.</p></div>
-          @if (publicationState() === 'activating') { <p class="didaca-alert" role="status">Die Policy wurde publiziert. DaCa wartet auf die gemeinsame Bestätigung von OPA und PostgreSQL.</p> }
-          @if (publicationState() === 'active') { <p class="didaca-alert exposure-success" role="status">Zugriffseinstellung seit {{ activatedAt() }} Uhr aktiv. OPA und PostgreSQL verwenden dieselbe Revision.</p> }
-          @if (publicationError()) { <p class="didaca-alert is-error" role="alert">{{ publicationError() }}</p> }
-          <button class="didaca-button exposure-primary-action" form="exposure-form" type="submit" [disabled]="!canActivate() || publicationState() === 'activating'">Zugriffseinstellung aktivieren</button>
-          <button class="didaca-button is-secondary exposure-secondary-action" type="button" (click)="resetDraft()">Entwurf zurücksetzen</button>
+          @if (publicationState() === 'activating') { <p class="daca-alert" role="status">Die Policy wurde publiziert. DaCa wartet auf die gemeinsame Bestätigung von OPA und PostgreSQL.</p> }
+          @if (publicationState() === 'active') { <p class="daca-alert exposure-success" role="status">Zugriffseinstellung seit {{ activatedAt() }} Uhr aktiv. OPA und PostgreSQL verwenden dieselbe Revision.</p> }
+          @if (publicationError()) { <p class="daca-alert is-error" role="alert">{{ publicationError() }}</p> }
+          <button class="daca-button exposure-primary-action" form="exposure-form" type="submit" [disabled]="!canActivate() || publicationState() === 'activating'">Zugriffseinstellung aktivieren</button>
+          <button class="daca-button is-secondary exposure-secondary-action" type="button" (click)="resetDraft()">Entwurf zurücksetzen</button>
           <small class="exposure-demo-note">Strukturierte PBAC-Definition · Gruppensnapshot und Rego werden serverseitig erzeugt</small>
         </div>
       </aside>

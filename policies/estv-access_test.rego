@@ -1,4 +1,4 @@
-package didaca.authz
+package daca.authz
 
 import rego.v1
 
@@ -8,7 +8,7 @@ test_st_gallen_is_allowed if {
     "action": "data.read",
     "resource": {"id": "11111111-1111-4111-8111-111111111111"},
     "endpoint": {"protocol": "http-rest"},
-  } with data.didaca.pip.products as {
+  } with data.daca.pip.products as {
     "11111111-1111-4111-8111-111111111111": {
       "id": "11111111-1111-4111-8111-111111111111",
       "owner": "ESTV",
@@ -23,7 +23,7 @@ test_other_canton_is_denied if {
     "action": "data.read",
     "resource": {"id": "11111111-1111-4111-8111-111111111111"},
     "endpoint": {"protocol": "http-rest"},
-  } with data.didaca.pip.products as {
+  } with data.daca.pip.products as {
     "11111111-1111-4111-8111-111111111111": {
       "id": "11111111-1111-4111-8111-111111111111",
       "owner": "ESTV",
@@ -38,7 +38,7 @@ test_wrong_owner_is_denied if {
     "action": "data.read",
     "resource": {"id": "11111111-1111-4111-8111-111111111111"},
     "endpoint": {"protocol": "postgresql"},
-  } with data.didaca.pip.products as {
+  } with data.daca.pip.products as {
     "11111111-1111-4111-8111-111111111111": {
       "id": "11111111-1111-4111-8111-111111111111",
       "owner": "OTHER",

@@ -95,7 +95,7 @@ def install_problem_handlers(app: FastAPI) -> None:
             status=422,
             title="Validation failed",
             detail="The request does not conform to the API contract.",
-            problem_type="urn:didaca:problem:validation",
+            problem_type="urn:daca:problem:validation",
             errors=errors,
         )
 
@@ -106,7 +106,7 @@ def install_problem_handlers(app: FastAPI) -> None:
             status=409,
             title="Conflict",
             detail="The request conflicts with an existing control-plane resource.",
-            problem_type="urn:didaca:problem:conflict",
+            problem_type="urn:daca:problem:conflict",
         )
 
     @app.exception_handler(StarletteHTTPException)

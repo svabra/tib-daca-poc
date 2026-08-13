@@ -15,36 +15,7 @@ down_revision: str | None = "0003_daaif_workflow"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-NAMING_CONVENTION = {
-    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-}
-
-
 def upgrade() -> None:
-    op.add_column("provenance_events", sa.Column("product_urn", sa.String(255)))
-    op.execute(
-        "UPDATE provenance_events SET product_urn = "
-        "(SELECT urn FROM data_products WHERE data_products.id = provenance_events.data_product_id)"
-    )
-    with op.batch_alter_table(
-        "provenance_events",
-        recreate="always",
-        naming_convention=NAMING_CONVENTION,
-    ) as batch:
-        batch.alter_column("product_urn", existing_type=sa.String(255), nullable=False)
-        batch.alter_column("data_product_id", existing_type=sa.Uuid(), nullable=True)
-        batch.drop_constraint(
-            "fk_provenance_events_data_product_id_data_products",
-            type_="foreignkey",
-        )
-        batch.create_foreign_key(
-            "fk_provenance_events_data_product_id_data_products",
-            "data_products",
-            ["data_product_id"],
-            ["id"],
-            ondelete="SET NULL",
-        )
-
     op.create_table(
         "poc_simulation_events",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -103,21 +74,3 @@ def downgrade() -> None:
     op.drop_index("ix_poc_simulation_actor", table_name="poc_simulation_events")
     op.drop_index("ix_poc_simulation_product", table_name="poc_simulation_events")
     op.drop_table("poc_simulation_events")
-    with op.batch_alter_table(
-        "provenance_events",
-        recreate="always",
-        naming_convention=NAMING_CONVENTION,
-    ) as batch:
-        batch.drop_constraint(
-            "fk_provenance_events_data_product_id_data_products",
-            type_="foreignkey",
-        )
-        batch.create_foreign_key(
-            "fk_provenance_events_data_product_id_data_products",
-            "data_products",
-            ["data_product_id"],
-            ["id"],
-            ondelete="CASCADE",
-        )
-        batch.alter_column("data_product_id", existing_type=sa.Uuid(), nullable=False)
-        batch.drop_column("product_urn")

@@ -1,4 +1,4 @@
-# BIT DiDaCa Control Plane API
+# BIT DaCa Control Plane API
 
 FastAPI service for registering Distributed Data Catalog instances and declaring
 their desired trust and synchronization topology. This service stores and validates
@@ -14,7 +14,7 @@ configuration; it **does not synchronize any catalog resources**.
   resource scopes, and optional product/owner/domain filters.
 - Manage declarative push/pull sync configurations. Enabling a configuration
   requires a currently valid, approved grant in the source-to-target direction.
-- Keep policy sharing opt-in (`DIDACA_CONTROL_POLICY_SYNC_ENABLED=false` by
+- Keep policy sharing opt-in (`DACA_CONTROL_POLICY_SYNC_ENABLED=false` by
   default), force the future conflict rule to `origin-wins`, and automatically
   disable configurations whose trust is withdrawn.
 - Record append-only audit and deployment observations.
@@ -28,12 +28,12 @@ Python 3.14 and [uv](https://docs.astral.sh/uv/) are required.
 
 ```powershell
 uv sync --extra test
-$env:DIDACA_CONTROL_DATABASE_URL = "postgresql+psycopg://didaca_control:replace-me@localhost:55432/didaca_control_plane"
-$env:DIDACA_CONTROL_DEMO_AUTH = "true" # local POC only
-$env:DIDACA_CONTROL_ENDPOINT_HOST_ALLOWLIST = "catalog-api"
+$env:DACA_CONTROL_DATABASE_URL = "postgresql+psycopg://daca_control:replace-me@localhost:55432/daca_control_plane"
+$env:DACA_CONTROL_DEMO_AUTH = "true" # local POC only
+$env:DACA_CONTROL_ENDPOINT_HOST_ALLOWLIST = "catalog-api"
 uv run alembic upgrade head
-uv run didaca-control-plane-seed
-uv run uvicorn didaca_control_plane.main:app --reload --port 8002
+uv run daca-control-plane-seed
+uv run uvicorn daca_control_plane.main:app --reload --port 8002
 ```
 
 The Docker image performs the migration and idempotent seed before starting the
@@ -61,8 +61,8 @@ that value in `If-Match`. Missing and stale preconditions produce `428` and `412
 Errors use `application/problem+json` and all responses carry `X-Request-ID`.
 
 All `POST` and `PATCH` routes are fail-closed. For the local POC,
-`DIDACA_CONTROL_DEMO_AUTH=true` enables mutations and each mutation must carry a
-nonblank `X-DiDaCa-Actor`. With demo auth disabled (the code default), mutations
+`DACA_CONTROL_DEMO_AUTH=true` enables mutations and each mutation must carry a
+nonblank `X-DaCa-Actor`. With demo auth disabled (the code default), mutations
 return `503` because no production identity provider is configured; read routes
 remain available. This header is a clearly labelled demo identity, not production
 authentication.
@@ -70,7 +70,7 @@ authentication.
 Catalog endpoints are accepted only when they use HTTP(S), contain neither URL
 credentials nor fragments, and resolve exclusively to public addresses. Loopback,
 link-local, private, reserved, multicast, unspecified, and unresolvable targets are
-rejected. `DIDACA_CONTROL_ENDPOINT_HOST_ALLOWLIST` is a comma-separated list of
+rejected. `DACA_CONTROL_ENDPOINT_HOST_ALLOWLIST` is a comma-separated list of
 explicit hostnames or `*.example.org` patterns for intentional internal targets;
 Compose allowlists only the `catalog-api` service. Endpoint policy is checked again
 before every health probe, redirects are disabled, and blocked legacy endpoints are
@@ -83,12 +83,12 @@ Example: create an approved directional grant and a disabled future sync:
 ```bash
 curl -X POST http://localhost:8002/api/v1/trust-grants \
   -H 'Content-Type: application/json' \
-  -H 'X-DiDaCa-Actor: demo-control-admin' \
+  -H 'X-DaCa-Actor: demo-control-admin' \
   -d '{"providerId":"<source-id>","consumerId":"<target-id>","state":"approved","allowedResourceTypes":["metadata","lineage","provenance"]}'
 
 curl -X POST http://localhost:8002/api/v1/sync-configurations \
   -H 'Content-Type: application/json' \
-  -H 'X-DiDaCa-Actor: demo-control-admin' \
+  -H 'X-DaCa-Actor: demo-control-admin' \
   -d '{"name":"Federal to canton","sourceId":"<source-id>","targetId":"<target-id>","trustGrantId":"<grant-id>","direction":"push","resourceScopes":["metadata"],"schedule":"manual","enabled":false}'
 ```
 
@@ -99,7 +99,7 @@ validates and records desired state; it never initiates network transfer.
 
 ```powershell
 uv run pytest
-uv run pytest --cov=didaca_control_plane --cov-report=term-missing
+uv run pytest --cov=daca_control_plane --cov-report=term-missing
 ```
 
 The focused suite uses SQLite for isolated contract tests. Production and Compose

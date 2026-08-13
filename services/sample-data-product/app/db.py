@@ -28,12 +28,12 @@ def fetch_statistics(
 ) -> list[dict[str, object]]:
     with Session(sample_engine()) as session, session.begin():
         session.execute(
-            text("SELECT set_config('didaca.subject_id', :subject_id, true)"),
+            text("SELECT set_config('daca.subject_id', :subject_id, true)"),
             {"subject_id": subject_id},
         )
-        session.execute(text("SELECT set_config('didaca.protocol', 'http-rest', true)"))
+        session.execute(text("SELECT set_config('daca.protocol', 'http-rest', true)"))
         session.execute(
-            text("SELECT set_config('didaca.subject_type', :subject_type, true)"),
+            text("SELECT set_config('daca.subject_type', :subject_type, true)"),
             {"subject_type": subject_type},
         )
         records = session.scalars(

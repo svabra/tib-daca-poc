@@ -27,7 +27,7 @@ def decode_cursor(cursor: str) -> tuple[datetime, str]:
             400,
             "Invalid cursor",
             "The pagination cursor is malformed or no longer usable.",
-            problem_type="urn:didaca:problem:invalid-cursor",
+            problem_type="urn:daca:problem:invalid-cursor",
         ) from exc
 
 

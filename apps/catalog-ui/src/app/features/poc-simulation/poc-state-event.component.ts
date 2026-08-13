@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { DidacaGlossaryTermComponent } from '@bit-didaca/design-system';
+import { DacaGlossaryTermComponent } from '@bit-daca/design-system';
 import { catchError, forkJoin, of } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DataProduct } from '../../core/catalog.models';
@@ -31,41 +31,41 @@ const COPY = {
 } as const;
 
 @Component({
-  selector: 'didaca-poc-state-event',
+  selector: 'daca-poc-state-event',
   standalone: true,
-  imports: [DatePipe, RouterLink, DidacaGlossaryTermComponent],
+  imports: [DatePipe, RouterLink, DacaGlossaryTermComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="didaca-page-heading">
-      <div><p class="didaca-eyebrow">{{ copy().eyebrow }} · <didaca-glossary-term term="PoC" /></p><h1>{{ copy().title }}</h1><p>{{ copy().description }}</p></div>
+    <section class="daca-page-heading">
+      <div><p class="daca-eyebrow">{{ copy().eyebrow }} · <daca-glossary-term term="PoC" /></p><h1>{{ copy().title }}</h1><p>{{ copy().description }}</p></div>
       <a routerLink="/poc-simulation">Alle Simulationen</a>
     </section>
 
     @if (eventType() === 'isbo_restricted') {
-      <p class="didaca-alert is-warning"><strong><didaca-glossary-term term="ISBO" />:</strong> Die Simulation widerruft keine aktiven Freigaben. Damit bleibt der bewusste Sicherheitsentscheid sichtbar und prüfbar.</p>
+      <p class="daca-alert is-warning"><strong><daca-glossary-term term="ISBO" />:</strong> Die Simulation widerruft keine aktiven Freigaben. Damit bleibt der bewusste Sicherheitsentscheid sichtbar und prüfbar.</p>
     }
 
     @if (loading()) {
-      <div class="didaca-card simulation-empty">Simulationsdaten werden geladen…</div>
+      <div class="daca-card simulation-empty">Simulationsdaten werden geladen…</div>
     } @else if (ownedFixtureProducts().length) {
       <div class="simulation-products">
         @for (product of ownedFixtureProducts(); track product.id) {
-          <article class="didaca-card simulation-product-row">
+          <article class="daca-card simulation-product-row">
             <div><small>{{ product.domain }} · Revision {{ product.revision }}</small><h2>{{ product.title }}</h2><p>{{ product.description }}</p></div>
             @if (activeFor(product.id); as event) {
-              <div class="simulation-active"><strong>Ereignis aktiv</strong><span>Ausgelöst {{ event.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</span><button class="didaca-button is-secondary" type="button" [disabled]="busy()" (click)="reset(event)">Ereignis zurücksetzen</button></div>
+              <div class="simulation-active"><strong>Ereignis aktiv</strong><span>Ausgelöst {{ event.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</span><button class="daca-button is-secondary" type="button" [disabled]="busy()" (click)="reset(event)">Ereignis zurücksetzen</button></div>
             } @else {
-              <button class="didaca-button" type="button" [disabled]="busy() || anyActiveFor(product.id)" (click)="trigger(product)">{{ copy().action }}</button>
+              <button class="daca-button" type="button" [disabled]="busy() || anyActiveFor(product.id)" (click)="trigger(product)">{{ copy().action }}</button>
             }
           </article>
         }
       </div>
     } @else {
-      <div class="didaca-card simulation-empty"><h2>Noch kein Fixture-Produkt vorhanden</h2><p>Reichen Sie zuerst eines der synthetischen Produkte über die echte Metadaten-Publikationsschnittstelle ein.</p><a class="didaca-button" routerLink="/poc-simulation/product-submitted">Einreichung simulieren</a></div>
+      <div class="daca-card simulation-empty"><h2>Noch kein Fixture-Produkt vorhanden</h2><p>Reichen Sie zuerst eines der synthetischen Produkte über die echte Metadaten-Publikationsschnittstelle ein.</p><a class="daca-button" routerLink="/poc-simulation/product-submitted">Einreichung simulieren</a></div>
     }
 
-    @if (notice()) { <p class="didaca-alert" role="status">{{ notice() }}</p> }
-    @if (error()) { <p class="didaca-alert is-error" role="alert">{{ error() }}</p> }
+    @if (notice()) { <p class="daca-alert" role="status">{{ notice() }}</p> }
+    @if (error()) { <p class="daca-alert is-error" role="alert">{{ error() }}</p> }
   `,
 })
 export class PocStateEventComponent {

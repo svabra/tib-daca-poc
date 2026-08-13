@@ -1,11 +1,11 @@
-package didaca.authz
+package daca.authz
 
 import rego.v1
 
 default decision := {"allow": false, "reason": "default_deny"}
 
 matches_grant(policy, grant) if {
-    resource := data.didaca.resourcesById[input.resource.id]
+    resource := data.daca.resourcesById[input.resource.id]
     policy.productId == input.resource.id
     grant.subject.id == input.subject.id
     grant.subject.type == object.get(input.subject, "type", "person")
@@ -19,7 +19,7 @@ matches_grant(policy, grant) if {
 }
 
 matches_group_grant(policy, grant) if {
-    resource := data.didaca.resourcesById[input.resource.id]
+    resource := data.daca.resourcesById[input.resource.id]
     policy.productId == input.resource.id
     grant.subject.type == "group"
     input.subject.type == "person"
@@ -35,7 +35,7 @@ matches_group_grant(policy, grant) if {
 
 matches_legacy(policy) if {
     count(object.get(policy, "grants", [])) == 0
-    resource := data.didaca.resourcesById[input.resource.id]
+    resource := data.daca.resourcesById[input.resource.id]
     policy.productId == input.resource.id
     input.subject.id in policy.subjects.userIds
     input.action in policy.actions
@@ -53,41 +53,41 @@ request_protocol := "postgresql" if {
 }
 
 explicitly_denied if {
-    some policy in data.didaca.policies
+    some policy in data.daca.policies
     policy.effect == "deny"
     some grant in policy.grants
     matches_grant(policy, grant)
 }
 
 explicitly_denied if {
-    some policy in data.didaca.policies
+    some policy in data.daca.policies
     policy.effect == "deny"
     some grant in policy.grants
     matches_group_grant(policy, grant)
 }
 
 explicitly_denied if {
-    some policy in data.didaca.policies
+    some policy in data.daca.policies
     policy.effect == "deny"
     matches_legacy(policy)
 }
 
 permitted if {
-    some policy in data.didaca.policies
+    some policy in data.daca.policies
     policy.effect == "allow"
     some grant in policy.grants
     matches_grant(policy, grant)
 }
 
 permitted if {
-    some policy in data.didaca.policies
+    some policy in data.daca.policies
     policy.effect == "allow"
     some grant in policy.grants
     matches_group_grant(policy, grant)
 }
 
 permitted if {
-    some policy in data.didaca.policies
+    some policy in data.daca.policies
     policy.effect == "allow"
     matches_legacy(policy)
 }

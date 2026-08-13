@@ -28,7 +28,7 @@ NEUCHATEL_SEED_NAME = "daca-neuchatel-request-products-v1"
 OWNER_INBOX_SEED_NAME = "daca-owner-inbox-request-v1"
 ACCESS_CONSUMER_SEED_NAME = "daca-active-access-consumers-v1"
 ESTV_PRODUCT_ID = uuid.UUID("11111111-1111-4111-8111-111111111111")
-ESTV_PRODUCT_URN = "urn:didaca:ch:estv:tax-statistics-by-canton"
+ESTV_PRODUCT_URN = "urn:daca:ch:estv:tax-statistics-by-canton"
 NEUCHATEL_CORPORATE_PRODUCT_ID = uuid.UUID("17777777-7777-4777-8777-777777777777")
 KASSANDRA_USER_ID = "kassandra.valdata"
 
@@ -126,8 +126,8 @@ def seeded_policy_definition() -> dict:
 def build_neuchatel_corporate_product(created: datetime) -> DataProduct:
     return DataProduct(
         id=NEUCHATEL_CORPORATE_PRODUCT_ID,
-        urn="urn:didaca:ch:ne:corporate-federal-tax-factors",
-        origin_catalog="urn:didaca:catalog:neuchatel",
+        urn="urn:daca:ch:ne:corporate-federal-tax-factors",
+        origin_catalog="urn:daca:catalog:neuchatel",
         revision=6,
         active_policy_revision=None,
         title="Juristische Personen Neuchâtel – Steuerfaktoren für die direkte Bundessteuer",
@@ -208,7 +208,7 @@ def seed_catalog(session: Session) -> bool:
     product = DataProduct(
         id=ESTV_PRODUCT_ID,
         urn=ESTV_PRODUCT_URN,
-        origin_catalog="urn:didaca:catalog:bit-poc",
+        origin_catalog="urn:daca:catalog:bit-poc",
         revision=1,
         active_policy_revision=1,
         title="ESTV-Steuerstatistik nach Kanton",
@@ -253,8 +253,8 @@ def seed_catalog(session: Session) -> bool:
         [
             DataProduct(
                 id=uuid.UUID("12222222-2222-4222-8222-222222222222"),
-                urn="urn:didaca:ch:estv:direct-federal-tax-assessments",
-                origin_catalog="urn:didaca:catalog:bit-poc",
+                urn="urn:daca:ch:estv:direct-federal-tax-assessments",
+                origin_catalog="urn:daca:catalog:bit-poc",
                 revision=3,
                 active_policy_revision=None,
                 title="Direkte Bundessteuer – Veranlagungen nach Kanton und Gemeinde",
@@ -294,8 +294,8 @@ def seed_catalog(session: Session) -> bool:
             ),
             DataProduct(
                 id=uuid.UUID("13333333-3333-4333-8333-333333333333"),
-                urn="urn:didaca:ch:estv:vat-sector-indicators",
-                origin_catalog="urn:didaca:catalog:bit-poc",
+                urn="urn:daca:ch:estv:vat-sector-indicators",
+                origin_catalog="urn:daca:catalog:bit-poc",
                 revision=5,
                 active_policy_revision=None,
                 title="Mehrwertsteuer – Branchenindikatoren",
@@ -335,8 +335,8 @@ def seed_catalog(session: Session) -> bool:
             ),
             DataProduct(
                 id=uuid.UUID("14444444-4444-4444-8444-444444444444"),
-                urn="urn:didaca:ch:cantons:withholding-tax-tariffs",
-                origin_catalog="urn:didaca:catalog:cantonal-tax-authorities",
+                urn="urn:daca:ch:cantons:withholding-tax-tariffs",
+                origin_catalog="urn:daca:catalog:cantonal-tax-authorities",
                 revision=12,
                 active_policy_revision=None,
                 title="Quellensteuer – Tarife, Kantons- und Gemeindecodes",
@@ -394,8 +394,8 @@ def seed_catalog(session: Session) -> bool:
             build_neuchatel_corporate_product(created),
             DataProduct(
                 id=uuid.UUID("15555555-5555-4555-8555-555555555555"),
-                urn="urn:didaca:ch:efv:nfa-tax-potential",
-                origin_catalog="urn:didaca:catalog:efv",
+                urn="urn:daca:ch:efv:nfa-tax-potential",
+                origin_catalog="urn:daca:catalog:efv",
                 revision=4,
                 active_policy_revision=None,
                 title="Ressourcenpotenzial NFA – Steuerbasis",
@@ -437,8 +437,8 @@ def seed_catalog(session: Session) -> bool:
             ),
             DataProduct(
                 id=uuid.UUID("16666666-6666-4666-8666-666666666666"),
-                urn="urn:didaca:ch:estv:withholding-tax-refunds-by-canton",
-                origin_catalog="urn:didaca:catalog:bit-poc",
+                urn="urn:daca:ch:estv:withholding-tax-refunds-by-canton",
+                origin_catalog="urn:daca:catalog:bit-poc",
                 revision=2,
                 active_policy_revision=None,
                 title="Verrechnungssteuer – Rückerstattungen nach Kanton",
@@ -505,7 +505,7 @@ def seed_catalog(session: Session) -> bool:
                 connection={
                     "host": "localhost",
                     "port": 55432,
-                    "database": "didaca_sample",
+                    "database": "daca_sample",
                     "schema": "public",
                     "relation": "tax_statistics",
                     "sslMode": "prefer",
@@ -519,7 +519,7 @@ def seed_catalog(session: Session) -> bool:
         [
             LineageEdge(
                 id=uuid.UUID("31111111-1111-4111-8111-111111111111"),
-                source_urn="urn:didaca:ch:estv:synthetic-tax-source",
+                source_urn="urn:daca:ch:estv:synthetic-tax-source",
                 target_urn=ESTV_PRODUCT_URN,
                 relation_type="derived-from",
                 transformation="Aggregate synthetic declarations by canton and tax year",
@@ -529,7 +529,7 @@ def seed_catalog(session: Session) -> bool:
             LineageEdge(
                 id=uuid.UUID("31111111-1111-4111-8111-222222222222"),
                 source_urn=ESTV_PRODUCT_URN,
-                target_urn="urn:didaca:ch:sg:finance-dashboard",
+                target_urn="urn:daca:ch:sg:finance-dashboard",
                 relation_type="consumed-by",
                 transformation=None,
                 state="inferred",
@@ -601,7 +601,7 @@ def seed_catalog(session: Session) -> bool:
             resource_type="data-product",
             resource_id=str(ESTV_PRODUCT_ID),
             action="seeded",
-            actor="didaca-bootstrap",
+            actor="daca-bootstrap",
             revision=1,
             details={"synthetic": True},
             occurred_at=created,
@@ -749,7 +749,7 @@ def seed_access_relationships(session: Session) -> bool:
 
 
 def seed_neuchatel_products(session: Session) -> bool:
-    """Add the two Noémie Rochat request examples to an existing SQLite portfolio."""
+    """Add the two Noémie Rochat request examples to an existing catalog portfolio."""
     if session.get(SeedMarker, NEUCHATEL_SEED_NAME) is not None:
         return False
 

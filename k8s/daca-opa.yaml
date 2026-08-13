@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: daca-opa-config
+  namespace: daai-brs-d
+  labels:
+    app.kubernetes.io/name: daca-opa
+    app.kubernetes.io/part-of: tib-daca-poc
+data:
+  config.yaml: |
+    services:
+      daca_catalog:
+        url: http://daca-catalog-api:8001
+      daca_catalog_status:
+        url: http://daca-catalog-api:8001/api/v1/internal/opa
+        credentials:
+          bearer:
+            token: "${CATALOG_INTERNAL_TOKEN}"
+    bundles:
+      daca:
+        service: daca_catalog
+        resource: api/v1/opa/bundles/catalog.tar.gz
+        polling:
+          min_delay_seconds: 2
+          max_delay_seconds: 5
+    decision_logs:
+      console: true
+    status:
+      service: daca_catalog_status
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: daca-opa
+  namespace: daai-brs-d
+  labels:
+    app.kubernetes.io/name: daca-opa
+    app.kubernetes.io/part-of: tib-daca-poc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: daca-opa
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: daca-opa
+        app.kubernetes.io/part-of: tib-daca-poc
+    spec:
+      containers:
+        - name: opa
+          image: openpolicyagent/opa:1.18.2
+          args:
+            - run
+            - --server
+            - --addr=0.0.0.0:8181
+            - --config-file=/config/config.yaml
+          env:
+            - name: CATALOG_INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: tib-daca-poc-secret
+                  key: CATALOG_INTERNAL_TOKEN
+          ports:
+            - name: http
+              containerPort: 8181
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: config
+          configMap:
+            name: daca-opa-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: daca-opa
+  namespace: daai-brs-d
+  labels:
+    app.kubernetes.io/name: daca-opa
+spec:
+  selector:
+    app.kubernetes.io/name: daca-opa
+  ports:
+    - name: http
+      port: 8181
+      targetPort: http

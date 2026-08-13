@@ -1,50 +1,50 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { StatusBadgeComponent } from '@bit-didaca/design-system';
+import { StatusBadgeComponent } from '@bit-daca/design-system';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav.component';
 import { accessConsumerSummary, consumersForProduct } from '../products/my-data-products';
 
 @Component({
-  selector: 'didaca-access-workspace',
+  selector: 'daca-access-workspace',
   standalone: true,
   imports: [ProductWorkspaceNavComponent, RouterLink, StatusBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <didaca-product-workspace-nav
+    <daca-product-workspace-nav
       [productId]="product().id"
       [productTitle]="product().title"
       activeSection="access"
       accessView="overview"
     />
 
-    <section class="didaca-page-heading access-workspace-heading">
+    <section class="daca-page-heading access-workspace-heading">
       <div>
-        <p class="didaca-eyebrow">Datenprodukt · Freigaben</p>
+        <p class="daca-eyebrow">Datenprodukt · Freigaben</p>
         <h1>Freigaben</h1>
         <p>Bearbeiten Sie Zugriffsanfragen, aktive Datenkonsumenten sowie die Metadatenkanäle für KOBY und I14Y an einem Ort.</p>
       </div>
-      <a class="didaca-button" [routerLink]="['/products', product().id, 'access', 'grant']">Zugriff einstellen</a>
+      <a class="daca-button" [routerLink]="['/products', product().id, 'access', 'grant']">Zugriff einstellen</a>
     </section>
 
     <div class="access-workspace-kpis">
-      <a class="didaca-card" routerLink="/tasks" [queryParams]="{ product: product().id }">
+      <a class="daca-card" routerLink="/tasks" [queryParams]="{ product: product().id }">
         <span>Offene Zugriffsanfragen</span><strong>{{ requests().length }}</strong><small>Entscheide im Aufgabenbereich bearbeiten</small>
       </a>
-      <a class="didaca-card" [routerLink]="['/products', product().id, 'access']" fragment="consumers">
+      <a class="daca-card" [routerLink]="['/products', product().id, 'access']" fragment="consumers">
         <span>Aktive Datenkonsumenten</span><strong>{{ consumerSummary().total }}</strong><small>{{ consumerSummary().persons }} Personen · {{ consumerSummary().machines }} Maschinen</small>
       </a>
-      <a class="didaca-card" [routerLink]="['/products', product().id, 'access', 'grant']" fragment="koby">
+      <a class="daca-card" [routerLink]="['/products', product().id, 'access', 'grant']" fragment="koby">
         <span>KOBY- und I14Y-Metadaten</span><strong>Unabhängige Opt-ins</strong><small>Pro Zugriffseinstellung ausdrücklich festlegen</small>
       </a>
     </div>
 
-    <section id="consumers" class="didaca-card access-workspace-consumers" aria-labelledby="access-consumers-title">
-      <div class="didaca-card-header">
-        <div><p class="didaca-eyebrow">Aktuell berechtigt</p><h2 id="access-consumers-title">Datenkonsumenten</h2></div>
-        <didaca-status-badge tone="green">{{ consumerSummary().total }} aktiv</didaca-status-badge>
+    <section id="consumers" class="daca-card access-workspace-consumers" aria-labelledby="access-consumers-title">
+      <div class="daca-card-header">
+        <div><p class="daca-eyebrow">Aktuell berechtigt</p><h2 id="access-consumers-title">Datenkonsumenten</h2></div>
+        <daca-status-badge tone="green">{{ consumerSummary().total }} aktiv</daca-status-badge>
       </div>
-      <div class="didaca-card-body">
+      <div class="daca-card-body">
         @if (consumers().length) {
           @for (consumer of consumers(); track consumer.consumerType + consumer.identityId) {
             <article class="access-workspace-consumer">

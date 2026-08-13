@@ -1,6 +1,6 @@
-# BIT DiDaCa architecture
+# BIT DaCa architecture
 
-BIT DiDaCa is a catalog ecosystem in which each catalog remains independently useful. The
+BIT DaCa is a catalog ecosystem in which each catalog remains independently useful. The
 control plane records relationships and desired federation settings; it is not on the catalog's
 metadata or authorization request path.
 
@@ -8,7 +8,7 @@ metadata or authorization request path.
 flowchart LR
   Owner[Data owner] -->|HTTP| CatalogUI[Catalog Angular PWA]
   CatalogUI -->|REST| CatalogAPI[Standalone catalog API / PAP]
-  CatalogAPI --> CatalogDB[(Catalog SQLite / POC)]
+  CatalogAPI --> CatalogDB[(Catalog PostgreSQL)]
   CatalogAPI -->|policy + PIP bundle over HTTP| OPA[Local OPA / PDP]
   Consumer[REST consumer] -->|HTTP + identity| ProductAPI[ESTV sample API / PEP]
   ProductAPI -->|decision input| OPA
@@ -30,7 +30,7 @@ flowchart LR
 - **Python 3.14 / FastAPI**: typed OpenAPI-first services with a natural future path to Pandas,
   Polars, PyArrow, profiling, schema inference, and lineage extraction. CPU-heavy wrangling can
   move to separate workers later without changing API contracts.
-- **SQLite 3**: persistent catalog metadata for the POC, isolated in the catalog container volume.
+- **PostgreSQL**: persistent catalog metadata, isolated in the `daca_catalog` database and role.
   SQLAlchemy and Alembic keep the persistence boundary ready for the planned PostgreSQL migration.
 - **PostgreSQL 18.4**: versioned control-plane data and direct product delivery. The local server
   contains two service-owned databases; production deployments may split them without changing

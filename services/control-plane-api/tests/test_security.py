@@ -2,19 +2,19 @@ import asyncio
 import socket
 
 import pytest
-from didaca_control_plane.api import router
-from didaca_control_plane.auth import require_mutation_actor
-from didaca_control_plane.config import Settings
-from didaca_control_plane.health import check_catalog_health
-from didaca_control_plane.main import create_app
-from didaca_control_plane.models import CatalogInstance
+from daca_control_plane.api import router
+from daca_control_plane.auth import require_mutation_actor
+from daca_control_plane.config import Settings
+from daca_control_plane.health import check_catalog_health
+from daca_control_plane.main import create_app
+from daca_control_plane.models import CatalogInstance
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
 
 def catalog_payload(suffix: str, endpoint: str) -> dict[str, object]:
     return {
-        "urn": f"urn:didaca:catalog:security-{suffix}",
+        "urn": f"urn:daca:catalog:security-{suffix}",
         "name": f"Security test {suffix}",
         "organization": "BIT",
         "environment": "test",
@@ -41,17 +41,17 @@ def test_every_mutating_route_has_demo_actor_gate() -> None:
 
 
 def test_mutation_requires_nonblank_actor_but_reads_remain_public(client: TestClient) -> None:
-    assert client.get("/api/v1/catalogs", headers={"X-DiDaCa-Actor": ""}).status_code == 200
+    assert client.get("/api/v1/catalogs", headers={"X-DaCa-Actor": ""}).status_code == 200
 
     response = client.post(
         "/api/v1/catalogs",
-        headers={"X-DiDaCa-Actor": "   "},
+        headers={"X-DaCa-Actor": "   "},
         json=catalog_payload("missing-actor", "http://catalog-api:8001"),
     )
 
     assert response.status_code == 401
     assert response.headers["content-type"].startswith("application/problem+json")
-    assert response.json()["type"] == "urn:didaca:problem:identity-required"
+    assert response.json()["type"] == "urn:daca:problem:identity-required"
 
 
 def test_disabled_demo_auth_fails_mutations_closed_and_keeps_reads_available(
@@ -71,12 +71,12 @@ def test_disabled_demo_auth_fails_mutations_closed_and_keeps_reads_available(
         assert disabled_client.get("/api/v1/catalogs").status_code == 200
         response = disabled_client.post(
             "/api/v1/catalogs",
-            headers={"X-DiDaCa-Actor": "demo-control-admin"},
+            headers={"X-DaCa-Actor": "demo-control-admin"},
             json=catalog_payload("disabled-auth", "http://catalog-api:8001"),
         )
 
     assert response.status_code == 503
-    assert response.json()["type"] == "urn:didaca:problem:identity-unavailable"
+    assert response.json()["type"] == "urn:daca:problem:identity-unavailable"
 
 
 @pytest.mark.parametrize(
@@ -98,7 +98,7 @@ def test_registration_rejects_non_public_address_ranges(client: TestClient, endp
     )
 
     assert response.status_code == 422
-    assert response.json()["type"] == "urn:didaca:problem:unsafe-catalog-endpoint"
+    assert response.json()["type"] == "urn:daca:problem:unsafe-catalog-endpoint"
 
 
 @pytest.mark.parametrize(
@@ -127,10 +127,10 @@ def test_registration_rejects_unresolvable_and_private_dns(
     def unresolvable(*_args, **_kwargs):
         raise socket.gaierror("not found")
 
-    monkeypatch.setattr("didaca_control_plane.endpoint_security.socket.getaddrinfo", unresolvable)
+    monkeypatch.setattr("daca_control_plane.endpoint_security.socket.getaddrinfo", unresolvable)
     unresolved = client.post(
         "/api/v1/catalogs",
-        json=catalog_payload("unresolved", "https://unresolved.didaca.example"),
+        json=catalog_payload("unresolved", "https://unresolved.daca.example"),
     )
     assert unresolved.status_code == 422
     assert "cannot be resolved" in unresolved.json()["detail"]
@@ -138,10 +138,10 @@ def test_registration_rejects_unresolvable_and_private_dns(
     def private_dns(*_args, **_kwargs):
         return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.20.30.40", 443))]
 
-    monkeypatch.setattr("didaca_control_plane.endpoint_security.socket.getaddrinfo", private_dns)
+    monkeypatch.setattr("daca_control_plane.endpoint_security.socket.getaddrinfo", private_dns)
     private = client.post(
         "/api/v1/catalogs",
-        json=catalog_payload("private-dns", "https://private.didaca.example"),
+        json=catalog_payload("private-dns", "https://private.daca.example"),
     )
     assert private.status_code == 422
     assert "non-public address" in private.json()["detail"]
@@ -153,10 +153,10 @@ def test_public_dns_and_explicit_docker_allowlist_are_accepted(
     def public_dns(*_args, **_kwargs):
         return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]
 
-    monkeypatch.setattr("didaca_control_plane.endpoint_security.socket.getaddrinfo", public_dns)
+    monkeypatch.setattr("daca_control_plane.endpoint_security.socket.getaddrinfo", public_dns)
     public = client.post(
         "/api/v1/catalogs",
-        json=catalog_payload("public-dns", "https://public.didaca.example"),
+        json=catalog_payload("public-dns", "https://public.daca.example"),
     )
     assert public.status_code == 201
 
@@ -164,7 +164,7 @@ def test_public_dns_and_explicit_docker_allowlist_are_accepted(
         raise AssertionError("allowlisted catalog-api should bypass DNS classification")
 
     monkeypatch.setattr(
-        "didaca_control_plane.endpoint_security.socket.getaddrinfo", dns_must_not_run
+        "daca_control_plane.endpoint_security.socket.getaddrinfo", dns_must_not_run
     )
     docker = client.post(
         "/api/v1/catalogs",
@@ -187,7 +187,7 @@ def test_catalog_patch_revalidates_endpoint(client: TestClient) -> None:
     )
 
     assert response.status_code == 422
-    assert response.json()["type"] == "urn:didaca:problem:unsafe-catalog-endpoint"
+    assert response.json()["type"] == "urn:daca:problem:unsafe-catalog-endpoint"
     assert client.get(f"/api/v1/catalogs/{created.json()['id']}").json()["desiredRevision"] == 1
 
 
@@ -198,10 +198,10 @@ def test_probe_blocks_legacy_private_targets_without_network_access(
         def __init__(self, *_args, **_kwargs) -> None:
             raise AssertionError("blocked endpoints must never reach the HTTP client")
 
-    monkeypatch.setattr("didaca_control_plane.health.httpx.AsyncClient", NetworkMustNotRun)
+    monkeypatch.setattr("daca_control_plane.health.httpx.AsyncClient", NetworkMustNotRun)
     catalog = CatalogInstance(
         id="11111111-1111-4111-8111-111111111119",
-        urn="urn:didaca:catalog:legacy-private",
+        urn="urn:daca:catalog:legacy-private",
         name="Legacy private",
         organization="BIT",
         environment="test",
@@ -224,10 +224,10 @@ def test_seed_placeholder_domain_is_intentionally_unprobed(
         def __init__(self, *_args, **_kwargs) -> None:
             raise AssertionError("reserved .invalid endpoints must never reach the HTTP client")
 
-    monkeypatch.setattr("didaca_control_plane.health.httpx.AsyncClient", NetworkMustNotRun)
+    monkeypatch.setattr("daca_control_plane.health.httpx.AsyncClient", NetworkMustNotRun)
     catalog = CatalogInstance(
         id="11111111-1111-4111-8111-111111111118",
-        urn="urn:didaca:catalog:seed-placeholder",
+        urn="urn:daca:catalog:seed-placeholder",
         name="Seed placeholder",
         organization="BIT",
         environment="test",

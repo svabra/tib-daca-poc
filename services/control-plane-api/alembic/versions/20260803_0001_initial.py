@@ -1,4 +1,4 @@
-"""Create DiDaCa control-plane schema.
+"""Create DaCa control-plane schema.
 
 Revision ID: 20260803_0001
 Revises:

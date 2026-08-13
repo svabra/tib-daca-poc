@@ -1,7 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { DidacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-didaca/design-system';
+import { DacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-daca/design-system';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DataProduct, StoredAccessRequest } from '../../core/catalog.models';
 import { selectNextWelcomeHeroTheme } from './welcome-hero-theme';
@@ -28,9 +28,9 @@ function selectSessionHeroTheme() {
 }
 
 @Component({
-  selector: 'didaca-welcome-page',
+  selector: 'daca-welcome-page',
   standalone: true,
-  imports: [DatePipe, RouterLink, StatusBadgeComponent, DidacaGlossaryTermComponent],
+  imports: [DatePipe, RouterLink, StatusBadgeComponent, DacaGlossaryTermComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="welcome-page">
@@ -58,15 +58,15 @@ function selectSessionHeroTheme() {
           >
         </picture>
           <div class="welcome-hero-copy">
-            <p class="didaca-eyebrow"><didaca-glossary-term term="DaCa" /></p>
+            <p class="daca-eyebrow"><daca-glossary-term term="DaCa" /></p>
             <h1 id="welcome-title">Willkommen im zentralen Data Catalog der Schweizer<br>Bundesverwaltung</h1>
             <p class="welcome-lead">
               Entdecken, beschreiben und verantwortungsvoll freigeben: Hier finden Sie Metadaten,
               Schnittstellen, Herkunft und Zugriffsregeln Ihrer Datenprodukte an einem Ort.
             </p>
             <div class="welcome-hero-actions">
-              <a class="didaca-button" routerLink="/products">Meine Datenprodukte öffnen</a>
-              <a class="didaca-button is-secondary" [routerLink]="['/products', product().id, 'access']">Freigaben verwalten</a>
+              <a class="daca-button" routerLink="/products">Meine Datenprodukte öffnen</a>
+              <a class="daca-button is-secondary" [routerLink]="['/products', product().id, 'access']">Freigaben verwalten</a>
             </div>
             <p class="welcome-context">
               <span>Proof of Concept</span>
@@ -76,7 +76,7 @@ function selectSessionHeroTheme() {
 
           <form class="welcome-search" role="search" (submit)="submitSearch($event)">
             <div>
-              <p class="didaca-eyebrow">Katalog durchsuchen</p>
+              <p class="daca-eyebrow">Katalog durchsuchen</p>
               <h2>Wonach suchen Sie?</h2>
               <p>Finden Sie Datenprodukte nach Thema, Organisation oder Stichwort.</p>
             </div>
@@ -92,7 +92,7 @@ function selectSessionHeroTheme() {
                 [value]="searchQuery()"
                 (input)="updateSearch($any($event.target).value)"
               >
-              <button class="didaca-button" type="submit">Suchen</button>
+              <button class="daca-button" type="submit">Suchen</button>
             </div>
             <div id="catalog-search-feedback" class="welcome-search-feedback" aria-live="polite">
               @switch (searchStatus()) {
@@ -126,7 +126,7 @@ function selectSessionHeroTheme() {
       <section id="handlungsbedarf" class="welcome-alerts" aria-labelledby="welcome-alerts-title">
         <div class="welcome-alerts-heading">
           <div>
-            <p class="didaca-eyebrow">Für {{ api.identityUser().displayName }}</p>
+            <p class="daca-eyebrow">Für {{ api.identityUser().displayName }}</p>
             <h2 id="welcome-alerts-title">Handlungsbedarf</h2>
           </div>
           @if (!ownerInboxLoading()) {
@@ -135,18 +135,18 @@ function selectSessionHeroTheme() {
         </div>
 
         @if (ownerInboxLoading()) {
-          <div class="didaca-card welcome-alert-empty" aria-live="polite">Aufgaben werden geladen…</div>
+          <div class="daca-card welcome-alert-empty" aria-live="polite">Aufgaben werden geladen…</div>
         } @else if (actionCount()) {
           <div class="welcome-alert-list">
             @for (task of simulationTasks(); track task.id) {
-              <article class="didaca-card welcome-alert-item is-simulation-alert">
+              <article class="daca-card welcome-alert-item is-simulation-alert">
                 <span class="welcome-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5 21 20H3L12 3.5Z"/><path d="M12 9v5M12 17.2v.2"/></svg></span>
                 <div class="welcome-alert-copy"><div><span>{{ task.taskType === 'simulation_isbo_restriction' ? 'Dringend' : 'Prüfung nötig' }}</span><time [attr.datetime]="task.createdAt">{{ task.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</time></div><h3>{{ task.title }}</h3><p>{{ task.detail }}</p></div>
-                <a class="didaca-button is-secondary" [routerLink]="['/products', task.dataProductId, 'overview']">Aufgabe öffnen</a>
+                <a class="daca-button is-secondary" [routerLink]="['/products', task.dataProductId, 'overview']">Aufgabe öffnen</a>
               </article>
             }
             @for (request of ownerRequests(); track request.id) {
-              <article class="didaca-card welcome-alert-item">
+              <article class="daca-card welcome-alert-item">
                 <span class="welcome-alert-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><path d="M12 3.5 21 20H3L12 3.5Z"/><path d="M12 9v5M12 17.2v.2"/></svg>
                 </span>
@@ -160,19 +160,19 @@ function selectSessionHeroTheme() {
                     <div><dt>Status</dt><dd>Anfrage eingegangen</dd></div>
                   </dl>
                 </div>
-                <a class="didaca-button is-secondary" routerLink="/tasks">Aufgabe öffnen</a>
+                <a class="daca-button is-secondary" routerLink="/tasks">Aufgabe öffnen</a>
               </article>
             }
           </div>
         } @else {
-          <div class="didaca-card welcome-alert-empty">Keine offenen Aufgaben. Ihre Datenprodukte benötigen aktuell keinen Entscheid.</div>
+          <div class="daca-card welcome-alert-empty">Keine offenen Aufgaben. Ihre Datenprodukte benötigen aktuell keinen Entscheid.</div>
         }
       </section>
 
       <section class="welcome-tasks" aria-labelledby="welcome-tasks-title">
         <div class="welcome-section-heading">
           <div>
-            <p class="didaca-eyebrow">Direkteinstieg</p>
+            <p class="daca-eyebrow">Direkteinstieg</p>
             <h2 id="welcome-tasks-title">Was möchten Sie tun?</h2>
           </div>
           <p>Wählen Sie einen Bereich, um mit dem Beispiel-Datenprodukt zu arbeiten.</p>
@@ -214,14 +214,14 @@ function selectSessionHeroTheme() {
         </div>
       </section>
 
-      <section class="welcome-featured didaca-card" aria-labelledby="welcome-product-title">
+      <section class="welcome-featured daca-card" aria-labelledby="welcome-product-title">
         <div class="welcome-product-main">
           <div class="welcome-product-heading">
             <div>
-              <p class="didaca-eyebrow">Beispiel-Datenprodukt</p>
+              <p class="daca-eyebrow">Beispiel-Datenprodukt</p>
               <h2 id="welcome-product-title">{{ productTitle() }}</h2>
             </div>
-            <didaca-status-badge tone="red">Eingeschränkt</didaca-status-badge>
+            <daca-status-badge tone="red">Eingeschränkt</daca-status-badge>
           </div>
           <p class="welcome-product-description">{{ productDescription() }}</p>
           <div class="welcome-product-meta" aria-label="Produktmerkmale">
@@ -235,8 +235,8 @@ function selectSessionHeroTheme() {
             Nur die Benutzergruppe Kanton St. Gallen darf die Produktdaten lesen.
           </p>
           <div class="welcome-product-actions">
-            <a class="didaca-button" routerLink="/products">Meine Datenprodukte öffnen</a>
-            <a class="didaca-button is-secondary" [routerLink]="['/products', product().id, 'access']">Freigaben</a>
+            <a class="daca-button" routerLink="/products">Meine Datenprodukte öffnen</a>
+            <a class="daca-button is-secondary" [routerLink]="['/products', product().id, 'access']">Freigaben</a>
           </div>
         </div>
 
@@ -272,12 +272,12 @@ export class WelcomePageComponent {
   readonly api = inject(CatalogApiService);
   readonly product = computed(() => this.api.product());
   readonly productTitle = computed(() =>
-    this.product().globalId === 'urn:didaca:ch:estv:tax-statistics-by-canton'
+    this.product().globalId === 'urn:daca:ch:estv:tax-statistics-by-canton'
       ? 'ESTV-Steuerstatistik nach Kanton'
       : this.product().title,
   );
   readonly productDescription = computed(() =>
-    this.product().globalId === 'urn:didaca:ch:estv:tax-statistics-by-canton'
+    this.product().globalId === 'urn:daca:ch:estv:tax-statistics-by-canton'
       ? 'Aggregierte jährliche Steuerstatistiken der Schweizer Kantone. Das Datenprodukt enthält synthetische Werte für den DaCa-Proof-of-Concept und keine Personendaten.'
       : this.product().description,
   );

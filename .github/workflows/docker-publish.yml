@@ -1,0 +1,225 @@
+name: Test and publish DaCa images
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.29"
+          python-version: "3.14"
+          enable-cache: true
+      - name: Install JavaScript dependencies
+        run: npm ci
+      - name: Install Python dependencies
+        run: uv sync --all-packages --locked
+      - name: Run complete test suite
+        run: npm test
+      - name: Build all artifacts
+        run: npm run build
+
+  postgres-compatibility:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres-version:
+          - "17"
+          - "18.4"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.29"
+          python-version: "3.14"
+          enable-cache: true
+      - name: Install Python dependencies
+        run: uv sync --all-packages --locked
+      - name: Start PostgreSQL ${{ matrix.postgres-version }}
+        shell: bash
+        run: |
+          docker run --detach \
+            --name daca-postgres-compat \
+            --publish 55432:5432 \
+            --env POSTGRES_USER=daca_admin \
+            --env POSTGRES_PASSWORD=daca_admin_test \
+            --env POSTGRES_DB=postgres \
+            --env CATALOG_DB_PASSWORD=daca_catalog_test \
+            --env CONTROL_PLANE_DB_PASSWORD=daca_control_test \
+            --env SAMPLE_DB_OWNER_PASSWORD=daca_sample_owner_test \
+            --env SAMPLE_DB_PASSWORD=daca_sample_api_test \
+            --env POLICY_PROJECTOR_DB_PASSWORD=daca_projector_test \
+            --env SG_DB_PASSWORD=daca_sg_test \
+            --env BERN_DB_PASSWORD=daca_bern_test \
+            --volume "$PWD/infra/postgres/init:/docker-entrypoint-initdb.d:ro" \
+            postgres:${{ matrix.postgres-version }}
+          for attempt in $(seq 1 40); do
+            if docker exec daca-postgres-compat pg_isready -U daca_admin -d postgres; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs daca-postgres-compat
+          exit 1
+      - name: Run migrations, idempotent seed and Catalog API tests
+        env:
+          DATABASE_URL: postgresql+psycopg://daca_catalog:daca_catalog_test@localhost:55432/daca_catalog
+          DACA_TEST_DATABASE_URL: postgresql+psycopg://daca_catalog:daca_catalog_test@localhost:55432/daca_catalog
+          DACA_CONTROL_DATABASE_URL: postgresql+psycopg://daca_control:daca_control_test@localhost:55432/daca_control_plane
+          ALEMBIC_DATABASE_URL: postgresql+psycopg://daca_sample_owner:daca_sample_owner_test@localhost:55432/daca_sample
+        run: |
+          uv run --package daca-catalog-api alembic -c services/catalog-api/alembic.ini upgrade head
+          uv run --package daca-catalog-api daca-catalog-seed
+          uv run --package daca-catalog-api daca-catalog-seed
+          uv run --package daca-control-plane-api alembic -c services/control-plane-api/alembic.ini upgrade head
+          uv run --package daca-control-plane-api daca-control-plane-seed
+          uv run --package daca-control-plane-api daca-control-plane-seed
+          uv run --package daca-sample-data-product alembic -c services/sample-data-product/alembic.ini upgrade head
+          uv run --all-packages pytest services/catalog-api/tests
+      - name: Show PostgreSQL logs after failure
+        if: failure()
+        run: docker logs daca-postgres-compat
+      - name: Stop PostgreSQL
+        if: always()
+        run: docker rm --force daca-postgres-compat
+
+  build:
+    needs:
+      - test
+      - postgres-compatibility
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: tib-daca-catalog-ui
+            repository: docker.io/svabra/tib-daca-catalog-ui
+            context: .
+            dockerfile: apps/catalog-ui/Dockerfile
+            archive: /tmp/tib-daca-catalog-ui.tar
+          - name: tib-daca-catalog-api
+            repository: docker.io/svabra/tib-daca-catalog-api
+            context: services/catalog-api
+            dockerfile: services/catalog-api/Dockerfile
+            archive: /tmp/tib-daca-catalog-api.tar
+          - name: tib-daca-sample-data-product
+            repository: docker.io/svabra/tib-daca-sample-data-product
+            context: services/sample-data-product
+            dockerfile: services/sample-data-product/Dockerfile
+            archive: /tmp/tib-daca-sample-data-product.tar
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Read release version
+        id: version
+        shell: bash
+        run: echo "value=$(tr -d '\r\n' < VERSION)" >> "$GITHUB_OUTPUT"
+      - name: Determine release tag publishing
+        id: release
+        shell: bash
+        run: |
+          publish=false
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            publish=true
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            publish=true
+          elif [[ -n "${{ github.event.before }}" && "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+            if ! git diff --quiet "${{ github.event.before }}" "${{ github.sha }}" -- VERSION; then
+              publish=true
+            fi
+          fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+      - name: Extract image metadata
+        id: metadata
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ matrix.image.repository }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=${{ steps.version.outputs.value }},enable=${{ steps.release.outputs.publish }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Build image archive
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.dockerfile }}
+          platforms: linux/amd64
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          outputs: type=docker,dest=${{ matrix.image.archive }}
+          cache-from: type=gha,scope=${{ matrix.image.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
+      - name: Store image tags
+        shell: bash
+        run: printf '%s\n' '${{ steps.metadata.outputs.tags }}' > /tmp/docker-tags.txt
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.image.name }}-image
+          path: |
+            ${{ matrix.image.archive }}
+            /tmp/docker-tags.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  push:
+    if: github.event_name != 'pull_request'
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: tib-daca-catalog-ui
+            archive: tib-daca-catalog-ui.tar
+          - name: tib-daca-catalog-api
+            archive: tib-daca-catalog-api.tar
+          - name: tib-daca-sample-data-product
+            archive: tib-daca-sample-data-product.tar
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ matrix.image.name }}-image
+          path: /tmp/docker-image
+      - name: Load image
+        run: docker load --input /tmp/docker-image/${{ matrix.image.archive }}
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: svabra
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Push every generated tag
+        shell: bash
+        run: |
+          while IFS= read -r tag; do
+            if [[ -n "$tag" ]]; then
+              docker push "$tag"
+            fi
+          done < /tmp/docker-image/docker-tags.txt

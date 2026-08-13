@@ -1,11 +1,11 @@
 {
-  "name": "BIT DiDaCa Control Plane",
-  "short_name": "DiDaCa Control",
+  "name": "BIT DaCa Control Plane",
+  "short_name": "DaCa Control",
   "description": "Distributed Data Catalog trust and federation control plane",
   "theme_color": "#e0001a",
   "background_color": "#f4f6f7",
   "display": "standalone",
   "start_url": "/federation",
   "scope": "/",
-  "icons": [{ "src": "/assets/didaca-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+  "icons": [{ "src": "/assets/daca-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
 }

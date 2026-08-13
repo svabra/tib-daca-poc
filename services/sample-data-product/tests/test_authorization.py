@@ -113,7 +113,7 @@ def test_framework_http_errors_use_problem_json(
     assert response.headers["content-type"].startswith("application/problem+json")
     assert response.headers["x-request-id"] == "contract-test"
     assert response.json() == {
-        "type": f"https://didaca.bit.admin.ch/problems/{expected_type}",
+        "type": f"https://daca.bit.admin.ch/problems/{expected_type}",
         "title": expected_title,
         "status": expected_status,
         "detail": "Not Found" if expected_status == 404 else "Method Not Allowed",
@@ -133,7 +133,7 @@ def test_request_validation_errors_use_problem_json() -> None:
     assert response.status_code == 422
     assert response.headers["content-type"].startswith("application/problem+json")
     body = response.json()
-    assert body["type"] == "https://didaca.bit.admin.ch/problems/validation"
+    assert body["type"] == "https://daca.bit.admin.ch/problems/validation"
     assert body["title"] == "Validation failed"
     assert body["instance"] == path
     assert body["requestId"] == "validation-test"

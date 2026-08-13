@@ -45,7 +45,7 @@ def create_app(
                 application.state.health_broker,
                 stop,
             ),
-            name="didaca-catalog-health-poller",
+            name="daca-catalog-health-poller",
         )
         try:
             yield
@@ -59,7 +59,7 @@ def create_app(
                 owned_engine.dispose()
 
     application = FastAPI(
-        title="BIT DiDaCa Control Plane API",
+        title="BIT DaCa Control Plane API",
         summary="Declarative catalog registration, trust and future sync control.",
         description=(
             "Manages desired control-plane state. It deliberately does not transfer "
@@ -81,7 +81,7 @@ def create_app(
             "Content-Type",
             "If-Match",
             "X-Request-ID",
-            "X-DiDaCa-Actor",
+            "X-DaCa-Actor",
         ],
         expose_headers=["ETag", "Location", "X-Request-ID"],
     )

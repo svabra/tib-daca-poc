@@ -1,4 +1,4 @@
-# BIT DiDaCa modern mockup deck
+# BIT DaCa modern mockup deck
 
 This self-contained HTML deck contains five comparable design directions. Every direction uses
 the same synthetic ESTV product scenario and contains explanatory copy, an editable metadata form,

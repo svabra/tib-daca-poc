@@ -13,9 +13,9 @@ def test_liveness_readiness_and_service_document(client: TestClient) -> None:
 def test_catalog_crud_uses_camel_case_etags_and_audit(client: TestClient) -> None:
     created = client.post(
         "/api/v1/catalogs",
-        headers={"X-Request-ID": "request-123", "X-DiDaCa-Actor": "tester"},
+        headers={"X-Request-ID": "request-123", "X-DaCa-Actor": "tester"},
         json={
-            "urn": "urn:didaca:catalog:federal",
+            "urn": "urn:daca:catalog:federal",
             "name": "Federal catalog",
             "organization": "BIT",
             "environment": "poc",
@@ -75,11 +75,11 @@ def test_validation_and_duplicate_conflicts_are_problem_json(client: TestClient)
     )
     assert invalid.status_code == 422
     assert invalid.headers["content-type"].startswith("application/problem+json")
-    assert invalid.json()["type"] == "urn:didaca:problem:validation"
+    assert invalid.json()["type"] == "urn:daca:problem:validation"
     assert len(invalid.json()["errors"]) == 2
 
     payload = {
-        "urn": "urn:didaca:catalog:duplicate",
+        "urn": "urn:daca:catalog:duplicate",
         "name": "First",
         "organization": "BIT",
         "environment": "test",
@@ -88,7 +88,7 @@ def test_validation_and_duplicate_conflicts_are_problem_json(client: TestClient)
     assert client.post("/api/v1/catalogs", json=payload).status_code == 201
     duplicate = client.post("/api/v1/catalogs", json=payload)
     assert duplicate.status_code == 409
-    assert duplicate.json()["type"] == "urn:didaca:problem:conflict"
+    assert duplicate.json()["type"] == "urn:daca:problem:conflict"
 
 
 def test_cursor_pagination_is_stable(client: TestClient) -> None:
@@ -96,7 +96,7 @@ def test_cursor_pagination_is_stable(client: TestClient) -> None:
         response = client.post(
             "/api/v1/catalogs",
             json={
-                "urn": f"urn:didaca:catalog:{suffix}",
+                "urn": f"urn:daca:catalog:{suffix}",
                 "name": suffix,
                 "organization": "BIT",
                 "environment": "test",

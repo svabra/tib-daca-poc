@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from copy import deepcopy
 
-from didaca_catalog.models import AuditEvent, DataProduct, PocSimulationEvent, ProvenanceEvent
+from daca_catalog.models import AuditEvent, DataProduct, PocSimulationEvent, ProvenanceEvent
 from sqlalchemy import select
 
 
@@ -17,7 +17,7 @@ def fixture_payload(client, owner: str = "kassandra.valdata") -> dict:
 
 
 def publish(client, owner: str = "kassandra.valdata") -> tuple[dict, dict[str, str]]:
-    headers = {"X-DiDaCa-User": owner}
+    headers = {"X-DaCa-User": owner}
     response = client.post("/api/v1/metadata-publications", json=fixture_payload(client, owner))
     assert response.status_code == 201
     return response.json(), headers
@@ -39,7 +39,7 @@ def test_owner_isolation_and_state_event_conflict(client):
 
     forbidden = client.post(
         f"/api/v1/poc/simulation-events/{body['event']['id']}/reset",
-        headers={"X-DiDaCa-User": "noemie.rochat"},
+        headers={"X-DaCa-User": "noemie.rochat"},
     )
     assert forbidden.status_code == 403
     conflict = client.post(
@@ -129,7 +129,7 @@ def test_physical_fixture_reset_requires_name_and_preserves_evidence(client, ses
 def test_non_fixture_product_cannot_be_physically_reset(client):
     response = client.post(
         "/api/v1/poc/data-products/11111111-1111-4111-8111-111111111111/reset",
-        headers={"X-DiDaCa-User": "kassandra.valdata"},
+        headers={"X-DaCa-User": "kassandra.valdata"},
         json={"confirmationName": "Kassandra Valdata"},
     )
     assert response.status_code in {403, 409}
@@ -140,12 +140,12 @@ def test_foreign_fixture_owner_cannot_trigger_or_reset(client):
     product_id = publication["productId"]
     forbidden_trigger = client.post(
         f"/api/v1/poc/data-products/{product_id}/simulation-events/not_discoverable",
-        headers={"X-DiDaCa-User": "kassandra.valdata"},
+        headers={"X-DaCa-User": "kassandra.valdata"},
     )
     assert forbidden_trigger.status_code == 403
     forbidden_reset = client.post(
         f"/api/v1/poc/data-products/{product_id}/reset",
-        headers={"X-DiDaCa-User": "kassandra.valdata"},
+        headers={"X-DaCa-User": "kassandra.valdata"},
         json={"confirmationName": "Kassandra Valdata"},
     )
     assert forbidden_reset.status_code == 403

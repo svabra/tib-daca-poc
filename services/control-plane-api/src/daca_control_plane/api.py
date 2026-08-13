@@ -184,7 +184,7 @@ async def run_health_check(
             422,
             "Catalog endpoint is intentionally unprobed",
             "The reserved .invalid catalog endpoint is a placeholder and cannot be health-checked.",
-            problem_type="urn:didaca:problem:catalog-endpoint-unprobed",
+            problem_type="urn:daca:problem:catalog-endpoint-unprobed",
         )
     session.add(observation)
     catalog.health_status = observation.status
@@ -369,7 +369,7 @@ def patch_trust_grant(
             409,
             "Terminal trust state",
             "A revoked or expired trust grant cannot be reopened; create a new grant.",
-            problem_type="urn:didaca:problem:terminal-trust-state",
+            problem_type="urn:daca:problem:terminal-trust-state",
         )
     next_from = changes.get("valid_from", grant.valid_from)
     next_until = changes.get("valid_until", grant.valid_until)
@@ -604,7 +604,7 @@ def list_audit_events(
 
 @health_router.get("/health/live")
 def liveness() -> dict[str, str]:
-    return {"status": "ok", "service": "didaca-control-plane-api"}
+    return {"status": "ok", "service": "daca-control-plane-api"}
 
 
 @health_router.get("/health/ready")
@@ -616,7 +616,7 @@ def readiness(session: SessionDependency) -> dict[str, str]:
             503,
             "Service unavailable",
             "The control-plane database is not ready.",
-            problem_type="urn:didaca:problem:not-ready",
+            problem_type="urn:daca:problem:not-ready",
         ) from exc
     return {"status": "ready", "database": "available"}
 
@@ -624,7 +624,7 @@ def readiness(session: SessionDependency) -> dict[str, str]:
 @health_router.get("/")
 def service_document() -> dict[str, object]:
     return {
-        "title": "BIT DiDaCa Control Plane",
+        "title": "BIT DaCa Control Plane",
         "version": "0.1.0",
         "api": "/api/v1",
         "openapi": "/docs",
@@ -641,7 +641,7 @@ def _flush_or_conflict(session: Session, detail: str) -> None:
             409,
             "Conflict",
             detail,
-            problem_type="urn:didaca:problem:conflict",
+            problem_type="urn:daca:problem:conflict",
         ) from exc
 
 
@@ -654,7 +654,7 @@ def _commit_or_conflict(session: Session) -> None:
             409,
             "Conflict",
             "The update conflicts with another control-plane resource.",
-            problem_type="urn:didaca:problem:conflict",
+            problem_type="urn:daca:problem:conflict",
         ) from exc
 
 
@@ -665,7 +665,7 @@ def _reject_nulls(changes: dict[str, object], nullable: set[str]) -> None:
             422,
             "Validation failed",
             f"These fields cannot be null: {', '.join(invalid)}.",
-            problem_type="urn:didaca:problem:validation",
+            problem_type="urn:daca:problem:validation",
         )
 
 
@@ -677,5 +677,5 @@ def _validate_catalog_endpoint_for_request(endpoint: str, request: Request) -> N
             422,
             "Unsafe catalog endpoint",
             exc.detail,
-            problem_type="urn:didaca:problem:unsafe-catalog-endpoint",
+            problem_type="urn:daca:problem:unsafe-catalog-endpoint",
         ) from exc

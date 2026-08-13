@@ -64,7 +64,7 @@ def install_problem_handlers(app: FastAPI) -> None:
             422,
             "Validation failed",
             "The request body or parameters are invalid",
-            problem_type="urn:didaca:problem:validation",
+            problem_type="urn:daca:problem:validation",
             errors=errors,
         )
 
@@ -75,6 +75,6 @@ def install_problem_handlers(app: FastAPI) -> None:
             409,
             "Conflict",
             "The requested change conflicts with an existing catalog resource",
-            problem_type="urn:didaca:problem:conflict",
+            problem_type="urn:daca:problem:conflict",
         )
 

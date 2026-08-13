@@ -6,16 +6,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="DIDACA_CONTROL_",
+        env_prefix="DACA_CONTROL_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    service_name: str = "BIT DiDaCa Control Plane"
+    service_name: str = "BIT DaCa Control Plane"
     environment: str = "development"
     database_url: str = (
-        "postgresql+psycopg://didaca_control:change-me@postgres:5432/didaca_control_plane"
+        "postgresql+psycopg://daca_control:change-me@postgres:5432/daca_control_plane"
     )
     health_poll_interval_seconds: float = Field(default=30.0, ge=0)
     health_request_timeout_seconds: float = Field(default=3.0, gt=0, le=30)

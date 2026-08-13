@@ -13,14 +13,14 @@ import httpx
 from .models import DataProduct, PolicyRevision
 from .settings import Settings
 
-GENERATED_REGO = """package didaca.authz
+GENERATED_REGO = """package daca.authz
 
 import rego.v1
 
 default decision := {"allow": false, "reason": "default_deny"}
 
 matches_grant(policy, grant) if {
-    resource := data.didaca.resourcesById[input.resource.id]
+    resource := data.daca.resourcesById[input.resource.id]
     policy.productId == input.resource.id
     grant.subject.id == input.subject.id
     grant.subject.type == object.get(input.subject, "type", "person")
@@ -34,7 +34,7 @@ matches_grant(policy, grant) if {
 }
 
 matches_group_grant(policy, grant) if {
-    resource := data.didaca.resourcesById[input.resource.id]
+    resource := data.daca.resourcesById[input.resource.id]
     policy.productId == input.resource.id
     grant.subject.type == "group"
     input.subject.type == "person"
@@ -50,7 +50,7 @@ matches_group_grant(policy, grant) if {
 
 matches_legacy(policy) if {
     count(object.get(policy, "grants", [])) == 0
-    resource := data.didaca.resourcesById[input.resource.id]
+    resource := data.daca.resourcesById[input.resource.id]
     policy.productId == input.resource.id
     input.subject.id in policy.subjects.userIds
     input.action in policy.actions
@@ -68,41 +68,41 @@ request_protocol := "postgresql" if {
 }
 
 explicitly_denied if {
-    some policy in data.didaca.policies
+    some policy in data.daca.policies
     policy.effect == "deny"
     some grant in policy.grants
     matches_grant(policy, grant)
 }
 
 explicitly_denied if {
-    some policy in data.didaca.policies
+    some policy in data.daca.policies
     policy.effect == "deny"
     some grant in policy.grants
     matches_group_grant(policy, grant)
 }
 
 explicitly_denied if {
-    some policy in data.didaca.policies
+    some policy in data.daca.policies
     policy.effect == "deny"
     matches_legacy(policy)
 }
 
 permitted if {
-    some policy in data.didaca.policies
+    some policy in data.daca.policies
     policy.effect == "allow"
     some grant in policy.grants
     matches_grant(policy, grant)
 }
 
 permitted if {
-    some policy in data.didaca.policies
+    some policy in data.daca.policies
     policy.effect == "allow"
     some grant in policy.grants
     matches_group_grant(policy, grant)
 }
 
 permitted if {
-    some policy in data.didaca.policies
+    some policy in data.daca.policies
     policy.effect == "allow"
     matches_legacy(policy)
 }
@@ -200,19 +200,19 @@ def bundle_data(active_policies: Iterable[ActivePolicy]) -> dict[str, Any]:
             "originCatalog": active.product.origin_catalog,
         }
         resources_by_id[str(active.product.id)] = resources[active.product.urn]
-    return {"didaca": {"policies": policies, "resources": resources, "resourcesById": resources_by_id}}
+    return {"daca": {"policies": policies, "resources": resources, "resourcesById": resources_by_id}}
 
 
 def build_opa_bundle(active_policies: list[ActivePolicy], revision: int | str) -> bytes:
     """Create a deterministic gzip-compressed OPA bundle."""
     files = {
         ".manifest": json.dumps(
-            {"revision": str(revision), "roots": ["didaca"]},
+            {"revision": str(revision), "roots": ["daca"]},
             sort_keys=True,
             separators=(",", ":"),
         ).encode(),
         "data.json": json.dumps(bundle_data(active_policies), sort_keys=True, separators=(",", ":")).encode(),
-        "didaca/authz/policy.rego": GENERATED_REGO.encode(),
+        "daca/authz/policy.rego": GENERATED_REGO.encode(),
     }
     output = io.BytesIO()
     with tarfile.open(fileobj=output, mode="w:gz", compresslevel=9) as archive:

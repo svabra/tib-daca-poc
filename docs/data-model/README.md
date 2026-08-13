@@ -18,15 +18,15 @@ Update generated sections with `npm run docs:data-model`. Validate them with
 
 | Persistence context | Storage | Tables | Alembic head | Migration fingerprint |
 |---|---|---:|---|---|
-| [Catalog data model](catalog.md) | SQLite in the PoC (`/data/didaca-catalog.db`); PostgreSQL is a future target | 26 | `0006_org_custom_groups` | `fc24a027f4cd9a0d` |
-| [Control-plane data model](control-plane.md) | PostgreSQL (`didaca_control_plane`) | 6 | `20260803_0001` | `e3a2b4cdfcec290a` |
-| [Sample data-product model](sample-data-product.md) | PostgreSQL (`didaca_sample`) | 3 | `0002_timed_entitlements` | `4ed037d35c19fa8c` |
+| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 26 | `0006_org_custom_groups` | `f0682139c7ea412c` |
+| [Control-plane data model](control-plane.md) | PostgreSQL (`daca_control_plane`) | 6 | `20260803_0001` | `ff3a5ea9ca863788` |
+| [Sample data-product model](sample-data-product.md) | PostgreSQL (`daca_sample`) | 3 | `0002_timed_entitlements` | `a95356703dd3bee2` |
 
 ## Cross-service data flow
 
 ```mermaid
 flowchart LR
-    DAAIF["DAAIF (external)"] -->|metadata publication| CATALOG["Standalone DaCa catalog\nSQLite"]
+    DAAIF["DAAIF (external)"] -->|metadata publication| CATALOG["Standalone DaCa catalog\nPostgreSQL"]
     CATALOG -->|published PBAC projection| OPA["OPA bundle"]
     CATALOG -->|entitlements + revision| SAMPLE["Sample data product\nPostgreSQL"]
     CONTROL["Optional control plane\nPostgreSQL"] -.->|health and desired configuration| CATALOG
@@ -78,16 +78,17 @@ The context prefix disambiguates names such as the two independent `audit_events
 
 ## PostgreSQL roles and protected objects
 
-Bootstrap fingerprint: `c1d27f8743f167da` from [`infra/postgres/init/00-create-databases.sh`](../../infra/postgres/init/00-create-databases.sh).
+Bootstrap fingerprint: `bd06747851cc2d9c` from [`infra/postgres/init/00-create-databases.sh`](../../infra/postgres/init/00-create-databases.sh).
 
 Roles declared by the local Compose bootstrap:
 
 | Role | Purpose |
 |---|---|
-| `didaca_control` | Owns and runs the control-plane schema. |
-| `didaca_policy_projector` | Writes projected entitlements and deployment revisions only. |
-| `didaca_sample_api` | HTTP PEP database role; subject and protocol are set in the transaction. |
-| `didaca_sample_owner` | Migration/schema owner for the sample product; never used by consumers. |
+| `daca_catalog` | Owns and runs the standalone catalog schema. |
+| `daca_control` | Owns and runs the control-plane schema. |
+| `daca_policy_projector` | Writes projected entitlements and deployment revisions only. |
+| `daca_sample_api` | HTTP PEP database role; subject and protocol are set in the transaction. |
+| `daca_sample_owner` | Migration/schema owner for the sample product; never used by consumers. |
 | `kanton-bern` | Synthetic direct PostgreSQL consumer used for a denied PoC path. |
 | `kanton-st-gallen` | Synthetic direct PostgreSQL consumer used for an allowed PoC path. |
 
@@ -95,16 +96,17 @@ Databases:
 
 | Database | Purpose |
 |---|---|
-| `didaca_control_plane` | Control-plane registry, trust, desired sync state and observations. |
-| `didaca_sample` | Protected sample product data and the policy projection used by RLS. |
+| `daca_catalog` | Standalone product metadata, workflow, policy and semantic evidence. |
+| `daca_control_plane` | Control-plane registry, trust, desired sync state and observations. |
+| `daca_sample` | Protected sample product data and the policy projection used by RLS. |
 
 Sample-product security objects:
 
-- Function `didaca_can_read(target_product uuid)`
-- Function `didaca_effective_protocol()`
-- Function `didaca_effective_subject()`
+- Function `daca_can_read(target_product uuid)`
+- Function `daca_effective_protocol()`
+- Function `daca_effective_subject()`
 - RLS `tax_statistics: enable`
 - RLS `tax_statistics: force`
-- Policy `didaca_product_read on tax_statistics`
+- Policy `daca_product_read on tax_statistics`
 
 <!-- END GENERATED: data-model. -->

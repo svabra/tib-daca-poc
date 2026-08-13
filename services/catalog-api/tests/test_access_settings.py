@@ -3,17 +3,17 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from didaca_catalog.models import (
+from daca_catalog.models import (
     IdentityDirectoryEntry,
     IdentityGroup,
     MetadataDeliveryOutbox,
     PolicyRevision,
 )
-from didaca_catalog.policy import ProjectionResult, project_to_postgresql
-from didaca_catalog.seed import ESTV_PRODUCT_ID
+from daca_catalog.policy import ProjectionResult, project_to_postgresql
+from daca_catalog.seed import ESTV_PRODUCT_ID
 from sqlalchemy import select
 
-OWNER_HEADERS = {"X-DiDaCa-User": "kassandra.valdata"}
+OWNER_HEADERS = {"X-DaCa-User": "kassandra.valdata"}
 
 
 def test_federal_organizations_are_ordered_and_bfs_is_searchable(client):
@@ -114,7 +114,7 @@ def test_owner_can_create_mixed_custom_group_and_other_users_cannot_read_it(clie
     assert [item["id"] for item in own_groups.json()] == [group_id]
     assert client.get(
         f"/api/v1/identity-directory/groups/{group_id}",
-        headers={"X-DiDaCa-User": "beat.stalder"},
+        headers={"X-DaCa-User": "beat.stalder"},
     ).status_code == 404
 
 
@@ -134,7 +134,7 @@ def test_access_setting_is_owner_isolated_and_unknown_identity_is_rejected(clien
     url = f"/api/v1/data-products/{ESTV_PRODUCT_ID}/access-settings"
     forbidden = client.put(
         url,
-        headers={"X-DiDaCa-User": "beat.stalder", "If-Match": '"1"'},
+        headers={"X-DaCa-User": "beat.stalder", "If-Match": '"1"'},
         json={"grant": access_grant("person", "noemie.rochat")},
     )
     assert forbidden.status_code == 403
@@ -163,7 +163,7 @@ def test_group_snapshot_and_postgresql_projection_are_server_generated(
             }
 
     monkeypatch.setattr(
-        "didaca_catalog.policy.httpx.put",
+        "daca_catalog.policy.httpx.put",
         lambda url, json, headers, timeout: captured.update(payload=json) or Response(),
     )
     response = client.put(
@@ -223,7 +223,7 @@ def test_i14y_outbox_waits_for_both_targets_and_deduplicates(
     client, session_factory, monkeypatch
 ):
     monkeypatch.setattr(
-        "didaca_catalog.main.project_to_postgresql",
+        "daca_catalog.main.project_to_postgresql",
         lambda settings, product_id, revision, definition: ProjectionResult(
             "deployed", observed_revision=revision
         ),
@@ -276,7 +276,7 @@ def test_i14y_outbox_waits_for_both_targets_and_deduplicates(
 
 def test_future_i14y_consent_is_scheduled_not_delivered(client, session_factory, monkeypatch):
     monkeypatch.setattr(
-        "didaca_catalog.main.project_to_postgresql",
+        "daca_catalog.main.project_to_postgresql",
         lambda settings, product_id, revision, definition: ProjectionResult(
             "deployed", observed_revision=revision
         ),
@@ -307,7 +307,7 @@ def test_group_revision_drift_creates_owner_task_without_expanding_snapshot(
     client, session_factory, monkeypatch
 ):
     monkeypatch.setattr(
-        "didaca_catalog.main.project_to_postgresql",
+        "daca_catalog.main.project_to_postgresql",
         lambda settings, product_id, revision, definition: ProjectionResult(
             "deployed", observed_revision=revision
         ),

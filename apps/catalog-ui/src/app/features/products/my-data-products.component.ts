@@ -21,14 +21,14 @@ import {
 } from './my-data-products';
 
 @Component({
-  selector: 'didaca-my-data-products',
+  selector: 'daca-my-data-products',
   standalone: true,
   imports: [DatePipe, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="didaca-page-heading product-index-heading">
+    <section class="daca-page-heading product-index-heading">
       <div>
-        <p class="didaca-eyebrow">Data Owner Workspace</p>
+        <p class="daca-eyebrow">Data Owner Workspace</p>
         <h1>Meine Datenprodukte</h1>
         <p>Finden Sie Datenprodukte, die Sie anbieten, freigegeben oder angefragt haben – sowie Produkte, die für Sie freigegeben wurden.</p>
       </div>
@@ -39,13 +39,13 @@ import {
     </section>
 
     @if (api.usingFallback()) {
-      <p class="didaca-alert is-warning">Vorschaudaten: Die SQLite-Katalog-API ist lokal nicht erreichbar. Suche und Filter bleiben mit dem identischen ESTV-Beispielportfolio nutzbar.</p>
+      <p class="daca-alert is-warning">Vorschaudaten: Die PostgreSQL-gestützte Katalog-API ist lokal nicht erreichbar. Suche und Filter bleiben mit dem identischen ESTV-Beispielportfolio nutzbar.</p>
     }
 
-    <section class="didaca-card product-search" aria-labelledby="product-search-title">
+    <section class="daca-card product-search" aria-labelledby="product-search-title">
       <div class="product-search-main">
         <div>
-          <p class="didaca-eyebrow">Katalog durchsuchen</p>
+          <p class="daca-eyebrow">Katalog durchsuchen</p>
           <h2 id="product-search-title">Welches Datenprodukt suchen Sie?</h2>
           <p>Titel, Fachgebiet, Behörde, Kanton, Gemeinde oder Machine ID eingeben.</p>
         </div>
@@ -83,7 +83,7 @@ import {
     <section class="product-results" id="product-results" aria-live="polite">
       <div class="product-results-heading">
         <div>
-          <p class="didaca-eyebrow">Ergebnisse</p>
+          <p class="daca-eyebrow">Ergebnisse</p>
           <h2>{{ productCountLabel(filteredProducts().length) }}</h2>
         </div>
         <div class="product-results-tools">
@@ -117,19 +117,19 @@ import {
         </div>
       }
       @if (identifierCopyError()) {
-        <p class="didaca-alert is-error" role="alert">Der Identifier konnte nicht in die Zwischenablage kopiert werden.</p>
+        <p class="daca-alert is-error" role="alert">Der Identifier konnte nicht in die Zwischenablage kopiert werden.</p>
       }
 
       @if (filteredProducts().length === 0) {
-        <div class="didaca-card product-empty">
+        <div class="daca-card product-empty">
           <strong>Keine passenden Datenprodukte gefunden.</strong>
           <p>Ändern Sie den Suchbegriff oder wählen Sie eine andere Beziehung.</p>
-          <button class="didaca-button is-secondary" type="button" (click)="resetFilters()">Alle Datenprodukte anzeigen</button>
+          <button class="daca-button is-secondary" type="button" (click)="resetFilters()">Alle Datenprodukte anzeigen</button>
         </div>
       } @else if (viewMode() === 'records') {
         <div class="product-list">
           @for (product of filteredProducts(); track product.id) {
-            <article class="didaca-card product-list-item">
+            <article class="daca-card product-list-item">
               <div class="product-list-accent" aria-hidden="true"></div>
               <div class="product-list-body">
                 <div class="product-list-meta">
@@ -220,7 +220,7 @@ import {
                   <div><dt>Geändert</dt><dd>{{ product.updatedAt | date: 'dd.MM.yyyy' }}</dd></div>
                 </dl>
                 <div class="product-list-actions">
-                  <a class="didaca-button is-secondary" [routerLink]="['/products', product.id, 'overview']">Produktdetails öffnen</a>
+                  <a class="daca-button is-secondary" [routerLink]="['/products', product.id, 'overview']">Produktdetails öffnen</a>
                   <div class="product-context-menu" (click)="$event.stopPropagation()">
                     <button
                       class="product-context-trigger"
@@ -264,7 +264,7 @@ import {
           }
         </div>
       } @else {
-        <div class="didaca-card product-table-shell">
+        <div class="daca-card product-table-shell">
           <table class="product-table">
             <thead>
               <tr>
@@ -400,7 +400,7 @@ import {
         >
           <header class="access-consumer-header">
             <div>
-              <p class="didaca-eyebrow">Aktive Zugriffe</p>
+              <p class="daca-eyebrow">Aktive Zugriffe</p>
               <h2 id="access-consumer-title">Datenkonsumenten</h2>
               <p>{{ product.title }}</p>
             </div>
@@ -471,7 +471,7 @@ import {
         <section class="ownership-transfer-dialog" role="dialog" aria-modal="true" aria-labelledby="ownership-transfer-title" (click)="$event.stopPropagation()">
           <header>
             <div>
-              <p class="didaca-eyebrow">Data Governance</p>
+              <p class="daca-eyebrow">Data Governance</p>
               <h2 id="ownership-transfer-title">Ownership transferieren</h2>
             </div>
             <button type="button" (click)="closeOwnershipTransfer()" aria-label="Dialog schliessen">×</button>
@@ -495,8 +495,8 @@ import {
             <p class="ownership-transfer-error" role="alert">{{ error }}</p>
           }
           <footer>
-            <button class="didaca-button is-secondary" type="button" [disabled]="transferSubmitting()" (click)="closeOwnershipTransfer()">Abbrechen</button>
-            <button class="didaca-button is-primary" type="button" [disabled]="!transferTarget() || transferSubmitting()" (click)="prepareOwnershipTransfer()">
+            <button class="daca-button is-secondary" type="button" [disabled]="transferSubmitting()" (click)="closeOwnershipTransfer()">Abbrechen</button>
+            <button class="daca-button is-primary" type="button" [disabled]="!transferTarget() || transferSubmitting()" (click)="prepareOwnershipTransfer()">
               {{ transferSubmitting() ? 'Anfrage wird gespeichert…' : 'Transferanfrage erstellen' }}
             </button>
           </footer>

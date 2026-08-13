@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from didaca_catalog.workflow_seed import term_uri
+from daca_catalog.workflow_seed import term_uri
 
 
 def fixture(client, fixture_id: str) -> dict:
     return next(item for item in client.get("/api/v1/poc/product-fixtures").json() if item["id"] == fixture_id)
 
 
-def test_demo_users_and_fixture_seed_are_idempotent_and_sqlite_backed(client):
+def test_demo_users_and_fixture_seed_are_idempotent_and_persisted(client):
     users = client.get("/api/v1/demo-users").json()
     assert [user["id"] for user in users] == ["beat.stalder", "kassandra.valdata", "noemie.rochat"]
     fixtures = client.get("/api/v1/poc/product-fixtures").json()
@@ -29,8 +29,8 @@ def test_open_publication_is_idempotent_defaults_to_discoverable_and_creates_tas
     assert repeated.json()["productId"] == product_id
     assert repeated.json()["created"] is False
 
-    owner_products = client.get("/api/v1/data-products", headers={"X-DiDaCa-User": "kassandra.valdata"}).json()["items"]
-    beat_products = client.get("/api/v1/data-products", headers={"X-DiDaCa-User": "beat.stalder"}).json()["items"]
+    owner_products = client.get("/api/v1/data-products", headers={"X-DaCa-User": "kassandra.valdata"}).json()["items"]
+    beat_products = client.get("/api/v1/data-products", headers={"X-DaCa-User": "beat.stalder"}).json()["items"]
     assert product_id in {item["id"] for item in owner_products}
     assert product_id not in {item["id"] for item in beat_products}
 
@@ -48,7 +48,7 @@ def test_automatic_publication_is_discoverable_but_default_denied(client):
     created = client.post("/api/v1/metadata-publications", json=payload)
     assert created.status_code == 201
     product_id = created.json()["productId"]
-    beat_products = client.get("/api/v1/data-products", headers={"X-DiDaCa-User": "beat.stalder"}).json()["items"]
+    beat_products = client.get("/api/v1/data-products", headers={"X-DaCa-User": "beat.stalder"}).json()["items"]
     assert product_id in {item["id"] for item in beat_products}
     policies = client.get(f"/api/v1/data-products/{product_id}/policies").json()["items"]
     assert policies == []
@@ -59,11 +59,11 @@ def test_quality_requires_canonical_product_and_all_key_field_mappings(client):
     payload["publicationMode"] = "automatic"
     created = client.post("/api/v1/metadata-publications", json=payload).json()
     product_id = created["productId"]
-    quality_state = client.get(f"/api/v1/data-products/{product_id}/quality", headers={"X-DiDaCa-User": "kassandra.valdata"}).json()
+    quality_state = client.get(f"/api/v1/data-products/{product_id}/quality", headers={"X-DaCa-User": "kassandra.valdata"}).json()
     fields = quality_state["fields"]
     response = client.put(
         f"/api/v1/data-products/{product_id}/quality",
-        headers={"X-DiDaCa-User": "kassandra.valdata"},
+        headers={"X-DaCa-User": "kassandra.valdata"},
         json={
             "title": payload["businessMetadata"]["title"],
             "description": payload["businessMetadata"]["description"],
@@ -92,15 +92,15 @@ def test_quality_requires_canonical_product_and_all_key_field_mappings(client):
     assert quality["medal"] == "gold"
     assert next(item for item in quality["criteria"] if item["id"] == "ontology")["complete"] is True
 
-    semantic = client.get(f"/api/v1/data-products/{product_id}/semantic-profile", headers={"X-DiDaCa-User": "kassandra.valdata"})
+    semantic = client.get(f"/api/v1/data-products/{product_id}/semantic-profile", headers={"X-DaCa-User": "kassandra.valdata"})
     assert semantic.status_code == 200
     assert "dcat:Dataset" in semantic.json()["@type"]
     assert semantic.json()["dcterms:conformsTo"] == "urn:daca:ontology:tax:v1"
 
-    mappings = client.get(f"/api/v1/data-products/{product_id}/semantic-mappings", headers={"X-DiDaCa-User": "kassandra.valdata"}).json()
+    mappings = client.get(f"/api/v1/data-products/{product_id}/semantic-mappings", headers={"X-DaCa-User": "kassandra.valdata"}).json()
     mapping_update = client.put(
         f"/api/v1/data-products/{product_id}/semantic-mappings",
-        headers={"X-DiDaCa-User": "kassandra.valdata"},
+        headers={"X-DaCa-User": "kassandra.valdata"},
         json={
             "productClassUri": payload["businessMetadata"]["productClassUri"],
             "productClassStatus": "confirmed",
@@ -114,13 +114,13 @@ def test_quality_requires_canonical_product_and_all_key_field_mappings(client):
     assert all(item["status"] == "confirmed" for item in mapping_update.json())
     assert client.put(
         f"/api/v1/data-products/{product_id}/semantic-mappings",
-        headers={"X-DiDaCa-User": "beat.stalder"},
+        headers={"X-DaCa-User": "beat.stalder"},
         json={"productClassUri": payload["businessMetadata"]["productClassUri"], "fieldMappings": []},
     ).status_code == 403
 
 
 def test_approval_creates_timed_policy_draft_and_publish_grants_request(client, monkeypatch):
-    from didaca_catalog.policy import ProjectionResult
+    from daca_catalog.policy import ProjectionResult
 
     payload = fixture(client, "kassandra-bronze")["payload"]
     payload["publicationMode"] = "automatic"
@@ -128,7 +128,7 @@ def test_approval_creates_timed_policy_draft_and_publish_grants_request(client, 
     product_id = created["productId"]
     request = client.post(
         f"/api/v1/data-products/{product_id}/access-requests",
-        headers={"X-DiDaCa-User": "beat.stalder"},
+        headers={"X-DaCa-User": "beat.stalder"},
         json={
             "consumerType": "person",
             "machineId": None,
@@ -146,7 +146,7 @@ def test_approval_creates_timed_policy_draft_and_publish_grants_request(client, 
     assert request.status_code == 201
     decided = client.post(
         f"/api/v1/access-requests/{request.json()['id']}/decision",
-        headers={"X-DiDaCa-User": "kassandra.valdata"},
+        headers={"X-DaCa-User": "kassandra.valdata"},
         json={"decision": "approve", "grantedVariant": "modified"},
     )
     assert decided.status_code == 200
@@ -155,13 +155,13 @@ def test_approval_creates_timed_policy_draft_and_publish_grants_request(client, 
     assert grant["subject"] == {"type": "person", "id": "beat.stalder"}
     assert grant["validFrom"] == "2026-09-01"
 
-    monkeypatch.setattr("didaca_catalog.main.project_to_postgresql", lambda settings, product_id, revision, definition: ProjectionResult("deployed", observed_revision=revision))
+    monkeypatch.setattr("daca_catalog.main.project_to_postgresql", lambda settings, product_id, revision, definition: ProjectionResult("deployed", observed_revision=revision))
     published = client.post(
         f"/api/v1/data-products/{product_id}/policies/{decided.json()['policy']['id']}/publish",
-        headers={"X-DiDaCa-User": "kassandra.valdata", "If-Match": f'"{decided.json()["policy"]["revision"]}"'},
+        headers={"X-DaCa-User": "kassandra.valdata", "If-Match": f'"{decided.json()["policy"]["revision"]}"'},
     )
     assert published.status_code == 201
-    mine = client.get(f"/api/v1/data-products/{product_id}/access-requests/mine", headers={"X-DiDaCa-User": "beat.stalder"}).json()
+    mine = client.get(f"/api/v1/data-products/{product_id}/access-requests/mine", headers={"X-DaCa-User": "beat.stalder"}).json()
     assert mine[0]["status"] == "approved_policy_pending"
     opa_deployment = next(
         item for item in published.json()["deployments"] if item["target"] == "opa"
@@ -178,5 +178,5 @@ def test_approval_creates_timed_policy_draft_and_publish_grants_request(client, 
         },
     )
     assert acknowledged.status_code == 200
-    mine = client.get(f"/api/v1/data-products/{product_id}/access-requests/mine", headers={"X-DiDaCa-User": "beat.stalder"}).json()
+    mine = client.get(f"/api/v1/data-products/{product_id}/access-requests/mine", headers={"X-DaCa-User": "beat.stalder"}).json()
     assert mine[0]["status"] == "granted_modified"

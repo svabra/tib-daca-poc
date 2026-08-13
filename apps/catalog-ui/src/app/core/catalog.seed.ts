@@ -58,7 +58,7 @@ export const FALLBACK_OWNED_ACCESS_CONSUMERS: readonly OwnedAccessConsumer[] = [
 
 export const FALLBACK_PRODUCT: DataProduct = {
   id: ESTV_PRODUCT_ID,
-  globalId: 'urn:didaca:ch:estv:tax-statistics-by-canton',
+  globalId: 'urn:daca:ch:estv:tax-statistics-by-canton',
   originCatalog: 'estv.catalog.admin.ch',
   revision: 7,
   title: 'ESTV-Steuerstatistik nach Kanton',
@@ -95,7 +95,7 @@ export const FALLBACK_PRODUCT: DataProduct = {
       protocol: 'http-rest',
       title: 'Tax statistics REST API',
       method: 'GET',
-      url: 'http://localhost:8003/api/v1/estv/tax-statistics',
+      url: '/sample-api/api/v1/estv/tax-statistics',
       mediaType: 'application/json',
       secretRef: 'demo/header-identity',
     },
@@ -103,9 +103,9 @@ export const FALLBACK_PRODUCT: DataProduct = {
       id: 'endpoint-postgres-estv',
       protocol: 'postgresql',
       title: 'Governed PostgreSQL relation',
-      host: 'localhost',
+      host: 'postgres',
       port: 55432,
-      database: 'didaca_sample',
+      database: 'daca_sample',
       schema: 'public',
       relation: 'tax_statistics',
       secretRef: 'demo/consumer-role',
@@ -119,7 +119,7 @@ export const FALLBACK_PRODUCTS: readonly DataProduct[] = [
   {
     ...FALLBACK_PRODUCT,
     id: '12222222-2222-4222-8222-222222222222',
-    globalId: 'urn:didaca:ch:estv:direct-federal-tax-assessments',
+    globalId: 'urn:daca:ch:estv:direct-federal-tax-assessments',
     revision: 3,
     title: 'Direkte Bundessteuer – Veranlagungen nach Kanton und Gemeinde',
     description: 'Aggregierte Veranlagungen und Erträge der direkten Bundessteuer mit Kantons- und Gemeindebezug; ausschliesslich synthetische POC-Werte.',
@@ -142,7 +142,7 @@ export const FALLBACK_PRODUCTS: readonly DataProduct[] = [
   {
     ...FALLBACK_PRODUCT,
     id: '13333333-3333-4333-8333-333333333333',
-    globalId: 'urn:didaca:ch:estv:vat-sector-indicators',
+    globalId: 'urn:daca:ch:estv:vat-sector-indicators',
     revision: 5,
     title: 'Mehrwertsteuer – Branchenindikatoren',
     description: 'Synthetische, aggregierte Umsatz- und Abrechnungsindikatoren zur Mehrwertsteuer nach Branche und Wirtschaftsregion.',
@@ -165,8 +165,8 @@ export const FALLBACK_PRODUCTS: readonly DataProduct[] = [
   {
     ...FALLBACK_PRODUCT,
     id: '14444444-4444-4444-8444-444444444444',
-    globalId: 'urn:didaca:ch:cantons:withholding-tax-tariffs',
-    originCatalog: 'urn:didaca:catalog:cantonal-tax-authorities',
+    globalId: 'urn:daca:ch:cantons:withholding-tax-tariffs',
+    originCatalog: 'urn:daca:catalog:cantonal-tax-authorities',
     revision: 12,
     title: 'Quellensteuer – Tarife, Kantons- und Gemeindecodes',
     description: 'Harmonisierte synthetische Tarifparameter sowie Kantons- und Gemeindecodes für die Quellensteuerprüfung der ESTV.',
@@ -201,8 +201,8 @@ export const FALLBACK_PRODUCTS: readonly DataProduct[] = [
   {
     ...FALLBACK_PRODUCT,
     id: '17777777-7777-4777-8777-777777777777',
-    globalId: 'urn:didaca:ch:ne:corporate-federal-tax-factors',
-    originCatalog: 'urn:didaca:catalog:neuchatel',
+    globalId: 'urn:daca:ch:ne:corporate-federal-tax-factors',
+    originCatalog: 'urn:daca:catalog:neuchatel',
     revision: 6,
     title: 'Juristische Personen Neuchâtel – Steuerfaktoren für die direkte Bundessteuer',
     description: 'Synthetische aggregierte Steuerfaktoren juristischer Personen aus dem Kanton Neuchâtel für den Abgleich der direkten Bundessteuer; keine Einzel- oder Personendaten.',
@@ -238,8 +238,8 @@ export const FALLBACK_PRODUCTS: readonly DataProduct[] = [
   {
     ...FALLBACK_PRODUCT,
     id: '15555555-5555-4555-8555-555555555555',
-    globalId: 'urn:didaca:ch:efv:nfa-tax-potential',
-    originCatalog: 'urn:didaca:catalog:efv',
+    globalId: 'urn:daca:ch:efv:nfa-tax-potential',
+    originCatalog: 'urn:daca:catalog:efv',
     revision: 4,
     title: 'Ressourcenpotenzial NFA – Steuerbasis',
     description: 'Aggregierte synthetische Steuerbasis für das Ressourcenpotenzial im nationalen Finanzausgleich mit Datenbeiträgen der Kantone.',
@@ -266,7 +266,7 @@ export const FALLBACK_PRODUCTS: readonly DataProduct[] = [
   {
     ...FALLBACK_PRODUCT,
     id: '16666666-6666-4666-8666-666666666666',
-    globalId: 'urn:didaca:ch:estv:withholding-tax-refunds-by-canton',
+    globalId: 'urn:daca:ch:estv:withholding-tax-refunds-by-canton',
     revision: 2,
     title: 'Verrechnungssteuer – Rückerstattungen nach Kanton',
     description: 'Synthetische aggregierte Rückerstattungsvolumen der Verrechnungssteuer nach Kanton und Bearbeitungsperiode.',
@@ -343,7 +343,7 @@ export const FALLBACK_POLICY: PolicyDefinition = {
   protocols: ['http', 'postgresql'],
   opaRevision: 3,
   postgresRevision: 3,
-  generatedRego: `package didaca.estv.tax_statistics
+  generatedRego: `package daca.estv.tax_statistics
 
 import rego.v1
 

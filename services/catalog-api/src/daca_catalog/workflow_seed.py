@@ -158,7 +158,7 @@ DEMO_USERS = (
     },
     # Non-selectable identities preserve existing API contract tests and local scripts.
     {
-        "id": "didaca-test-editor",
+        "id": "daca-test-editor",
         "display_name": "DaCa Test Editor",
         "organization": "BIT",
         "email": "test@localhost",
@@ -188,7 +188,7 @@ DEMO_USERS = (
         "selectable": False,
     },
     {
-        "id": "didaca-demo-editor",
+        "id": "daca-demo-editor",
         "display_name": "DaCa Demo Editor",
         "organization": "BIT",
         "email": "demo@localhost",
@@ -467,7 +467,7 @@ def seed_workflow_reference_data(session: Session) -> bool:
     if version is None:
         session.add(CanonicalOntologyVersion(id=ONTOLOGY_VERSION_ID, uri=ONTOLOGY_URI, version="1.0.0-poc", title="DaCa Canonical Tax Ontology · PoC", active=True, created_at=now))
         # No ORM relationship links these reference rows; make the parent
-        # visible before SQLite checks the children's foreign keys.
+        # visible before the database checks the children's foreign keys.
         session.flush()
         for local_name, kind, label, definition in TERM_DEFINITIONS:
             session.add(CanonicalOntologyTerm(id=stable_id(f"term:{local_name}"), ontology_version_id=ONTOLOGY_VERSION_ID, uri=term_uri(local_name), kind=kind, label=label, definition=definition))

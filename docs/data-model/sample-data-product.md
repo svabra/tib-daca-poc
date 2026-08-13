@@ -2,7 +2,7 @@
 
 The sample ESTV product owns synthetic product rows and the local PostgreSQL authorization projection.
 
-**Storage:** PostgreSQL (`didaca_sample`).
+**Storage:** PostgreSQL (`daca_sample`).
 
 ## Authorization boundary
 
@@ -13,7 +13,7 @@ The catalog policy revision is projected into this database by product ID and re
 - SQLAlchemy source: [`services/sample-data-product/app/models.py`](../../services/sample-data-product/app/models.py)
 - Alembic head: `0002_timed_entitlements`
 - Schema fingerprint: `66b6fe58d4af6144`
-- Migration fingerprint: `4ed037d35c19fa8c`
+- Migration fingerprint: `a95356703dd3bee2`
 - Tables: `3`
 
 ## Domain status vocabulary

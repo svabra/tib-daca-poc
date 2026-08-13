@@ -1,2 +1,2 @@
-"""BIT DiDaCa synthetic ESTV product."""
+"""BIT DaCa synthetic ESTV product."""
 

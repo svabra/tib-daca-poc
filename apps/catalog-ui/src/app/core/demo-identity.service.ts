@@ -31,7 +31,7 @@ export class DemoIdentityService {
   readonly users = this.usersState.asReadonly();
   readonly userId = this.userIdState.asReadonly();
   readonly user = computed(() => this.usersState().find((user) => user.id === this.userIdState()) ?? this.usersState()[0] ?? KASSANDRA);
-  readonly headers = computed(() => new HttpHeaders({ 'X-DiDaCa-User': this.userIdState() }));
+  readonly headers = computed(() => new HttpHeaders({ 'X-DaCa-User': this.userIdState() }));
 
   constructor() {
     this.http.get<DemoUser[]>('/api/v1/demo-users').pipe(catchError(() => of([KASSANDRA]))).subscribe((users) => {

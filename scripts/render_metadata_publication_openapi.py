@@ -14,7 +14,7 @@ UI_OUTPUT = ROOT / "apps" / "catalog-ui" / "public" / "openapi" / "daca-metadata
 if str(CATALOG_SRC) not in sys.path:
     sys.path.insert(0, str(CATALOG_SRC))
 
-from didaca_catalog.main import app  # noqa: E402
+from daca_catalog.main import app  # noqa: E402
 
 FOCUSED_PATHS = (
     "/api/v1/metadata-publications",
@@ -57,7 +57,7 @@ def focused_spec() -> dict[str, Any]:
             "version": source["info"]["version"],
             "description": (
                 "Focused integration contract for publishing REST metadata from DAAIF into DaCa. "
-                "Set DIDACA_OPEN_METADATA_PUBLICATION=true on the Catalog API. The endpoint accepts "
+                "Set DACA_OPEN_METADATA_PUBLICATION=true on the Catalog API. The endpoint accepts "
                 "metadata only, never credentials or product records, and does not grant access."
             ),
         },

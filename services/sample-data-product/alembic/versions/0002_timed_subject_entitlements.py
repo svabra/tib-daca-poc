@@ -40,21 +40,21 @@ def upgrade() -> None:
 
     op.execute(
         """
-        CREATE OR REPLACE FUNCTION didaca_can_read(target_product uuid) RETURNS boolean
+        CREATE OR REPLACE FUNCTION daca_can_read(target_product uuid) RETURNS boolean
         LANGUAGE sql STABLE SECURITY DEFINER
         SET search_path = public, pg_temp
         AS $$
           SELECT EXISTS (
             SELECT 1 FROM policy_entitlements entitlement
             WHERE entitlement.product_id = target_product
-              AND entitlement.subject_id = didaca_effective_subject()
+              AND entitlement.subject_id = daca_effective_subject()
               AND entitlement.subject_type = CASE
-                WHEN session_user = 'didaca_sample_api'
-                  THEN COALESCE(NULLIF(current_setting('didaca.subject_type', true), ''), 'person')
+                WHEN session_user = 'daca_sample_api'
+                  THEN COALESCE(NULLIF(current_setting('daca.subject_type', true), ''), 'person')
                 ELSE 'person'
               END
               AND entitlement.action = 'data.read'
-              AND entitlement.protocol = didaca_effective_protocol()
+              AND entitlement.protocol = daca_effective_protocol()
               AND entitlement.active
               AND CURRENT_DATE BETWEEN entitlement.valid_from AND entitlement.valid_until
           )
@@ -67,16 +67,16 @@ def downgrade() -> None:
     op.execute("DELETE FROM tax_statistics WHERE product_id = '9c9a0112-d4ef-57d0-862c-0d27872c82c2'::uuid")
     op.execute(
         """
-        CREATE OR REPLACE FUNCTION didaca_can_read(target_product uuid) RETURNS boolean
+        CREATE OR REPLACE FUNCTION daca_can_read(target_product uuid) RETURNS boolean
         LANGUAGE sql STABLE SECURITY DEFINER
         SET search_path = public, pg_temp
         AS $$
           SELECT EXISTS (
             SELECT 1 FROM policy_entitlements entitlement
             WHERE entitlement.product_id = target_product
-              AND entitlement.subject_id = didaca_effective_subject()
+              AND entitlement.subject_id = daca_effective_subject()
               AND entitlement.action = 'data.read'
-              AND entitlement.protocol = didaca_effective_protocol()
+              AND entitlement.protocol = daca_effective_protocol()
               AND entitlement.active
           )
         $$

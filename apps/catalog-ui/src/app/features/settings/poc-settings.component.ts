@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, HostListener, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { DidacaGlossaryTermComponent } from '@bit-didaca/design-system';
+import { DacaGlossaryTermComponent } from '@bit-daca/design-system';
 import { catchError, of } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService } from '../../core/demo-identity.service';
@@ -25,29 +25,29 @@ interface PublicationResult {
 }
 
 @Component({
-  selector: 'didaca-poc-settings',
+  selector: 'daca-poc-settings',
   standalone: true,
-  imports: [RouterLink, DidacaGlossaryTermComponent],
+  imports: [RouterLink, DacaGlossaryTermComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="didaca-page-heading">
-      <div><p class="didaca-eyebrow"><didaca-glossary-term term="PoC" /> Simulation</p><h1>Simulationsereignis: Datenprodukt im <didaca-glossary-term term="DaCa" /> eingereicht</h1><p>Simulieren Sie die offene REST-Metadatenpublikation eines bereits in <didaca-glossary-term term="DAAIF" /> erstellten Datenprodukts.</p></div>
-      <a class="poc-open-api" href="http://localhost:8001/docs" target="_blank" rel="noreferrer">OpenAPI · ohne Identifikation</a>
+    <section class="daca-page-heading">
+      <div><p class="daca-eyebrow"><daca-glossary-term term="PoC" /> Simulation</p><h1>Simulationsereignis: Datenprodukt im <daca-glossary-term term="DaCa" /> eingereicht</h1><p>Simulieren Sie die offene REST-Metadatenpublikation eines bereits in <daca-glossary-term term="DAAIF" /> erstellten Datenprodukts.</p></div>
+      <a class="poc-open-api" href="/catalog-api/docs" target="_blank" rel="noreferrer">OpenAPI · ohne Identifikation</a>
     </section>
 
-    <p class="didaca-alert is-warning"><strong>Nur PoC:</strong> Der Publikationsendpunkt ist lokal bewusst offen. Er übernimmt Metadaten, niemals Zugangsdaten oder Secrets. Datenzugriff bleibt Default Deny.</p>
+    <p class="daca-alert is-warning"><strong>Nur PoC:</strong> Der Publikationsendpunkt ist lokal bewusst offen. Er übernimmt Metadaten, niemals Zugangsdaten oder Secrets. Datenzugriff bleibt Default Deny.</p>
 
     <div class="poc-fixture-groups">
       @for (user of identity.users(); track user.id) {
-        <section class="didaca-card poc-fixture-group">
+        <section class="daca-card poc-fixture-group">
           <header><div>@if (user.avatarUrl) { <img [src]="user.avatarUrl" alt=""> }<span><small>Data Owner</small><strong>{{ user.displayName }}</strong><small>{{ user.organization }}</small></span></div><b>{{ fixturesFor(user.id).length }} Fixtures</b></header>
           <div>
             @for (fixture of fixturesFor(user.id); track fixture.id) {
               <article>
                 <span class="quality-medal" [class]="'is-' + fixture.maturityLevel">{{ medal(fixture.maturityLevel) }}</span>
                 <div><small>DAAIF · {{ fixture.sourceProductId }}</small><h2>{{ fixture.title }}</h2><p>{{ fixture.maturityLevel === 'gold' ? 'Fachlich, technisch, DCAT und Ontologie vorbereitet.' : fixture.maturityLevel === 'silver' ? 'Technische und fachliche Angaben vorhanden.' : 'Nur technische REST-Metadaten vorhanden.' }}</p></div>
-                @if (fixture.injectedProductId) { <a class="didaca-button is-secondary" [routerLink]="['/products', fixture.injectedProductId, 'overview']">Produkt öffnen</a> }
-                @else { <button class="didaca-button" type="button" aria-describedby="publication-action-help" (click)="open(fixture, $event)">Ereignis «Datenprodukt im DaCa eingereicht» auslösen</button> }
+                @if (fixture.injectedProductId) { <a class="daca-button is-secondary" [routerLink]="['/products', fixture.injectedProductId, 'overview']">Produkt öffnen</a> }
+                @else { <button class="daca-button" type="button" aria-describedby="publication-action-help" (click)="open(fixture, $event)">Ereignis «Datenprodukt im DaCa eingereicht» auslösen</button> }
               </article>
             }
           </div>
@@ -60,28 +60,28 @@ interface PublicationResult {
     @if (selected(); as fixture) {
       <div class="poc-dialog-backdrop" (click)="closeBackdrop($event)">
         <section class="poc-dialog" role="dialog" aria-modal="true" aria-labelledby="publication-title">
-          <header><div><p class="didaca-eyebrow">DAAIF → DaCa</p><h2 id="publication-title">Metadaten publizieren</h2></div><button id="poc-publication-close" type="button" (click)="close()" aria-label="Schliessen">×</button></header>
+          <header><div><p class="daca-eyebrow">DAAIF → DaCa</p><h2 id="publication-title">Metadaten publizieren</h2></div><button id="poc-publication-close" type="button" (click)="close()" aria-label="Schliessen">×</button></header>
           <p><strong>{{ fixture.title }}</strong></p>
           <dl><div><dt>Quelle</dt><dd>DAAIF</dd></div><div><dt>Protokoll</dt><dd>REST · GET</dd></div><div><dt>Owner</dt><dd>{{ ownerName(fixture.ownerUserId) }}</dd></div></dl>
           <fieldset><legend>Publikationsmodus</legend><label><input type="radio" name="mode" value="governance_review" [checked]="mode() === 'governance_review'" (change)="mode.set('governance_review')"><span><strong>Governance-Prüfung</strong><small>Owner-sichtbarer Entwurf mit zwei Aufgaben.</small></span></label><label><input type="radio" name="mode" value="automatic" [checked]="mode() === 'automatic'" (change)="mode.set('automatic')"><span><strong>Vollautomatische Publikation</strong><small>Sofort auffindbar, Datenzugriff weiterhin gesperrt.</small></span></label></fieldset>
           <label class="poc-discoverable"><input type="checkbox" [checked]="discoverable()" (change)="discoverable.set($any($event.target).checked)"><span><strong>Im Katalog auffindbar</strong><small>OpenAPI-Default: true. Dies gibt keine Produktdaten frei.</small></span></label>
-          @if (error()) { <p class="didaca-alert is-error" role="alert">{{ error() }}</p> }
-          <footer><button class="didaca-button is-secondary" type="button" (click)="close()">Abbrechen</button><button class="didaca-button" type="button" [disabled]="submitting()" (click)="publish()">{{ submitting() ? 'Ereignis wird ausgelöst…' : 'Ereignis jetzt auslösen' }}</button></footer>
+          @if (error()) { <p class="daca-alert is-error" role="alert">{{ error() }}</p> }
+          <footer><button class="daca-button is-secondary" type="button" (click)="close()">Abbrechen</button><button class="daca-button" type="button" [disabled]="submitting()" (click)="publish()">{{ submitting() ? 'Ereignis wird ausgelöst…' : 'Ereignis jetzt auslösen' }}</button></footer>
         </section>
       </div>
     }
 
     @if (result(); as outcome) {
-      <section class="didaca-card poc-result" role="status"><div><p class="didaca-eyebrow">Erfolgreich übernommen</p><h2>{{ outcome.created ? 'Datenprodukt und Aufgaben erstellt' : 'Datenprodukt war bereits vorhanden' }}</h2><p>{{ outcome.missingFields.length }} Qualitätskriterien sind noch offen.</p></div><div class="poc-result-actions"><a class="didaca-button" [routerLink]="['/products', outcome.productId, 'quality']">Qualitätswizard öffnen</a><button class="didaca-button is-secondary" type="button" (click)="openReset(outcome.productId)">Fixture zurücksetzen</button></div></section>
+      <section class="daca-card poc-result" role="status"><div><p class="daca-eyebrow">Erfolgreich übernommen</p><h2>{{ outcome.created ? 'Datenprodukt und Aufgaben erstellt' : 'Datenprodukt war bereits vorhanden' }}</h2><p>{{ outcome.missingFields.length }} Qualitätskriterien sind noch offen.</p></div><div class="poc-result-actions"><a class="daca-button" [routerLink]="['/products', outcome.productId, 'quality']">Qualitätswizard öffnen</a><button class="daca-button is-secondary" type="button" (click)="openReset(outcome.productId)">Fixture zurücksetzen</button></div></section>
     }
 
     @if (resetProductId()) {
       <div class="poc-dialog-backdrop" (click)="closeResetBackdrop($event)">
         <section class="poc-dialog" role="alertdialog" aria-modal="true" aria-labelledby="reset-title" aria-describedby="reset-detail">
-          <header><div><p class="didaca-eyebrow">Physischer PoC-Reset</p><h2 id="reset-title">Fixture-Produkt löschen?</h2></div><button type="button" (click)="closeReset()" aria-label="Schliessen">×</button></header>
+          <header><div><p class="daca-eyebrow">Physischer PoC-Reset</p><h2 id="reset-title">Fixture-Produkt löschen?</h2></div><button type="button" (click)="closeReset()" aria-label="Schliessen">×</button></header>
           <p id="reset-detail">Produkt, Publikation und abhängige synthetische Daten werden gelöscht. Audit, Provenienz-URN und Reset-Nachweis bleiben erhalten. Geben Sie zur Bestätigung exakt <strong>{{ identity.user().displayName }}</strong> ein.</p>
           <label class="poc-reset-confirmation"><span>Bestätigungsname</span><input type="text" [value]="confirmationName()" (input)="confirmationName.set($any($event.target).value)" autocomplete="off"></label>
-          <footer><button class="didaca-button is-secondary" type="button" (click)="closeReset()">Abbrechen</button><button class="didaca-button" type="button" [disabled]="confirmationName() !== identity.user().displayName || submitting()" (click)="resetFixture()">Fixture physisch zurücksetzen</button></footer>
+          <footer><button class="daca-button is-secondary" type="button" (click)="closeReset()">Abbrechen</button><button class="daca-button" type="button" [disabled]="confirmationName() !== identity.user().displayName || submitting()" (click)="resetFixture()">Fixture physisch zurücksetzen</button></footer>
         </section>
       </div>
     }

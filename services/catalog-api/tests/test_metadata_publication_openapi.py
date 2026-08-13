@@ -3,7 +3,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-from didaca_catalog.main import app
+from daca_catalog.main import app
 
 
 def load_renderer():
@@ -24,7 +24,7 @@ def test_focused_openapi_is_current_and_documents_contract():
     assert {"200", "404", "409", "422", "503"}.issubset(publication["responses"])
     examples = spec["components"]["schemas"]["MetadataPublicationCreate"]["examples"]
     assert {example["publicationMode"] for example in examples} == {"governance_review", "automatic"}
-    assert "DIDACA_OPEN_METADATA_PUBLICATION" in spec["info"]["description"]
+    assert "DACA_OPEN_METADATA_PUBLICATION" in spec["info"]["description"]
 
 
 def test_live_fastapi_schema_contains_same_publication_operation():

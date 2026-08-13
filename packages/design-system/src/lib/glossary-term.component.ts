@@ -9,7 +9,7 @@ import {
   signal,
 } from '@angular/core';
 
-export const DIDACA_GLOSSARY: Readonly<Record<string, string>> = {
+export const DACA_GLOSSARY: Readonly<Record<string, string>> = {
   DaCa: 'Distributed Data Catalog – der zentrale Einstieg in Metadaten, Verantwortlichkeiten und Zugriffsregeln der Data Platform BIT.',
   DAAIF: 'Data Analytics und AI Feed – Expert Data Analytics and Data Product Curation Platform.',
   ISBO: 'Informatiksicherheitsbeauftragte oder Informatiksicherheitsbeauftragter der Organisationseinheit.',
@@ -29,14 +29,14 @@ export const DIDACA_GLOSSARY: Readonly<Record<string, string>> = {
 let tooltipSequence = 0;
 
 @Component({
-  selector: 'didaca-glossary-term',
+  selector: 'daca-glossary-term',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <span class="didaca-glossary" (mouseenter)="open()" (mouseleave)="closeOnPointer()">
+    <span class="daca-glossary" (mouseenter)="open()" (mouseleave)="closeOnPointer()">
       <button
         type="button"
-        class="didaca-glossary-trigger"
+        class="daca-glossary-trigger"
         [class.is-icon-only]="iconOnly()"
         [attr.aria-label]="iconOnly() ? 'Begriff ' + term() + ' erklären' : null"
         [attr.aria-describedby]="tooltipId"
@@ -47,7 +47,7 @@ let tooltipSequence = 0;
       >{{ iconOnly() ? '?' : label() }}</button>
       <span
         #tooltip
-        class="didaca-glossary-tooltip"
+        class="daca-glossary-tooltip"
         [class.is-visible]="visible()"
         [style.left.px]="left()"
         [style.top.px]="top()"
@@ -57,7 +57,7 @@ let tooltipSequence = 0;
     </span>
   `,
 })
-export class DidacaGlossaryTermComponent {
+export class DacaGlossaryTermComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly term = input.required<string>();
   readonly display = input<string | null>(null);
@@ -67,8 +67,8 @@ export class DidacaGlossaryTermComponent {
   readonly left = signal(16);
   readonly top = signal(16);
   readonly label = computed(() => this.display() ?? this.term());
-  readonly definition = computed(() => this.explanation() ?? DIDACA_GLOSSARY[this.term()] ?? 'Fachbegriff im DaCa-Kontext.');
-  readonly tooltipId = `didaca-glossary-${++tooltipSequence}`;
+  readonly definition = computed(() => this.explanation() ?? DACA_GLOSSARY[this.term()] ?? 'Fachbegriff im DaCa-Kontext.');
+  readonly tooltipId = `daca-glossary-${++tooltipSequence}`;
 
   open(): void {
     this.visible.set(true);
@@ -107,8 +107,8 @@ export class DidacaGlossaryTermComponent {
   }
 
   private position(): void {
-    const trigger = this.host.nativeElement.querySelector<HTMLElement>('.didaca-glossary-trigger');
-    const tooltip = this.host.nativeElement.querySelector<HTMLElement>('.didaca-glossary-tooltip');
+    const trigger = this.host.nativeElement.querySelector<HTMLElement>('.daca-glossary-trigger');
+    const tooltip = this.host.nativeElement.querySelector<HTMLElement>('.daca-glossary-tooltip');
     if (!trigger || !tooltip) return;
     const triggerRect = trigger.getBoundingClientRect();
     const tooltipRect = tooltip.getBoundingClientRect();

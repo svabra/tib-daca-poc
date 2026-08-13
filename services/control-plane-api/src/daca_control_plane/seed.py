@@ -18,12 +18,12 @@ def seed_database(session_factory: sessionmaker[Session]) -> bool:
     created = False
     with session_factory() as session:
         federal = session.scalar(
-            select(CatalogInstance).where(CatalogInstance.urn == "urn:didaca:catalog:bit-federal")
+            select(CatalogInstance).where(CatalogInstance.urn == "urn:daca:catalog:bit-federal")
         )
         if federal is None:
             federal = CatalogInstance(
                 id=FEDERAL_CATALOG_ID,
-                urn="urn:didaca:catalog:bit-federal",
+                urn="urn:daca:catalog:bit-federal",
                 name="BIT Federal Data Catalog",
                 organization="Bundesamt für Informatik und Telekommunikation",
                 environment="poc",
@@ -43,13 +43,13 @@ def seed_database(session_factory: sessionmaker[Session]) -> bool:
 
         st_gallen = session.scalar(
             select(CatalogInstance).where(
-                CatalogInstance.urn == "urn:didaca:catalog:kanton-st-gallen"
+                CatalogInstance.urn == "urn:daca:catalog:kanton-st-gallen"
             )
         )
         if st_gallen is None:
             st_gallen = CatalogInstance(
                 id=ST_GALLEN_CATALOG_ID,
-                urn="urn:didaca:catalog:kanton-st-gallen",
+                urn="urn:daca:catalog:kanton-st-gallen",
                 name="Kanton St. Gallen Data Catalog",
                 organization="Kanton St. Gallen",
                 environment="poc",
