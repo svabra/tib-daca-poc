@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -16,11 +17,14 @@ def _camel(value: str) -> str:
 
 class Entitlement(CamelModel):
     subject_id: str = Field(min_length=1, max_length=200)
+    subject_type: Literal["person", "machine"] = "person"
     action: Literal["data.read"]
     protocol: Literal["http-rest", "postgresql"]
+    valid_from: dt.date = dt.date.min
+    valid_until: dt.date = dt.date.max
+    data_variant: Literal["original", "modified"] = "original"
 
 
 class PolicyProjection(CamelModel):
     revision: int = Field(ge=1)
     entitlements: list[Entitlement]
-

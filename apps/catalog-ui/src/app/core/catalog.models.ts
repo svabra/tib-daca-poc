@@ -24,6 +24,8 @@ export interface DataProduct {
   id: string;
   globalId: string;
   originCatalog: string;
+  ownerUserId?: string | null;
+  discoverable?: boolean;
   revision: number;
   title: string;
   description: string;
@@ -35,6 +37,8 @@ export interface DataProduct {
   contact: string;
   license: string;
   quality: string;
+  qualityMedal?: 'bronze' | 'silver' | 'gold' | 'platinum';
+  qualityScore?: number;
   updateFrequency: string;
   additionalMetadata: Record<string, unknown>;
   endpoints: EndpointDescriptor[];
@@ -75,9 +79,54 @@ export interface PolicyDefinition {
   resources: { productId: string; owner: string };
   actions: string[];
   protocols: ('http' | 'postgresql')[];
+  grants?: Array<{
+    subject: { type: 'person' | 'machine' | 'group'; id: string };
+    actions: string[];
+    protocols: ('http' | 'postgresql')[];
+    validFrom: string;
+    validUntil: string;
+    dataVariant: 'original' | 'modified';
+    metadataChannels?: { kobyMcp: boolean; i14y: boolean };
+    groupSnapshot?: { groupId: string; membershipRevision: number; memberIds: string[] } | null;
+  }>;
   generatedRego: string;
   opaRevision: number;
   postgresRevision: number;
+}
+
+export type IdentityDirectorySource = 'federal' | 'cantonal' | 'municipal' | 'federal_related';
+
+export interface IdentityDirectoryEntry {
+  id: string;
+  displayName: string;
+  organization: string;
+  organizationId: string | null;
+  email: string;
+  source: IdentityDirectorySource;
+  sourceSystem: string;
+}
+
+export interface IdentityGroupSummary {
+  id: string;
+  label: string;
+  description: string;
+  source: IdentityDirectorySource;
+  membershipRevision: number;
+  memberCount: number;
+  userManaged: boolean;
+}
+
+export interface IdentityGroupDetail extends IdentityGroupSummary {
+  members: IdentityDirectoryEntry[];
+}
+
+export interface AdministrativeOrganization {
+  id: string;
+  departmentCode: string;
+  officeCode: string | null;
+  displayName: string;
+  organizationType: 'federal_council' | 'chancellery' | 'department' | 'office' | 'affiliated';
+  label: string;
 }
 
 export type AccessRequestStatus =
@@ -85,6 +134,7 @@ export type AccessRequestStatus =
   | 'identity_review'
   | 'legal_review'
   | 'conditions_review'
+  | 'approved_policy_pending'
   | 'granted_modified'
   | 'granted_original'
   | 'rejected'

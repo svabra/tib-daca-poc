@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { DidacaGlossaryTermComponent } from '@bit-didaca/design-system';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { AccessRequestStatus, AccessRequestSubmission, StoredAccessRequest } from '../../core/catalog.models';
 import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/my-data-products';
@@ -9,18 +10,18 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
 @Component({
   selector: 'didaca-access-request-form',
   standalone: true,
-  imports: [DatePipe, ReactiveFormsModule, RouterLink],
+  imports: [DatePipe, ReactiveFormsModule, RouterLink, DidacaGlossaryTermComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <nav class="access-request-breadcrumb" aria-label="Brotkrümelnavigation">
-      <a routerLink="/metadata">Meine Datenprodukte</a><span aria-hidden="true">›</span><span>Zugriff anfragen</span>
+      <a routerLink="/products">Meine Datenprodukte</a><span aria-hidden="true">›</span><span>Zugriff anfragen</span>
     </nav>
 
     <section class="didaca-page-heading access-request-heading">
       <div>
         <p class="didaca-eyebrow">Zugriffsantrag</p>
         <h1>Zugriff auf Datenprodukt anfragen</h1>
-        <p>Beschreiben Sie den vorgesehenen Datenbezug. Die Data Ownerin oder der Data Owner prüft Identität, Rechtslage und Zugriffskonditionen.</p>
+        <p>Beschreiben Sie den vorgesehenen Datenbezug für eine persönliche <didaca-glossary-term term="eIAM" />-Identität oder einen <didaca-glossary-term term="M2M" />-Service. Die Data Ownerin oder der Data Owner prüft Identität, Rechtslage und Zugriffskonditionen.</p>
       </div>
     </section>
 
@@ -28,7 +29,7 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
       <section class="didaca-card access-request-owner-guard">
         <h2>Kein Antrag erforderlich</h2>
         <p>Sie sind für dieses Datenprodukt verantwortlich und verfügen bereits über den benötigten Arbeitszugriff.</p>
-        <a class="didaca-button is-secondary" routerLink="/metadata">Zurück zu meinen Datenprodukten</a>
+        <a class="didaca-button is-secondary" routerLink="/products">Zurück zu meinen Datenprodukten</a>
       </section>
     } @else if (createdRequest(); as receipt) {
       <section class="didaca-card access-request-confirmation" aria-live="polite">
@@ -43,7 +44,7 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
           <div><dt>Eingereicht</dt><dd>{{ receipt.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</dd></div>
         </dl>
         <div class="access-request-confirmation-actions">
-          <a class="didaca-button is-primary" routerLink="/metadata" [queryParams]="{ relationship: 'requestedByMe' }">Meine Anfragen anzeigen</a>
+          <a class="didaca-button is-primary" routerLink="/products" [queryParams]="{ relationship: 'requestedByMe' }">Meine Anfragen anzeigen</a>
           <button class="didaca-button is-secondary" type="button" (click)="createAnotherRequest()">Weiteren Antrag erstellen</button>
         </div>
       </section>
@@ -155,7 +156,7 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
           @if (submitError(); as error) { <p class="didaca-alert is-error" role="alert">{{ error }}</p> }
 
           <footer>
-            <a class="didaca-button is-secondary" routerLink="/metadata">Abbrechen</a>
+            <a class="didaca-button is-secondary" routerLink="/products">Abbrechen</a>
             <button class="didaca-button is-primary" type="submit" [disabled]="submitting()">
               {{ submitting() ? 'Antrag wird gespeichert…' : 'Zugriffsanfrage einreichen' }}
             </button>
@@ -223,18 +224,19 @@ export class AccessRequestFormComponent {
     requestedVariant: this.fb.nonNullable.control<'original' | 'modified' | 'either'>('either'),
     validFrom: [futureDate(7), Validators.required],
     validUntil: [futureDate(372), Validators.required],
-    contactEmail: ['kassandra.valdata@estv.admin.ch', [Validators.required, Validators.email]],
+    contactEmail: ['', [Validators.required, Validators.email]],
     notes: '',
     conditionsAccepted: [false, Validators.requiredTrue],
   });
 
   constructor() {
+    this.form.controls.contactEmail.setValue(this.api.identityUser().email);
     this.api.selectProduct(this.productId);
     this.api.loadMyAccessRequests(this.productId).subscribe((requests) => this.existingRequests.set(requests));
   }
 
   isOwnProduct(): boolean {
-    return canTransferOwnership(this.product());
+    return canTransferOwnership(this.product(), this.api.identityUserId());
   }
 
   ownerName(): string {
@@ -314,6 +316,7 @@ export class AccessRequestFormComponent {
       identity_review: 'Identität wird geprüft',
       legal_review: 'Rechtslage wird geprüft',
       conditions_review: 'Zugriffskonditionen werden geprüft',
+      approved_policy_pending: 'Genehmigt · Policy wird publiziert',
       granted_modified: 'Zugriff gewährt (modifiziert)',
       granted_original: 'Zugriff gewährt (original)',
       rejected: 'Zugriff nicht gewährt',

@@ -4,10 +4,54 @@ import { WelcomePageComponent } from './features/welcome/welcome-page.component'
 export const routes: Routes = [
   { path: '', pathMatch: 'full', component: WelcomePageComponent, title: 'Willkommen | DaCa' },
   {
-    path: 'metadata',
+    path: 'products',
+    pathMatch: 'full',
     loadComponent: () => import('./features/products/my-data-products.component').then((m) => m.MyDataProductsComponent),
     data: { preload: true },
     title: 'Meine Datenprodukte | DaCa',
+  },
+  { path: 'metadata', pathMatch: 'full', redirectTo: 'products' },
+  {
+    path: 'tasks',
+    loadComponent: () => import('./features/tasks/owner-tasks.component').then((m) => m.OwnerTasksComponent),
+    data: { preload: true },
+    title: 'Aufgaben | DaCa',
+  },
+  {
+    path: 'poc-simulation',
+    pathMatch: 'full',
+    loadComponent: () => import('./features/poc-simulation/poc-simulation-hub.component').then((m) => m.PocSimulationHubComponent),
+    data: { preload: true },
+    title: 'PoC Simulation | DaCa',
+  },
+  {
+    path: 'poc-simulation/product-submitted',
+    loadComponent: () => import('./features/settings/poc-settings.component').then((m) => m.PocSettingsComponent),
+    title: 'Datenprodukt im DaCa eingereicht | PoC Simulation',
+  },
+  {
+    path: 'poc-simulation/quality-below-threshold',
+    loadComponent: () => import('./features/poc-simulation/poc-state-event.component').then((m) => m.PocStateEventComponent),
+    data: { eventType: 'quality_below_threshold' },
+    title: 'Datenqualität zu tief | PoC Simulation',
+  },
+  {
+    path: 'poc-simulation/not-discoverable',
+    loadComponent: () => import('./features/poc-simulation/poc-state-event.component').then((m) => m.PocStateEventComponent),
+    data: { eventType: 'not_discoverable' },
+    title: 'Datenprodukt nicht auffindbar | PoC Simulation',
+  },
+  {
+    path: 'poc-simulation/isbo-restricted',
+    loadComponent: () => import('./features/poc-simulation/poc-state-event.component').then((m) => m.PocStateEventComponent),
+    data: { eventType: 'isbo_restricted' },
+    title: 'Durch ISBO eingeschränkt | PoC Simulation',
+  },
+  { path: 'settings', pathMatch: 'full', redirectTo: 'poc-simulation/product-submitted' },
+  {
+    path: 'products/:id/quality',
+    loadComponent: () => import('./features/quality/product-quality-wizard.component').then((m) => m.ProductQualityWizardComponent),
+    title: 'Datenprodukt-Qualität | DaCa',
   },
   {
     path: 'lineage',
@@ -32,6 +76,11 @@ export const routes: Routes = [
     title: 'Zugriff anfragen | DaCa',
   },
   {
+    path: 'products/:id/overview',
+    loadComponent: () => import('./features/products/product-overview.component').then((m) => m.ProductOverviewComponent),
+    title: 'Datenprodukt | DaCa',
+  },
+  {
     path: 'products/:id/metadata',
     loadComponent: () => import('./features/metadata/metadata-studio.component').then((m) => m.MetadataStudioComponent),
     title: 'Produktmetadaten | DaCa',
@@ -40,6 +89,16 @@ export const routes: Routes = [
     path: 'products/:id/lineage',
     loadComponent: () => import('./features/lineage/lineage-explorer.component').then((m) => m.LineageExplorerComponent),
     title: 'Produkt-Lineage | DaCa',
+  },
+  {
+    path: 'products/:id/access/grant',
+    loadComponent: () => import('./features/exposure/exposure-studio.component').then((m) => m.ExposureStudioComponent),
+    title: 'Zugriff einstellen | DaCa',
+  },
+  {
+    path: 'products/:id/access',
+    loadComponent: () => import('./features/exposure/access-workspace.component').then((m) => m.AccessWorkspaceComponent),
+    title: 'Freigaben | DaCa',
   },
   {
     path: 'products/:id/security',

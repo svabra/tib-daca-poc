@@ -106,3 +106,56 @@ final result: passed
 - [ ] Capture desktop and mobile implementation screenshots and compare them with the supplied reference.
 
 final result: blocked
+
+---
+
+# Design QA — Alpine image inside the welcome card
+
+## Comparison target
+
+- Source visual truth: `output/playwright/welcome-alps-desktop.png` and `output/playwright/welcome-alps-mobile.png`.
+- Rendered implementation: `output/playwright/welcome-alps-card-revert-desktop-final.png` and `output/playwright/welcome-alps-card-revert-mobile-final.png`.
+- Normalized comparison evidence: `output/playwright/welcome-alps-card-comparison-final.png` and `output/playwright/welcome-alps-card-comparison-mobile-final.png`.
+- Desktop viewport: 1440 × 1000 CSS pixels at density 1. The source content width is 1425 px; the 15 px scrollbar was removed from the implementation capture for a 1425 × 1000 comparison.
+- Mobile viewport: 390 × 844 CSS pixels at density 1. The source content width is 375 px; the 15 px scrollbar was removed from the implementation capture for a 375 × 844 comparison.
+- State: German landing page, default search state, alpine image loaded.
+
+## Findings
+
+- No actionable P0, P1, or P2 differences remain.
+- The alpine image is again confined to the welcome card. The surrounding `main` canvas uses the standard neutral catalog background.
+- The image starts loading with the visible card and fades in immediately after its native `load` event; the former three-second scheduling delay was removed.
+
+## Required fidelity surfaces
+
+- Fonts and typography: the shared Noto Sans hierarchy, federal eyebrow, title weight, line height, and desktop/mobile wrapping match the reference. `Bundesverwaltung` remains intact on both viewports.
+- Spacing and layout rhythm: the standard 1500 px page container and shared desktop/mobile padding are restored. Card borders, red top rule, internal grid, buttons, and following section spacing align with the source.
+- Colors and visual tokens: the neutral canvas, white card, federal red, BIT blue, and the white image wash use the established catalog tokens and reference balance.
+- Image quality and asset fidelity: the supplied responsive AVIF/WebP glacier assets are used directly with the same right-side crop and a soft white overlay. No placeholder or CSS-drawn replacement is present.
+- Copy and content: title, lead, search labels, actions, PoC note, and task preview match the selected reference state.
+
+## Full-view and focused evidence
+
+- Desktop: the combined comparison shows the source on the left and implementation on the right at the same normalized content width. Header, hero geometry, image crop, title wrap, controls, and beginning of `Handlungsbedarf` align.
+- Mobile: the combined comparison verifies the same card-only image treatment, intact `Bundesverwaltung`, stacked actions, and absence of horizontal overflow.
+- A separate focused crop was unnecessary because the complete welcome card and all relevant controls are legible in the normalized comparisons.
+
+## Comparison history
+
+1. The preceding iteration placed the image across the entire `main` canvas, which contradicted the selected card-only reference.
+2. The image was moved back inside `.welcome-hero`; full-width main overrides were removed and the neutral page canvas restored.
+3. The first post-revert comparison exposed a P2 title-wrap mismatch caused by a discretionary hyphen. The title now breaks before `Bundesverwaltung`, matching both desktop and mobile references.
+4. Final desktop and mobile comparisons show no remaining P0/P1/P2 differences.
+
+## Runtime checks
+
+- Browser-rendered desktop and mobile captures completed successfully.
+- Responsive resize retained the layout without horizontal overflow.
+- Browser console: 0 errors and 0 warnings.
+- Automated checks: 19 unit tests passed; production build passed.
+
+## Follow-up polish
+
+- None required for this revert.
+
+final result: passed

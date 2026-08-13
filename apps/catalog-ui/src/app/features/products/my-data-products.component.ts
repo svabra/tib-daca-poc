@@ -14,7 +14,6 @@ import {
   dataConsumerCountLabel,
   deliveryProtocols,
   isConsumedProduct,
-  KASSANDRA_USER_ID,
   matchesProduct,
   ProductRelationshipFilter,
   consumersForProduct,
@@ -34,8 +33,8 @@ import {
         <p>Finden Sie Datenprodukte, die Sie anbieten, freigegeben oder angefragt haben – sowie Produkte, die für Sie freigegeben wurden.</p>
       </div>
       <aside class="product-index-identity" aria-label="Aktueller Arbeitskontext">
-        <img class="product-index-avatar" src="/assets/kassandra-valdata.webp" alt="">
-        <span><small>Aktueller Arbeitskontext</small><strong>Kassandra Valdata</strong><small>Eidgenössische Steuerverwaltung ESTV</small></span>
+        @if (api.identityUser().avatarUrl) { <img class="product-index-avatar" [src]="api.identityUser().avatarUrl!" alt=""> }
+        <span><small>Aktueller Arbeitskontext</small><strong>{{ api.identityUser().displayName }}</strong><small>{{ api.identityUser().organization }}</small></span>
       </aside>
     </section>
 
@@ -90,7 +89,7 @@ import {
         <div class="product-results-tools">
           <p>
             @if (api.loading()) { Katalog wird aktualisiert… }
-            @else { Für {{ userDisplayName }} · ESTV }
+            @else { Für {{ api.identityUser().displayName }} · {{ api.identityUser().organization }} }
           </p>
           <div class="product-view-switch" role="group" aria-label="Darstellung der Datenprodukte">
             <button type="button" [class.is-active]="viewMode() === 'records'" [attr.aria-pressed]="viewMode() === 'records'" (click)="viewMode.set('records')">
@@ -138,15 +137,20 @@ import {
                   <span>{{ product.owner }}</span>
                   <span>{{ classificationLabel(product.classification) }}</span>
                   <span>{{ lifecycleLabel(product.lifecycle) }}</span>
+                  @if (product.qualityMedal) { <span class="product-quality-medal" [class]="'product-quality-medal is-' + product.qualityMedal">{{ qualityLabel(product) }}</span> }
                 </div>
                 <h3>{{ product.title }}</h3>
                 <p>{{ product.description }}</p>
+                @for (alert of simulationAlerts(product); track alert.eventId) {
+                  <div class="product-simulation-alert"><strong>{{ alert.title }}</strong><span>{{ alert.detail }}</span></div>
+                }
 
                 <div class="product-relationships" aria-label="Ihre Beziehung zu diesem Datenprodukt">
                   @for (badge of badges(product); track badge.kind + badge.detail) {
                     @if (badge.kind === 'offered' && consumerSummary(product).total > 0) {
                       <button
                         class="product-consumer-badge is-offered"
+                        [class.needs-attention]="badge.tone === 'attention'"
                         type="button"
                         [attr.aria-label]="dataConsumerLabel(consumerSummary(product).total) + ' von ' + product.title + ' anzeigen'"
                         (click)="openConsumerDrawer(product, $event)"
@@ -162,6 +166,7 @@ import {
                         [class.is-requested]="badge.kind === 'requestedByMe'"
                         [class.is-shared-with]="badge.kind === 'sharedWithMe'"
                         [class.is-machine]="badge.kind === 'machine'"
+                        [class.needs-attention]="badge.tone === 'attention'"
                       >
                         <strong>{{ badge.label }}</strong><small>{{ badge.detail }}</small>
                         @if (badge.kind === 'offered') { <span>{{ consumerBreakdown(product) }}</span> }
@@ -215,7 +220,7 @@ import {
                   <div><dt>Geändert</dt><dd>{{ product.updatedAt | date: 'dd.MM.yyyy' }}</dd></div>
                 </dl>
                 <div class="product-list-actions">
-                  <a class="didaca-button is-secondary" [routerLink]="['/products', product.id, 'metadata']">Produktdetails öffnen</a>
+                  <a class="didaca-button is-secondary" [routerLink]="['/products', product.id, 'overview']">Produktdetails öffnen</a>
                   <div class="product-context-menu" (click)="$event.stopPropagation()">
                     <button
                       class="product-context-trigger"
@@ -231,7 +236,7 @@ import {
                     </button>
                     @if (activeProductMenuId() === product.id) {
                       <div class="product-context-popover" role="menu" [id]="'product-actions-' + product.id">
-                        <a role="menuitem" [routerLink]="['/products', product.id, 'metadata']">
+                        <a role="menuitem" [routerLink]="['/products', product.id, 'overview']">
                           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.5L19 8v11.5H5z"/><path d="M15.5 4.5V8H19M8 12h8M8 15h6"/></svg>
                           <span>Produktdetails öffnen</span>
                         </a>
@@ -276,9 +281,9 @@ import {
               @for (product of filteredProducts(); track product.id) {
                 <tr>
                   <td>
-                    <a class="product-table-title" [routerLink]="['/products', product.id, 'metadata']">
+                    <a class="product-table-title" [routerLink]="['/products', product.id, 'overview']">
                       <strong>{{ product.title }}</strong>
-                      <span>{{ product.domain }} · Revision {{ product.revision }}</span>
+                      <span>{{ product.domain }} · Revision {{ product.revision }} @if (product.qualityMedal) { · <b>{{ qualityLabel(product) }}</b> }</span>
                     </a>
                   </td>
                   <td>
@@ -297,6 +302,7 @@ import {
                         @if (badge.kind === 'offered' && consumerSummary(product).total > 0) {
                           <button
                             type="button"
+                            [class.needs-attention]="badge.tone === 'attention'"
                             [attr.aria-label]="dataConsumerLabel(consumerSummary(product).total) + ' von ' + product.title + ' anzeigen'"
                             (click)="openConsumerDrawer(product, $event)"
                           >
@@ -305,7 +311,7 @@ import {
                             <span>{{ consumerBreakdown(product) }}</span>
                           </button>
                         } @else {
-                          <span>
+                          <span [class.needs-attention]="badge.tone === 'attention'">
                             <strong>{{ badge.label }}</strong>
                             @if (badge.kind === 'offered') {
                               <small>{{ badge.detail }}</small><span>{{ consumerBreakdown(product) }}</span>
@@ -316,7 +322,9 @@ import {
                     </span>
                   </td>
                   <td>
-                    @if (request(product); as access) {
+                    @if (simulationAlerts(product).length) {
+                      <span class="product-table-request is-attention"><strong>{{ simulationAlerts(product)[0].title }}</strong><small>{{ simulationAlerts(product)[0].detail }}</small></span>
+                    } @else if (request(product); as access) {
                       <span class="product-table-request" [class.is-granted]="access.tone === 'granted'" [class.is-rejected]="access.tone === 'rejected'">
                         <strong>{{ access.label }}</strong><small>{{ access.requestId }}</small>
                       </span>
@@ -332,7 +340,7 @@ import {
                   <td><span class="product-table-date">{{ product.updatedAt | date: 'dd.MM.yyyy' }}<small>{{ frequencyLabel(product.updateFrequency) }}</small></span></td>
                   <td>
                     <div class="product-table-actions">
-                      <a [routerLink]="['/products', product.id, 'metadata']">Öffnen</a>
+                      <a [routerLink]="['/products', product.id, 'overview']">Öffnen</a>
                       <div class="product-context-menu" (click)="$event.stopPropagation()">
                         <button
                           class="product-context-trigger"
@@ -348,7 +356,7 @@ import {
                         </button>
                         @if (activeProductMenuId() === product.id) {
                           <div class="product-context-popover" role="menu" [id]="'product-table-actions-' + product.id">
-                            <a role="menuitem" [routerLink]="['/products', product.id, 'metadata']">
+                            <a role="menuitem" [routerLink]="['/products', product.id, 'overview']">
                               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.5L19 8v11.5H5z"/><path d="M15.5 4.5V8H19M8 12h8M8 15h6"/></svg>
                               <span>Produktdetails öffnen</span>
                             </a>
@@ -514,7 +522,6 @@ export class MyDataProductsComponent implements OnDestroy {
   readonly consumerDrawerProduct = signal<DataProduct | null>(null);
   readonly consumerTypeFilter = signal<'all' | 'person' | 'machine'>('all');
   readonly consumerQuery = signal('');
-  readonly userDisplayName = 'Kassandra Valdata';
   private consumerDrawerReturnFocus: HTMLElement | null = null;
   private bodyOverflowBeforeDrawer: string | null = null;
   readonly filters: readonly { value: ProductRelationshipFilter; label: string }[] = [
@@ -530,7 +537,7 @@ export class MyDataProductsComponent implements OnDestroy {
       product,
       this.query(),
       this.filter(),
-      KASSANDRA_USER_ID,
+      this.api.identityUserId(),
       this.api.ownedAccessConsumers(),
     )),
   );
@@ -565,13 +572,13 @@ export class MyDataProductsComponent implements OnDestroy {
       product,
       '',
       filter,
-      KASSANDRA_USER_ID,
+      this.api.identityUserId(),
       this.api.ownedAccessConsumers(),
     )).length;
   }
 
   badges(product: DataProduct) {
-    return relationshipBadges(product, KASSANDRA_USER_ID, this.api.ownedAccessConsumers());
+    return relationshipBadges(product, this.api.identityUserId(), this.api.ownedAccessConsumers());
   }
 
   consumerSummary(product: DataProduct) {
@@ -595,9 +602,20 @@ export class MyDataProductsComponent implements OnDestroy {
     return deliveryProtocols(product);
   }
 
+  qualityLabel(product: DataProduct): string {
+    const medal = ({ bronze: 'Bronze', silver: 'Silber', gold: 'Gold', platinum: 'Platinum' } as const)[product.qualityMedal ?? 'bronze'];
+    return product.qualityScore === undefined ? medal : `${medal} · ${product.qualityScore}/6`;
+  }
+
+  simulationAlerts(product: DataProduct): Array<{ eventId: string; title: string; detail: string }> {
+    const value = product.additionalMetadata['simulationAlerts'];
+    if (!Array.isArray(value)) return [];
+    return value.filter((item): item is { eventId: string; title: string; detail: string } => Boolean(item && typeof item === 'object' && 'eventId' in item && 'title' in item && 'detail' in item));
+  }
+
   visibleOwner(product: DataProduct): DataOwnerProfile | null {
-    const isRelevantOwner = isConsumedProduct(product, KASSANDRA_USER_ID)
-      || canTransferOwnership(product, KASSANDRA_USER_ID);
+    const isRelevantOwner = isConsumedProduct(product, this.api.identityUserId())
+      || canTransferOwnership(product, this.api.identityUserId());
     return isRelevantOwner ? dataOwner(product) : null;
   }
 
@@ -606,7 +624,7 @@ export class MyDataProductsComponent implements OnDestroy {
   }
 
   ownershipTransferAvailable(product: DataProduct): boolean {
-    return canTransferOwnership(product, KASSANDRA_USER_ID);
+    return canTransferOwnership(product, this.api.identityUserId());
   }
 
   toggleProductMenu(productId: string): void {

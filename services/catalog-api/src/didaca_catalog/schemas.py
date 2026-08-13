@@ -33,6 +33,8 @@ class DataProductResponse(ApiModel):
     origin_catalog: str
     revision: int
     active_policy_revision: int | None
+    owner_user_id: str | None = None
+    discoverable: bool = True
     title: str
     description: str
     owner: str
@@ -54,6 +56,8 @@ class DataProductSummary(ApiModel):
     urn: str
     origin_catalog: str
     revision: int
+    owner_user_id: str | None = None
+    discoverable: bool = True
     title: str
     description: str
     owner: str
@@ -112,6 +116,7 @@ AccessRequestStatus = Literal[
     "identity_review",
     "legal_review",
     "conditions_review",
+    "approved_policy_pending",
     "granted_modified",
     "granted_original",
     "rejected",
@@ -204,6 +209,7 @@ class HttpConnection(ApiModel):
     base_url: str = Field(min_length=1, max_length=1000)
     path: str = Field(min_length=1, max_length=1000)
     method: Literal["GET", "POST"] = "GET"
+    media_type: str = Field(default="application/json", max_length=255)
 
     @field_validator("base_url")
     @classmethod
@@ -297,7 +303,8 @@ class LineageResponse(ApiModel):
 
 class ProvenanceEventResponse(ApiModel):
     id: uuid.UUID
-    data_product_id: uuid.UUID
+    data_product_id: uuid.UUID | None
+    product_urn: str
     sequence: int
     event_type: str
     actor: str
@@ -317,7 +324,42 @@ class AuditEventResponse(ApiModel):
 
 
 class SubjectSelectors(ApiModel):
-    user_ids: list[str] = Field(min_length=1)
+    user_ids: list[str] = Field(default_factory=list)
+    machine_ids: list[str] = Field(default_factory=list)
+    group_ids: list[str] = Field(default_factory=list)
+
+
+class PolicySubject(ApiModel):
+    type: Literal["person", "machine", "group"]
+    id: str = Field(min_length=1, max_length=255)
+
+
+class MetadataChannels(ApiModel):
+    koby_mcp: bool = False
+    i14y: bool = False
+
+
+class GroupSnapshot(ApiModel):
+    group_id: str = Field(min_length=1, max_length=200)
+    membership_revision: int = Field(ge=1)
+    member_ids: list[str] = Field(min_length=1)
+
+
+class PolicyGrant(ApiModel):
+    subject: PolicySubject
+    actions: list[Literal["data.read"]] = Field(default_factory=lambda: ["data.read"], min_length=1)
+    protocols: list[Literal["http", "postgresql"]] = Field(min_length=1)
+    valid_from: date
+    valid_until: date
+    data_variant: Literal["original", "modified"] = "original"
+    metadata_channels: MetadataChannels = Field(default_factory=MetadataChannels)
+    group_snapshot: GroupSnapshot | None = None
+
+    @model_validator(mode="after")
+    def valid_period(self) -> PolicyGrant:
+        if self.valid_until < self.valid_from:
+            raise ValueError("validUntil must be on or after validFrom")
+        return self
 
 
 class ResourceSelectors(ApiModel):
@@ -326,11 +368,13 @@ class ResourceSelectors(ApiModel):
 
 
 class PolicyDefinition(ApiModel):
-    effect: Literal["allow", "deny"]
-    subjects: SubjectSelectors
+    default_effect: Literal["deny"] = "deny"
+    effect: Literal["allow", "deny"] = "allow"
+    subjects: SubjectSelectors = Field(default_factory=SubjectSelectors)
     resources: ResourceSelectors
-    actions: list[Literal["data.read"]] = Field(min_length=1)
-    protocols: list[Literal["http", "postgresql"]] = Field(min_length=1)
+    actions: list[Literal["data.read"]] = Field(default_factory=lambda: ["data.read"])
+    protocols: list[Literal["http", "postgresql"]] = Field(default_factory=lambda: ["http"])
+    grants: list[PolicyGrant] = Field(default_factory=list)
 
 
 class PolicyCreate(ApiModel):
@@ -376,6 +420,381 @@ class HealthResponse(ApiModel):
     status: Literal["ok", "ready"]
     service: str
     version: str
+
+
+class DemoUserResponse(ApiModel):
+    id: str
+    display_name: str
+    organization: str
+    email: str
+    phone: str | None
+    avatar_url: str | None
+    roles: list[str]
+
+
+IdentityDirectorySource = Literal["federal", "cantonal", "municipal", "federal_related"]
+
+
+class IdentityDirectoryEntryResponse(ApiModel):
+    id: str
+    display_name: str
+    organization: str
+    organization_id: str | None
+    email: str
+    source: IdentityDirectorySource
+    source_system: str
+
+
+class IdentityGroupSummaryResponse(ApiModel):
+    id: str
+    label: str
+    description: str
+    source: IdentityDirectorySource
+    membership_revision: int
+    member_count: int
+    user_managed: bool
+
+
+class IdentityGroupDetailResponse(IdentityGroupSummaryResponse):
+    members: list[IdentityDirectoryEntryResponse]
+
+
+class AdministrativeOrganizationResponse(ApiModel):
+    id: str
+    department_code: str
+    office_code: str | None
+    display_name: str
+    organization_type: Literal["federal_council", "chancellery", "department", "office", "affiliated"]
+    label: str
+
+
+class IdentityGroupCreate(ApiModel):
+    label: str = Field(min_length=3, max_length=120)
+    description: str = Field(min_length=3, max_length=500)
+    member_ids: list[str] = Field(min_length=1, max_length=50)
+
+    @field_validator("member_ids")
+    @classmethod
+    def unique_members(cls, value: list[str]) -> list[str]:
+        normalized = [item.strip() for item in value if item.strip()]
+        if not normalized or len(set(normalized)) != len(normalized):
+            raise ValueError("memberIds must contain unique non-empty identity IDs")
+        return normalized
+
+
+class AccessSettingUpsert(ApiModel):
+    grant: PolicyGrant
+
+
+class MetadataDeliveryOutboxResponse(ApiModel):
+    id: uuid.UUID
+    data_product_id: uuid.UUID
+    product_revision: int
+    policy_revision: int
+    channel: Literal["i14y"]
+    valid_from: date
+    valid_until: date
+    status: Literal["scheduled", "simulated_delivered"]
+    payload: dict[str, Any]
+    created_at: datetime
+    delivered_at: datetime | None
+
+
+class PublicationEndpoint(ApiModel):
+    base_url: str = Field(min_length=1, max_length=1000)
+    path: str = Field(min_length=1, max_length=1000)
+    method: Literal["GET"] = "GET"
+
+    @field_validator("base_url")
+    @classmethod
+    def safe_url(cls, value: str) -> str:
+        parsed = urlsplit(value.strip())
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("baseUrl must be an absolute HTTP(S) URL")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("baseUrl must not contain credentials, query parameters, or fragments")
+        return value.rstrip("/")
+
+    @field_validator("path")
+    @classmethod
+    def safe_path(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized.startswith("/") or "?" in normalized or "#" in normalized:
+            raise ValueError("path must be an absolute URL path without query or fragment")
+        return normalized
+
+
+class PublicationSchemaField(ApiModel):
+    name: str = Field(min_length=1, max_length=255)
+    data_type: str = Field(min_length=1, max_length=100)
+    nullable: bool = False
+    key_field: bool = False
+    business_description: str | None = Field(default=None, max_length=2000)
+    ontology_term_uri: str | None = Field(default=None, max_length=500)
+
+
+class PublicationTechnicalMetadata(ApiModel):
+    service_name: str = Field(min_length=1, max_length=255)
+    endpoint: PublicationEndpoint
+    schema_fields: list[PublicationSchemaField] = Field(min_length=1, max_length=100)
+
+
+class PublicationBusinessMetadata(ApiModel):
+    title: str | None = Field(default=None, max_length=255)
+    description: str | None = Field(default=None, max_length=5000)
+    domain: str | None = Field(default=None, max_length=255)
+    classification: Literal["public", "internal", "confidential", "restricted"] | None = None
+    keywords: list[str] = Field(default_factory=list, max_length=30)
+    contact_email: str | None = Field(default=None, max_length=320)
+    update_frequency: str | None = Field(default=None, max_length=100)
+    product_class_uri: str | None = Field(default=None, max_length=500)
+    graph: dict[str, Any] | None = None
+    dcat_reviewed: bool = False
+
+
+class MetadataPublicationCreate(ApiModel):
+    source_system: str = Field(min_length=1, max_length=100)
+    source_product_id: str = Field(min_length=3, max_length=255, pattern=r"^[A-Za-z0-9._:-]+$")
+    owner_user_id: str = Field(min_length=1, max_length=200)
+    publication_mode: Literal["governance_review", "automatic"]
+    discoverable: bool = True
+    technical_metadata: PublicationTechnicalMetadata
+    business_metadata: PublicationBusinessMetadata | None = None
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        from_attributes=True,
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "sourceSystem": "DAAIF",
+                    "sourceProductId": "estv.direct-tax-assessments.v1",
+                    "ownerUserId": "kassandra.valdata",
+                    "publicationMode": "governance_review",
+                    "discoverable": True,
+                    "technicalMetadata": {
+                        "serviceName": "direct-tax-assessments-api",
+                        "endpoint": {
+                            "baseUrl": "https://daaif-poc.example.admin.ch",
+                            "path": "/api/v1/direct-tax-assessments",
+                            "method": "GET",
+                        },
+                        "schemaFields": [
+                            {
+                                "name": "cantonCode",
+                                "dataType": "string",
+                                "nullable": False,
+                                "keyField": True,
+                            }
+                        ],
+                    },
+                },
+                {
+                    "sourceSystem": "DAAIF",
+                    "sourceProductId": "estv.vat-indicators.v1",
+                    "ownerUserId": "kassandra.valdata",
+                    "publicationMode": "automatic",
+                    "discoverable": True,
+                    "technicalMetadata": {
+                        "serviceName": "vat-indicators-api",
+                        "endpoint": {
+                            "baseUrl": "https://daaif-poc.example.admin.ch",
+                            "path": "/api/v1/vat-indicators",
+                            "method": "GET",
+                        },
+                        "schemaFields": [
+                            {"name": "taxYear", "dataType": "integer", "nullable": False, "keyField": True}
+                        ],
+                    },
+                },
+            ]
+        },
+    )
+
+
+class MetadataPublicationResponse(ApiModel):
+    publication_id: uuid.UUID
+    product_id: uuid.UUID
+    state: Literal["pending_review", "published_incomplete", "published"]
+    created: bool
+    missing_fields: list[str]
+    task_ids: list[uuid.UUID]
+
+
+class PocProductFixtureResponse(ApiModel):
+    id: str
+    owner_user_id: str
+    source_product_id: str
+    title: str
+    maturity_level: Literal["bronze", "silver", "gold"]
+    payload: dict[str, Any]
+    injected_product_id: uuid.UUID | None = None
+
+
+class WorkflowTaskResponse(ApiModel):
+    id: uuid.UUID
+    task_type: Literal[
+        "metadata_quality",
+        "access_governance",
+        "access_request_review",
+        "simulation_quality_alert",
+        "simulation_discoverability_alert",
+        "simulation_isbo_restriction",
+        "group_membership_changed",
+    ]
+    status: Literal["open", "in_progress", "completed"]
+    assignee_user_id: str
+    data_product_id: uuid.UUID
+    access_request_id: uuid.UUID | None
+    simulation_event_id: uuid.UUID | None = None
+    title: str
+    detail: str
+    created_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None
+
+
+SimulationEventType = Literal[
+    "product_submitted",
+    "quality_below_threshold",
+    "not_discoverable",
+    "isbo_restricted",
+]
+
+
+class PocSimulationEventResponse(ApiModel):
+    id: uuid.UUID
+    event_type: SimulationEventType
+    operation: Literal["trigger", "reset", "product_reset"]
+    product_id: uuid.UUID
+    product_urn: str
+    fixture_id: str | None
+    actor_user_id: str
+    trigger_event_id: uuid.UUID | None
+    confirmation_name: str | None
+    before_state: dict[str, Any]
+    after_state: dict[str, Any]
+    created_at: datetime
+    active: bool = False
+
+
+class PocSimulationTriggerResponse(ApiModel):
+    event: PocSimulationEventResponse
+    product: DataProductResponse
+    task: WorkflowTaskResponse | None = None
+
+
+class PocProductResetRequest(ApiModel):
+    confirmation_name: str = Field(min_length=1, max_length=255)
+
+
+class PocSimulationResetResponse(ApiModel):
+    reset_event: PocSimulationEventResponse
+    deleted_product_id: uuid.UUID | None = None
+
+
+class ProductFieldReview(ApiModel):
+    id: uuid.UUID
+    key_field: bool
+    business_description: str | None = Field(default=None, max_length=2000)
+    ontology_term_uri: str | None = Field(default=None, max_length=500)
+
+
+class ProductQualityReview(ApiModel):
+    title: str = Field(min_length=1, max_length=255)
+    description: str = Field(min_length=20, max_length=5000)
+    domain: str = Field(min_length=1, max_length=255)
+    classification: Literal["public", "internal", "confidential", "restricted"]
+    contact_email: str = Field(min_length=5, max_length=320)
+    update_frequency: str = Field(min_length=1, max_length=100)
+    dcat_reviewed: bool
+    product_class_uri: str = Field(min_length=1, max_length=500)
+    fields: list[ProductFieldReview] = Field(min_length=1)
+    graph: dict[str, Any]
+    graph_confirmed: bool
+
+
+class QualityCriterion(ApiModel):
+    id: Literal["access", "discoverability", "technical", "business", "graph", "ontology"]
+    label: str
+    complete: bool
+
+
+class ProductQualityResponse(ApiModel):
+    data_product_id: uuid.UUID
+    score: int
+    medal: Literal["bronze", "silver", "gold", "platinum"]
+    criteria: list[QualityCriterion]
+    dcat_reviewed: bool
+
+
+class OntologyVersionResponse(ApiModel):
+    id: uuid.UUID
+    uri: str
+    version: str
+    title: str
+    active: bool
+
+
+class OntologyAlignmentResponse(ApiModel):
+    target_uri: str
+    relation: Literal["exactMatch", "closeMatch"]
+
+
+class OntologyTermResponse(ApiModel):
+    id: uuid.UUID
+    ontology_version_id: uuid.UUID
+    uri: str
+    kind: Literal["class", "property", "concept"]
+    label: str
+    definition: str
+    alignments: list[OntologyAlignmentResponse] = Field(default_factory=list)
+
+
+class SemanticMappingResponse(ApiModel):
+    id: uuid.UUID
+    data_product_id: uuid.UUID
+    data_product_field_id: uuid.UUID | None
+    ontology_term_id: uuid.UUID
+    term_uri: str
+    term_label: str
+    mapping_type: Literal["product_class", "field_property"]
+    status: Literal["suggested", "confirmed", "unresolved"]
+    confirmed_by: str | None
+
+
+class SemanticFieldMappingUpdate(ApiModel):
+    field_id: uuid.UUID
+    term_uri: str = Field(min_length=1, max_length=500)
+    status: Literal["suggested", "confirmed", "unresolved"] = "confirmed"
+
+
+class SemanticMappingsUpdate(ApiModel):
+    product_class_uri: str = Field(min_length=1, max_length=500)
+    product_class_status: Literal["suggested", "confirmed", "unresolved"] = "confirmed"
+    field_mappings: list[SemanticFieldMappingUpdate] = Field(default_factory=list)
+
+
+class AccessGovernanceCreate(ApiModel):
+    discoverable: bool
+    discoverability_confirmed: Literal[True]
+    grants: list[PolicyGrant] = Field(default_factory=list)
+
+
+class AccessRequestDecision(ApiModel):
+    decision: Literal["approve", "reject"]
+    granted_variant: Literal["original", "modified"] | None = None
+    comment: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def approval_requires_variant(self) -> AccessRequestDecision:
+        if self.decision == "approve" and self.granted_variant is None:
+            raise ValueError("grantedVariant is required when approving")
+        if self.decision == "reject" and self.granted_variant is not None:
+            raise ValueError("grantedVariant is not allowed when rejecting")
+        return self
 
 
 class Problem(ApiModel):

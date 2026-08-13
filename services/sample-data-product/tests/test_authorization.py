@@ -20,6 +20,15 @@ def test_decision_input_uses_trusted_resource_attributes() -> None:
     assert document["subject"]["id"] == "kanton-st-gallen"
     assert document["resource"]["owner"] == "ESTV"
     assert document["endpoint"]["protocol"] == "http-rest"
+    assert document["subject"]["type"] == "person"
+    assert document["context"]["currentDate"]
+
+
+def test_decision_input_supports_machine_identity_and_daaif_product() -> None:
+    request = SimpleNamespace(method="GET", url=SimpleNamespace(path="/api/v1/daaif/example"), state=SimpleNamespace(request_id="r-2"))
+    document = decision_input("svc-tax-analysis", request, subject_type="machine", product_id="9c9a0112-d4ef-57d0-862c-0d27872c82c2")
+    assert document["subject"] == {"id": "svc-tax-analysis", "type": "machine"}
+    assert document["resource"]["id"] == "9c9a0112-d4ef-57d0-862c-0d27872c82c2"
 
 
 @pytest.mark.asyncio

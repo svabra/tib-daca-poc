@@ -33,6 +33,7 @@ def client(session_factory):
         database_url="sqlite+pysqlite://",
         cors_origins=["http://testserver"],
         didaca_demo_auth=True,
+        didaca_open_metadata_publication=True,
         sample_policy_projection_url=None,
         internal_token="test-internal-token",
     )

@@ -33,6 +33,7 @@ services:
       SEED_ON_STARTUP: "true"
       CORS_ORIGINS: '["http://localhost:8080"]'
       DIDACA_DEMO_AUTH: ${DIDACA_DEMO_AUTH:-true}
+      DIDACA_OPEN_METADATA_PUBLICATION: ${DIDACA_OPEN_METADATA_PUBLICATION:-true}
       SAMPLE_POLICY_PROJECTION_URL: http://sample-data-product:8000/internal/v1/policy-projections
       SAMPLE_POLICY_PROJECTION_TOKEN: ${DIDACA_POLICY_DEPLOYMENT_TOKEN:-change-me-in-production}
       INTERNAL_TOKEN: local-development-only

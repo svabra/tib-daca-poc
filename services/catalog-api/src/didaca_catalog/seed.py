@@ -19,6 +19,7 @@ from .models import (
 )
 from .policy import generate_rego
 from .settings import get_settings
+from .workflow_seed import seed_workflow_reference_data
 
 SEED_NAME = "daca-estv-portfolio-v2"
 OWNER_SEED_NAME = "daca-estv-owner-profiles-v3"
@@ -193,12 +194,14 @@ def seed_catalog(session: Session) -> bool:
         neuchatel_products_added = seed_neuchatel_products(session)
         owner_inbox_added = seed_owner_inbox_access_request(session)
         access_consumers_added = seed_active_access_consumers(session)
+        workflow_added = seed_workflow_reference_data(session)
         return (
             owner_profiles_added
             or relationships_added
             or neuchatel_products_added
             or owner_inbox_added
             or access_consumers_added
+            or workflow_added
         )
 
     created = datetime(2026, 8, 1, 8, 0, tzinfo=UTC)
@@ -539,6 +542,7 @@ def seed_catalog(session: Session) -> bool:
             ProvenanceEvent(
                 id=uuid.UUID("41111111-1111-4111-8111-111111111111"),
                 data_product_id=ESTV_PRODUCT_ID,
+                product_urn=ESTV_PRODUCT_URN,
                 sequence=1,
                 event_type="created",
                 actor="estv-data-owner",
@@ -548,6 +552,7 @@ def seed_catalog(session: Session) -> bool:
             ProvenanceEvent(
                 id=uuid.UUID("41111111-1111-4111-8111-222222222222"),
                 data_product_id=ESTV_PRODUCT_ID,
+                product_urn=ESTV_PRODUCT_URN,
                 sequence=2,
                 event_type="quality-validated",
                 actor="estv-quality-gate",
@@ -615,6 +620,7 @@ def seed_catalog(session: Session) -> bool:
         ]
     )
     session.commit()
+    seed_workflow_reference_data(session)
     return True
 
 

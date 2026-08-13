@@ -19,7 +19,37 @@ import rego.v1
 
 default decision := {"allow": false, "reason": "default_deny"}
 
-matches(policy) if {
+matches_grant(policy, grant) if {
+    resource := data.didaca.resourcesById[input.resource.id]
+    policy.productId == input.resource.id
+    grant.subject.id == input.subject.id
+    grant.subject.type == object.get(input.subject, "type", "person")
+    input.action in grant.actions
+    resource.urn in policy.resources.productUrns
+    resource.owner in policy.resources.owners
+    request_protocol in grant.protocols
+    request_date := object.get(object.get(input, "context", {}), "currentDate", "1970-01-01")
+    request_date >= grant.validFrom
+    request_date <= grant.validUntil
+}
+
+matches_group_grant(policy, grant) if {
+    resource := data.didaca.resourcesById[input.resource.id]
+    policy.productId == input.resource.id
+    grant.subject.type == "group"
+    input.subject.type == "person"
+    input.subject.id in grant.groupSnapshot.memberIds
+    input.action in grant.actions
+    resource.urn in policy.resources.productUrns
+    resource.owner in policy.resources.owners
+    request_protocol in grant.protocols
+    request_date := object.get(object.get(input, "context", {}), "currentDate", "1970-01-01")
+    request_date >= grant.validFrom
+    request_date <= grant.validUntil
+}
+
+matches_legacy(policy) if {
+    count(object.get(policy, "grants", [])) == 0
     resource := data.didaca.resourcesById[input.resource.id]
     policy.productId == input.resource.id
     input.subject.id in policy.subjects.userIds
@@ -40,13 +70,41 @@ request_protocol := "postgresql" if {
 explicitly_denied if {
     some policy in data.didaca.policies
     policy.effect == "deny"
-    matches(policy)
+    some grant in policy.grants
+    matches_grant(policy, grant)
+}
+
+explicitly_denied if {
+    some policy in data.didaca.policies
+    policy.effect == "deny"
+    some grant in policy.grants
+    matches_group_grant(policy, grant)
+}
+
+explicitly_denied if {
+    some policy in data.didaca.policies
+    policy.effect == "deny"
+    matches_legacy(policy)
 }
 
 permitted if {
     some policy in data.didaca.policies
     policy.effect == "allow"
-    matches(policy)
+    some grant in policy.grants
+    matches_grant(policy, grant)
+}
+
+permitted if {
+    some policy in data.didaca.policies
+    policy.effect == "allow"
+    some grant in policy.grants
+    matches_group_grant(policy, grant)
+}
+
+permitted if {
+    some policy in data.didaca.policies
+    policy.effect == "allow"
+    matches_legacy(policy)
 }
 
 decision := {"allow": false, "reason": "explicit_deny"} if {
@@ -69,15 +127,55 @@ def definition_as_camel(definition: dict[str, Any]) -> dict[str, Any]:
     """Normalize definitions persisted by older/local callers to the public wire shape."""
     subjects = definition.get("subjects", {})
     resources = definition.get("resources", {})
+    user_ids = subjects.get("userIds", subjects.get("user_ids", []))
+    machine_ids = subjects.get("machineIds", subjects.get("machine_ids", []))
+    group_ids = subjects.get("groupIds", subjects.get("group_ids", []))
+    actions = definition.get("actions", ["data.read"])
+    protocols = definition.get("protocols", ["http"])
+    raw_grants = definition.get("grants", [])
+    grants = []
+    for grant in raw_grants:
+        subject = grant.get("subject", {})
+        normalized_grant = {
+                "subject": {"type": subject.get("type", "person"), "id": subject.get("id", "")},
+                "actions": grant.get("actions", ["data.read"]),
+                "protocols": grant.get("protocols", ["http"]),
+                "validFrom": grant.get("validFrom", grant.get("valid_from", "0001-01-01")),
+                "validUntil": grant.get("validUntil", grant.get("valid_until", "9999-12-31")),
+                "dataVariant": grant.get("dataVariant", grant.get("data_variant", "original")),
+                "metadataChannels": grant.get(
+                    "metadataChannels",
+                    grant.get("metadata_channels", {"kobyMcp": False, "i14y": False}),
+                ),
+            }
+        group_snapshot = grant.get("groupSnapshot", grant.get("group_snapshot"))
+        if group_snapshot is not None:
+            normalized_grant["groupSnapshot"] = group_snapshot
+        grants.append(normalized_grant)
+    if not grants:
+        for subject_type, identifiers in (("person", user_ids), ("machine", machine_ids)):
+            grants.extend(
+                {
+                    "subject": {"type": subject_type, "id": identifier},
+                    "actions": actions,
+                    "protocols": protocols,
+                    "validFrom": "0001-01-01",
+                    "validUntil": "9999-12-31",
+                    "dataVariant": "original",
+                }
+                for identifier in identifiers
+            )
     return {
+        "defaultEffect": definition.get("defaultEffect", definition.get("default_effect", "deny")),
         "effect": definition["effect"],
-        "subjects": {"userIds": subjects.get("userIds", subjects.get("user_ids", []))},
+        "subjects": {"userIds": user_ids, "machineIds": machine_ids, "groupIds": group_ids},
         "resources": {
             "productUrns": resources.get("productUrns", resources.get("product_urns", [])),
             "owners": resources.get("owners", []),
         },
-        "actions": definition["actions"],
-        "protocols": definition["protocols"],
+        "actions": actions,
+        "protocols": protocols,
+        "grants": grants,
     }
 
 
@@ -146,18 +244,50 @@ def project_to_postgresql(
 
     entitlements: list[dict[str, str]] = []
     if definition is not None:
+        explicit_grants = bool(definition.get("grants"))
         normalized = definition_as_camel(definition)
         if normalized["effect"] == "allow":
-            projected_protocols = [
-                "http-rest" if protocol == "http" else "postgresql"
-                for protocol in normalized["protocols"]
-            ]
-            entitlements = [
-                {"subjectId": subject, "action": action, "protocol": protocol}
-                for subject in normalized["subjects"]["userIds"]
-                for action in normalized["actions"]
-                for protocol in projected_protocols
-            ]
+            if explicit_grants:
+                for grant in normalized["grants"]:
+                    subjects = (
+                        [
+                            ("person", member_id)
+                            for member_id in grant.get("groupSnapshot", {}).get(
+                                "memberIds", []
+                            )
+                        ]
+                        if grant["subject"]["type"] == "group"
+                        else [(grant["subject"]["type"], grant["subject"]["id"])]
+                    )
+                    for subject_type, subject_id in subjects:
+                        for action in grant["actions"]:
+                            for protocol in grant["protocols"]:
+                                entitlements.append(
+                                    {
+                                        "subjectId": subject_id,
+                                        "subjectType": subject_type,
+                                        "action": action,
+                                        "protocol": (
+                                            "http-rest"
+                                            if protocol == "http"
+                                            else "postgresql"
+                                        ),
+                                        "validFrom": grant["validFrom"],
+                                        "validUntil": grant["validUntil"],
+                                        "dataVariant": grant["dataVariant"],
+                                    }
+                                )
+            else:
+                entitlements = [
+                    {
+                        "subjectId": grant["subject"]["id"],
+                        "action": action,
+                        "protocol": "http-rest" if protocol == "http" else "postgresql",
+                    }
+                    for grant in normalized["grants"]
+                    for action in grant["actions"]
+                    for protocol in grant["protocols"]
+                ]
 
     base_url = settings.sample_policy_projection_url.rstrip("/")
     url = base_url.format(product_id=product_id) if "{product_id}" in base_url else f"{base_url}/{product_id}"

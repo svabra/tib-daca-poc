@@ -106,6 +106,9 @@ a { color: var(--didaca-blue); }
 }
 .didaca-authority-user-role { color: #fff; font-weight: 400; }
 .didaca-authority-user strong { font-size: inherit; font-weight: 700; }
+.didaca-user-switcher img { width: 28px; height: 28px; border: 1px solid rgba(255,255,255,.55); border-radius: 50%; object-fit: cover; }
+.didaca-user-switcher select { max-width: 300px; border: 0; padding: 4px 26px 4px 4px; background: transparent; color: #fff; font-weight: 700; cursor: pointer; }
+.didaca-user-switcher select option { background: #fff; color: var(--didaca-ink); }
 .didaca-authority-notification {
   position: relative;
   display: grid;
@@ -169,6 +172,23 @@ a { color: var(--didaca-blue); }
 .didaca-main-nav a:hover { color: var(--didaca-red); background: transparent; }
 .didaca-main-nav a:hover::after, .didaca-main-nav a.is-active::after { background: var(--didaca-red); }
 .didaca-main-nav a.is-active { box-shadow: none; color: #20262d; }
+.didaca-nav-group { position: relative; display: flex; align-items: stretch; }
+.didaca-nav-group > a { padding-right: 8px; }
+.didaca-nav-tools { display: flex; align-items: center; padding-right: 8px; }
+.didaca-nav-toggle { display: grid; place-items: center; width: 34px; border: 0; background: transparent; color: var(--didaca-ink); cursor: pointer; }
+.didaca-nav-toggle svg { width: 18px; height: 18px; fill: currentColor; transition: transform .16s ease; }
+.didaca-nav-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.didaca-nav-dropdown { position: absolute; top: calc(100% - 1px); left: 0; z-index: 90; display: grid; width: min(520px, calc(100vw - 32px)); border: 1px solid var(--didaca-border-strong); border-top: 3px solid var(--didaca-red); padding: 8px; background: #fff; box-shadow: 0 18px 42px rgba(18,37,52,.18); }
+.didaca-nav-dropdown a { min-height: 48px; padding: 9px 12px; white-space: normal; }
+.didaca-nav-dropdown a::after { display: none; }
+.didaca-nav-dropdown a:hover, .didaca-nav-dropdown a:focus-visible { background: var(--didaca-blue-soft); color: var(--didaca-blue); }
+
+.didaca-glossary { display: inline-flex; align-items: baseline; }
+.didaca-glossary-trigger { border: 0; border-bottom: 1px dotted currentColor; padding: 0; background: transparent; color: inherit; font: inherit; font-weight: inherit; line-height: inherit; cursor: help; }
+.didaca-glossary-trigger.is-icon-only { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid currentColor; border-radius: 50%; color: var(--didaca-blue); font-size: .72rem; font-weight: 700; line-height: 1; }
+.didaca-glossary-tooltip { position: fixed; z-index: 1000; display: none; width: min(360px, calc(100vw - 24px)); border-radius: 3px; padding: 11px 13px; background: rgba(31,52,71,.96); box-shadow: 0 10px 28px rgba(7,22,34,.28); color: #fff; font-size: .78rem; font-weight: 400; line-height: 1.45; text-align: left; white-space: normal; }
+.didaca-glossary-tooltip.is-visible { display: grid; gap: 3px; }
+.didaca-glossary-tooltip strong { color: #fff; font-size: .75rem; }
 
 .didaca-page { width: min(100%, 1500px); min-height: calc(100vh - 303px); margin: 0 auto; padding: 36px 36px 70px; }
 .didaca-footer { border-top: 1px solid var(--didaca-border); background: #fff; color: var(--didaca-muted); font-size: 0.82rem; }
@@ -233,6 +253,11 @@ a { color: var(--didaca-blue); }
   .didaca-main-nav a, .didaca-main-nav a:last-child { min-height: 44px; border: 0; border-bottom: 1px solid var(--didaca-border); }
   .didaca-main-nav a::after { display: none; }
   .didaca-main-nav a.is-active { box-shadow: inset 4px 0 0 var(--didaca-red); }
+  .didaca-nav-group { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .didaca-nav-group > a { border-bottom: 1px solid var(--didaca-border); }
+  .didaca-nav-tools { border-bottom: 1px solid var(--didaca-border); }
+  .didaca-nav-dropdown { position: static; grid-column: 1 / -1; width: auto; border-width: 0 0 1px 4px; border-color: var(--didaca-border) var(--didaca-border) var(--didaca-border) var(--didaca-red); box-shadow: none; }
+  .didaca-nav-dropdown a { padding-left: 20px; }
   .didaca-page { padding: 28px 22px 54px; }
   .didaca-grid-2, .didaca-grid-3 { grid-template-columns: 1fr; }
 }
@@ -254,6 +279,9 @@ a { color: var(--didaca-blue); }
   .didaca-authority-inner.has-user { justify-content: space-between; gap: 0; padding-inline: 16px; }
   .didaca-authority-inner.has-user .didaca-authority-link { display: flex; }
   .didaca-authority-user { margin-left: auto; padding-inline: 4px; }
+  .didaca-user-switcher { min-width: 0; }
+  .didaca-user-switcher img { flex: 0 0 28px; }
+  .didaca-user-switcher select { width: min(176px, 46vw); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .didaca-authority-notification { flex-basis: 32px; width: 32px; height: 32px; }
   .didaca-language-nav span { min-width: 49px; padding: 10px 0 10px 4px; font-size: .875rem; }
 }
@@ -261,6 +289,7 @@ a { color: var(--didaca-blue); }
 @media (max-width: 359px) {
   .didaca-authority-inner.has-user { justify-content: flex-end; }
   .didaca-authority-inner.has-user .didaca-authority-link { display: none; }
+  .didaca-user-switcher select { width: 150px; }
 }
 
 @media (min-width: 480px) {

@@ -6,18 +6,25 @@ import { StatusBadgeComponent } from '@bit-didaca/design-system';
 import { finalize } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DataProduct } from '../../core/catalog.models';
+import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav.component';
 
 @Component({
   selector: 'didaca-metadata-studio',
   standalone: true,
-  imports: [DatePipe, ReactiveFormsModule, StatusBadgeComponent],
+  imports: [DatePipe, ProductWorkspaceNavComponent, ReactiveFormsModule, StatusBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    <didaca-product-workspace-nav
+      [productId]="product().id"
+      [productTitle]="product().title"
+      activeSection="metadata"
+    />
+
     <section class="didaca-page-heading metadata-heading">
       <div>
-        <p class="didaca-eyebrow">Mockup 01 · Product 360</p>
-        <h1>Metadata Studio</h1>
-        <p>Edit the DCAT-AP-CH-friendly catalog record. Changes use optimistic concurrency and create an audit event.</p>
+        <p class="didaca-eyebrow">Datenprodukt · Metadaten</p>
+        <h1>Metadaten</h1>
+        <p>Bearbeiten Sie den DCAT-AP-CH-kompatiblen Katalogeintrag. Änderungen erzeugen eine neue Revision und einen Audit-Eintrag.</p>
       </div>
       <div class="metadata-revision">
         <didaca-status-badge tone="green">{{ product().lifecycle }}</didaca-status-badge>

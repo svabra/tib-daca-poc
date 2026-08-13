@@ -60,3 +60,14 @@ opt-in and disabled by default because it carries a higher trust requirement tha
 - `packages/design-system`: shared federal CI tokens/assets.
 - `infra`: PostgreSQL and OPA local runtime configuration.
 - `docs`: architecture, PBAC explanation, and verified mockup screenshots.
+
+## Data-model documentation invariant
+
+`docs/data-model/` is the required persistent data-model reference for every DaCa service in this
+monorepo. Any change to SQLAlchemy models, Alembic migrations, persisted JSON structures,
+PostgreSQL roles, database functions, grants, or RLS policies must update that documentation in
+the same change. Run `npm run docs:data-model` after a persistence change and
+`npm run docs:data-model:check` before handing it off. Never edit text between generated markers
+manually; add durable explanations outside those markers or update the generator descriptions.
+DAAIF is an external system: document only the publication and workflow evidence persisted by
+DaCa, not an inferred DAAIF data model.

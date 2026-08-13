@@ -2,23 +2,32 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { StatusBadgeComponent } from '@bit-didaca/design-system';
+import { DidacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-didaca/design-system';
 import { finalize } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
+import { DemoIdentityService } from '../../core/demo-identity.service';
 import { FALLBACK_POLICY } from '../../core/catalog.seed';
 import { PolicyDefinition } from '../../core/catalog.models';
+import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav.component';
 
 @Component({
   selector: 'didaca-security-policy',
   standalone: true,
-  imports: [FormsModule, StatusBadgeComponent],
+  imports: [FormsModule, ProductWorkspaceNavComponent, StatusBadgeComponent, DidacaGlossaryTermComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    <didaca-product-workspace-nav
+      [productId]="api.product().id"
+      [productTitle]="api.product().title"
+      activeSection="access"
+      accessView="technical"
+    />
+
     <section class="didaca-page-heading">
       <div>
-        <p class="didaca-eyebrow">Mockup 03 · Security & access</p>
-        <h1>Policy-based access control</h1>
-        <p>Data owners publish one structured intent; DaCa distributes and verifies HTTP and PostgreSQL enforcement.</p>
+        <p class="didaca-eyebrow">Freigaben · Erweiterte Kontrolle</p>
+        <h1>Technische Durchsetzung</h1>
+        <p>Prüfen Sie <didaca-glossary-term term="PBAC" />-Regeln sowie deren Durchsetzung über <didaca-glossary-term term="OPA" />, REST und PostgreSQL.</p>
       </div>
       <didaca-status-badge [tone]="api.policyUsingFallback() ? 'orange' : deploymentsAligned() ? 'green' : 'red'">
         {{ api.policyUsingFallback() ? 'Demo policy preview' : 'Policy revision ' + policy().revision + ' · ' + policy().state }}
@@ -34,15 +43,15 @@ import { PolicyDefinition } from '../../core/catalog.models';
         <div class="didaca-card-header"><div><p class="didaca-eyebrow">Canonical definition</p><h2 id="policy-definition-title">Who may access this product?</h2></div><span class="policy-readonly">Structured policy</span></div>
         <div class="didaca-card-body">
           <div class="policy-sentence" aria-label="Readable policy summary">
-            <span>ALLOW</span>
-            <p>subject <strong>kanton-st-gallen</strong> to <strong>data.read</strong> the product <strong>{{ api.product().title }}</strong> owned by <strong>ESTV</strong> over <strong>HTTP or PostgreSQL</strong>.</p>
+            <span>{{ policy().grants?.length ? 'ALLOW' : 'DENY' }}</span>
+            <p>{{ policySummary() }}</p>
           </div>
           <div class="policy-builder-grid">
-            <div><span>Effect</span><strong class="is-allow">Allow</strong></div>
-            <div><span>Subject selector</span><strong>id = kanton-st-gallen</strong></div>
-            <div><span>Resource selectors</span><strong>owner = ESTV<br>productId = {{ shortProductId() }}</strong></div>
+            <div><span>Effect</span><strong class="is-allow">{{ policy().grants?.length ? 'Allow matching grants' : 'Default deny' }}</strong></div>
+            <div><span>Identitäten</span><strong>{{ subjectSummary() }}</strong></div>
+            <div><span>Resource selectors</span><strong>owner = {{ policy().resources.owner }}<br>productId = {{ shortProductId() }}</strong></div>
             <div><span>Action</span><strong>data.read</strong></div>
-            <div><span>Protocols</span><strong>HTTP · PostgreSQL</strong></div>
+            <div><span>Protokolle</span><strong>{{ policy().protocols.join(' · ').toUpperCase() }}</strong></div>
             <div><span>Default</span><strong class="is-deny">Deny all unmatched requests</strong></div>
           </div>
           <p class="didaca-alert">Resource owner and classification are enriched from the trusted catalog PIP; callers cannot override them.</p>
@@ -52,10 +61,12 @@ import { PolicyDefinition } from '../../core/catalog.models';
       <aside class="didaca-card policy-test-panel" aria-labelledby="policy-test-title">
         <div class="didaca-card-header"><h2 id="policy-test-title">Live decision test</h2><span class="demo-badge">Demo identity</span></div>
         <div class="didaca-card-body">
-          <label>Act as user
+          <label>Demo-Identität
             <select [ngModel]="selectedUser()" (ngModelChange)="selectedUser.set($event); testState.set('idle')">
+              @for (user of identity.users(); track user.id) {
+                <option [value]="user.id">{{ user.displayName }} · {{ user.organization }}</option>
+              }
               <option value="kanton-st-gallen">kanton-st-gallen</option>
-              <option value="kanton-bern">kanton-bern</option>
               <option value="anonymous">anonymous / no identity</option>
             </select>
           </label>
@@ -63,8 +74,8 @@ import { PolicyDefinition } from '../../core/catalog.models';
             <span>{{ expectedAllowed() ? 'ALLOW' : 'DENY' }}</span>
             <strong>{{ expectedAllowed() ? 'Policy selectors match' : 'Default-deny applies' }}</strong>
           </div>
-          <button class="didaca-button" type="button" [disabled]="testing()" (click)="testEndpoint()">
-            {{ testing() ? 'Calling PEP…' : 'Test protected REST endpoint' }}
+          <button class="didaca-button" type="button" [disabled]="testing() || !runtimeAvailable()" (click)="testEndpoint()">
+            {{ testing() ? 'PEP wird aufgerufen…' : runtimeAvailable() ? 'Geschützten REST-Zugriff testen' : 'Für dieses Produkt nur Metadaten-PoC' }}
           </button>
           @if (testMessage()) {
             <p class="didaca-alert" [class.is-error]="testState() === 'denied' || testState() === 'error'">{{ testMessage() }}</p>
@@ -89,6 +100,13 @@ import { PolicyDefinition } from '../../core/catalog.models';
       <section class="didaca-card">
         <div class="didaca-card-header"><h2>Generated Rego</h2><span>Read-only compiler output</span></div>
         <pre class="policy-code"><code>{{ policy().generatedRego }}</code></pre>
+        @if (policy().state === 'draft') {
+          <div class="didaca-card-body">
+            <p class="didaca-alert is-warning">Der Entwurf gewährt noch keinen Zugriff. Erst die Publikation projiziert dieselbe Revision nach OPA und PostgreSQL.</p>
+            <button class="didaca-button" type="button" [disabled]="publishing()" (click)="publishDraft()">{{ publishing() ? 'Policy wird publiziert…' : 'Policy bewusst publizieren' }}</button>
+            @if (publishMessage()) { <p class="didaca-alert" [class.is-error]="publishFailed()">{{ publishMessage() }}</p> }
+          </div>
+        }
       </section>
       <section class="didaca-card">
         <div class="didaca-card-header"><h2>Deployment status</h2><span>Desired revision {{ policy().revision }}</span></div>
@@ -103,11 +121,19 @@ import { PolicyDefinition } from '../../core/catalog.models';
 })
 export class SecurityPolicyComponent {
   readonly api = inject(CatalogApiService);
+  readonly identity = inject(DemoIdentityService);
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
   readonly policy = signal<PolicyDefinition>(FALLBACK_POLICY);
-  readonly selectedUser = signal('kanton-st-gallen');
-  readonly expectedAllowed = computed(() => this.selectedUser() === 'kanton-st-gallen');
+  readonly selectedUser = signal(this.api.identityUserId());
+  readonly expectedAllowed = computed(() => {
+    const user = this.selectedUser();
+    const today = new Date().toISOString().slice(0, 10);
+    const grants = this.policy().grants ?? [];
+    if (grants.length) return grants.some((grant) => grant.subject.type === 'person' && grant.subject.id === user && grant.validFrom <= today && grant.validUntil >= today && grant.protocols.includes('http'));
+    return this.policy().subjects.includes(user);
+  });
+  readonly runtimeAvailable = computed(() => ['11111111-1111-4111-8111-111111111111', '9c9a0112-d4ef-57d0-862c-0d27872c82c2'].includes(this.api.product().id));
   readonly shortProductId = computed(() => `${this.policy().resources.productId.slice(0, 8)}…`);
   readonly deploymentsAligned = computed(() =>
     !this.api.policyUsingFallback()
@@ -117,6 +143,9 @@ export class SecurityPolicyComponent {
   readonly testing = signal(false);
   readonly testState = signal<'idle' | 'allowed' | 'denied' | 'error'>('idle');
   readonly testMessage = signal('');
+  readonly publishing = signal(false);
+  readonly publishMessage = signal('');
+  readonly publishFailed = signal(false);
 
   constructor() {
     this.api.selectProduct(this.route.snapshot.paramMap.get('id'));
@@ -132,13 +161,43 @@ export class SecurityPolicyComponent {
     return this.api.policyUsingFallback() ? 'preview' : observedRevision ? `rev ${observedRevision}` : 'pending';
   }
 
+  policySummary(): string {
+    const grants = this.policy().grants ?? [];
+    if (!grants.length) return `Keine konkrete Freigabe für ${this.api.product().title}. Default Deny bleibt aktiv.`;
+    return grants.map((grant) => `${grant.subject.type === 'person' ? 'eIAM' : 'Machine ID'} ${grant.subject.id} · ${grant.dataVariant} · ${grant.validFrom} bis ${grant.validUntil}`).join('; ');
+  }
+
+  subjectSummary(): string {
+    const grants = this.policy().grants ?? [];
+    return grants.length ? grants.map((grant) => `${grant.subject.type}: ${grant.subject.id}`).join(' · ') : 'Keine Grants';
+  }
+
+  publishDraft(): void {
+    this.publishing.set(true);
+    this.publishFailed.set(false);
+    this.publishMessage.set('');
+    this.api.publishPolicy(this.api.product().id, this.policy().id, this.policy().revision).pipe(finalize(() => this.publishing.set(false))).subscribe({
+      next: () => {
+        this.publishMessage.set('Policy publiziert; OPA- und PostgreSQL-Projektion wurden angestossen.');
+        this.api.loadPolicy().subscribe((policy) => this.policy.set(policy));
+      },
+      error: (error: HttpErrorResponse) => {
+        this.publishFailed.set(true);
+        this.publishMessage.set(error.error?.detail ?? 'Die Policy konnte nicht publiziert werden.');
+      },
+    });
+  }
+
   testEndpoint(): void {
     const user = this.selectedUser();
     const headers: Record<string, string> = user === 'anonymous' ? {} : { 'X-DiDaCa-User': user };
     this.testing.set(true);
     this.testMessage.set('');
+    const endpoint = this.api.product().id === '9c9a0112-d4ef-57d0-862c-0d27872c82c2'
+      ? 'http://localhost:8003/api/v1/daaif/estv.direct-tax-assessments.v1'
+      : 'http://localhost:8003/api/v1/estv/tax-statistics';
     this.http
-      .get<unknown>('http://localhost:8003/api/v1/estv/tax-statistics', { headers, observe: 'response' })
+      .get<unknown>(endpoint, { headers, observe: 'response' })
       .pipe(finalize(() => this.testing.set(false)))
       .subscribe({
         next: (response) => {

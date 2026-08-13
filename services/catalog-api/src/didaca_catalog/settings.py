@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     app_name: str = "BIT DiDaCa Catalog API"
     environment: str = "local"
     didaca_demo_auth: bool = False
+    didaca_open_metadata_publication: bool = False
     database_url: str = "sqlite+pysqlite:///./didaca-catalog.db"
     seed_on_startup: bool = False
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:8080"])

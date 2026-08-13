@@ -6,6 +6,7 @@ import dagre from '@dagrejs/dagre';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { FALLBACK_EDGES, FALLBACK_NODES, FALLBACK_PROVENANCE } from '../../core/catalog.seed';
 import { LineageEdge, LineageNode, ProvenanceEvent } from '../../core/catalog.models';
+import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav.component';
 
 interface PositionedNode extends LineageNode { x: number; y: number; }
 interface PositionedEdge extends LineageEdge { path: string; labelX: number; labelY: number; }
@@ -13,14 +14,20 @@ interface PositionedEdge extends LineageEdge { path: string; labelX: number; lab
 @Component({
   selector: 'didaca-lineage-explorer',
   standalone: true,
-  imports: [DatePipe, StatusBadgeComponent],
+  imports: [DatePipe, ProductWorkspaceNavComponent, StatusBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    <didaca-product-workspace-nav
+      [productId]="api.product().id"
+      [productTitle]="api.product().title"
+      activeSection="lineage"
+    />
+
     <section class="didaca-page-heading">
       <div>
-        <p class="didaca-eyebrow">Mockup 02 · Observability</p>
-        <h1>Lineage & provenance</h1>
-        <p>Trace trusted origins, transformation evidence and declared consumers across catalog boundaries.</p>
+        <p class="didaca-eyebrow">Datenprodukt · Herkunft</p>
+        <h1>Lineage & Provenienz</h1>
+        <p>Nachvollziehbare Quellen, Transformationen und deklarierte Konsumenten über Kataloggrenzen hinweg.</p>
       </div>
       <didaca-status-badge tone="green">{{ edges().length }} relations · current</didaca-status-badge>
     </section>

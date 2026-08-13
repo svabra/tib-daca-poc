@@ -21,7 +21,7 @@ describe('My data products filtering', () => {
     expect(FALLBACK_PRODUCTS.filter((product) => matchesProduct(product, '', 'all'))).toHaveLength(7);
     expect(offered).toHaveLength(3);
     expect(sharedByMe).toHaveLength(2);
-    expect(requestedByMe).toHaveLength(2);
+    expect(requestedByMe).toHaveLength(1);
     expect(sharedWithMe).toHaveLength(3);
   });
 
@@ -43,11 +43,29 @@ describe('My data products filtering', () => {
     const empty = FALLBACK_PRODUCTS.find((product) => product.id === '12222222-2222-4222-8222-222222222222')!;
 
     expect(relationshipBadges(main, undefined, FALLBACK_OWNED_ACCESS_CONSUMERS)).toEqual([
-      { kind: 'offered', label: 'Von Ihnen angeboten', detail: '5 Datenkonsumenten' },
+      { kind: 'offered', label: 'Von Ihnen angeboten', detail: '5 Datenkonsumenten', tone: 'normal' },
     ]);
     expect(relationshipBadges(empty, undefined, FALLBACK_OWNED_ACCESS_CONSUMERS)).toEqual([
-      { kind: 'offered', label: 'Von Ihnen angeboten', detail: 'Keine Datenkonsumenten' },
+      { kind: 'offered', label: 'Von Ihnen angeboten', detail: 'Keine Datenkonsumenten', tone: 'attention' },
     ]);
+  });
+
+  it('shows only the active relationship after an access request was granted', () => {
+    const granted = FALLBACK_PRODUCTS.find((product) => product.id === '17777777-7777-4777-8777-777777777777')!;
+    const badges = relationshipBadges(granted);
+
+    expect(badges.some((badge) => badge.kind === 'requestedByMe')).toBe(false);
+    expect(badges.some((badge) => badge.kind === 'sharedWithMe')).toBe(true);
+    expect(badges.every((badge) => badge.tone === 'normal')).toBe(true);
+  });
+
+  it('marks an open request as requiring attention', () => {
+    const open = FALLBACK_PRODUCTS.find((product) => product.id === '14444444-4444-4444-8444-444444444444')!;
+
+    expect(relationshipBadges(open)).toContainEqual(expect.objectContaining({
+      kind: 'requestedByMe',
+      tone: 'attention',
+    }));
   });
 
   it('searches product metadata, connected authorities and machine ids', () => {

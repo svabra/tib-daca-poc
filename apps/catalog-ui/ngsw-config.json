@@ -5,7 +5,24 @@
     {
       "name": "app-shell",
       "installMode": "prefetch",
-      "resources": { "files": ["/favicon.ico", "/index.html", "/styles-*.css", "/main-*.js", "/manifest.webmanifest", "/assets/**"] }
+      "resources": {
+        "files": [
+          "/favicon.ico",
+          "/index.html",
+          "/styles-*.css",
+          "/main-*.js",
+          "/manifest.webmanifest",
+          "/assets/**",
+          "!/assets/swiss-*-*.avif",
+          "!/assets/swiss-*-*.webp"
+        ]
+      }
+    },
+    {
+      "name": "decorative-media",
+      "installMode": "lazy",
+      "updateMode": "lazy",
+      "resources": { "files": ["/assets/swiss-*-*.avif", "/assets/swiss-*-*.webp"] }
     },
     {
       "name": "lazy-features",

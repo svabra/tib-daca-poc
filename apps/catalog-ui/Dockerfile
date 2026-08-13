@@ -7,6 +7,7 @@ COPY apps/control-plane-ui/package.json ./apps/control-plane-ui/package.json
 RUN npm ci
 COPY packages/design-system ./packages/design-system
 COPY apps/catalog-ui ./apps/catalog-ui
+COPY docs/openapi/daca-metadata-publication.openapi.yaml ./apps/catalog-ui/public/openapi/daca-metadata-publication.openapi.yaml
 RUN npm run build --workspace @didaca/catalog-ui
 
 FROM nginx:1.29-alpine

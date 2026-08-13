@@ -1,16 +1,26 @@
-import { ChangeDetectionStrategy, Component, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, input, output, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
+import { DidacaGlossaryTermComponent } from './glossary-term.component';
 
 export interface DidacaNavigationItem {
   label: string;
   path: string;
   exact?: boolean;
+  description?: string;
+  children?: readonly DidacaNavigationItem[];
+}
+
+export interface DidacaUserOption {
+  id: string;
+  displayName: string;
+  organization: string;
+  avatarUrl?: string | null;
 }
 
 @Component({
   selector: 'didaca-federal-shell',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink, RouterLinkActive, DidacaGlossaryTermComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <a class="didaca-skip-link" href="#main-content">{{ locale() === 'de' ? 'Zum Inhalt springen' : 'Skip to content' }}</a>
@@ -24,6 +34,15 @@ export interface DidacaNavigationItem {
             </svg>
           </a>
           @if (userName(); as name) {
+            @if (users().length > 1) {
+              <label class="didaca-authority-user didaca-user-switcher">
+                @if (userAvatarUrl()) { <img [src]="userAvatarUrl()!" alt=""> }
+                <span class="didaca-authority-user-role">{{ locale() === 'de' ? 'Demo-Benutzerin' : 'Demo user' }}</span>
+                <select [value]="userId()" (change)="userChange.emit($any($event.target).value)" aria-label="Demo-Benutzer wechseln">
+                  @for (user of users(); track user.id) { <option [value]="user.id" [selected]="user.id === userId()">{{ user.displayName }} · {{ user.organization }}</option> }
+                </select>
+              </label>
+            } @else {
             <span
               class="didaca-authority-user"
               [attr.aria-label]="locale() === 'de'
@@ -33,6 +52,7 @@ export interface DidacaNavigationItem {
               <span class="didaca-authority-user-role">{{ locale() === 'de' ? 'Demo-Benutzerin' : 'Demo user' }}</span>
               <strong>{{ name }}</strong>
             </span>
+            }
           }
           @if (notificationCount() > 0) {
             <a
@@ -111,12 +131,47 @@ export interface DidacaNavigationItem {
       >
         <div class="didaca-header-inner didaca-main-nav-inner">
           @for (item of navigation(); track item.path) {
-            <a
-              [routerLink]="item.path"
-              routerLinkActive="is-active"
-              [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
-              (click)="menuOpen.set(false)"
-            >{{ item.label }}</a>
+            @if (item.children?.length) {
+              <div class="didaca-nav-group">
+                <a
+                  [routerLink]="item.path"
+                  routerLinkActive="is-active"
+                  [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
+                  (click)="closeNavigation()"
+                >{{ item.label }}</a>
+                <span class="didaca-nav-tools">
+                  @if (item.description) {
+                    <didaca-glossary-term
+                      [term]="item.label"
+                      [explanation]="item.description"
+                      [iconOnly]="true"
+                    />
+                  }
+                  <button
+                    class="didaca-nav-toggle"
+                    type="button"
+                    [attr.aria-expanded]="openNavigationPath() === item.path"
+                    [attr.aria-controls]="navigationId(item.path)"
+                    [attr.aria-label]="'Untermenü ' + item.label + (openNavigationPath() === item.path ? ' schliessen' : ' öffnen')"
+                    (click)="toggleNavigation(item.path, $event)"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5.7 9.5 6.3 6 6.3-6 1.4 1.5-7.7 7.3L4.3 11z" /></svg></button>
+                </span>
+                @if (openNavigationPath() === item.path) {
+                  <div class="didaca-nav-dropdown" [id]="navigationId(item.path)">
+                    @for (child of item.children; track child.path) {
+                      <a [routerLink]="child.path" routerLinkActive="is-active" (click)="closeNavigation()">{{ child.label }}</a>
+                    }
+                  </div>
+                }
+              </div>
+            } @else {
+              <a
+                [routerLink]="item.path"
+                routerLinkActive="is-active"
+                [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
+                (click)="closeNavigation()"
+              >{{ item.label }}</a>
+            }
           }
         </div>
       </nav>
@@ -146,8 +201,37 @@ export class FederalShellComponent {
   readonly subtitleBelow = input(false);
   readonly locale = input<'de' | 'en'>('en');
   readonly userName = input<string | null>(null);
+  readonly userId = input<string | null>(null);
+  readonly userAvatarUrl = input<string | null>(null);
+  readonly users = input<readonly DidacaUserOption[]>([]);
+  readonly userChange = output<string>();
   readonly notificationCount = input(0);
   readonly notificationHref = input('/#main-content');
   readonly navigation = input.required<readonly DidacaNavigationItem[]>();
   readonly menuOpen = signal(false);
+  readonly openNavigationPath = signal<string | null>(null);
+
+  toggleNavigation(path: string, event: Event): void {
+    event.stopPropagation();
+    this.openNavigationPath.update((open) => open === path ? null : path);
+  }
+
+  closeNavigation(): void {
+    this.menuOpen.set(false);
+    this.openNavigationPath.set(null);
+  }
+
+  navigationId(path: string): string {
+    return `didaca-subnav-${path.replace(/[^a-z0-9]+/gi, '-')}`;
+  }
+
+  @HostListener('document:keydown.escape')
+  closeSubnavigation(): void {
+    this.openNavigationPath.set(null);
+  }
+
+  @HostListener('document:click')
+  closeSubnavigationOutside(): void {
+    this.openNavigationPath.set(null);
+  }
 }

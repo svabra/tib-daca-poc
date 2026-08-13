@@ -1,102 +1,150 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { StatusBadgeComponent } from '@bit-didaca/design-system';
+import { DidacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-didaca/design-system';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DataProduct, StoredAccessRequest } from '../../core/catalog.models';
+import { selectNextWelcomeHeroTheme } from './welcome-hero-theme';
 import { catalogProductMatches } from './welcome-search';
 
 type SearchStatus = 'idle' | 'empty' | 'match' | 'none';
+const HERO_THEME_STORAGE_KEY = 'daca.welcome.hero-theme';
+
+function selectSessionHeroTheme() {
+  let previousThemeId: string | null = null;
+  try {
+    previousThemeId = typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem(HERO_THEME_STORAGE_KEY);
+  } catch {
+    // Storage can be unavailable in hardened browser contexts. Rotation still works for this render.
+  }
+
+  const selectedTheme = selectNextWelcomeHeroTheme(previousThemeId);
+  try {
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(HERO_THEME_STORAGE_KEY, selectedTheme.id);
+  } catch {
+    // The selected theme remains usable even when persistence is blocked.
+  }
+  return selectedTheme;
+}
 
 @Component({
   selector: 'didaca-welcome-page',
   standalone: true,
-  imports: [DatePipe, RouterLink, StatusBadgeComponent],
+  imports: [DatePipe, RouterLink, StatusBadgeComponent, DidacaGlossaryTermComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="welcome-page">
       <section class="welcome-hero" aria-labelledby="welcome-title">
-        <div class="welcome-hero-copy">
-          <p class="didaca-eyebrow">DaCa</p>
-          <h1 id="welcome-title">Willkommen im zentralen Data Catalog der Schweizer Bundesverwaltung</h1>
-          <p class="welcome-lead">
-            Entdecken, beschreiben und verantwortungsvoll freigeben: Hier finden Sie Metadaten,
-            Schnittstellen, Herkunft und Zugriffsregeln Ihrer Datenprodukte an einem Ort.
-          </p>
-          <div class="welcome-hero-actions">
-            <a class="didaca-button" routerLink="/metadata">Meine Datenprodukte öffnen</a>
-            <a class="didaca-button is-secondary" routerLink="/exposure">Freigabe konfigurieren</a>
+        <picture class="welcome-hero-background" [class.is-loaded]="heroImageLoaded()" aria-hidden="true">
+          <source
+            type="image/avif"
+            [srcset]="heroAvifSrcset"
+            sizes="(max-width: 760px) 960px, 1600px"
+          >
+          <source
+            type="image/webp"
+            [srcset]="heroWebpSrcset"
+            sizes="(max-width: 760px) 960px, 1600px"
+          >
+          <img
+            [src]="heroFallbackSrc"
+            width="1600"
+            height="800"
+            alt=""
+            loading="lazy"
+            decoding="async"
+            fetchpriority="low"
+            (load)="heroImageLoaded.set(true)"
+          >
+        </picture>
+          <div class="welcome-hero-copy">
+            <p class="didaca-eyebrow"><didaca-glossary-term term="DaCa" /></p>
+            <h1 id="welcome-title">Willkommen im zentralen Data Catalog der Schweizer<br>Bundesverwaltung</h1>
+            <p class="welcome-lead">
+              Entdecken, beschreiben und verantwortungsvoll freigeben: Hier finden Sie Metadaten,
+              Schnittstellen, Herkunft und Zugriffsregeln Ihrer Datenprodukte an einem Ort.
+            </p>
+            <div class="welcome-hero-actions">
+              <a class="didaca-button" routerLink="/products">Meine Datenprodukte öffnen</a>
+              <a class="didaca-button is-secondary" [routerLink]="['/products', product().id, 'access']">Freigaben verwalten</a>
+            </div>
+            <p class="welcome-context">
+              <span>Proof of Concept</span>
+              PoC Data Catalog · Anmeldung noch nicht verfügbar
+            </p>
           </div>
-          <p class="welcome-context">
-            <span>Proof of Concept</span>
-            PoC Data Catalog · Anmeldung noch nicht verfügbar
-          </p>
-        </div>
 
-        <form class="welcome-search" role="search" (submit)="submitSearch($event)">
-          <div>
-            <p class="didaca-eyebrow">Katalog durchsuchen</p>
-            <h2>Wonach suchen Sie?</h2>
-            <p>Finden Sie Datenprodukte nach Thema, Organisation oder Stichwort.</p>
-          </div>
-          <label for="catalog-search">Suchbegriff</label>
-          <div class="welcome-search-control">
-            <input
-              id="catalog-search"
-              type="search"
-              autocomplete="off"
-              placeholder="z. B. Steuerstatistik oder ESTV"
-              aria-describedby="catalog-search-feedback"
-              [attr.aria-invalid]="searchStatus() === 'empty' ? 'true' : null"
-              [value]="searchQuery()"
-              (input)="updateSearch($any($event.target).value)"
-            >
-            <button class="didaca-button" type="submit">Suchen</button>
-          </div>
-          <div id="catalog-search-feedback" class="welcome-search-feedback" aria-live="polite">
-            @switch (searchStatus()) {
-              @case ('empty') {
-                <p class="is-warning">Bitte geben Sie einen Suchbegriff ein.</p>
+          <form class="welcome-search" role="search" (submit)="submitSearch($event)">
+            <div>
+              <p class="didaca-eyebrow">Katalog durchsuchen</p>
+              <h2>Wonach suchen Sie?</h2>
+              <p>Finden Sie Datenprodukte nach Thema, Organisation oder Stichwort.</p>
+            </div>
+            <label for="catalog-search">Suchbegriff</label>
+            <div class="welcome-search-control">
+              <input
+                id="catalog-search"
+                type="search"
+                autocomplete="off"
+                placeholder="z. B. Steuerstatistik oder ESTV"
+                aria-describedby="catalog-search-feedback"
+                [attr.aria-invalid]="searchStatus() === 'empty' ? 'true' : null"
+                [value]="searchQuery()"
+                (input)="updateSearch($any($event.target).value)"
+              >
+              <button class="didaca-button" type="submit">Suchen</button>
+            </div>
+            <div id="catalog-search-feedback" class="welcome-search-feedback" aria-live="polite">
+              @switch (searchStatus()) {
+                @case ('empty') {
+                  <p class="is-warning">Bitte geben Sie einen Suchbegriff ein.</p>
+                }
+                @case ('match') {
+                  <p class="is-match">{{ searchResults().length }} {{ searchResults().length === 1 ? 'Datenprodukt gefunden' : 'Datenprodukte gefunden' }}</p>
+                  <ul class="welcome-search-results" aria-label="Gefundene Datenprodukte">
+                    @for (result of searchResults(); track result.id) {
+                      <li>
+                        <a [routerLink]="['/products', result.id, 'overview']">
+                          <span>{{ result.title }}</span>
+                          <small>{{ result.owner }} · {{ result.domain }}</small>
+                        </a>
+                      </li>
+                    }
+                  </ul>
+                }
+                @case ('none') {
+                  <p>Keine Datenprodukte für diesen Suchbegriff gefunden.</p>
+                }
+                @default {
+                  <p class="is-hint">Tipp: Suchen Sie nach „Kanton“ oder „ESTV“.</p>
+                }
               }
-              @case ('match') {
-                <p class="is-match">{{ searchResults().length }} {{ searchResults().length === 1 ? 'Datenprodukt gefunden' : 'Datenprodukte gefunden' }}</p>
-                <ul class="welcome-search-results" aria-label="Gefundene Datenprodukte">
-                  @for (result of searchResults(); track result.id) {
-                    <li>
-                      <a [routerLink]="['/products', result.id, 'metadata']">
-                        <span>{{ result.title }}</span>
-                        <small>{{ result.owner }} · {{ result.domain }}</small>
-                      </a>
-                    </li>
-                  }
-                </ul>
-              }
-              @case ('none') {
-                <p>Keine Datenprodukte für diesen Suchbegriff gefunden.</p>
-              }
-              @default {
-                <p class="is-hint">Tipp: Suchen Sie nach „Kanton“ oder „ESTV“.</p>
-              }
-            }
-          </div>
-        </form>
+            </div>
+          </form>
       </section>
 
       <section id="handlungsbedarf" class="welcome-alerts" aria-labelledby="welcome-alerts-title">
         <div class="welcome-alerts-heading">
           <div>
-            <p class="didaca-eyebrow">Für Kassandra Valdata</p>
+            <p class="didaca-eyebrow">Für {{ api.identityUser().displayName }}</p>
             <h2 id="welcome-alerts-title">Handlungsbedarf</h2>
           </div>
           @if (!ownerInboxLoading()) {
-            <span><strong>{{ ownerRequests().length }}</strong> {{ ownerRequests().length === 1 ? 'offene Aufgabe' : 'offene Aufgaben' }}</span>
+            <span><strong>{{ actionCount() }}</strong> {{ actionCount() === 1 ? 'offene Aufgabe' : 'offene Aufgaben' }}</span>
           }
         </div>
 
         @if (ownerInboxLoading()) {
           <div class="didaca-card welcome-alert-empty" aria-live="polite">Aufgaben werden geladen…</div>
-        } @else if (ownerRequests().length) {
+        } @else if (actionCount()) {
           <div class="welcome-alert-list">
+            @for (task of simulationTasks(); track task.id) {
+              <article class="didaca-card welcome-alert-item is-simulation-alert">
+                <span class="welcome-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5 21 20H3L12 3.5Z"/><path d="M12 9v5M12 17.2v.2"/></svg></span>
+                <div class="welcome-alert-copy"><div><span>{{ task.taskType === 'simulation_isbo_restriction' ? 'Dringend' : 'Prüfung nötig' }}</span><time [attr.datetime]="task.createdAt">{{ task.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</time></div><h3>{{ task.title }}</h3><p>{{ task.detail }}</p></div>
+                <a class="didaca-button is-secondary" [routerLink]="['/products', task.dataProductId, 'overview']">Aufgabe öffnen</a>
+              </article>
+            }
             @for (request of ownerRequests(); track request.id) {
               <article class="didaca-card welcome-alert-item">
                 <span class="welcome-alert-icon" aria-hidden="true">
@@ -112,7 +160,7 @@ type SearchStatus = 'idle' | 'empty' | 'match' | 'none';
                     <div><dt>Status</dt><dd>Anfrage eingegangen</dd></div>
                   </dl>
                 </div>
-                <a class="didaca-button is-secondary" routerLink="/exposure">Anfrage prüfen</a>
+                <a class="didaca-button is-secondary" routerLink="/tasks">Aufgabe öffnen</a>
               </article>
             }
           </div>
@@ -131,7 +179,7 @@ type SearchStatus = 'idle' | 'empty' | 'match' | 'none';
         </div>
 
         <div class="welcome-task-grid">
-          <a class="welcome-task-card" routerLink="/metadata">
+          <a class="welcome-task-card" routerLink="/products">
             <span class="welcome-task-number" aria-hidden="true">01</span>
             <span class="welcome-task-copy">
               <strong>Datenprodukt pflegen</strong>
@@ -139,29 +187,29 @@ type SearchStatus = 'idle' | 'empty' | 'match' | 'none';
             </span>
             <span class="welcome-task-link">Meine Datenprodukte öffnen</span>
           </a>
-          <a class="welcome-task-card" routerLink="/exposure">
+          <a class="welcome-task-card" routerLink="/tasks">
             <span class="welcome-task-number" aria-hidden="true">02</span>
             <span class="welcome-task-copy">
-              <strong>Freigabe verwalten</strong>
-              <span>Benutzergruppen, Zeitraum und KOBY-Metadatenzugriff über MCP festlegen.</span>
+              <strong>Aufgaben bearbeiten</strong>
+              <span>Zugriffsanfragen und weitere Aufgaben zu Ihren Datenprodukten bearbeiten.</span>
             </span>
-            <span class="welcome-task-link">Freigabe & MCP öffnen</span>
+            <span class="welcome-task-link">Aufgaben öffnen</span>
           </a>
-          <a class="welcome-task-card" routerLink="/lineage">
+          <a class="welcome-task-card" [routerLink]="['/products', product().id, 'access']">
             <span class="welcome-task-number" aria-hidden="true">03</span>
+            <span class="welcome-task-copy">
+              <strong>Freigaben verwalten</strong>
+              <span>Zugriffsanfragen, Datenkonsumenten und KOBY-Metadatenzugriff verwalten.</span>
+            </span>
+            <span class="welcome-task-link">Freigaben öffnen</span>
+          </a>
+          <a class="welcome-task-card" [routerLink]="['/products', product().id, 'lineage']">
+            <span class="welcome-task-number" aria-hidden="true">04</span>
             <span class="welcome-task-copy">
               <strong>Herkunft nachvollziehen</strong>
               <span>Lineage, Transformationen und append-only Provenienz einsehen.</span>
             </span>
             <span class="welcome-task-link">Lineage öffnen</span>
-          </a>
-          <a class="welcome-task-card" routerLink="/security">
-            <span class="welcome-task-number" aria-hidden="true">04</span>
-            <span class="welcome-task-copy">
-              <strong>Zugriff prüfen</strong>
-              <span>PBAC-Regeln sowie die Projektion nach OPA und PostgreSQL kontrollieren.</span>
-            </span>
-            <span class="welcome-task-link">Sicherheit öffnen</span>
           </a>
         </div>
       </section>
@@ -187,8 +235,8 @@ type SearchStatus = 'idle' | 'empty' | 'match' | 'none';
             Nur die Benutzergruppe Kanton St. Gallen darf die Produktdaten lesen.
           </p>
           <div class="welcome-product-actions">
-            <a class="didaca-button" routerLink="/metadata">Meine Datenprodukte öffnen</a>
-            <a class="didaca-button is-secondary" routerLink="/exposure">Freigabe & MCP</a>
+            <a class="didaca-button" routerLink="/products">Meine Datenprodukte öffnen</a>
+            <a class="didaca-button is-secondary" [routerLink]="['/products', product().id, 'access']">Freigaben</a>
           </div>
         </div>
 
@@ -199,7 +247,7 @@ type SearchStatus = 'idle' | 'empty' | 'match' | 'none';
             KOBY erhält nur nach ausdrücklicher Freigabe Zugriff auf Metadaten.
             Produktdaten und Zugangsdaten bleiben ausgeschlossen.
           </p>
-          <a routerLink="/exposure">MCP-Freigabe prüfen</a>
+          <a [routerLink]="['/products', product().id, 'access', 'grant']" fragment="koby">KOBY-Metadatenzugriff prüfen</a>
         </aside>
       </section>
 
@@ -238,6 +286,13 @@ export class WelcomePageComponent {
   readonly searchResults = signal<readonly DataProduct[]>([]);
   readonly ownerRequests = this.api.ownerAccessRequests;
   readonly ownerInboxLoading = this.api.ownerAccessRequestLoading;
+  readonly simulationTasks = computed(() => this.api.workflowTasks().filter((task) => task.taskType.startsWith('simulation_')));
+  readonly actionCount = computed(() => this.ownerRequests().length + this.simulationTasks().length);
+  readonly heroTheme = selectSessionHeroTheme();
+  readonly heroAvifSrcset = `/assets/${this.heroTheme.assetName}-960.avif 960w, /assets/${this.heroTheme.assetName}-1600.avif 1600w`;
+  readonly heroWebpSrcset = `/assets/${this.heroTheme.assetName}-960.webp 960w, /assets/${this.heroTheme.assetName}-1600.webp 1600w`;
+  readonly heroFallbackSrc = `/assets/${this.heroTheme.assetName}-1600.webp`;
+  readonly heroImageLoaded = signal(false);
 
   requestProductTitle(request: StoredAccessRequest): string {
     return this.api.products().find((product) => product.id === request.dataProductId)?.title ?? 'Datenprodukt';

@@ -44,7 +44,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:8080", "http://127.0.0.1:8080"],
     allow_methods=["GET", "PUT", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-DiDaCa-User", "X-Request-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-DiDaCa-User", "X-DiDaCa-Machine", "X-Request-ID"],
 )
 
 
@@ -138,12 +138,19 @@ async def validation_problem_handler(
     )
 
 
-def decision_input(subject_id: str, request: Request) -> dict[str, Any]:
+def decision_input(
+    subject_id: str,
+    request: Request,
+    *,
+    subject_type: str = "person",
+    product_id: str | None = None,
+) -> dict[str, Any]:
+    resolved_product_id = product_id or settings.product_id
     return {
-        "subject": {"id": subject_id},
+        "subject": {"id": subject_id, "type": subject_type},
         "action": "data.read",
         "resource": {
-            "id": settings.product_id,
+            "id": resolved_product_id,
             "slug": settings.product_slug,
             "owner": settings.product_owner,
             "classification": settings.product_classification,
@@ -154,6 +161,7 @@ def decision_input(subject_id: str, request: Request) -> dict[str, Any]:
             "path": request.url.path,
             "requestId": request.state.request_id,
         },
+        "context": {"currentDate": dt.datetime.now(dt.UTC).date().isoformat()},
     }
 
 
@@ -292,6 +300,56 @@ async def read_tax_statistics(
     }
 
 
+DAAIF_REFERENCE_PRODUCT_ID = "9c9a0112-d4ef-57d0-862c-0d27872c82c2"
+
+
+@app.get("/api/v1/daaif/{source_product_id}", tags=["data products"])
+async def read_daaif_reference_product(
+    source_product_id: str,
+    request: Request,
+    x_didaca_user: str | None = Header(default=None, alias="X-DiDaCa-User"),
+    x_didaca_machine: str | None = Header(default=None, alias="X-DiDaCa-Machine"),
+) -> dict[str, Any]:
+    if source_product_id != "estv.direct-tax-assessments.v1":
+        raise ProblemError(404, "Data product not found", "This fixture has metadata only.", "not-found")
+    if not settings.didaca_demo_auth:
+        raise ProblemError(503, "Production identity provider not configured", "Demo identity is disabled.", "identity-unavailable")
+    identities = [value.strip() for value in (x_didaca_user, x_didaca_machine) if value and value.strip()]
+    if len(identities) != 1:
+        raise ProblemError(401, "Identity required", "Provide exactly one demo person or machine identity.", "identity-required")
+    subject_id = identities[0]
+    subject_type = "machine" if x_didaca_machine and x_didaca_machine.strip() else "person"
+    allow, reason, decision_id = await evaluate_opa(
+        decision_input(subject_id, request, subject_type=subject_type, product_id=DAAIF_REFERENCE_PRODUCT_ID)
+    )
+    if not allow:
+        raise ProblemError(403, "Access denied", reason, "access-denied")
+    rows = await run_in_threadpool(
+        fetch_statistics,
+        subject_id,
+        uuid.UUID(DAAIF_REFERENCE_PRODUCT_ID),
+        subject_type,
+    )
+    return {
+        "dataProduct": {
+            "id": DAAIF_REFERENCE_PRODUCT_ID,
+            "sourceProductId": source_product_id,
+            "title": "Direkte Bundessteuer – Veranlagungsindikatoren nach Kanton und Gemeinde",
+            "owner": "ESTV",
+            "classification": "internal",
+            "synthetic": True,
+        },
+        "records": rows,
+        "authorization": {
+            "subjectId": subject_id,
+            "subjectType": subject_type,
+            "decision": "allow",
+            "reason": reason,
+            "decisionId": decision_id,
+        },
+    }
+
+
 def apply_projection(product_id: uuid.UUID, projection: PolicyProjection) -> dict[str, Any]:
     with Session(projector_engine()) as session, session.begin():
         current = session.scalar(
@@ -317,8 +375,12 @@ def apply_projection(product_id: uuid.UUID, projection: PolicyProjection) -> dic
                 PolicyEntitlement(
                     product_id=product_id,
                     subject_id=entitlement.subject_id,
+                    subject_type=entitlement.subject_type,
                     action=entitlement.action,
                     protocol=entitlement.protocol,
+                    valid_from=entitlement.valid_from,
+                    valid_until=entitlement.valid_until,
+                    data_variant=entitlement.data_variant,
                     policy_revision=projection.revision,
                     active=True,
                 )

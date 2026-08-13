@@ -21,13 +21,21 @@ def projector_engine() -> Engine:
     return create_engine(get_settings().policy_projector_database_url, pool_pre_ping=True)
 
 
-def fetch_statistics(subject_id: str, product_id: uuid.UUID) -> list[dict[str, object]]:
+def fetch_statistics(
+    subject_id: str,
+    product_id: uuid.UUID,
+    subject_type: str = "person",
+) -> list[dict[str, object]]:
     with Session(sample_engine()) as session, session.begin():
         session.execute(
             text("SELECT set_config('didaca.subject_id', :subject_id, true)"),
             {"subject_id": subject_id},
         )
         session.execute(text("SELECT set_config('didaca.protocol', 'http-rest', true)"))
+        session.execute(
+            text("SELECT set_config('didaca.subject_type', :subject_type, true)"),
+            {"subject_type": subject_type},
+        )
         records = session.scalars(
             select(TaxStatistic)
             .where(TaxStatistic.product_id == product_id)
@@ -48,4 +56,3 @@ def fetch_statistics(subject_id: str, product_id: uuid.UUID) -> list[dict[str, o
 def database_ready() -> bool:
     with sample_engine().connect() as connection:
         return connection.scalar(text("SELECT 1")) == 1
-

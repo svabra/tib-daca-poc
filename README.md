@@ -1,6 +1,6 @@
-# BIT DiDaCa
+# BIT DaCa
 
-**DiDaCa** means **Distributed Data Catalog**. This proof of concept contains a standalone catalog,
+**DaCa** means **Distributed Data Catalog**. This proof of concept contains a standalone catalog,
 a catalog control plane, and a synthetic ESTV data product protected over both REST and direct
 PostgreSQL access.
 
@@ -81,6 +81,46 @@ curl.exe -X PATCH `
 A missing precondition returns `428`; a stale ETag returns `412`. Errors use
 `application/problem+json` and include a request ID.
 
+## Exercise the DAAIF → DaCa Golden Path
+
+Open `http://localhost:8080/poc-simulation/product-submitted`. The PoC Simulation area exposes three already-created
+DAAIF REST fixtures for each SQLite-backed demo identity. Submitting a fixture calls the open
+metadata-only endpoint `POST /api/v1/metadata-publications`; it creates an owner-scoped product,
+a quality task, and an access-governance task without granting product-data access.
+
+The endpoint is disabled by default outside the local Compose profile and is enabled there with
+`DIDACA_OPEN_METADATA_PUBLICATION=true`. It accepts only HTTP(S) REST descriptions without URL
+credentials, query strings, fragments, or secret fields. `sourceSystem + sourceProductId` is
+idempotent; a changed replay returns `409`.
+
+DAAIF can integrate against the versioned focused contract
+[`docs/openapi/daca-metadata-publication.openapi.yaml`](docs/openapi/daca-metadata-publication.openapi.yaml).
+With the local stack running, the complete interactive specification is available in
+[Swagger UI](http://localhost:8001/docs) and as [OpenAPI JSON](http://localhost:8001/openapi.json).
+Keep the focused contract in sync with the running FastAPI application using:
+
+```powershell
+npm run docs:openapi
+npm run docs:openapi:check
+```
+
+The checked contract is also served by the Catalog UI at
+`http://localhost:8080/openapi/daca-metadata-publication.openapi.yaml` so a DAAIF developer can
+download the exact integration subset without cloning the repository.
+
+The five-step quality wizard keeps DCAT-AP-CH catalog mappings separate from the local
+`DaCa Canonical Tax Ontology · PoC`. Platinum is calculated server-side only when all six stored
+proofs are present: published access governance, confirmed discoverability, technical metadata,
+business metadata, confirmed KOBY Graphify context, and confirmed mappings for the product class
+and every key field. The semantic profile is available as DCAT-oriented JSON-LD at
+`GET /api/v1/data-products/{id}/semantic-profile`; no SPARQL endpoint is exposed.
+
+Access decisions are deliberately two-phase: approval creates a timed PBAC/Rego draft and sets
+the request to `approved_policy_pending`; only successful publication to OPA and PostgreSQL sets
+it to `granted_original` or `granted_modified`. The DAAIF reference fixture can then be exercised
+at `GET http://localhost:8003/api/v1/daaif/estv.direct-tax-assessments.v1` with exactly one local
+demo identity header (`X-DiDaCa-User` or `X-DiDaCa-Machine`).
+
 ## Exercise the control plane
 
 Catalog registrations, directed grants, sync intent, deployment observations, health history,
@@ -134,6 +174,20 @@ npm run build
 npm test
 npm run lint
 ```
+
+The persistent data model for the catalog, control plane, and protected sample product is in
+[`docs/data-model/`](docs/data-model/README.md). DAAIF is treated as an external source; the
+documentation covers only the publication and workflow evidence stored by DaCa. After changing
+SQLAlchemy models, Alembic migrations, persisted JSON structures, PostgreSQL roles, functions, or
+RLS policies, regenerate and verify the model documentation:
+
+```powershell
+npm run docs:data-model
+npm run docs:data-model:check
+```
+
+The second command is part of the root `npm test` pipeline and fails when generated tables,
+columns, relationships, constraints, migration heads, or protected PostgreSQL objects drift.
 
 These root commands build/test both Angular workspaces and all Python services; `npm test` also
 runs both reviewed Rego suites with the pinned OPA image. `npm audit --omit=dev` reports no

@@ -1,10 +1,15 @@
 import { HttpClient, HttpErrorResponse, HttpHeaders, HttpResponse } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
-import { catchError, forkJoin, map, Observable, of, tap, throwError, timeout } from 'rxjs';
+import { catchError, forkJoin, map, Observable, of, switchMap, tap, throwError, timeout } from 'rxjs';
 import {
   AccessRequestSubmission,
+  AdministrativeOrganization,
   DataProduct,
   EndpointDescriptor,
+  IdentityDirectoryEntry,
+  IdentityDirectorySource,
+  IdentityGroupDetail,
+  IdentityGroupSummary,
   LineageEdge,
   LineageNode,
   OwnedAccessConsumer,
@@ -13,6 +18,7 @@ import {
   StoredAccessRequest,
 } from './catalog.models';
 import { FALLBACK_EDGES, FALLBACK_NODES, FALLBACK_OWNED_ACCESS_CONSUMERS, FALLBACK_POLICY, FALLBACK_PRODUCT, FALLBACK_PRODUCTS, FALLBACK_PROVENANCE } from './catalog.seed';
+import { DemoIdentityService } from './demo-identity.service';
 
 type Collection<T> = T[] | { items: T[] };
 type ProductWire = Partial<Omit<DataProduct, 'contact' | 'quality' | 'license'>> & {
@@ -51,55 +57,52 @@ type ProvenanceWire = {
   details: Record<string, unknown>;
   occurredAt: string;
 };
-type PolicyWire = {
+export type PolicyWire = {
   id: string;
   revision: number;
   status: 'draft' | 'published' | 'revoked';
   definition: {
     effect: 'allow' | 'deny';
-    subjects: { userIds: string[] };
+    subjects: { userIds: string[]; machineIds?: string[]; groupIds?: string[] };
     resources: { productUrns: string[]; owners: string[] };
     actions: string[];
     protocols: ('http' | 'postgresql')[];
+    grants?: NonNullable<PolicyDefinition['grants']>;
   };
   generatedRego: string;
   deployments: Array<{ target: 'opa' | 'postgresql'; observedRevision: number | null; desiredRevision: number }>;
 };
 
-const FALLBACK_OWNER_ACCESS_REQUEST: StoredAccessRequest = {
-  id: '81111111-1111-4111-8111-111111111111',
-  requestNumber: 'ZA-2026-ESTV-0001',
-  dataProductId: '11111111-1111-4111-8111-111111111111',
-  requesterId: 'beat.stalder',
-  requesterName: 'Beat Stalder',
-  requesterOrganization: 'Kanton St. Gallen',
-  contactEmail: 'beat.stalder@sg.ch',
-  consumerType: 'person',
-  machineId: null,
-  purpose: 'Kantonale Finanzanalyse und Plausibilisierung der aggregierten Bundessteuerstatistik.',
-  legalBasis: 'Amtshilfe zwischen Behörden',
-  requestedProtocol: 'http',
-  requestedVariant: 'modified',
-  validFrom: '2026-09-01',
-  validUntil: '2027-08-31',
-  notes: 'Benötigt werden ausschliesslich aggregierte Daten ohne Personenbezug.',
-  status: 'submitted',
-  createdAt: '2026-08-11T07:45:00Z',
-  updatedAt: '2026-08-11T07:45:00Z',
-};
+export interface WorkflowTaskWire {
+  id: string;
+  taskType: 'metadata_quality' | 'access_governance' | 'access_request_review' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed';
+  status: 'open' | 'in_progress' | 'completed';
+  assigneeUserId: string;
+  dataProductId: string;
+  accessRequestId: string | null;
+  simulationEventId?: string | null;
+  title: string;
+  detail: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+}
 
 @Injectable({ providedIn: 'root' })
 export class CatalogApiService {
   private readonly http = inject(HttpClient);
+  private readonly identity = inject(DemoIdentityService);
   private readonly productState = signal<DataProduct>(FALLBACK_PRODUCT);
   private readonly productsState = signal<readonly DataProduct[]>(FALLBACK_PRODUCTS);
   private readonly ownerAccessRequestState = signal<readonly StoredAccessRequest[]>([]);
   private readonly ownedAccessConsumerState = signal<readonly OwnedAccessConsumer[]>(FALLBACK_OWNED_ACCESS_CONSUMERS);
+  private readonly workflowTaskState = signal<readonly WorkflowTaskWire[]>([]);
 
   readonly product = this.productState.asReadonly();
   readonly products = this.productsState.asReadonly();
   readonly ownerAccessRequests = this.ownerAccessRequestState.asReadonly();
   readonly ownedAccessConsumers = this.ownedAccessConsumerState.asReadonly();
+  readonly workflowTasks = this.workflowTaskState.asReadonly();
   readonly ownerAccessRequestLoading = signal(true);
   readonly loading = signal(true);
   readonly usingFallback = signal(false);
@@ -112,19 +115,21 @@ export class CatalogApiService {
   constructor() {
     this.refreshProducts();
     this.refreshOwnerAccessRequestInbox();
+    this.refreshWorkflowTasks();
   }
 
   refreshProducts(): void {
     this.loading.set(true);
-    const identityHeaders = new HttpHeaders({ 'X-DiDaCa-User': 'kassandra.valdata' });
+    this.usingFallback.set(false);
+    const identityHeaders = this.identity.headers();
     forkJoin({
-      products: this.http.get<Collection<ProductWire>>('/api/v1/data-products?limit=25'),
+      products: this.http.get<Collection<ProductWire>>('/api/v1/data-products?limit=25', { headers: identityHeaders }),
       accessRequests: this.http
         .get<StoredAccessRequest[]>('/api/v1/access-requests/mine', { headers: identityHeaders })
         .pipe(catchError(() => of([]))),
       accessConsumers: this.http
         .get<OwnedAccessConsumer[]>('/api/v1/access-consumers/owned', { headers: identityHeaders })
-        .pipe(catchError(() => of(FALLBACK_OWNED_ACCESS_CONSUMERS))),
+        .pipe(catchError(() => of([]))),
     })
       .pipe(
         timeout(3000),
@@ -167,7 +172,7 @@ export class CatalogApiService {
     const current = this.productState();
     const headers = new HttpHeaders({
       'If-Match': this.etag(),
-      'X-DiDaCa-User': 'didaca-demo-editor',
+      'X-DiDaCa-User': this.identity.userId(),
     });
     const body = {
       title: patch.title,
@@ -200,7 +205,7 @@ export class CatalogApiService {
   }
 
   createAccessRequest(productId: string, request: AccessRequestSubmission): Observable<StoredAccessRequest> {
-    const headers = new HttpHeaders({ 'X-DiDaCa-User': 'kassandra.valdata' });
+    const headers = this.identity.headers();
     return this.http
       .post<StoredAccessRequest>(
         `/api/v1/data-products/${encodeURIComponent(productId)}/access-requests`,
@@ -219,7 +224,7 @@ export class CatalogApiService {
   }
 
   loadMyAccessRequests(productId: string): Observable<readonly StoredAccessRequest[]> {
-    const headers = new HttpHeaders({ 'X-DiDaCa-User': 'kassandra.valdata' });
+    const headers = this.identity.headers();
     return this.http
       .get<StoredAccessRequest[]>(
         `/api/v1/data-products/${encodeURIComponent(productId)}/access-requests/mine`,
@@ -232,12 +237,12 @@ export class CatalogApiService {
   }
 
   loadOwnerAccessRequestInbox(): Observable<readonly StoredAccessRequest[]> {
-    const headers = new HttpHeaders({ 'X-DiDaCa-User': 'kassandra.valdata' });
+    const headers = this.identity.headers();
     return this.http
       .get<StoredAccessRequest[]>('/api/v1/access-requests/inbox', { headers })
       .pipe(
         timeout(3000),
-        catchError(() => of([FALLBACK_OWNER_ACCESS_REQUEST])),
+        catchError(() => of([])),
       );
   }
 
@@ -248,6 +253,16 @@ export class CatalogApiService {
       this.ownerAccessRequestLoading.set(false);
     });
   }
+
+  refreshWorkflowTasks(): void {
+    this.http.get<WorkflowTaskWire[]>('/api/v1/tasks/mine', { headers: this.identity.headers() })
+      .pipe(timeout(3000), catchError(() => of([])))
+      .subscribe((tasks) => this.workflowTaskState.set(tasks));
+  }
+
+  identityUserId(): string { return this.identity.userId(); }
+  identityUser() { return this.identity.user(); }
+  identityHeaders(): HttpHeaders { return this.identity.headers(); }
 
   loadLineage(): Observable<{ nodes: readonly LineageNode[]; edges: readonly LineageEdge[]; provenance: readonly ProvenanceEvent[] }> {
     const id = encodeURIComponent(this.productState().id);
@@ -319,6 +334,7 @@ export class CatalogApiService {
           resources: { productId: this.productState().id, owner: policy.definition.resources.owners[0] ?? this.productState().owner },
           actions: policy.definition.actions,
           protocols: policy.definition.protocols,
+          grants: policy.definition.grants ?? [],
           generatedRego: policy.generatedRego,
           opaRevision: opa?.observedRevision ?? 0,
           postgresRevision: postgres?.observedRevision ?? 0,
@@ -331,10 +347,123 @@ export class CatalogApiService {
     );
   }
 
+  createAccessGovernance(productId: string, body: Record<string, unknown>): Observable<PolicyWire> {
+    return this.http.post<PolicyWire>(`/api/v1/data-products/${encodeURIComponent(productId)}/access-governance`, body, { headers: this.identity.headers(), observe: 'response' }).pipe(
+      map((response) => {
+        if (!response.body) throw new Error('Der Katalog hat keinen Policy-Entwurf geliefert.');
+        this.etag.set(response.headers.get('etag') ?? `"${response.body.revision}"`);
+        return response.body;
+      }),
+    );
+  }
+
+  searchDirectoryPeople(
+    q = '',
+    source: IdentityDirectorySource | '' = '',
+    organizationId = '',
+  ): Observable<IdentityDirectoryEntry[]> {
+    const params: Record<string, string> = { limit: '20' };
+    if (q.trim()) params['q'] = q.trim();
+    if (source) params['source'] = source;
+    if (organizationId) params['organization_id'] = organizationId;
+    return this.http.get<IdentityDirectoryEntry[]>('/api/v1/identity-directory/people', {
+      headers: this.identity.headers(),
+      params,
+    });
+  }
+
+  loadAdministrativeOrganizations(): Observable<AdministrativeOrganization[]> {
+    return this.http.get<AdministrativeOrganization[]>('/api/v1/identity-directory/organizations', {
+      headers: this.identity.headers(),
+    });
+  }
+
+  searchIdentityGroups(
+    q = '',
+    source: IdentityDirectorySource | '' = '',
+  ): Observable<IdentityGroupSummary[]> {
+    const params: Record<string, string> = { limit: '20' };
+    if (q.trim()) params['q'] = q.trim();
+    if (source) params['source'] = source;
+    return this.http.get<IdentityGroupSummary[]>('/api/v1/identity-directory/groups', {
+      headers: this.identity.headers(),
+      params,
+    });
+  }
+
+  loadIdentityGroup(groupId: string): Observable<IdentityGroupDetail> {
+    return this.http.get<IdentityGroupDetail>(
+      `/api/v1/identity-directory/groups/${encodeURIComponent(groupId)}`,
+      { headers: this.identity.headers() },
+    );
+  }
+
+  createIdentityGroup(body: {
+    label: string;
+    description: string;
+    memberIds: string[];
+  }): Observable<IdentityGroupDetail> {
+    return this.http.post<IdentityGroupDetail>('/api/v1/identity-directory/groups', body, {
+      headers: this.identity.headers(),
+    });
+  }
+
+  upsertAccessSetting(
+    productId: string,
+    grant: NonNullable<PolicyDefinition['grants']>[number],
+  ): Observable<PolicyWire> {
+    const url = `/api/v1/data-products/${encodeURIComponent(productId)}`;
+    return this.http.get<PolicyWire>(`${url}/policies/latest`, {
+      headers: this.identity.headers(),
+      observe: 'response',
+    }).pipe(
+      catchError((error: HttpErrorResponse) => {
+        if (error.status !== 404) return throwError(() => error);
+        return of(new HttpResponse<PolicyWire>({ body: null, headers: new HttpHeaders({ ETag: '"0"' }) }));
+      }),
+      switchMap((response) => {
+        const currentRevision = response.body?.revision ?? 0;
+        const headers = this.identity.headers().set(
+          'If-Match',
+          response.headers.get('etag') ?? `"${currentRevision}"`,
+        );
+        return this.http.put<PolicyWire>(`${url}/access-settings`, { grant }, {
+          headers,
+          observe: 'response',
+        });
+      }),
+      map((response) => {
+        if (!response.body) throw new Error('Der Katalog hat keinen Policy-Entwurf geliefert.');
+        return response.body;
+      }),
+    );
+  }
+
+  loadLatestPolicyWire(productId: string): Observable<PolicyWire> {
+    return this.http.get<PolicyWire>(
+      `/api/v1/data-products/${encodeURIComponent(productId)}/policies/latest`,
+      { headers: this.identity.headers() },
+    );
+  }
+
+  publishPolicy(productId: string, policyId: string, revision: number): Observable<PolicyWire> {
+    const headers = this.identity.headers().set('If-Match', `"${revision}"`);
+    return this.http.post<PolicyWire>(`/api/v1/data-products/${encodeURIComponent(productId)}/policies/${encodeURIComponent(policyId)}/publish`, {}, { headers }).pipe(
+      tap(() => { this.refreshProducts(); this.refreshOwnerAccessRequestInbox(); this.refreshWorkflowTasks(); }),
+    );
+  }
+
+  decideAccessRequest(requestId: string, decision: 'approve' | 'reject', grantedVariant?: 'original' | 'modified'): Observable<{ request: StoredAccessRequest; policy: PolicyWire | null }> {
+    return this.http.post<{ request: StoredAccessRequest; policy: PolicyWire | null }>(`/api/v1/access-requests/${encodeURIComponent(requestId)}/decision`, { decision, grantedVariant: grantedVariant ?? null }, { headers: this.identity.headers() }).pipe(
+      tap(() => { this.refreshOwnerAccessRequestInbox(); this.refreshWorkflowTasks(); }),
+    );
+  }
+
   private hydrateProduct(id: string): void {
+    const headers = this.identity.headers();
     forkJoin({
-      product: this.http.get<ProductWire>(`/api/v1/data-products/${encodeURIComponent(id)}`, { observe: 'response' }),
-      endpoints: this.http.get<EndpointWire[]>(`/api/v1/data-products/${encodeURIComponent(id)}/endpoints`),
+      product: this.http.get<ProductWire>(`/api/v1/data-products/${encodeURIComponent(id)}`, { headers, observe: 'response' }),
+      endpoints: this.http.get<EndpointWire[]>(`/api/v1/data-products/${encodeURIComponent(id)}/endpoints`, { headers }),
     })
       .pipe(timeout(3000), catchError(() => of(null)))
       .subscribe((result) => {
@@ -347,6 +476,7 @@ export class CatalogApiService {
   }
 
   private normalizeProduct(product: ProductWire, endpoints?: EndpointDescriptor[]): DataProduct {
+    const qualityObject = product.quality && typeof product.quality === 'object' ? product.quality : null;
     const quality = typeof product.quality === 'string'
       ? product.quality
       : product.quality
@@ -359,6 +489,10 @@ export class CatalogApiService {
       contact: typeof product.contact === 'string' ? product.contact : product.contact?.email ?? FALLBACK_PRODUCT.contact,
       license: product.license ?? FALLBACK_PRODUCT.license,
       quality,
+      qualityMedal: qualityObject && ['bronze', 'silver', 'gold', 'platinum'].includes(String(qualityObject['medal']))
+        ? qualityObject['medal'] as DataProduct['qualityMedal']
+        : undefined,
+      qualityScore: qualityObject && Number.isFinite(Number(qualityObject['score'])) ? Number(qualityObject['score']) : undefined,
       updateFrequency: product.updateFrequency ?? FALLBACK_PRODUCT.updateFrequency,
       additionalMetadata: product.additionalMetadata ?? product.metadata ?? FALLBACK_PRODUCT.additionalMetadata,
       endpoints: endpoints ?? product.endpoints ?? FALLBACK_PRODUCT.endpoints,
@@ -420,7 +554,7 @@ export class CatalogApiService {
           ...metadata,
           catalogUsage: {
             ...usage,
-            requestedByUserIds: [...new Set([...requestedIds, 'kassandra.valdata'])],
+            requestedByUserIds: [...new Set([...requestedIds, this.identity.userId()])],
           },
           accessRequest: {
             requestId: request.requestNumber,
