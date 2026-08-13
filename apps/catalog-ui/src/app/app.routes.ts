@@ -10,6 +10,11 @@ export const routes: Routes = [
     data: { preload: true },
     title: 'Meine Datenprodukte | DaCa',
   },
+  {
+    path: 'search',
+    loadComponent: () => import('./features/search/catalog-expert-search.component').then((m) => m.CatalogExpertSearchComponent),
+    title: 'Expertensuche | DaCa',
+  },
   { path: 'metadata', pathMatch: 'full', redirectTo: 'products' },
   {
     path: 'tasks',

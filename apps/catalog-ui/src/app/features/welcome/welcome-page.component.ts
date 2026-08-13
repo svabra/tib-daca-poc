@@ -1,13 +1,18 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { DacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-daca/design-system';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DataProduct, StoredAccessRequest } from '../../core/catalog.models';
 import { selectNextWelcomeHeroTheme } from './welcome-hero-theme';
-import { catalogProductMatches } from './welcome-search';
+import {
+  CATALOG_LIVE_RESULT_LIMIT,
+  CATALOG_SEARCH_MIN_LENGTH,
+  catalogSearchIsReady,
+  searchCatalogProducts,
+} from './welcome-search';
 
-type SearchStatus = 'idle' | 'empty' | 'match' | 'none';
+type SearchStatus = 'idle' | 'empty' | 'short' | 'match' | 'none';
 const HERO_THEME_STORAGE_KEY = 'daca.welcome.hero-theme';
 
 function selectSessionHeroTheme() {
@@ -74,7 +79,14 @@ function selectSessionHeroTheme() {
             </p>
           </div>
 
-          <form class="welcome-search" role="search" (submit)="submitSearch($event)">
+          <form
+            class="welcome-search"
+            role="search"
+            [class.is-expanded]="searchExpanded()"
+            (submit)="submitSearch($event)"
+            (focusin)="expandSearch()"
+            (focusout)="collapseSearchIfFocusLeaves($event)"
+          >
             <div>
               <p class="daca-eyebrow">Katalog durchsuchen</p>
               <h2>Wonach suchen Sie?</h2>
@@ -89,8 +101,11 @@ function selectSessionHeroTheme() {
                 placeholder="z. B. Steuerstatistik oder ESTV"
                 aria-describedby="catalog-search-feedback"
                 [attr.aria-invalid]="searchStatus() === 'empty' ? 'true' : null"
+                [attr.aria-expanded]="searchExpanded()"
+                aria-controls="catalog-search-feedback"
                 [value]="searchQuery()"
                 (input)="updateSearch($any($event.target).value)"
+                (keydown.escape)="collapseSearch($event)"
               >
               <button class="daca-button" type="submit">Suchen</button>
             </div>
@@ -99,8 +114,11 @@ function selectSessionHeroTheme() {
                 @case ('empty') {
                   <p class="is-warning">Bitte geben Sie einen Suchbegriff ein.</p>
                 }
+                @case ('short') {
+                  <p class="is-hint">Geben Sie mindestens {{ searchMinimumLength }} Zeichen ein.</p>
+                }
                 @case ('match') {
-                  <p class="is-match">{{ searchResults().length }} {{ searchResults().length === 1 ? 'Datenprodukt gefunden' : 'Datenprodukte gefunden' }}</p>
+                  <p class="is-match">{{ searchResultCount() }} {{ searchResultCount() === 1 ? 'Datenprodukt gefunden' : 'Datenprodukte gefunden' }}</p>
                   <ul class="welcome-search-results" aria-label="Gefundene Datenprodukte">
                     @for (result of searchResults(); track result.id) {
                       <li>
@@ -111,6 +129,11 @@ function selectSessionHeroTheme() {
                       </li>
                     }
                   </ul>
+                  @if (searchResultCount() > searchResults().length) {
+                    <a class="welcome-search-all" [routerLink]="['/search']" [queryParams]="{ q: searchQuery().trim() }">
+                      Alle {{ searchResultCount() }} Ergebnisse in der Expertensuche anzeigen
+                    </a>
+                  }
                 }
                 @case ('none') {
                   <p>Keine Datenprodukte für diesen Suchbegriff gefunden.</p>
@@ -270,6 +293,7 @@ function selectSessionHeroTheme() {
 })
 export class WelcomePageComponent {
   readonly api = inject(CatalogApiService);
+  private readonly router = inject(Router);
   readonly product = computed(() => this.api.product());
   readonly productTitle = computed(() =>
     this.product().globalId === 'urn:daca:ch:estv:tax-statistics-by-canton'
@@ -284,6 +308,9 @@ export class WelcomePageComponent {
   readonly searchQuery = signal('');
   readonly searchStatus = signal<SearchStatus>('idle');
   readonly searchResults = signal<readonly DataProduct[]>([]);
+  readonly searchResultCount = signal(0);
+  readonly searchExpanded = signal(false);
+  readonly searchMinimumLength = CATALOG_SEARCH_MIN_LENGTH;
   readonly ownerRequests = this.api.ownerAccessRequests;
   readonly ownerInboxLoading = this.api.ownerAccessRequestLoading;
   readonly simulationTasks = computed(() => this.api.workflowTasks().filter((task) => task.taskType.startsWith('simulation_')));
@@ -300,31 +327,59 @@ export class WelcomePageComponent {
 
   updateSearch(value: string): void {
     this.searchQuery.set(value);
-    this.searchStatus.set('idle');
+    const normalizedQuery = value.trim();
+    if (!normalizedQuery) {
+      this.resetSearch('idle');
+      return;
+    }
+    if (!catalogSearchIsReady(normalizedQuery)) {
+      this.resetSearch('short');
+      return;
+    }
+    this.runLiveSearch(normalizedQuery);
+  }
+
+  expandSearch(): void {
+    this.searchExpanded.set(true);
+  }
+
+  collapseSearchIfFocusLeaves(event: FocusEvent): void {
+    const form = event.currentTarget as HTMLElement;
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && form.contains(nextTarget)) return;
+    this.searchExpanded.set(false);
+  }
+
+  collapseSearch(event: Event): void {
+    event.preventDefault();
+    this.searchExpanded.set(false);
+    (event.currentTarget as HTMLInputElement).blur();
   }
 
   submitSearch(event: Event): void {
     event.preventDefault();
-    const query = this.searchQuery();
-    if (!query.trim()) {
-      this.searchResults.set([]);
-      this.searchStatus.set('empty');
+    const query = this.searchQuery().trim();
+    if (!query) {
+      this.resetSearch('empty');
       return;
     }
+    if (!catalogSearchIsReady(query)) {
+      this.resetSearch('short');
+      return;
+    }
+    void this.router.navigate(['/search'], { queryParams: { q: query } });
+  }
 
-    const matches = this.api.products().filter((candidate) => catalogProductMatches(query, [
-      candidate.title,
-      candidate.description,
-      candidate.owner,
-      candidate.domain,
-      candidate.globalId,
-      candidate.updateFrequency,
-      ...candidate.keywords,
-      ...candidate.endpoints.map((endpoint) => endpoint.title),
-      JSON.stringify(candidate.additionalMetadata),
-      'Öffentliche Finanzen Steuern Kantone Gemeinden Statistik Bundessteuern',
-    ]));
-    this.searchResults.set(matches);
-    this.searchStatus.set(matches.length > 0 ? 'match' : 'none');
+  private runLiveSearch(query: string): void {
+    const allMatches = searchCatalogProducts(this.api.products(), query);
+    this.searchResultCount.set(allMatches.length);
+    this.searchResults.set(allMatches.slice(0, CATALOG_LIVE_RESULT_LIMIT));
+    this.searchStatus.set(allMatches.length > 0 ? 'match' : 'none');
+  }
+
+  private resetSearch(status: SearchStatus): void {
+    this.searchResultCount.set(0);
+    this.searchResults.set([]);
+    this.searchStatus.set(status);
   }
 }

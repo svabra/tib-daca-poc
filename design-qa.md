@@ -68,6 +68,61 @@ final result: passed
 
 ---
 
+# Design QA — Expanding landing-page search widget
+
+## Comparison target
+
+- Source visual truth: the two user-provided landing-page screenshots in the current conversation. The selected expanded-state reference is the second attachment (1885 × 1341 px); the first attachment (1797 × 1393 px) establishes the compact state.
+- Rendered implementation: `output/playwright/welcome-search-expanded-three-results.png`.
+- Additional implementation evidence: `output/playwright/welcome-search-collapsed.png`, `output/playwright/welcome-search-expanded-empty.png`, `output/playwright/welcome-search-expanded-one-result.png`, and `output/playwright/welcome-search-expanded-mobile.png`.
+- Desktop viewport: 1797 × 1393 CSS pixels at device density 1. Source and implementation use browser-chrome screenshots at effectively the same desktop scale; comparison focused on the app-owned hero region.
+- Mobile viewport: 390 × 844 CSS pixels at device density 1; document client width is 375 px because of the visible scrollbar.
+- Compared state: German landing page with Kassandra Valdata, search focused, and three live-result previews for `st`.
+
+## Findings
+
+- No actionable P0, P1, or P2 differences remain.
+- The expanded widget matches the reference's right-side placement and occupies about four fifths of the hero's inner height. It expands toward the left without crossing the hero boundary.
+- A fixed 540 px expanded widget and 318 px feedback region keep the hero at exactly 661.33 px for both one and seven matching products, removing result-count layout shifts.
+
+## Required fidelity surfaces
+
+- Fonts and typography: the existing shared federal type stack, heading weights, red eyebrow, compact labels, and result hierarchy were preserved. No typography was redesigned.
+- Spacing and layout rhythm: the compact widget measures 488.47 × 286 px; the expanded widget measures 560.47 × 540 px. The hero changes height once from 607.71 to 661.33 px on focus, then remains fixed while results change.
+- Colors and visual tokens: the implementation preserves federal red, BIT blue, white translucent search surface, existing border tokens, and the reference's restrained shadow.
+- Image quality and asset fidelity: the active responsive hero image remains the existing optimized AVIF/WebP asset with its established crop and loading behavior. No asset was replaced or approximated.
+- Copy and content: the search title, input, live-result count, product labels, and Expertensuche link are unchanged from the approved flow.
+- Motion and accessibility: the 240 ms expansion uses a short easing curve, `aria-expanded`, keyboard focus, focus-within behavior, Escape-to-collapse, and a no-animation `prefers-reduced-motion` variant.
+
+## Full-view and focused evidence
+
+- Full-view desktop comparison: `output/playwright/welcome-search-expanded-three-results.png` shows the expanded panel, complete hero, and stable following `Handlungsbedarf` section at the reference viewport.
+- Focused state comparison: the compact, focused-empty, one-result, and three-result captures verify the intended animation endpoints and fixed result surface. A separate crop was unnecessary because the search labels and all three rows are legible at original resolution.
+- Responsive evidence: `output/playwright/welcome-search-expanded-mobile.png` shows the full-width stacked input/button treatment and three results. Browser measurement reported `scrollWidth = 375` and `clientWidth = 375`, so no horizontal overflow exists.
+
+## Comparison history
+
+1. The previous implementation let live-result content determine the search widget's height, making the content below the hero move when the result count changed.
+2. The widget received explicit compact and expanded dimensions, a focus-driven state, and a fixed feedback area sized for three preview results.
+3. Post-fix browser measurements show identical hero and search dimensions for seven matches and one match: hero 661.33 px, search widget 540 px.
+
+## Primary interactions and runtime checks
+
+- Clicked the empty search input and verified immediate expansion before typing.
+- Entered `st` and verified three preview cards plus the Expertensuche link.
+- Replaced it with `mehrwertsteuer` and verified one preview card without any hero-height change.
+- Verified the 390 px mobile layout and absence of horizontal overflow.
+- Browser console: 0 errors and 0 warnings.
+- Automated checks: 24 unit tests passed; production build passed.
+
+## Follow-up polish
+
+- P3: the reserved whitespace below a single result is intentional because it prevents layout movement; it can later host recent searches or suggested topics if desired.
+
+final result: passed
+
+---
+
 # Design QA — Federal top bar
 
 ## Comparison target
