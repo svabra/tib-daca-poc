@@ -11,16 +11,16 @@ The catalog policy revision is projected into this database by product ID and re
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/sample-data-product/app/models.py`](../../services/sample-data-product/app/models.py)
-- Alembic head: `0002_timed_entitlements`
-- Schema fingerprint: `66b6fe58d4af6144`
-- Migration fingerprint: `a95356703dd3bee2`
+- Alembic head: `0003_weekly_availability`
+- Schema fingerprint: `67830d4b629f4cae`
+- Migration fingerprint: `62ec28e96d141cf0`
 - Tables: `3`
 
 ## Domain status vocabulary
 
 - Entitlement subject type is `person` or `machine`; action is currently `data.read`.
 - Protocols are `http-rest` and `postgresql`; variants are `original` and `modified`.
-- An entitlement is effective only when `active` is true and the current date is between `valid_from` and `valid_until` inclusive.
+- An entitlement is effective only when `active` is true, the current date is between `valid_from` and `valid_until` inclusive, and any optional weekday/time window matches in its IANA time zone. Window end time is exclusive.
 
 ## Persisted structured values
 
@@ -44,6 +44,10 @@ erDiagram
         date valid_from
         date valid_until
         string data_variant
+        string weekly_days
+        time weekly_start_time
+        time weekly_end_time
+        string weekly_time_zone
         bigint policy_revision
         boolean active
     }
@@ -90,6 +94,10 @@ Time-bounded person or machine grants used by forced RLS.
 | `valid_from` | `DATE` | no | — | `0001-01-01` |
 | `valid_until` | `DATE` | no | — | `9999-12-31` |
 | `data_variant` | `VARCHAR(32)` | no | — | `original` |
+| `weekly_days` | `VARCHAR(32)` | yes | — | — |
+| `weekly_start_time` | `TIME` | yes | — | — |
+| `weekly_end_time` | `TIME` | yes | — | — |
+| `weekly_time_zone` | `VARCHAR(100)` | yes | — | — |
 | `policy_revision` | `BIGINT` | no | — | — |
 | `active` | `BOOLEAN` | no | — | `True` |
 

@@ -23,6 +23,11 @@ export const routes: Routes = [
     title: 'Aufgaben | DaCa',
   },
   {
+    path: 'governance-submissions/:id',
+    loadComponent: () => import('./features/tasks/governance-review.component').then((m) => m.GovernanceReviewComponent),
+    title: 'Publikationsfreigabe | DaCa',
+  },
+  {
     path: 'poc-simulation',
     pathMatch: 'full',
     loadComponent: () => import('./features/poc-simulation/poc-simulation-hub.component').then((m) => m.PocSimulationHubComponent),

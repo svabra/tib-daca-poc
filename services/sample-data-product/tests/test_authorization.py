@@ -21,7 +21,7 @@ def test_decision_input_uses_trusted_resource_attributes() -> None:
     assert document["resource"]["owner"] == "ESTV"
     assert document["endpoint"]["protocol"] == "http-rest"
     assert document["subject"]["type"] == "person"
-    assert document["context"]["currentDate"]
+    assert document["context"]["requestTimestamp"].endswith("Z")
 
 
 def test_decision_input_supports_machine_identity_and_daaif_product() -> None:

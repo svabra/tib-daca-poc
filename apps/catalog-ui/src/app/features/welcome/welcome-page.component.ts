@@ -161,11 +161,11 @@ function selectSessionHeroTheme() {
           <div class="daca-card welcome-alert-empty" aria-live="polite">Aufgaben werden geladen…</div>
         } @else if (actionCount()) {
           <div class="welcome-alert-list">
-            @for (task of simulationTasks(); track task.id) {
+            @for (task of actionTasks(); track task.id) {
               <article class="daca-card welcome-alert-item is-simulation-alert">
                 <span class="welcome-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5 21 20H3L12 3.5Z"/><path d="M12 9v5M12 17.2v.2"/></svg></span>
                 <div class="welcome-alert-copy"><div><span>{{ task.taskType === 'simulation_isbo_restriction' ? 'Dringend' : 'Prüfung nötig' }}</span><time [attr.datetime]="task.createdAt">{{ task.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</time></div><h3>{{ task.title }}</h3><p>{{ task.detail }}</p></div>
-                <a class="daca-button is-secondary" [routerLink]="['/products', task.dataProductId, 'overview']">Aufgabe öffnen</a>
+                <a class="daca-button is-secondary" [routerLink]="taskRoute(task)">Aufgabe öffnen</a>
               </article>
             }
             @for (request of ownerRequests(); track request.id) {
@@ -313,8 +313,8 @@ export class WelcomePageComponent {
   readonly searchMinimumLength = CATALOG_SEARCH_MIN_LENGTH;
   readonly ownerRequests = this.api.ownerAccessRequests;
   readonly ownerInboxLoading = this.api.ownerAccessRequestLoading;
-  readonly simulationTasks = computed(() => this.api.workflowTasks().filter((task) => task.taskType.startsWith('simulation_')));
-  readonly actionCount = computed(() => this.ownerRequests().length + this.simulationTasks().length);
+  readonly actionTasks = computed(() => this.api.workflowTasks().filter((task) => task.taskType.startsWith('simulation_') || task.taskType === 'publication_approval'));
+  readonly actionCount = computed(() => this.ownerRequests().length + this.actionTasks().length);
   readonly heroTheme = selectSessionHeroTheme();
   readonly heroAvifSrcset = `/assets/${this.heroTheme.assetName}-960.avif 960w, /assets/${this.heroTheme.assetName}-1600.avif 1600w`;
   readonly heroWebpSrcset = `/assets/${this.heroTheme.assetName}-960.webp 960w, /assets/${this.heroTheme.assetName}-1600.webp 1600w`;
@@ -323,6 +323,11 @@ export class WelcomePageComponent {
 
   requestProductTitle(request: StoredAccessRequest): string {
     return this.api.products().find((product) => product.id === request.dataProductId)?.title ?? 'Datenprodukt';
+  }
+
+  taskRoute(task: { taskType: string; dataProductId: string; governanceSubmissionId?: string | null }): unknown[] {
+    if (task.taskType === 'publication_approval' && task.governanceSubmissionId) return ['/governance-submissions', task.governanceSubmissionId];
+    return ['/products', task.dataProductId, 'overview'];
   }
 
   updateSearch(value: string): void {

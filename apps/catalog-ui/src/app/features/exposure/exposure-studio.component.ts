@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-daca/design-system';
 import { Subscription } from 'rxjs';
@@ -24,6 +24,22 @@ import {
 type SubjectType = 'person' | 'machine' | 'group';
 type PublicationState = 'draft' | 'activating' | 'active';
 const DIRECTORY_SEARCH_DEBOUNCE_MS = 250;
+
+function localIsoDate(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function journeyDateRange(): [string, string] {
+  const start = new Date();
+  const end = new Date(start);
+  end.setFullYear(end.getFullYear() + 1);
+  return [localIsoDate(start), localIsoDate(end)];
+}
+
+const [JOURNEY_START_DATE, JOURNEY_END_DATE] = journeyDateRange();
 
 @Component({
   selector: 'daca-exposure-studio',
@@ -60,6 +76,48 @@ const DIRECTORY_SEARCH_DEBOUNCE_MS = 250;
       <a [routerLink]="['/products', product().id, 'metadata']">Metadaten ansehen</a>
     </section>
 
+    @if (isJourneyProduct()) {
+      <div class="exposure-layout">
+        <section class="daca-card exposure-form">
+          <div class="daca-card-header"><div><p class="daca-eyebrow">Customer Journey · Gemeinsame Review-Ansicht</p><h2>Drei Empfänger nach denselben Bedingungen freigeben</h2></div><daca-status-badge tone="orange">Vier-Augen-Prinzip</daca-status-badge></div>
+          <div class="daca-card-body">
+            <p>Joel Ruod übermittelt einen unveröffentlichten Policy-Entwurf. Erst Thomas Kriegli kann exakt diese Revision genehmigen.</p>
+            @if (linkedAccessRequest(); as request) {
+              <p class="daca-alert" role="status" data-testid="journey-linked-access-request"><strong>{{ request.requestNumber }}:</strong> Die Anfrage von {{ request.requesterName }} wird über den bestätigten Snapshot der Gruppe Kanton St. Gallen erfüllt.</p>
+            }
+            <div class="owner-task-list">
+              <article class="daca-card owner-task-card"><div class="owner-task-priority"></div><div class="owner-task-main"><div><span>Gruppe · Kanton</span><code>kanton-st-gallen</code></div><h3>Kanton St. Gallen</h3><p>REST · Originaldaten · Mitgliedersnapshot beim Übermitteln</p></div></article>
+              <article class="daca-card owner-task-card"><div class="owner-task-priority"></div><div class="owner-task-main"><div><span>Gruppe · Bundesamt</span><code>efd-efv-bundestresorerie</code></div><h3>EFD – EFV / Bundestresorerie</h3><p>REST · Originaldaten · Daniel Aebischer im aktuellen Snapshot</p></div></article>
+              <article class="daca-card owner-task-card"><div class="owner-task-priority"></div><div class="owner-task-main"><div><span>Person · Approver</span><code>thomas.kriegli</code></div><h3>Thomas Kriegli</h3><p>Persönlicher REST-Zugriff zusätzlich zur Vier-Augen-Freigabe</p></div></article>
+            </div>
+            <section class="exposure-rule-section">
+              <div class="exposure-section-heading"><div><p class="daca-eyebrow">Gültigkeit und PBAC</p><h3>Durchgehend gültig</h3></div><span>24/7</span></div>
+              <div class="exposure-period-grid">
+                <label>Gültig ab<input type="date" [value]="journeyStartDate()" (input)="journeyStartDate.set($any($event.target).value)"></label>
+                <label>Gültig bis<input type="date" [value]="journeyEndDate()" [min]="journeyStartDate()" (input)="journeyEndDate.set($any($event.target).value)"></label>
+                <div class="exposure-timezone"><span>Zeitfenster</span><strong>Alle Wochentage · 24 Stunden</strong><small>Keine zusätzliche Wochenzeit-Einschränkung</small></div>
+              </div>
+            </section>
+            <div class="exposure-channel-grid">
+              <label class="exposure-koby-consent is-selected"><input type="checkbox" role="switch" [checked]="journeyKoby()" (change)="journeyKoby.set($any($event.target).checked)"><span><strong>KOBY über MCP aktivieren</strong><small>Metadaten und Kontext; keine Produktdaten oder Zugangsdaten.</small></span><b>MCP</b></label>
+              <label class="exposure-koby-consent is-selected"><input type="checkbox" role="switch" [checked]="journeyI14y()" (change)="journeyI14y.set($any($event.target).checked)"><span><strong>I14Y aktivieren</strong><small>Nur Metadaten; keine Produktdaten oder Zugangsdaten. Simulierte Outbox.</small></span><b>I14Y</b></label>
+              <label class="exposure-koby-consent is-selected"><input type="checkbox" role="switch" [checked]="journeyBar()" (change)="journeyBar.set($any($event.target).checked)"><span><strong>Automatische BAR-Archivierung</strong><small>20 Jahre Aufbewahrung; nur persistierte Governance-Evidenz, kein Netzwerkaufruf.</small></span><b>BAR</b></label>
+            </div>
+          </div>
+        </section>
+        <aside class="daca-card exposure-review">
+          <div class="daca-card-header"><div><p class="daca-eyebrow">Übermittlung</p><h2>Publikation beantragen</h2></div></div>
+          <div class="daca-card-body">
+            <dl class="exposure-review-list"><div><dt>Empfänger</dt><dd>2 Gruppen · 1 Person</dd></div><div><dt>Protokoll</dt><dd>HTTP REST</dd></div><div><dt>Datenvariante</dt><dd>Original</dd></div><div><dt>Zeitfenster</dt><dd>24/7</dd></div><div><dt>KOBY / MCP</dt><dd>{{ journeyKoby() ? 'Aktiviert' : 'Deaktiviert' }}</dd></div><div><dt>I14Y</dt><dd>{{ journeyI14y() ? 'Aktiviert' : 'Deaktiviert' }}</dd></div><div><dt>BAR</dt><dd>{{ journeyBar() ? '20 Jahre' : 'Deaktiviert' }}</dd></div></dl>
+            <div class="exposure-guardrail"><strong>Niemand erhält sofort Zugriff</strong><p>Die Policy bleibt bis zu Thomas’ Entscheid und den bestätigten OPA-/PostgreSQL-Deployments ohne Wirkung.</p></div>
+            @if (journeyNotice()) { <p class="daca-alert" role="status">{{ journeyNotice() }}</p> }
+            @if (publicationError()) { <p class="daca-alert is-error" role="alert">{{ publicationError() }}</p> }
+            <button class="daca-button exposure-primary-action" data-testid="journey-submit-governance" type="button" [disabled]="journeySubmitting() || !dateValidForJourney()" (click)="submitJourneyGovernance()">{{ journeySubmitting() ? 'Wird Thomas Kriegli übermittelt …' : 'Zur Vier-Augen-Genehmigung übermitteln' }}</button>
+            <a class="daca-button is-secondary exposure-secondary-action" [routerLink]="['/products', product().id, 'quality']">Metadaten-Vorprüfung öffnen</a>
+          </div>
+        </aside>
+      </div>
+    } @else {
     <div class="exposure-layout">
       <form id="exposure-form" class="daca-card exposure-form" (submit)="$event.preventDefault(); activate()">
         <section class="exposure-rule-section" aria-labelledby="audience-title">
@@ -250,6 +308,7 @@ const DIRECTORY_SEARCH_DEBOUNCE_MS = 250;
         </div>
       </aside>
     </div>
+    }
   `,
 })
 export class ExposureStudioComponent implements OnDestroy {
@@ -286,17 +345,35 @@ export class ExposureStudioComponent implements OnDestroy {
   readonly publicationState = signal<PublicationState>('draft');
   readonly activatedAt = signal('');
   readonly publicationError = signal<string | null>(null);
+  readonly journeyStartDate = signal(JOURNEY_START_DATE);
+  readonly journeyEndDate = signal(JOURNEY_END_DATE);
+  readonly journeyKoby = signal(true);
+  readonly journeyI14y = signal(true);
+  readonly journeyBar = signal(true);
+  readonly journeySubmitting = signal(false);
+  readonly journeyNotice = signal<string | null>(null);
 
   private personSearchTimer: ReturnType<typeof setTimeout> | null = null;
   private groupSearchTimer: ReturnType<typeof setTimeout> | null = null;
   private personSearchSubscription: Subscription | null = null;
   private groupSearchSubscription: Subscription | null = null;
+  private linkedRequestInitialized = false;
 
   readonly subjectId = computed(() => this.subjectType() === 'person'
     ? this.selectedPerson()?.id ?? ''
     : this.subjectType() === 'group'
       ? this.selectedGroup()?.id ?? ''
       : this.machineIdentity().trim());
+  readonly isJourneyProduct = computed(() => {
+    const sourceProductId = String(this.product().additionalMetadata['sourceProductId'] ?? '');
+    return sourceProductId === 'daaif:kantonale-gewerbesteuer-soll-ist-2022-2026:v1'
+      || this.product().title.includes('Kantonale Gewerbesteuer');
+  });
+  readonly linkedAccessRequestId = this.route.snapshot.queryParamMap.get('request');
+  readonly linkedAccessRequest = computed(() => this.linkedAccessRequestId
+    ? this.api.ownerAccessRequests().find((request) => request.id === this.linkedAccessRequestId) ?? null
+    : null);
+  readonly dateValidForJourney = computed(() => isExposureDateRangeValid(this.journeyStartDate(), this.journeyEndDate()));
   readonly subjectValid = computed(() => isExposureSubjectIdValid(this.subjectId()));
   readonly subjectTypeLabel = computed(() => this.subjectType() === 'person' ? 'Persönlich · eIAM' : this.subjectType() === 'machine' ? 'Maschine · M2M' : 'Gruppenzugriff');
   readonly subjectSummary = computed(() => this.subjectType() === 'person'
@@ -333,6 +410,19 @@ export class ExposureStudioComponent implements OnDestroy {
 
   constructor() {
     this.api.selectProduct(this.route.snapshot.paramMap.get('id'));
+    effect(() => {
+      const request = this.linkedAccessRequest();
+      if (!request || this.linkedRequestInitialized) return;
+      this.linkedRequestInitialized = true;
+      this.startDate.set(request.validFrom);
+      this.endDate.set(request.validUntil);
+      this.journeyStartDate.set(request.validFrom);
+      this.journeyEndDate.set(request.validUntil);
+      if (request.consumerType === 'machine' && request.machineId) {
+        this.subjectType.set('machine');
+        this.machineIdentity.set(request.machineId);
+      }
+    });
     this.api.loadAdministrativeOrganizations().subscribe({
       next: (organizations) => this.organizations.set(organizations),
     });
@@ -503,12 +593,54 @@ export class ExposureStudioComponent implements OnDestroy {
       validFrom: this.startDate(), validUntil: this.endDate(), dataVariant: 'original',
       metadataChannels: { kobyMcp: this.kobyAllowed(), i14y: this.i14yAllowed() },
     };
-    this.api.upsertAccessSetting(this.product().id, grant).subscribe({
+    const accessRequestFulfillments = this.linkedAccessRequestId ? [{
+      accessRequestId: this.linkedAccessRequestId,
+      fulfillmentSubject: { type: this.subjectType(), id: this.subjectId() },
+    }] : [];
+    this.api.upsertAccessSetting(this.product().id, grant, accessRequestFulfillments).subscribe({
       next: (draft) => this.api.publishPolicy(this.product().id, draft.id, draft.revision).subscribe({
         next: () => { this.publicationState.set('activating'); this.pollActivation(0); },
         error: (error) => this.publicationError.set(error?.error?.detail ?? 'Die Zugriffseinstellung konnte nicht aktiviert werden.'),
       }),
       error: (error) => this.publicationError.set(error?.error?.detail ?? 'Der Policy-Entwurf konnte nicht erstellt werden.'),
+    });
+  }
+
+  submitJourneyGovernance(): void {
+    if (!this.dateValidForJourney() || this.journeySubmitting()) return;
+    this.journeySubmitting.set(true);
+    this.publicationError.set(null);
+    this.journeyNotice.set(null);
+    const common = {
+      actions: ['data.read'],
+      protocols: ['http'],
+      validFrom: this.journeyStartDate(),
+      validUntil: this.journeyEndDate(),
+      dataVariant: 'original',
+      metadataChannels: { kobyMcp: this.journeyKoby(), i14y: this.journeyI14y() },
+    };
+    this.api.createGovernanceSubmission(this.product().id, {
+      discoverable: true,
+      discoverabilityConfirmed: true,
+      grants: [
+        { ...common, subject: { type: 'group', id: 'kanton-st-gallen' } },
+        { ...common, subject: { type: 'group', id: 'efd-efv-bundestresorerie' } },
+        { ...common, subject: { type: 'person', id: 'thomas.kriegli' } },
+      ],
+      barArchive: { enabled: this.journeyBar(), retentionYears: 20 },
+      accessRequestFulfillments: this.linkedAccessRequestId ? [{
+        accessRequestId: this.linkedAccessRequestId,
+        fulfillmentSubject: { type: 'group', id: 'kanton-st-gallen' },
+      }] : [],
+    }).subscribe({
+      next: (submission) => {
+        this.journeySubmitting.set(false);
+        this.journeyNotice.set(`Zur Prüfung übermittelt. Thomas Kriegli hat die Aufgabe für Policy-Revision ${submission.policyRevision} erhalten.`);
+      },
+      error: (error) => {
+        this.journeySubmitting.set(false);
+        this.publicationError.set(error?.error?.detail ?? 'Die Governance-Einstellungen konnten nicht übermittelt werden.');
+      },
     });
   }
 

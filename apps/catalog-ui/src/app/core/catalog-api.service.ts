@@ -5,6 +5,7 @@ import {
   AccessRequestSubmission,
   AdministrativeOrganization,
   DataProduct,
+  GovernanceSubmission,
   EndpointDescriptor,
   IdentityDirectoryEntry,
   IdentityDirectorySource,
@@ -75,12 +76,13 @@ export type PolicyWire = {
 
 export interface WorkflowTaskWire {
   id: string;
-  taskType: 'metadata_quality' | 'access_governance' | 'access_request_review' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed';
+  taskType: 'metadata_quality' | 'access_governance' | 'access_request_review' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed' | 'publication_approval' | 'governance_correction';
   status: 'open' | 'in_progress' | 'completed';
   assigneeUserId: string;
   dataProductId: string;
   accessRequestId: string | null;
   simulationEventId?: string | null;
+  governanceSubmissionId?: string | null;
   title: string;
   detail: string;
   createdAt: string;
@@ -166,6 +168,41 @@ export class CatalogApiService {
       this.etag.set(`"${cached.revision}"`);
     }
     this.hydrateProduct(id);
+  }
+
+  loadProduct(id: string): Observable<DataProduct> {
+    const headers = this.identity.headers();
+    return forkJoin({
+      product: this.http.get<ProductWire>(
+        `/api/v1/data-products/${encodeURIComponent(id)}`,
+        { headers, observe: 'response' },
+      ),
+      endpoints: this.http.get<EndpointWire[]>(
+        `/api/v1/data-products/${encodeURIComponent(id)}/endpoints`,
+        { headers },
+      ),
+    }).pipe(
+      timeout(3000),
+      map((result) => {
+        if (!result.product.body || result.product.body.id !== id) {
+          throw new Error('The catalog returned a different or empty product.');
+        }
+        const product = this.normalizeProduct(
+          result.product.body,
+          result.endpoints.map((endpoint) => this.normalizeEndpoint(endpoint)),
+        );
+        this.productState.set(product);
+        this.productsState.update((products) => {
+          const existing = products.some((item) => item.id === product.id);
+          return existing
+            ? products.map((item) => (item.id === product.id ? product : item))
+            : [...products, product];
+        });
+        this.etag.set(result.product.headers.get('etag') ?? `"${product.revision}"`);
+        this.usingFallback.set(false);
+        return product;
+      }),
+    );
   }
 
   updateMetadata(patch: Partial<DataProduct>): Observable<DataProduct> {
@@ -266,9 +303,10 @@ export class CatalogApiService {
 
   loadLineage(): Observable<{ nodes: readonly LineageNode[]; edges: readonly LineageEdge[]; provenance: readonly ProvenanceEvent[] }> {
     const id = encodeURIComponent(this.productState().id);
+    const headers = this.identity.headers();
     return forkJoin({
-      lineage: this.http.get<LineageWire>(`/api/v1/data-products/${id}/lineage`),
-      provenance: this.http.get<ProvenanceWire[]>(`/api/v1/data-products/${id}/provenance`),
+      lineage: this.http.get<LineageWire>(`/api/v1/data-products/${id}/lineage`, { headers }),
+      provenance: this.http.get<ProvenanceWire[]>(`/api/v1/data-products/${id}/provenance`, { headers }),
     }).pipe(
       timeout(3000),
       map(({ lineage, provenance }) => {
@@ -314,7 +352,9 @@ export class CatalogApiService {
 
   loadPolicy(): Observable<PolicyDefinition> {
     const id = encodeURIComponent(this.productState().id);
-    return this.http.get<{ items: PolicyWire[] }>(`/api/v1/data-products/${id}/policies`).pipe(
+    return this.http.get<{ items: PolicyWire[] }>(`/api/v1/data-products/${id}/policies`, {
+      headers: this.identity.headers(),
+    }).pipe(
       timeout(3000),
       map((response) => response.items[0]),
       map((policy) => {
@@ -354,6 +394,39 @@ export class CatalogApiService {
         this.etag.set(response.headers.get('etag') ?? `"${response.body.revision}"`);
         return response.body;
       }),
+    );
+  }
+
+  createGovernanceSubmission(productId: string, body: Record<string, unknown>): Observable<GovernanceSubmission> {
+    return this.http.post<GovernanceSubmission>(
+      `/api/v1/data-products/${encodeURIComponent(productId)}/governance-submissions`,
+      body,
+      { headers: this.identity.headers() },
+    ).pipe(tap(() => this.refreshWorkflowTasks()));
+  }
+
+  loadGovernanceSubmission(submissionId: string): Observable<{ submission: GovernanceSubmission; etag: string }> {
+    return this.http.get<GovernanceSubmission>(
+      `/api/v1/governance-submissions/${encodeURIComponent(submissionId)}`,
+      { headers: this.identity.headers(), observe: 'response' },
+    ).pipe(map((response) => {
+      if (!response.body) throw new Error('Der Governance-Snapshot ist leer.');
+      return { submission: response.body, etag: response.headers.get('etag') ?? `"${response.body.revision}"` };
+    }));
+  }
+
+  decideGovernanceSubmission(
+    submissionId: string,
+    revision: number,
+    policyRevision: number,
+    decision: 'approve' | 'reject',
+    comment: string | null,
+  ): Observable<GovernanceSubmission> {
+    const headers = this.identity.headers().set('If-Match', `"${revision}"`);
+    return this.http.post<GovernanceSubmission>(
+      `/api/v1/governance-submissions/${encodeURIComponent(submissionId)}/decision`,
+      { decision, policyRevision, comment },
+      { headers },
     );
   }
 
@@ -411,6 +484,10 @@ export class CatalogApiService {
   upsertAccessSetting(
     productId: string,
     grant: NonNullable<PolicyDefinition['grants']>[number],
+    accessRequestFulfillments: Array<{
+      accessRequestId: string;
+      fulfillmentSubject: { type: 'person' | 'machine' | 'group'; id: string };
+    }> = [],
   ): Observable<PolicyWire> {
     const url = `/api/v1/data-products/${encodeURIComponent(productId)}`;
     return this.http.get<PolicyWire>(`${url}/policies/latest`, {
@@ -427,7 +504,7 @@ export class CatalogApiService {
           'If-Match',
           response.headers.get('etag') ?? `"${currentRevision}"`,
         );
-        return this.http.put<PolicyWire>(`${url}/access-settings`, { grant }, {
+        return this.http.put<PolicyWire>(`${url}/access-settings`, { grant, accessRequestFulfillments }, {
           headers,
           observe: 'response',
         });
@@ -460,19 +537,7 @@ export class CatalogApiService {
   }
 
   private hydrateProduct(id: string): void {
-    const headers = this.identity.headers();
-    forkJoin({
-      product: this.http.get<ProductWire>(`/api/v1/data-products/${encodeURIComponent(id)}`, { headers, observe: 'response' }),
-      endpoints: this.http.get<EndpointWire[]>(`/api/v1/data-products/${encodeURIComponent(id)}/endpoints`, { headers }),
-    })
-      .pipe(timeout(3000), catchError(() => of(null)))
-      .subscribe((result) => {
-        if (!result?.product.body) return;
-        const product = this.normalizeProduct(result.product.body, result.endpoints.map((endpoint) => this.normalizeEndpoint(endpoint)));
-        this.productState.set(product);
-        this.productsState.update((products) => products.map((item) => (item.id === product.id ? product : item)));
-        this.etag.set(result.product.headers.get('etag') ?? `"${product.revision}"`);
-      });
+    this.loadProduct(id).pipe(catchError(() => of(null))).subscribe();
   }
 
   private normalizeProduct(product: ProductWire, endpoints?: EndpointDescriptor[]): DataProduct {

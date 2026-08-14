@@ -74,7 +74,8 @@ import { StoredAccessRequest } from '../../core/catalog.models';
                   } @else if (request.status === 'approved_policy_pending') {
                     <a class="daca-button" [routerLink]="['/products', request.dataProductId, 'security']">Policy-Entwurf öffnen</a>
                   } @else {
-                    <button class="daca-button" type="button" (click)="approve(request)">Genehmigen</button>
+                    <a class="daca-button" data-testid="access-request-to-setting" [routerLink]="['/products', request.dataProductId, 'access', 'grant']" [queryParams]="{ request: request.id }">In Zugriffseinstellung übernehmen</a>
+                    <button class="daca-button is-secondary" type="button" (click)="approve(request)">Direkt genehmigen</button>
                     <button class="daca-button is-secondary" type="button" (click)="reject(request)">Ablehnen</button>
                   }
                 </div>
@@ -126,10 +127,13 @@ export class OwnerTasksComponent {
       simulation_quality_alert: 'Qualitätsalarm',
       simulation_discoverability_alert: 'Auffindbarkeitsalarm',
       simulation_isbo_restriction: 'Dringender Sicherheitsalarm',
+      publication_approval: 'Vier-Augen-Freigabe',
+      governance_correction: 'Korrektur erforderlich',
     } as Record<string, string>)[value] ?? 'Aufgabe';
   }
 
-  taskRoute(task: { taskType: string; dataProductId: string }): unknown[] {
+  taskRoute(task: { taskType: string; dataProductId: string; governanceSubmissionId?: string | null }): unknown[] {
+    if (task.taskType === 'publication_approval' && task.governanceSubmissionId) return ['/governance-submissions', task.governanceSubmissionId];
     if (task.taskType === 'metadata_quality' || task.taskType === 'simulation_quality_alert') return ['/products', task.dataProductId, 'quality'];
     if (task.taskType.startsWith('simulation_')) return ['/products', task.dataProductId, 'overview'];
     return ['/products', task.dataProductId, 'access', 'grant'];

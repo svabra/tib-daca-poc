@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { selectNextWelcomeHeroTheme, WELCOME_HERO_THEMES } from './welcome-hero-theme';
 
 describe('welcome hero theme rotation', () => {
-  it('contains the glacier and all three additional Swiss themes', () => {
+  it('contains every configured Swiss theme', () => {
     expect(WELCOME_HERO_THEMES.map((theme) => theme.id)).toEqual([
       'alps-glacier',
       'federal-palace-summer',
       'aarau-old-town-summer',
+      'neuchatel-castle-lake',
       'lion-monument-lucerne',
       'ticino-morcote-summer',
       'rhine-falls-schaffhausen',

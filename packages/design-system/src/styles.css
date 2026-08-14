@@ -166,7 +166,8 @@ a { color: var(--daca-blue); }
 .daca-menu-button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
 
 .daca-main-nav { border-top: 1px solid #e1e1e1; background: #fff; }
-.daca-main-nav-inner { display: flex; min-height: 64px; align-items: stretch; margin-left: -16px; }
+.daca-main-nav-inner { display: flex; min-height: 64px; align-items: stretch; margin-inline: auto; }
+.daca-main-nav-inner > :first-child { margin-left: -16px; }
 .daca-main-nav a { position: relative; display: flex; align-items: center; padding: 0 16px; border: 0; color: #20262d; font-size: 1.125rem; font-weight: 400; line-height: 1.25; text-decoration: none; white-space: nowrap; }
 .daca-main-nav a::after { position: absolute; right: 16px; bottom: 0; left: 16px; height: 3px; background: transparent; content: ''; transition: background-color .16s ease; }
 .daca-main-nav a:hover { color: var(--daca-red); background: transparent; }
@@ -250,6 +251,7 @@ a { color: var(--daca-blue); }
   .daca-main-nav { display: none; }
   .daca-main-nav.daca-main-nav-open { display: block; }
   .daca-main-nav-inner { display: grid; min-height: 0; margin-left: 0; padding-block: 8px; }
+  .daca-main-nav-inner > :first-child { margin-left: 0; }
   .daca-main-nav a, .daca-main-nav a:last-child { min-height: 44px; border: 0; border-bottom: 1px solid var(--daca-border); }
   .daca-main-nav a::after { display: none; }
   .daca-main-nav a.is-active { box-shadow: inset 4px 0 0 var(--daca-red); }

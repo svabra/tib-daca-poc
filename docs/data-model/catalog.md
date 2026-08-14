@@ -11,16 +11,17 @@ DAAIF is an external source system and its internal data model is outside this r
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
-- Alembic head: `0006_org_custom_groups`
-- Schema fingerprint: `44381a5a4f11afe1`
-- Migration fingerprint: `f0682139c7ea412c`
-- Tables: `26`
+- Alembic head: `0010_request_policy_binding`
+- Schema fingerprint: `438246ffe447acbf`
+- Migration fingerprint: `1b282e400ed95e43`
+- Tables: `27`
 
 ## Domain status vocabulary
 
 - Product lifecycle is `draft`, `active`, `deprecated` or `retired`; classification is `public`, `internal`, `confidential` or `restricted`.
 - Access requests progress through `submitted`, `identity_review`, `legal_review`, `conditions_review`, `approved_policy_pending`, a granted state, `rejected` or `withdrawn`. Granted states distinguish `granted_original` and `granted_modified`.
-- Workflow task types include `metadata_quality`, `access_governance`, `access_request_review`, simulation alerts and `group_membership_changed`; task states are `open`, `in_progress` and `completed`.
+- Workflow task types include `metadata_quality`, `access_governance`, `publication_approval`, `governance_correction`, `access_request_review`, simulation alerts and `group_membership_changed`; task states are `open`, `in_progress` and `completed`.
+- Governance submissions progress through `pending_approval`, `approved_deploying`, `approved`, `rejected` or `deployment_failed`. Discoverability and metadata publication become active only after both PostgreSQL and OPA confirm the reviewed revision.
 - Identity sources are `federal`, `cantonal`, `municipal` and `federal_related`. Federal organizations are ordered by department and office and displayed as, for example, `EFD - BIT`. System groups are globally visible; custom groups are owner-isolated. Group membership revisions increase monotonically; existing policy snapshots never expand automatically.
 - I14Y outbox entries use channel `i14y` and status `scheduled` or `simulated_delivered`; the PoC performs no external network request.
 - Metadata publication modes are `governance_review` and `automatic`; stored states are `pending_review`, `published_incomplete` and `published`.
@@ -31,7 +32,8 @@ DAAIF is an external source system and its internal data model is outside this r
 
 - `data_products.keywords` is a string array; `contact`, `quality` and physical `metadata` hold DCAT-friendly extension objects.
 - `endpoints.connection` describes only HTTP/REST or PostgreSQL connectivity and never contains credentials.
-- `policy_revisions.definition` is the constrained PBAC document. Each grant targets one person, machine or group, carries its validity period and independent KOBY/MCP and I14Y flags; group grants contain a server-generated membership snapshot. Generated Rego is stored separately and is not editable.
+- `policy_revisions.definition` is the constrained PBAC document. Each grant targets one person, machine or group, carries its validity period, optional IANA-zone weekly availability and independent KOBY/MCP and I14Y flags; group grants contain a server-generated membership snapshot. Generated Rego is stored separately and is not editable.
+- `governance_submissions.review_snapshot` preserves the exact product, grants, group memberships, office hours and policy revision reviewed by the assigned approver. `archive_evidence` records the BAR 20-year PoC choice without creating an archive job or network call.
 - `metadata_delivery_outbox.payload` is a DCAT-oriented metadata snapshot for the local I14Y simulation. It contains no product data and no external delivery URL.
 - `metadata_publications.normalized_payload` and `poc_product_fixtures.payload` retain normalized PoC metadata, never secrets.
 - `product_context_graphs.graph` stores deterministic nodes and edges; flexible provenance/audit `details` contain metadata only.
@@ -58,6 +60,11 @@ erDiagram
         date valid_until
         text notes
         string status
+        string fulfillment_subject_type
+        string fulfillment_subject_id
+        integer fulfillment_group_revision
+        uuid decision_policy_revision_id FK
+        string granted_variant
         datetime created_at
         datetime updated_at
     }
@@ -140,6 +147,7 @@ erDiagram
         string phone
         string avatar_url
         json roles
+        string supervisor_user_id FK
         boolean selectable
         boolean active
         datetime created_at
@@ -153,6 +161,22 @@ erDiagram
         json connection
         string secret_ref
         datetime created_at
+    }
+    governance_submissions {
+        uuid id PK
+        uuid data_product_id FK
+        uuid policy_revision_id FK,UK
+        string owner_user_id FK
+        string approver_user_id FK
+        string status
+        integer revision
+        json review_snapshot
+        json archive_evidence
+        string decision
+        text decision_comment
+        datetime submitted_at
+        datetime decided_at
+        datetime updated_at
     }
     identity_directory_entries {
         string id PK
@@ -178,6 +202,7 @@ erDiagram
         string label
         text description
         string source
+        string organization_id FK
         string owner_user_id FK
         boolean system_managed
         integer membership_revision
@@ -321,6 +346,7 @@ erDiagram
         uuid data_product_id FK
         uuid access_request_id FK
         uuid simulation_event_id FK
+        uuid governance_submission_id FK
         string title
         text detail
         datetime created_at
@@ -328,13 +354,20 @@ erDiagram
         datetime completed_at
     }
     data_products ||--o{ access_requests : "data_product_id"
+    policy_revisions o|--o{ access_requests : "decision_policy_revision_id"
     canonical_ontology_versions ||--o{ canonical_ontology_terms : "ontology_version_id"
     data_products ||--o{ data_product_fields : "data_product_id"
     demo_users o|--o{ data_products : "owner_user_id"
+    demo_users o|--o{ demo_users : "supervisor_user_id"
     data_products ||--o{ endpoints : "data_product_id"
+    data_products ||--o{ governance_submissions : "data_product_id"
+    policy_revisions ||--o{ governance_submissions : "policy_revision_id"
+    demo_users ||--o{ governance_submissions : "owner_user_id"
+    demo_users ||--o{ governance_submissions : "approver_user_id"
     administrative_organizations o|--o{ identity_directory_entries : "organization_id"
     identity_groups ||--o| identity_group_memberships : "group_id"
     identity_directory_entries ||--o| identity_group_memberships : "identity_id"
+    administrative_organizations o|--o{ identity_groups : "organization_id"
     demo_users o|--o{ identity_groups : "owner_user_id"
     data_products ||--o{ metadata_delivery_outbox : "data_product_id"
     data_products ||--o{ metadata_publications : "data_product_id"
@@ -353,6 +386,7 @@ erDiagram
     data_products ||--o{ workflow_tasks : "data_product_id"
     access_requests o|--o{ workflow_tasks : "access_request_id"
     poc_simulation_events o|--o{ workflow_tasks : "simulation_event_id"
+    governance_submissions o|--o{ workflow_tasks : "governance_submission_id"
 ```
 
 Relationships in this diagram are physical foreign keys inside this database only.
@@ -382,6 +416,11 @@ Requests by people or machines for time-bounded access to a data product.
 | `valid_until` | `DATE` | no | — | — |
 | `notes` | `TEXT` | yes | — | — |
 | `status` | `VARCHAR(32)` | no | — | `submitted` |
+| `fulfillment_subject_type` | `VARCHAR(32)` | yes | — | — |
+| `fulfillment_subject_id` | `VARCHAR(255)` | yes | — | — |
+| `fulfillment_group_revision` | `INTEGER` | yes | — | — |
+| `decision_policy_revision_id` | `CHAR(32)` | yes | FK | — |
+| `granted_variant` | `VARCHAR(32)` | yes | — | — |
 | `created_at` | `DATETIME` | no | — | `utc_now` |
 | `updated_at` | `DATETIME` | no | — | `utc_now` |
 
@@ -390,10 +429,14 @@ Constraints and indexes:
 - Unique `unnamed`: `request_number`
 - Check `ck_access_request_consumer_type`: `consumer_type IN ('person', 'machine')`
 - Check `ck_access_request_dates`: `valid_until >= valid_from`
+- Check `ck_access_request_fulfillment_subject_type`: `fulfillment_subject_type IS NULL OR fulfillment_subject_type IN ('person', 'machine', 'group')`
+- Check `ck_access_request_granted_variant`: `granted_variant IS NULL OR granted_variant IN ('original', 'modified')`
 - Check `ck_access_request_protocol`: `requested_protocol IN ('http', 'postgresql', 'both')`
 - Check `ck_access_request_status`: `status IN ('submitted', 'identity_review', 'legal_review', 'conditions_review', 'approved_policy_pending', 'granted_modified', 'granted_original', 'rejected', 'withdrawn')`
 - Check `ck_access_request_variant`: `requested_variant IN ('original', 'modified', 'either')`
 - Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
+- Foreign key `decision_policy_revision_id` → `policy_revisions.id`; on delete `SET NULL`
+- Index `ix_access_request_decision_policy` on `decision_policy_revision_id`
 - Index `ix_access_request_product` on `data_product_id`
 - Index `ix_access_request_requester` on `requester_id`
 
@@ -544,13 +587,14 @@ PoC identities available to the demo identity switcher.
 | `phone` | `VARCHAR(100)` | yes | — | — |
 | `avatar_url` | `VARCHAR(500)` | yes | — | — |
 | `roles` | `JSON` | no | — | `list` |
+| `supervisor_user_id` | `VARCHAR(200)` | yes | FK | — |
 | `selectable` | `BOOLEAN` | no | — | `True` |
 | `active` | `BOOLEAN` | no | — | `True` |
 | `created_at` | `DATETIME` | no | — | `utc_now` |
 
 Constraints and indexes:
 
-- No additional constraints or explicit indexes.
+- Foreign key `supervisor_user_id` → `demo_users.id`; on delete `SET NULL`
 
 ### `endpoints`
 
@@ -572,6 +616,39 @@ Constraints and indexes:
 - Check `ck_endpoint_protocol`: `protocol IN ('http-rest', 'postgresql')`
 - Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
 - Index `ix_endpoints_data_product` on `data_product_id`
+
+### `governance_submissions`
+
+Four-eyes publication evidence linking one immutable review snapshot to its exact policy revision, owner, approver and deployment state.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `data_product_id` | `CHAR(32)` | no | FK | — |
+| `policy_revision_id` | `CHAR(32)` | no | FK, UK | — |
+| `owner_user_id` | `VARCHAR(200)` | no | FK | — |
+| `approver_user_id` | `VARCHAR(200)` | no | FK | — |
+| `status` | `VARCHAR(32)` | no | — | `pending_approval` |
+| `revision` | `INTEGER` | no | — | `1` |
+| `review_snapshot` | `JSON` | no | — | — |
+| `archive_evidence` | `JSON` | no | — | — |
+| `decision` | `VARCHAR(16)` | yes | — | — |
+| `decision_comment` | `TEXT` | yes | — | — |
+| `submitted_at` | `DATETIME` | no | — | `utc_now` |
+| `decided_at` | `DATETIME` | yes | — | — |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Check `ck_governance_submission_decision`: `decision IS NULL OR decision IN ('approve', 'reject')`
+- Check `ck_governance_submission_status`: `status IN ('pending_approval', 'approved_deploying', 'approved', 'rejected', 'deployment_failed')`
+- Unique `uq_governance_submission_policy`: `policy_revision_id`
+- Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
+- Foreign key `policy_revision_id` → `policy_revisions.id`; on delete `RESTRICT`
+- Foreign key `owner_user_id` → `demo_users.id`
+- Foreign key `approver_user_id` → `demo_users.id`
+- Index `ix_governance_submission_approver` on `approver_user_id, status`
+- Index `ix_governance_submission_product` on `data_product_id, submitted_at`
 
 ### `identity_directory_entries`
 
@@ -626,6 +703,7 @@ Versioned system or owner-managed identity groups that can be captured as immuta
 | `label` | `VARCHAR(255)` | no | — | — |
 | `description` | `TEXT` | no | — | — |
 | `source` | `VARCHAR(32)` | no | — | — |
+| `organization_id` | `VARCHAR(100)` | yes | FK | — |
 | `owner_user_id` | `VARCHAR(200)` | yes | FK | — |
 | `system_managed` | `BOOLEAN` | no | — | `False` |
 | `membership_revision` | `INTEGER` | no | — | `1` |
@@ -636,6 +714,7 @@ Versioned system or owner-managed identity groups that can be captured as immuta
 Constraints and indexes:
 
 - Check `ck_identity_group_source`: `source IN ('federal', 'cantonal', 'municipal', 'federal_related')`
+- Foreign key `organization_id` → `administrative_organizations.id`; on delete `SET NULL`
 - Foreign key `owner_user_id` → `demo_users.id`; on delete `CASCADE`
 - Index `ix_identity_group_source_label` on `source, label`
 
@@ -924,6 +1003,7 @@ Owner work items for quality, access governance and request processing.
 | `data_product_id` | `CHAR(32)` | no | FK | — |
 | `access_request_id` | `CHAR(32)` | yes | FK | — |
 | `simulation_event_id` | `CHAR(32)` | yes | FK | — |
+| `governance_submission_id` | `CHAR(32)` | yes | FK | — |
 | `title` | `VARCHAR(255)` | no | — | — |
 | `detail` | `TEXT` | no | — | — |
 | `created_at` | `DATETIME` | no | — | `utc_now` |
@@ -936,6 +1016,7 @@ Constraints and indexes:
 - Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
 - Foreign key `access_request_id` → `access_requests.id`; on delete `CASCADE`
 - Foreign key `simulation_event_id` → `poc_simulation_events.id`; on delete `SET NULL`
+- Foreign key `governance_submission_id` → `governance_submissions.id`; on delete `CASCADE`
 - Index `ix_workflow_task_assignee` on `assignee_user_id, status`
 - Index `ix_workflow_task_product` on `data_product_id`
 

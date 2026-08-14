@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 
-from sqlalchemy import BigInteger, Boolean, Date, DateTime, Integer, Numeric, String, Text
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Integer, Numeric, String, Text, Time
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -35,6 +35,10 @@ class PolicyEntitlement(Base):
     valid_from: Mapped[dt.date] = mapped_column(Date, default=dt.date.min)
     valid_until: Mapped[dt.date] = mapped_column(Date, default=dt.date.max)
     data_variant: Mapped[str] = mapped_column(String(32), default="original")
+    weekly_days: Mapped[str | None] = mapped_column(String(32))
+    weekly_start_time: Mapped[dt.time | None] = mapped_column(Time)
+    weekly_end_time: Mapped[dt.time | None] = mapped_column(Time)
+    weekly_time_zone: Mapped[str | None] = mapped_column(String(100))
     policy_revision: Mapped[int] = mapped_column(BigInteger)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 

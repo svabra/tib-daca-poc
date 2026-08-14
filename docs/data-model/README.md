@@ -18,9 +18,9 @@ Update generated sections with `npm run docs:data-model`. Validate them with
 
 | Persistence context | Storage | Tables | Alembic head | Migration fingerprint |
 |---|---|---:|---|---|
-| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 26 | `0006_org_custom_groups` | `f0682139c7ea412c` |
+| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 27 | `0010_request_policy_binding` | `1b282e400ed95e43` |
 | [Control-plane data model](control-plane.md) | PostgreSQL (`daca_control_plane`) | 6 | `20260803_0001` | `ff3a5ea9ca863788` |
-| [Sample data-product model](sample-data-product.md) | PostgreSQL (`daca_sample`) | 3 | `0002_timed_entitlements` | `a95356703dd3bee2` |
+| [Sample data-product model](sample-data-product.md) | PostgreSQL (`daca_sample`) | 3 | `0003_weekly_availability` | `62ec28e96d141cf0` |
 
 ## Cross-service data flow
 
@@ -49,6 +49,7 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.data_products`
 - `catalog.demo_users`
 - `catalog.endpoints`
+- `catalog.governance_submissions`
 - `catalog.identity_directory_entries`
 - `catalog.identity_group_memberships`
 - `catalog.identity_groups`

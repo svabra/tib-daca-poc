@@ -156,6 +156,28 @@ DEMO_USERS = (
         "roles": ["data_owner", "data_consumer"],
         "selectable": True,
     },
+    {
+        "id": "thomas.kriegli",
+        "display_name": "Thomas Kriegli",
+        "organization": "Eidgenössische Steuerverwaltung ESTV",
+        "email": "thomas.kriegli@estv.admin.ch",
+        "phone": "+41 58 000 00 83",
+        "avatar_url": None,
+        "roles": ["publication_approver", "data_consumer"],
+        "supervisor_user_id": None,
+        "selectable": True,
+    },
+    {
+        "id": "joel.ruod",
+        "display_name": "Joel Ruod",
+        "organization": "Eidgenössische Steuerverwaltung ESTV",
+        "email": "joel.ruod@estv.admin.ch",
+        "phone": "+41 58 000 00 82",
+        "avatar_url": None,
+        "roles": ["data_analyst", "data_owner"],
+        "supervisor_user_id": "thomas.kriegli",
+        "selectable": True,
+    },
     # Non-selectable identities preserve existing API contract tests and local scripts.
     {
         "id": "daca-test-editor",
@@ -204,6 +226,8 @@ DIRECTORY_ENTRIES = (
     ("kassandra.valdata", "Kassandra Valdata", "EFD - ESTV", "kassandra.valdata@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("ariane.keller", "Ariane Keller", "EFD - ESTV", "ariane.keller@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("daniel.aebischer", "Daniel Aebischer", "EFD - EFV", "daniel.aebischer@efv.admin.ch", "federal", "Bundespersonalverzeichnis"),
+    ("joel.ruod", "Joel Ruod", "EFD - ESTV", "joel.ruod@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
+    ("thomas.kriegli", "Thomas Kriegli", "EFD - ESTV", "thomas.kriegli@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("noemie.rochat", "Noémie Rochat", "Kanton Neuchâtel", "noemie.rochat@ne.ch", "cantonal", "Kantonales Personalverzeichnis"),
     ("lucien.morel", "Lucien Morel", "Kanton Neuchâtel", "lucien.morel@ne.ch", "cantonal", "Kantonales Personalverzeichnis"),
     ("beat.stalder", "Beat Stalder", "Kanton St. Gallen", "beat.stalder@sg.ch", "cantonal", "Kantonales Personalverzeichnis"),
@@ -224,6 +248,8 @@ DIRECTORY_ORGANIZATION_IDS = {
     "kassandra.valdata": "efd-estv",
     "ariane.keller": "efd-estv",
     "daniel.aebischer": "efd-efv",
+    "joel.ruod": "efd-estv",
+    "thomas.kriegli": "efd-estv",
     "sophie.brunner": "edi-bfs",
     "marc.gisler": "efd-bit",
     "nina.fankhauser": "bk",
@@ -235,7 +261,12 @@ DIRECTORY_GROUPS = (
     ("kanton-st-gallen", "Kanton St. Gallen", "Mitarbeitende der kantonalen Verwaltung St. Gallen", "cantonal", ("beat.stalder", "sarah.brunner")),
     ("estv-data-stewards", "ESTV Data Stewards", "Verantwortliche für Metadatenqualität und Governance der ESTV", "federal", ("kassandra.valdata", "ariane.keller")),
     ("bund-forschung", "Forschung Bund", "Bundesmitarbeitende mit Aufgaben in Analyse und Forschung", "federal", ("daniel.aebischer", "kassandra.valdata")),
+    ("efd-efv-bundestresorerie", "EFD – EFV / Bundestresorerie", "Systemverwaltete Empfängergruppe der Eidgenössischen Finanzverwaltung", "federal", ("daniel.aebischer",)),
 )
+
+DIRECTORY_GROUP_ORGANIZATION_IDS = {
+    "efd-efv-bundestresorerie": "efd-efv",
+}
 
 
 TERM_DEFINITIONS = (
@@ -248,6 +279,7 @@ TERM_DEFINITIONS = (
     ("StGallenMunicipalTaxRateDataset", "class", "Gemeindesteuerfüsse St. Gallen", "Kommunale Steuerfüsse im Kanton St. Gallen."),
     ("StGallenMunicipalRevenueDataset", "class", "Steuererträge St. Galler Gemeinden", "Aggregierte Steuererträge der Gemeinden."),
     ("StGallenPropertyTransferDataset", "class", "Grundstück- und Handänderungssteuer St. Gallen", "Kennzahlen zu Grundstück- und Handänderungssteuern."),
+    ("CorporateTaxForecastDataset", "class", "Kantonale Gewerbesteuer – Soll/Ist und Hochrechnung", "Synthetische kantonale Gewerbesteuerwerte mit Jahresplan, Ist und Hochrechnung."),
     ("CantonCode", "property", "Kantonscode", "Amtlicher Code eines Schweizer Kantons."),
     ("MunicipalityCode", "property", "Gemeindecode", "Amtlicher Identifikator einer politischen Gemeinde."),
     ("TaxYear", "property", "Steuerjahr", "Kalenderjahr, auf das sich eine Steuerkennzahl bezieht."),
@@ -258,6 +290,9 @@ TERM_DEFINITIONS = (
     ("TaxRate", "property", "Steuersatz", "Anwendbarer Steuersatz oder Steuerfuss."),
     ("LegalEntityCount", "property", "Anzahl juristische Personen", "Aggregierte Anzahl juristischer Personen."),
     ("PropertyValue", "property", "Grundstückwert", "Aggregierter steuerlich relevanter Grundstückwert."),
+    ("PlannedAmount", "property", "Planbetrag", "Aggregierter synthetischer Planbetrag in CHF."),
+    ("ActualAmount", "property", "Istbetrag", "Aggregierter synthetischer Istbetrag in CHF."),
+    ("ForecastAmount", "property", "Hochrechnung", "Aggregierte synthetische Jahreshochrechnung in CHF."),
 )
 
 
@@ -374,8 +409,12 @@ def seed_workflow_reference_data(session: Session) -> bool:
     changed = False
     now = datetime(2026, 8, 11, 10, 0, tzinfo=UTC)
     for definition in DEMO_USERS:
-        if session.get(DemoUser, definition["id"]) is None:
+        existing_user = session.get(DemoUser, definition["id"])
+        if existing_user is None:
             session.add(DemoUser(**definition, active=True, created_at=now))
+            changed = True
+        elif existing_user.supervisor_user_id != definition.get("supervisor_user_id"):
+            existing_user.supervisor_user_id = definition.get("supervisor_user_id")
             changed = True
     session.flush()
 
@@ -425,6 +464,7 @@ def seed_workflow_reference_data(session: Session) -> bool:
                 changed = True
     session.flush()
     for group_id, label, description, source, members in DIRECTORY_GROUPS:
+        organization_id = DIRECTORY_GROUP_ORGANIZATION_IDS.get(group_id)
         group = session.get(IdentityGroup, group_id)
         if group is None:
             session.add(
@@ -433,6 +473,7 @@ def seed_workflow_reference_data(session: Session) -> bool:
                     label=label,
                     description=description,
                     source=source,
+                    organization_id=organization_id,
                     owner_user_id=None,
                     system_managed=True,
                     membership_revision=1,
@@ -442,11 +483,17 @@ def seed_workflow_reference_data(session: Session) -> bool:
                 )
             )
             changed = True
-        elif not group.system_managed or group.owner_user_id is not None:
-            group.system_managed = True
-            group.owner_user_id = None
-            group.updated_at = now
-            changed = True
+        else:
+            if (
+                not group.system_managed
+                or group.owner_user_id is not None
+                or group.organization_id != organization_id
+            ):
+                group.system_managed = True
+                group.owner_user_id = None
+                group.organization_id = organization_id
+                group.updated_at = now
+                changed = True
         session.flush()
         for identity_id in members:
             membership = session.get(
@@ -469,9 +516,43 @@ def seed_workflow_reference_data(session: Session) -> bool:
         # No ORM relationship links these reference rows; make the parent
         # visible before the database checks the children's foreign keys.
         session.flush()
-        for local_name, kind, label, definition in TERM_DEFINITIONS:
-            session.add(CanonicalOntologyTerm(id=stable_id(f"term:{local_name}"), ontology_version_id=ONTOLOGY_VERSION_ID, uri=term_uri(local_name), kind=kind, label=label, definition=definition))
         changed = True
+
+    # Reconcile terms independently from the version. New PoC concepts must be
+    # backfilled into an existing persistent catalog just as reliably as they
+    # are created in a fresh one.
+    for local_name, kind, label, definition in TERM_DEFINITIONS:
+        term_id = stable_id(f"term:{local_name}")
+        term = session.get(CanonicalOntologyTerm, term_id)
+        if term is None:
+            term = session.scalar(
+                select(CanonicalOntologyTerm).where(
+                    CanonicalOntologyTerm.uri == term_uri(local_name)
+                )
+            )
+        if term is None:
+            session.add(
+                CanonicalOntologyTerm(
+                    id=term_id,
+                    ontology_version_id=ONTOLOGY_VERSION_ID,
+                    uri=term_uri(local_name),
+                    kind=kind,
+                    label=label,
+                    definition=definition,
+                )
+            )
+            changed = True
+        elif (
+            term.ontology_version_id != ONTOLOGY_VERSION_ID
+            or term.kind != kind
+            or term.label != label
+            or term.definition != definition
+        ):
+            term.ontology_version_id = ONTOLOGY_VERSION_ID
+            term.kind = kind
+            term.label = label
+            term.definition = definition
+            changed = True
 
     for fixture_id, owner_id, source_id, title, domain, maturity, class_term, fields in FIXTURE_SPECS:
         if session.get(PocProductFixture, fixture_id) is None:

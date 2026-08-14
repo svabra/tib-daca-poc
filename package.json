@@ -25,9 +25,11 @@
     "docs:openapi:check": "uv run python scripts/render_metadata_publication_openapi.py --check",
     "lint": "npm run lint:web && npm run lint:python",
     "lint:web": "npm run lint --workspaces --if-present",
-    "lint:python": "uv run --all-packages ruff check services",
+    "lint:python": "uv run --all-packages ruff check services journeys",
     "compose:up": "docker compose up --build",
     "compose:down": "docker compose down",
+    "journey:data-analyst": "uv run --package daca-journey-runner daca-journey data-analyst-golden-path",
+    "journey:data-analyst:headed": "uv run --package daca-journey-runner daca-journey data-analyst-golden-path --headed",
     "start:catalog-ui": "npm run start --workspace @daca/catalog-ui",
     "start:control-plane-ui": "npm run start --workspace @daca/control-plane-ui"
   },

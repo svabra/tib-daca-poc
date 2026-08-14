@@ -22,8 +22,14 @@ paths:
               $ref: "#/components/schemas/MetadataPublicationCreate"
         required: true
       responses:
-        200:
+        201:
           description: "Successful Response"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetadataPublicationResponse"
+        200:
+          description: "Idempotent replay of an identical source publication."
           content:
             application/json:
               schema:

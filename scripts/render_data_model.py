@@ -48,6 +48,7 @@ CATALOG_TABLES = {
     "identity_directory_entries": "Synthetic trusted people searchable across federal, cantonal, municipal and federally affiliated sources.",
     "identity_group_memberships": "Time-bounded links from trusted groups to personal directory identities.",
     "identity_groups": "Versioned system or owner-managed identity groups that can be captured as immutable policy snapshots.",
+    "governance_submissions": "Four-eyes publication evidence linking one immutable review snapshot to its exact policy revision, owner, approver and deployment state.",
     "lineage_edges": "URN-based lineage relations that may refer to products outside this catalog.",
     "metadata_publications": "Idempotent metadata submissions received from external source systems such as DAAIF.",
     "metadata_delivery_outbox": "Deduplicated local PoC evidence for simulated I14Y metadata deliveries.",
@@ -91,7 +92,8 @@ CONTEXTS = (
         json_notes=(
             "`data_products.keywords` is a string array; `contact`, `quality` and physical `metadata` hold DCAT-friendly extension objects.",
             "`endpoints.connection` describes only HTTP/REST or PostgreSQL connectivity and never contains credentials.",
-            "`policy_revisions.definition` is the constrained PBAC document. Each grant targets one person, machine or group, carries its validity period and independent KOBY/MCP and I14Y flags; group grants contain a server-generated membership snapshot. Generated Rego is stored separately and is not editable.",
+            "`policy_revisions.definition` is the constrained PBAC document. Each grant targets one person, machine or group, carries its validity period, optional IANA-zone weekly availability and independent KOBY/MCP and I14Y flags; group grants contain a server-generated membership snapshot. Generated Rego is stored separately and is not editable.",
+            "`governance_submissions.review_snapshot` preserves the exact product, grants, group memberships, office hours and policy revision reviewed by the assigned approver. `archive_evidence` records the BAR 20-year PoC choice without creating an archive job or network call.",
             "`metadata_delivery_outbox.payload` is a DCAT-oriented metadata snapshot for the local I14Y simulation. It contains no product data and no external delivery URL.",
             "`metadata_publications.normalized_payload` and `poc_product_fixtures.payload` retain normalized PoC metadata, never secrets.",
             "`product_context_graphs.graph` stores deterministic nodes and edges; flexible provenance/audit `details` contain metadata only.",
@@ -99,7 +101,8 @@ CONTEXTS = (
         status_notes=(
             "Product lifecycle is `draft`, `active`, `deprecated` or `retired`; classification is `public`, `internal`, `confidential` or `restricted`.",
             "Access requests progress through `submitted`, `identity_review`, `legal_review`, `conditions_review`, `approved_policy_pending`, a granted state, `rejected` or `withdrawn`. Granted states distinguish `granted_original` and `granted_modified`.",
-            "Workflow task types include `metadata_quality`, `access_governance`, `access_request_review`, simulation alerts and `group_membership_changed`; task states are `open`, `in_progress` and `completed`.",
+            "Workflow task types include `metadata_quality`, `access_governance`, `publication_approval`, `governance_correction`, `access_request_review`, simulation alerts and `group_membership_changed`; task states are `open`, `in_progress` and `completed`.",
+            "Governance submissions progress through `pending_approval`, `approved_deploying`, `approved`, `rejected` or `deployment_failed`. Discoverability and metadata publication become active only after both PostgreSQL and OPA confirm the reviewed revision.",
             "Identity sources are `federal`, `cantonal`, `municipal` and `federal_related`. Federal organizations are ordered by department and office and displayed as, for example, `EFD - BIT`. System groups are globally visible; custom groups are owner-isolated. Group membership revisions increase monotonically; existing policy snapshots never expand automatically.",
             "I14Y outbox entries use channel `i14y` and status `scheduled` or `simulated_delivered`; the PoC performs no external network request.",
             "Metadata publication modes are `governance_review` and `automatic`; stored states are `pending_review`, `published_incomplete` and `published`.",
@@ -141,7 +144,7 @@ CONTEXTS = (
         status_notes=(
             "Entitlement subject type is `person` or `machine`; action is currently `data.read`.",
             "Protocols are `http-rest` and `postgresql`; variants are `original` and `modified`.",
-            "An entitlement is effective only when `active` is true and the current date is between `valid_from` and `valid_until` inclusive.",
+            "An entitlement is effective only when `active` is true, the current date is between `valid_from` and `valid_until` inclusive, and any optional weekday/time window matches in its IANA time zone. Window end time is exclusive.",
         ),
     ),
 )

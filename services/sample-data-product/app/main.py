@@ -162,7 +162,7 @@ def decision_input(
             "path": request.url.path,
             "requestId": request.state.request_id,
         },
-        "context": {"currentDate": dt.datetime.now(dt.UTC).date().isoformat()},
+        "context": {"requestTimestamp": dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z")},
     }
 
 
@@ -352,6 +352,15 @@ async def read_daaif_reference_product(
 
 
 def apply_projection(product_id: uuid.UUID, projection: PolicyProjection) -> dict[str, Any]:
+    weekday_numbers = {
+        "monday": 1,
+        "tuesday": 2,
+        "wednesday": 3,
+        "thursday": 4,
+        "friday": 5,
+        "saturday": 6,
+        "sunday": 7,
+    }
     with Session(projector_engine()) as session, session.begin():
         current = session.scalar(
             select(PolicyDeployment).where(PolicyDeployment.product_id == product_id)
@@ -372,6 +381,7 @@ def apply_projection(product_id: uuid.UUID, projection: PolicyProjection) -> dic
 
         session.execute(delete(PolicyEntitlement).where(PolicyEntitlement.product_id == product_id))
         for entitlement in projection.entitlements:
+            availability = entitlement.weekly_availability
             session.add(
                 PolicyEntitlement(
                     product_id=product_id,
@@ -382,6 +392,18 @@ def apply_projection(product_id: uuid.UUID, projection: PolicyProjection) -> dic
                     valid_from=entitlement.valid_from,
                     valid_until=entitlement.valid_until,
                     data_variant=entitlement.data_variant,
+                    weekly_days=(
+                        ",".join(str(weekday_numbers[item]) for item in availability.weekdays)
+                        if availability
+                        else None
+                    ),
+                    weekly_start_time=(
+                        dt.time.fromisoformat(availability.start_time) if availability else None
+                    ),
+                    weekly_end_time=(
+                        dt.time.fromisoformat(availability.end_time) if availability else None
+                    ),
+                    weekly_time_zone=availability.time_zone if availability else None,
                     policy_revision=projection.revision,
                     active=True,
                 )

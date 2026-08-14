@@ -60,8 +60,8 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
           <fieldset>
             <legend>1. Antragstellende Person</legend>
             <div class="access-request-person">
-              <img src="/assets/kassandra-valdata.webp" alt="">
-              <span><strong>Kassandra Valdata</strong><small>Eidgenössische Steuerverwaltung ESTV</small><small>Identität aus dem Demo-Benutzerkontext</small></span>
+              @if (api.identityUser().avatarUrl; as avatarUrl) { <img [src]="avatarUrl" alt=""> }
+              <span><strong>{{ api.identityUser().displayName }}</strong><small>{{ api.identityUser().organization }}</small><small>Identität aus dem Demo-Benutzerkontext</small></span>
             </div>
             <label class="access-request-field">
               <span>Kontakt-E-Mail *</span>
@@ -75,7 +75,7 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
             <div class="access-request-choice-group" role="radiogroup" aria-label="Zugriff für">
               <label [class.is-selected]="form.controls.consumerType.value === 'person'">
                 <input type="radio" formControlName="consumerType" value="person" (change)="consumerTypeChanged()">
-                <span><strong>Für mich persönlich</strong><small>Interaktiver Zugriff durch Kassandra Valdata</small></span>
+                <span><strong>Für mich persönlich</strong><small>Interaktiver Zugriff durch {{ api.identityUser().displayName }}</small></span>
               </label>
               <label [class.is-selected]="form.controls.consumerType.value === 'machine'">
                 <input type="radio" formControlName="consumerType" value="machine" (change)="consumerTypeChanged()">

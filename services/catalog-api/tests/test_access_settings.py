@@ -86,6 +86,25 @@ def test_group_search_returns_member_preview(client):
         "lucien.morel",
     }
 
+    treasury = client.get(
+        "/api/v1/identity-directory/groups/efd-efv-bundestresorerie",
+        headers=OWNER_HEADERS,
+    )
+    assert treasury.status_code == 200
+    assert treasury.json()["organizationId"] == "efd-efv"
+    assert treasury.json()["userManaged"] is False
+    assert [member["id"] for member in treasury.json()["members"]] == [
+        "daniel.aebischer"
+    ]
+    filtered = client.get(
+        "/api/v1/identity-directory/groups",
+        headers=OWNER_HEADERS,
+        params={"organization_id": "efd-efv"},
+    )
+    assert [group["id"] for group in filtered.json()] == [
+        "efd-efv-bundestresorerie"
+    ]
+
 
 def test_owner_can_create_mixed_custom_group_and_other_users_cannot_read_it(client):
     created = client.post(

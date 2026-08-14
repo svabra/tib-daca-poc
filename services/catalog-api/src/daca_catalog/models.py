@@ -32,8 +32,13 @@ class Base(DeclarativeBase):
 class DataProduct(Base):
     __tablename__ = "data_products"
     __table_args__ = (
-        CheckConstraint("lifecycle IN ('draft', 'active', 'deprecated', 'retired')", name="ck_product_lifecycle"),
-        CheckConstraint("classification IN ('public', 'internal', 'confidential', 'restricted')", name="ck_product_classification"),
+        CheckConstraint(
+            "lifecycle IN ('draft', 'active', 'deprecated', 'retired')", name="ck_product_lifecycle"
+        ),
+        CheckConstraint(
+            "classification IN ('public', 'internal', 'confidential', 'restricted')",
+            name="ck_product_classification",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
@@ -54,17 +59,29 @@ class DataProduct(Base):
     license: Mapped[str | None] = mapped_column(String(255))
     quality: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     update_frequency: Mapped[str | None] = mapped_column(String(100))
-    extra_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, nullable=False, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+    extra_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSON, nullable=False, default=dict
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
 
-    endpoints: Mapped[list[Endpoint]] = relationship(back_populates="data_product", cascade="all, delete-orphan")
+    endpoints: Mapped[list[Endpoint]] = relationship(
+        back_populates="data_product", cascade="all, delete-orphan"
+    )
     provenance_events: Mapped[list[ProvenanceEvent]] = relationship(
         back_populates="data_product",
         passive_deletes=True,
     )
-    policy_revisions: Mapped[list[PolicyRevision]] = relationship(back_populates="data_product", cascade="all, delete-orphan")
-    access_requests: Mapped[list[AccessRequest]] = relationship(back_populates="data_product", cascade="all, delete-orphan")
+    policy_revisions: Mapped[list[PolicyRevision]] = relationship(
+        back_populates="data_product", cascade="all, delete-orphan"
+    )
+    access_requests: Mapped[list[AccessRequest]] = relationship(
+        back_populates="data_product", cascade="all, delete-orphan"
+    )
 
 
 class Endpoint(Base):
@@ -83,7 +100,9 @@ class Endpoint(Base):
     protocol: Mapped[str] = mapped_column(String(32), nullable=False)
     connection: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     secret_ref: Mapped[str | None] = mapped_column(String(255))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
 
     data_product: Mapped[DataProduct] = relationship(back_populates="endpoints")
 
@@ -102,7 +121,9 @@ class LineageEdge(Base):
     relation_type: Mapped[str] = mapped_column(String(100), nullable=False)
     transformation: Mapped[str | None] = mapped_column(Text)
     state: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
 
 
 class ProvenanceEvent(Base):
@@ -137,13 +158,17 @@ class AuditEvent(Base):
     actor: Mapped[str] = mapped_column(String(255), nullable=False)
     revision: Mapped[int | None] = mapped_column(Integer)
     details: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
 
 
 class AccessRequest(Base):
     __tablename__ = "access_requests"
     __table_args__ = (
-        CheckConstraint("consumer_type IN ('person', 'machine')", name="ck_access_request_consumer_type"),
+        CheckConstraint(
+            "consumer_type IN ('person', 'machine')", name="ck_access_request_consumer_type"
+        ),
         CheckConstraint(
             "requested_protocol IN ('http', 'postgresql', 'both')",
             name="ck_access_request_protocol",
@@ -158,8 +183,17 @@ class AccessRequest(Base):
             name="ck_access_request_status",
         ),
         CheckConstraint("valid_until >= valid_from", name="ck_access_request_dates"),
+        CheckConstraint(
+            "fulfillment_subject_type IS NULL OR fulfillment_subject_type IN ('person', 'machine', 'group')",
+            name="ck_access_request_fulfillment_subject_type",
+        ),
+        CheckConstraint(
+            "granted_variant IS NULL OR granted_variant IN ('original', 'modified')",
+            name="ck_access_request_granted_variant",
+        ),
         Index("ix_access_request_product", "data_product_id"),
         Index("ix_access_request_requester", "requester_id"),
+        Index("ix_access_request_decision_policy", "decision_policy_revision_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
@@ -181,7 +215,16 @@ class AccessRequest(Base):
     valid_until: Mapped[date] = mapped_column(Date, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="submitted")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    fulfillment_subject_type: Mapped[str | None] = mapped_column(String(32))
+    fulfillment_subject_id: Mapped[str | None] = mapped_column(String(255))
+    fulfillment_group_revision: Mapped[int | None] = mapped_column(Integer)
+    decision_policy_revision_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("policy_revisions.id", ondelete="SET NULL")
+    )
+    granted_variant: Mapped[str | None] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
     )
@@ -198,17 +241,23 @@ class PolicyRevision(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
-    data_product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("data_products.id", ondelete="CASCADE"), nullable=False)
+    data_product_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("data_products.id", ondelete="CASCADE"), nullable=False
+    )
     revision: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     definition: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     generated_rego: Mapped[str] = mapped_column(Text, nullable=False)
     created_by: Mapped[str] = mapped_column(String(255), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     data_product: Mapped[DataProduct] = relationship(back_populates="policy_revisions")
-    deployments: Mapped[list[PolicyDeployment]] = relationship(back_populates="policy_revision", cascade="all, delete-orphan")
+    deployments: Mapped[list[PolicyDeployment]] = relationship(
+        back_populates="policy_revision", cascade="all, delete-orphan"
+    )
 
 
 class PolicyDeployment(Base):
@@ -220,13 +269,17 @@ class PolicyDeployment(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
-    policy_revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("policy_revisions.id", ondelete="CASCADE"), nullable=False)
+    policy_revision_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("policy_revisions.id", ondelete="CASCADE"), nullable=False
+    )
     target: Mapped[str] = mapped_column(String(32), nullable=False)
     desired_revision: Mapped[int] = mapped_column(Integer, nullable=False)
     observed_revision: Mapped[int | None] = mapped_column(Integer)
     state: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     error: Mapped[str | None] = mapped_column(Text)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
 
     policy_revision: Mapped[PolicyRevision] = relationship(back_populates="deployments")
 
@@ -235,7 +288,9 @@ class SeedMarker(Base):
     __tablename__ = "seed_markers"
 
     name: Mapped[str] = mapped_column(String(100), primary_key=True)
-    applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    applied_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
 
 
 class DemoUser(Base):
@@ -248,9 +303,14 @@ class DemoUser(Base):
     phone: Mapped[str | None] = mapped_column(String(100))
     avatar_url: Mapped[str | None] = mapped_column(String(500))
     roles: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    supervisor_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("demo_users.id", ondelete="SET NULL")
+    )
     selectable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
 
 
 class AdministrativeOrganization(Base):
@@ -260,7 +320,9 @@ class AdministrativeOrganization(Base):
             "organization_type IN ('federal_council', 'chancellery', 'department', 'office', 'affiliated')",
             name="ck_administrative_organization_type",
         ),
-        UniqueConstraint("department_code", "office_code", name="uq_administrative_organization_codes"),
+        UniqueConstraint(
+            "department_code", "office_code", name="uq_administrative_organization_codes"
+        ),
         Index("ix_administrative_organization_sort", "department_order", "office_order"),
     )
 
@@ -272,7 +334,9 @@ class AdministrativeOrganization(Base):
     department_order: Mapped[int] = mapped_column(Integer, nullable=False)
     office_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
 
 
 class IdentityDirectoryEntry(Base):
@@ -296,7 +360,9 @@ class IdentityDirectoryEntry(Base):
     source: Mapped[str] = mapped_column(String(32), nullable=False)
     source_system: Mapped[str] = mapped_column(String(100), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
     )
@@ -316,13 +382,18 @@ class IdentityGroup(Base):
     label: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     source: Mapped[str] = mapped_column(String(32), nullable=False)
+    organization_id: Mapped[str | None] = mapped_column(
+        ForeignKey("administrative_organizations.id", ondelete="SET NULL")
+    )
     owner_user_id: Mapped[str | None] = mapped_column(
         ForeignKey("demo_users.id", ondelete="CASCADE")
     )
     system_managed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     membership_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
     )
@@ -346,7 +417,9 @@ class IdentityGroupMembership(Base):
     )
     valid_from: Mapped[date | None] = mapped_column(Date)
     valid_until: Mapped[date | None] = mapped_column(Date)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
 
 
 class PocProductFixture(Base):
@@ -358,26 +431,77 @@ class PocProductFixture(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     maturity_level: Mapped[str] = mapped_column(String(32), nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
 
 
 class MetadataPublication(Base):
     __tablename__ = "metadata_publications"
     __table_args__ = (
-        UniqueConstraint("source_system", "source_product_id", name="uq_metadata_publication_source"),
+        UniqueConstraint(
+            "source_system", "source_product_id", name="uq_metadata_publication_source"
+        ),
         Index("ix_metadata_publication_product", "data_product_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
     source_system: Mapped[str] = mapped_column(String(100), nullable=False)
     source_product_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    data_product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("data_products.id", ondelete="CASCADE"), nullable=False)
+    data_product_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("data_products.id", ondelete="CASCADE"), nullable=False
+    )
     publication_mode: Mapped[str] = mapped_column(String(32), nullable=False)
     discoverable_explicit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     normalized_payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
-    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class GovernanceSubmission(Base):
+    """Immutable review evidence plus the mutable decision/deployment state."""
+
+    __tablename__ = "governance_submissions"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending_approval', 'approved_deploying', 'approved', "
+            "'rejected', 'deployment_failed')",
+            name="ck_governance_submission_status",
+        ),
+        CheckConstraint(
+            "decision IS NULL OR decision IN ('approve', 'reject')",
+            name="ck_governance_submission_decision",
+        ),
+        UniqueConstraint("policy_revision_id", name="uq_governance_submission_policy"),
+        Index("ix_governance_submission_product", "data_product_id", "submitted_at"),
+        Index("ix_governance_submission_approver", "approver_user_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    data_product_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("data_products.id", ondelete="CASCADE"), nullable=False
+    )
+    policy_revision_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("policy_revisions.id", ondelete="RESTRICT"), nullable=False
+    )
+    owner_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    approver_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending_approval")
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    review_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    archive_evidence: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    decision: Mapped[str | None] = mapped_column(String(16))
+    decision_comment: Mapped[str | None] = mapped_column(Text)
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
 
 
 class MetadataDeliveryOutbox(Base):
@@ -409,7 +533,9 @@ class MetadataDeliveryOutbox(Base):
     valid_until: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -421,40 +547,56 @@ class DataProductField(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
-    data_product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("data_products.id", ondelete="CASCADE"), nullable=False)
+    data_product_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("data_products.id", ondelete="CASCADE"), nullable=False
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     data_type: Mapped[str] = mapped_column(String(100), nullable=False)
     nullable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     key_field: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     business_description: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
 
 
 class ProductQualityAssessment(Base):
     __tablename__ = "product_quality_assessments"
 
-    data_product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("data_products.id", ondelete="CASCADE"), primary_key=True)
+    data_product_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("data_products.id", ondelete="CASCADE"), primary_key=True
+    )
     access_management_defined: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     discoverability_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    technical_metadata_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    technical_metadata_complete: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     business_metadata_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     graph_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     ontology_embedded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     dcat_reviewed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     medal: Mapped[str] = mapped_column(String(32), nullable=False, default="bronze")
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
 
 
 class ProductContextGraph(Base):
     __tablename__ = "product_context_graphs"
 
-    data_product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("data_products.id", ondelete="CASCADE"), primary_key=True)
+    data_product_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("data_products.id", ondelete="CASCADE"), primary_key=True
+    )
     graph: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="suggested")
     confirmed_by: Mapped[str | None] = mapped_column(String(200))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
 
 
 class CanonicalOntologyVersion(Base):
@@ -465,7 +607,9 @@ class CanonicalOntologyVersion(Base):
     version: Mapped[str] = mapped_column(String(50), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
 
 
 class CanonicalOntologyTerm(Base):
@@ -473,7 +617,9 @@ class CanonicalOntologyTerm(Base):
     __table_args__ = (Index("ix_ontology_term_version", "ontology_version_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
-    ontology_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("canonical_ontology_versions.id"), nullable=False)
+    ontology_version_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("canonical_ontology_versions.id"), nullable=False
+    )
     uri: Mapped[str] = mapped_column(String(500), unique=True, nullable=False)
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
     label: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -485,7 +631,9 @@ class OntologyTermAlignment(Base):
     __table_args__ = (UniqueConstraint("term_id", "target_uri", name="uq_ontology_term_alignment"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
-    term_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("canonical_ontology_terms.id", ondelete="CASCADE"), nullable=False)
+    term_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("canonical_ontology_terms.id", ondelete="CASCADE"), nullable=False
+    )
     target_uri: Mapped[str] = mapped_column(String(1000), nullable=False)
     relation: Mapped[str] = mapped_column(String(32), nullable=False)
 
@@ -495,13 +643,21 @@ class ProductSemanticMapping(Base):
     __table_args__ = (Index("ix_semantic_mapping_product", "data_product_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
-    data_product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("data_products.id", ondelete="CASCADE"), nullable=False)
-    data_product_field_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("data_product_fields.id", ondelete="CASCADE"))
-    ontology_term_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("canonical_ontology_terms.id"), nullable=False)
+    data_product_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("data_products.id", ondelete="CASCADE"), nullable=False
+    )
+    data_product_field_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("data_product_fields.id", ondelete="CASCADE")
+    )
+    ontology_term_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("canonical_ontology_terms.id"), nullable=False
+    )
     mapping_type: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="suggested")
     confirmed_by: Mapped[str | None] = mapped_column(String(200))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
 
 
 class WorkflowTask(Base):
@@ -515,15 +671,26 @@ class WorkflowTask(Base):
     task_type: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")
     assignee_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
-    data_product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("data_products.id", ondelete="CASCADE"), nullable=False)
-    access_request_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("access_requests.id", ondelete="CASCADE"))
+    data_product_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("data_products.id", ondelete="CASCADE"), nullable=False
+    )
+    access_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("access_requests.id", ondelete="CASCADE")
+    )
     simulation_event_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("poc_simulation_events.id", ondelete="SET NULL")
     )
+    governance_submission_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("governance_submissions.id", ondelete="CASCADE")
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     detail: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -559,4 +726,6 @@ class PocSimulationEvent(Base):
     confirmation_name: Mapped[str | None] = mapped_column(String(255))
     before_state: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     after_state: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )

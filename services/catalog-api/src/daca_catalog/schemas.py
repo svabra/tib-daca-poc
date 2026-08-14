@@ -4,6 +4,7 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -46,7 +47,9 @@ class DataProductResponse(ApiModel):
     license: str | None
     quality: dict[str, Any]
     update_frequency: str | None
-    metadata: dict[str, Any] = Field(validation_alias="extra_metadata", serialization_alias="metadata")
+    metadata: dict[str, Any] = Field(
+        validation_alias="extra_metadata", serialization_alias="metadata"
+    )
     created_at: datetime
     updated_at: datetime
 
@@ -66,7 +69,9 @@ class DataProductSummary(ApiModel):
     classification: str
     keywords: list[str]
     update_frequency: str | None
-    metadata: dict[str, Any] = Field(validation_alias="extra_metadata", serialization_alias="metadata")
+    metadata: dict[str, Any] = Field(
+        validation_alias="extra_metadata", serialization_alias="metadata"
+    )
     updated_at: datetime
 
 
@@ -105,7 +110,11 @@ class DataProductPatch(ApiModel):
             "quality",
             "metadata",
         }
-        null_fields = sorted(name for name in self.model_fields_set.intersection(non_nullable) if getattr(self, name) is None)
+        null_fields = sorted(
+            name
+            for name in self.model_fields_set.intersection(non_nullable)
+            if getattr(self, name) is None
+        )
         if null_fields:
             raise ValueError(f"fields cannot be null: {', '.join(null_fields)}")
         return self
@@ -142,7 +151,13 @@ class AccessRequestCreate(ApiModel):
     def valid_contact_email(cls, value: str) -> str:
         normalized = value.strip().lower()
         local, separator, domain = normalized.partition("@")
-        if not separator or not local or "." not in domain or domain.startswith(".") or domain.endswith("."):
+        if (
+            not separator
+            or not local
+            or "." not in domain
+            or domain.startswith(".")
+            or domain.endswith(".")
+        ):
             raise ValueError("contactEmail must be a valid email address")
         return normalized
 
@@ -184,6 +199,11 @@ class AccessRequestResponse(ApiModel):
     valid_until: date
     notes: str | None
     status: AccessRequestStatus
+    fulfillment_subject_type: Literal["person", "machine", "group"] | None = None
+    fulfillment_subject_id: str | None = None
+    fulfillment_group_revision: int | None = None
+    decision_policy_revision_id: uuid.UUID | None = None
+    granted_variant: Literal["original", "modified"] | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -266,7 +286,9 @@ class PostgreSQLEndpointCreate(EndpointBase):
     connection: PostgreSQLConnection
 
 
-EndpointCreate = Annotated[HttpEndpointCreate | PostgreSQLEndpointCreate, Field(discriminator="protocol")]
+EndpointCreate = Annotated[
+    HttpEndpointCreate | PostgreSQLEndpointCreate, Field(discriminator="protocol")
+]
 
 
 class EndpointIdentity(ApiModel):
@@ -283,7 +305,9 @@ class PostgreSQLEndpointResponse(EndpointIdentity, PostgreSQLEndpointCreate):
     pass
 
 
-EndpointResponse = Annotated[HttpEndpointResponse | PostgreSQLEndpointResponse, Field(discriminator="protocol")]
+EndpointResponse = Annotated[
+    HttpEndpointResponse | PostgreSQLEndpointResponse, Field(discriminator="protocol")
+]
 
 
 class LineageEdgeResponse(ApiModel):
@@ -345,6 +369,29 @@ class GroupSnapshot(ApiModel):
     member_ids: list[str] = Field(min_length=1)
 
 
+class WeeklyAvailability(ApiModel):
+    weekdays: list[
+        Literal["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    ] = Field(min_length=1, max_length=7)
+    start_time: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    end_time: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    time_zone: str = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def valid_window(self) -> WeeklyAvailability:
+        if len(set(self.weekdays)) != len(self.weekdays):
+            raise ValueError("weekdays must not contain duplicates")
+        if self.end_time <= self.start_time:
+            raise ValueError(
+                "endTime must be later than startTime; overnight windows are not supported"
+            )
+        try:
+            ZoneInfo(self.time_zone)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("timeZone must be a valid IANA time zone") from exc
+        return self
+
+
 class PolicyGrant(ApiModel):
     subject: PolicySubject
     actions: list[Literal["data.read"]] = Field(default_factory=lambda: ["data.read"], min_length=1)
@@ -354,12 +401,18 @@ class PolicyGrant(ApiModel):
     data_variant: Literal["original", "modified"] = "original"
     metadata_channels: MetadataChannels = Field(default_factory=MetadataChannels)
     group_snapshot: GroupSnapshot | None = None
+    weekly_availability: WeeklyAvailability | None = None
 
     @model_validator(mode="after")
     def valid_period(self) -> PolicyGrant:
         if self.valid_until < self.valid_from:
             raise ValueError("validUntil must be on or after validFrom")
         return self
+
+
+class AccessRequestFulfillment(ApiModel):
+    access_request_id: uuid.UUID
+    fulfillment_subject: PolicySubject
 
 
 class ResourceSelectors(ApiModel):
@@ -430,6 +483,7 @@ class DemoUserResponse(ApiModel):
     phone: str | None
     avatar_url: str | None
     roles: list[str]
+    supervisor_user_id: str | None = None
 
 
 IdentityDirectorySource = Literal["federal", "cantonal", "municipal", "federal_related"]
@@ -450,6 +504,7 @@ class IdentityGroupSummaryResponse(ApiModel):
     label: str
     description: str
     source: IdentityDirectorySource
+    organization_id: str | None
     membership_revision: int
     member_count: int
     user_managed: bool
@@ -464,7 +519,9 @@ class AdministrativeOrganizationResponse(ApiModel):
     department_code: str
     office_code: str | None
     display_name: str
-    organization_type: Literal["federal_council", "chancellery", "department", "office", "affiliated"]
+    organization_type: Literal[
+        "federal_council", "chancellery", "department", "office", "affiliated"
+    ]
     label: str
 
 
@@ -484,6 +541,7 @@ class IdentityGroupCreate(ApiModel):
 
 class AccessSettingUpsert(ApiModel):
     grant: PolicyGrant
+    access_request_fulfillments: list[AccessRequestFulfillment] = Field(default_factory=list)
 
 
 class MetadataDeliveryOutboxResponse(ApiModel):
@@ -605,7 +663,12 @@ class MetadataPublicationCreate(ApiModel):
                             "method": "GET",
                         },
                         "schemaFields": [
-                            {"name": "taxYear", "dataType": "integer", "nullable": False, "keyField": True}
+                            {
+                                "name": "taxYear",
+                                "dataType": "integer",
+                                "nullable": False,
+                                "keyField": True,
+                            }
                         ],
                     },
                 },
@@ -643,12 +706,15 @@ class WorkflowTaskResponse(ApiModel):
         "simulation_discoverability_alert",
         "simulation_isbo_restriction",
         "group_membership_changed",
+        "publication_approval",
+        "governance_correction",
     ]
     status: Literal["open", "in_progress", "completed"]
     assignee_user_id: str
     data_product_id: uuid.UUID
     access_request_id: uuid.UUID | None
     simulation_event_id: uuid.UUID | None = None
+    governance_submission_id: uuid.UUID | None = None
     title: str
     detail: str
     created_at: datetime
@@ -714,6 +780,8 @@ class ProductQualityReview(ApiModel):
     fields: list[ProductFieldReview] = Field(min_length=1)
     graph: dict[str, Any]
     graph_confirmed: bool
+    discoverable: bool = True
+    discoverability_confirmed: Literal[True] = True
 
 
 class QualityCriterion(ApiModel):
@@ -781,6 +849,58 @@ class AccessGovernanceCreate(ApiModel):
     discoverable: bool
     discoverability_confirmed: Literal[True]
     grants: list[PolicyGrant] = Field(default_factory=list)
+
+
+class BarArchiveSetting(ApiModel):
+    enabled: bool = True
+    retention_years: Literal[20] = 20
+
+
+class GovernanceSubmissionCreate(ApiModel):
+    discoverable: bool = True
+    discoverability_confirmed: Literal[True]
+    grants: list[PolicyGrant] = Field(min_length=1)
+    bar_archive: BarArchiveSetting = Field(default_factory=BarArchiveSetting)
+    access_request_fulfillments: list[AccessRequestFulfillment] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def http_only(self) -> GovernanceSubmissionCreate:
+        if any(grant.protocols != ["http"] for grant in self.grants):
+            raise ValueError("Governance submissions in V1 support HTTP REST grants only")
+        request_ids = [item.access_request_id for item in self.access_request_fulfillments]
+        if len(request_ids) != len(set(request_ids)):
+            raise ValueError("accessRequestFulfillments must contain unique access request IDs")
+        return self
+
+
+class GovernanceDecisionCreate(ApiModel):
+    decision: Literal["approve", "reject"]
+    policy_revision: int = Field(ge=1)
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+class GovernanceSubmissionResponse(ApiModel):
+    id: uuid.UUID
+    data_product_id: uuid.UUID
+    policy_revision_id: uuid.UUID
+    policy_revision: int
+    owner_user_id: str
+    approver_user_id: str
+    status: Literal[
+        "pending_approval",
+        "approved_deploying",
+        "approved",
+        "rejected",
+        "deployment_failed",
+    ]
+    revision: int
+    review_snapshot: dict[str, Any]
+    archive_evidence: dict[str, Any]
+    decision: Literal["approve", "reject"] | None
+    decision_comment: str | None
+    submitted_at: datetime
+    decided_at: datetime | None
+    updated_at: datetime
 
 
 class AccessRequestDecision(ApiModel):

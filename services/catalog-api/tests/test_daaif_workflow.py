@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from daca_catalog.main import daaif_ontology_suggestion
 from daca_catalog.workflow_seed import term_uri
 
 
@@ -7,9 +8,26 @@ def fixture(client, fixture_id: str) -> dict:
     return next(item for item in client.get("/api/v1/poc/product-fixtures").json() if item["id"] == fixture_id)
 
 
+def test_journey_ontology_suggestions_do_not_confuse_distinct_with_ist():
+    source_id = "daaif:kantonale-gewerbesteuer-soll-ist-2022-2026:v1"
+
+    assert (
+        daaif_ontology_suggestion(source_id, "actual_receipts_to_date_chf")
+        == term_uri("ActualAmount")
+    )
+    assert daaif_ontology_suggestion(source_id, "distinct_month_count") is None
+
+
 def test_demo_users_and_fixture_seed_are_idempotent_and_persisted(client):
     users = client.get("/api/v1/demo-users").json()
-    assert [user["id"] for user in users] == ["beat.stalder", "kassandra.valdata", "noemie.rochat"]
+    assert [user["id"] for user in users] == [
+        "beat.stalder",
+        "joel.ruod",
+        "kassandra.valdata",
+        "noemie.rochat",
+        "thomas.kriegli",
+    ]
+    assert next(user for user in users if user["id"] == "joel.ruod")["supervisorUserId"] == "thomas.kriegli"
     fixtures = client.get("/api/v1/poc/product-fixtures").json()
     assert len(fixtures) == 9
     assert {item["maturityLevel"] for item in fixtures} == {"bronze", "silver", "gold"}
@@ -34,7 +52,11 @@ def test_open_publication_is_idempotent_defaults_to_discoverable_and_creates_tas
     assert product_id in {item["id"] for item in owner_products}
     assert product_id not in {item["id"] for item in beat_products}
 
-    endpoints = client.get(f"/api/v1/data-products/{product_id}/endpoints")
+    assert client.get(f"/api/v1/data-products/{product_id}/endpoints").status_code == 404
+    endpoints = client.get(
+        f"/api/v1/data-products/{product_id}/endpoints",
+        headers={"X-DaCa-User": "kassandra.valdata"},
+    )
     assert endpoints.status_code == 200
     assert endpoints.json()[0]["connection"]["mediaType"] == "application/json"
 

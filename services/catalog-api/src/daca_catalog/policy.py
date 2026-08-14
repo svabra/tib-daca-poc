@@ -19,6 +19,36 @@ import rego.v1
 
 default decision := {"allow": false, "reason": "default_deny"}
 
+request_timestamp_ns := time.parse_rfc3339_ns(timestamp) if {
+    timestamp := object.get(object.get(input, "context", {}), "requestTimestamp", "")
+}
+
+valid_grant_time(grant) if {
+    not grant.weeklyAvailability
+    parts := time.date(request_timestamp_ns)
+    request_date := sprintf("%04d-%02d-%02d", parts)
+    request_date >= grant.validFrom
+    request_date <= grant.validUntil
+}
+
+valid_grant_time(grant) if {
+    schedule := grant.weeklyAvailability
+    parts := time.date([request_timestamp_ns, schedule.timeZone])
+    request_date := sprintf("%04d-%02d-%02d", parts)
+    request_date >= grant.validFrom
+    request_date <= grant.validUntil
+    weekday := lower(time.weekday([request_timestamp_ns, schedule.timeZone]))
+    weekday in schedule.weekdays
+    clock := time.clock([request_timestamp_ns, schedule.timeZone])
+    now_seconds := (clock[0] * 3600) + (clock[1] * 60) + clock[2]
+    start_parts := split(schedule.startTime, ":")
+    start_seconds := (to_number(start_parts[0]) * 3600) + (to_number(start_parts[1]) * 60)
+    end_parts := split(schedule.endTime, ":")
+    end_seconds := (to_number(end_parts[0]) * 3600) + (to_number(end_parts[1]) * 60)
+    now_seconds >= start_seconds
+    now_seconds < end_seconds
+}
+
 matches_grant(policy, grant) if {
     resource := data.daca.resourcesById[input.resource.id]
     policy.productId == input.resource.id
@@ -28,9 +58,7 @@ matches_grant(policy, grant) if {
     resource.urn in policy.resources.productUrns
     resource.owner in policy.resources.owners
     request_protocol in grant.protocols
-    request_date := object.get(object.get(input, "context", {}), "currentDate", "1970-01-01")
-    request_date >= grant.validFrom
-    request_date <= grant.validUntil
+    valid_grant_time(grant)
 }
 
 matches_group_grant(policy, grant) if {
@@ -43,12 +71,11 @@ matches_group_grant(policy, grant) if {
     resource.urn in policy.resources.productUrns
     resource.owner in policy.resources.owners
     request_protocol in grant.protocols
-    request_date := object.get(object.get(input, "context", {}), "currentDate", "1970-01-01")
-    request_date >= grant.validFrom
-    request_date <= grant.validUntil
+    valid_grant_time(grant)
 }
 
 matches_legacy(policy) if {
+    request_timestamp_ns
     count(object.get(policy, "grants", [])) == 0
     resource := data.daca.resourcesById[input.resource.id]
     policy.productId == input.resource.id
@@ -151,6 +178,11 @@ def definition_as_camel(definition: dict[str, Any]) -> dict[str, Any]:
         group_snapshot = grant.get("groupSnapshot", grant.get("group_snapshot"))
         if group_snapshot is not None:
             normalized_grant["groupSnapshot"] = group_snapshot
+        weekly_availability = grant.get(
+            "weeklyAvailability", grant.get("weekly_availability")
+        )
+        if weekly_availability is not None:
+            normalized_grant["weeklyAvailability"] = weekly_availability
         grants.append(normalized_grant)
     if not grants:
         for subject_type, identifiers in (("person", user_ids), ("machine", machine_ids)):
@@ -242,7 +274,7 @@ def project_to_postgresql(
     if not settings.sample_policy_projection_url:
         return ProjectionResult("pending", error="policy projection URL is not configured")
 
-    entitlements: list[dict[str, str]] = []
+    entitlements: list[dict[str, Any]] = []
     if definition is not None:
         explicit_grants = bool(definition.get("grants"))
         normalized = definition_as_camel(definition)
@@ -275,6 +307,11 @@ def project_to_postgresql(
                                         "validFrom": grant["validFrom"],
                                         "validUntil": grant["validUntil"],
                                         "dataVariant": grant["dataVariant"],
+                                        **(
+                                            {"weeklyAvailability": grant["weeklyAvailability"]}
+                                            if grant.get("weeklyAvailability")
+                                            else {}
+                                        ),
                                     }
                                 )
             else:

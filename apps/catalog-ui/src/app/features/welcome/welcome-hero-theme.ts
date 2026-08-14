@@ -7,6 +7,7 @@ export const WELCOME_HERO_THEMES: readonly WelcomeHeroTheme[] = [
   { id: 'alps-glacier', assetName: 'swiss-alps-glacier' },
   { id: 'federal-palace-summer', assetName: 'swiss-federal-palace-summer' },
   { id: 'aarau-old-town-summer', assetName: 'swiss-aarau-old-town-summer' },
+  { id: 'neuchatel-castle-lake', assetName: 'swiss-neuchatel-castle-lake' },
   { id: 'lion-monument-lucerne', assetName: 'swiss-lion-monument-lucerne' },
   { id: 'ticino-morcote-summer', assetName: 'swiss-ticino-morcote-summer' },
   { id: 'rhine-falls-schaffhausen', assetName: 'swiss-rhine-falls-schaffhausen' },

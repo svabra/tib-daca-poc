@@ -138,6 +138,12 @@ it to `granted_original` or `granted_modified`. The DAAIF reference fixture can 
 at `GET http://localhost:8080/sample-api/api/v1/daaif/estv.direct-tax-assessments.v1` with exactly one local
 demo identity header (`X-DaCa-User` or `X-DaCa-Machine`).
 
+The full browser-driven customer journey across a transient DAAIF and DaCa stack lives in
+[`journeys/`](journeys/README.md). It records screenshots, video, Playwright trace, JUnit output,
+container logs and a SHA-qualified result summary, then removes every journey container and
+volume. Run it locally with `npm run journey:data-analyst`; the official GitHub workflow is a
+manual `workflow_dispatch` on `main` only.
+
 ## Exercise the control plane
 
 Catalog registrations, directed grants, sync intent, deployment observations, health history,
