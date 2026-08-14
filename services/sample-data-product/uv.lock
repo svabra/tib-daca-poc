@@ -77,7 +77,7 @@ wheels = [
 ]
 
 [[package]]
-name = "didaca-sample-data-product"
+name = "daca-sample-data-product"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

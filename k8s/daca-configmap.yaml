@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tib-daca-poc-config
+  namespace: daai-brs-d
+  labels:
+    app.kubernetes.io/part-of: tib-daca-poc
+data:
+  ENVIRONMENT: poc
+  SEED_ON_STARTUP: "false"
+  CORS_ORIGINS: "[]"
+  DACA_DEMO_AUTH: "true"
+  DACA_OPEN_METADATA_PUBLICATION: "true"
+  SAMPLE_POLICY_PROJECTION_URL: http://daca-sample-data-product:8000/internal/v1/policy-projections
+  OPA_DECISION_URL: http://daca-opa:8181/v1/data/daca/authz/decision
+  CATALOG_DEPLOYMENT_ACK_URL: http://daca-catalog-api:8001/internal/v1/policy-deployments/acknowledge

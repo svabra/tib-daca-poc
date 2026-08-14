@@ -14,7 +14,6 @@ import {
   dataConsumerCountLabel,
   deliveryProtocols,
   isConsumedProduct,
-  KASSANDRA_USER_ID,
   matchesProduct,
   ProductRelationshipFilter,
   consumersForProduct,
@@ -22,31 +21,31 @@ import {
 } from './my-data-products';
 
 @Component({
-  selector: 'didaca-my-data-products',
+  selector: 'daca-my-data-products',
   standalone: true,
   imports: [DatePipe, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="didaca-page-heading product-index-heading">
+    <section class="daca-page-heading product-index-heading">
       <div>
-        <p class="didaca-eyebrow">Data Owner Workspace</p>
+        <p class="daca-eyebrow">Data Owner Workspace</p>
         <h1>Meine Datenprodukte</h1>
         <p>Finden Sie Datenprodukte, die Sie anbieten, freigegeben oder angefragt haben – sowie Produkte, die für Sie freigegeben wurden.</p>
       </div>
       <aside class="product-index-identity" aria-label="Aktueller Arbeitskontext">
-        <img class="product-index-avatar" src="/assets/kassandra-valdata.webp" alt="">
-        <span><small>Aktueller Arbeitskontext</small><strong>Kassandra Valdata</strong><small>Eidgenössische Steuerverwaltung ESTV</small></span>
+        @if (api.identityUser().avatarUrl) { <img class="product-index-avatar" [src]="api.identityUser().avatarUrl!" alt=""> }
+        <span><small>Aktueller Arbeitskontext</small><strong>{{ api.identityUser().displayName }}</strong><small>{{ api.identityUser().organization }}</small></span>
       </aside>
     </section>
 
     @if (api.usingFallback()) {
-      <p class="didaca-alert is-warning">Vorschaudaten: Die SQLite-Katalog-API ist lokal nicht erreichbar. Suche und Filter bleiben mit dem identischen ESTV-Beispielportfolio nutzbar.</p>
+      <p class="daca-alert is-warning">Vorschaudaten: Die PostgreSQL-gestützte Katalog-API ist lokal nicht erreichbar. Suche und Filter bleiben mit dem identischen ESTV-Beispielportfolio nutzbar.</p>
     }
 
-    <section class="didaca-card product-search" aria-labelledby="product-search-title">
+    <section class="daca-card product-search" aria-labelledby="product-search-title">
       <div class="product-search-main">
         <div>
-          <p class="didaca-eyebrow">Katalog durchsuchen</p>
+          <p class="daca-eyebrow">Katalog durchsuchen</p>
           <h2 id="product-search-title">Welches Datenprodukt suchen Sie?</h2>
           <p>Titel, Fachgebiet, Behörde, Kanton, Gemeinde oder Machine ID eingeben.</p>
         </div>
@@ -84,13 +83,13 @@ import {
     <section class="product-results" id="product-results" aria-live="polite">
       <div class="product-results-heading">
         <div>
-          <p class="didaca-eyebrow">Ergebnisse</p>
+          <p class="daca-eyebrow">Ergebnisse</p>
           <h2>{{ productCountLabel(filteredProducts().length) }}</h2>
         </div>
         <div class="product-results-tools">
           <p>
             @if (api.loading()) { Katalog wird aktualisiert… }
-            @else { Für {{ userDisplayName }} · ESTV }
+            @else { Für {{ api.identityUser().displayName }} · {{ api.identityUser().organization }} }
           </p>
           <div class="product-view-switch" role="group" aria-label="Darstellung der Datenprodukte">
             <button type="button" [class.is-active]="viewMode() === 'records'" [attr.aria-pressed]="viewMode() === 'records'" (click)="viewMode.set('records')">
@@ -118,19 +117,19 @@ import {
         </div>
       }
       @if (identifierCopyError()) {
-        <p class="didaca-alert is-error" role="alert">Der Identifier konnte nicht in die Zwischenablage kopiert werden.</p>
+        <p class="daca-alert is-error" role="alert">Der Identifier konnte nicht in die Zwischenablage kopiert werden.</p>
       }
 
       @if (filteredProducts().length === 0) {
-        <div class="didaca-card product-empty">
+        <div class="daca-card product-empty">
           <strong>Keine passenden Datenprodukte gefunden.</strong>
           <p>Ändern Sie den Suchbegriff oder wählen Sie eine andere Beziehung.</p>
-          <button class="didaca-button is-secondary" type="button" (click)="resetFilters()">Alle Datenprodukte anzeigen</button>
+          <button class="daca-button is-secondary" type="button" (click)="resetFilters()">Alle Datenprodukte anzeigen</button>
         </div>
       } @else if (viewMode() === 'records') {
         <div class="product-list">
           @for (product of filteredProducts(); track product.id) {
-            <article class="didaca-card product-list-item">
+            <article class="daca-card product-list-item">
               <div class="product-list-accent" aria-hidden="true"></div>
               <div class="product-list-body">
                 <div class="product-list-meta">
@@ -138,15 +137,20 @@ import {
                   <span>{{ product.owner }}</span>
                   <span>{{ classificationLabel(product.classification) }}</span>
                   <span>{{ lifecycleLabel(product.lifecycle) }}</span>
+                  @if (product.qualityMedal) { <span class="product-quality-medal" [class]="'product-quality-medal is-' + product.qualityMedal">{{ qualityLabel(product) }}</span> }
                 </div>
                 <h3>{{ product.title }}</h3>
                 <p>{{ product.description }}</p>
+                @for (alert of simulationAlerts(product); track alert.eventId) {
+                  <div class="product-simulation-alert"><strong>{{ alert.title }}</strong><span>{{ alert.detail }}</span></div>
+                }
 
                 <div class="product-relationships" aria-label="Ihre Beziehung zu diesem Datenprodukt">
                   @for (badge of badges(product); track badge.kind + badge.detail) {
                     @if (badge.kind === 'offered' && consumerSummary(product).total > 0) {
                       <button
                         class="product-consumer-badge is-offered"
+                        [class.needs-attention]="badge.tone === 'attention'"
                         type="button"
                         [attr.aria-label]="dataConsumerLabel(consumerSummary(product).total) + ' von ' + product.title + ' anzeigen'"
                         (click)="openConsumerDrawer(product, $event)"
@@ -162,6 +166,7 @@ import {
                         [class.is-requested]="badge.kind === 'requestedByMe'"
                         [class.is-shared-with]="badge.kind === 'sharedWithMe'"
                         [class.is-machine]="badge.kind === 'machine'"
+                        [class.needs-attention]="badge.tone === 'attention'"
                       >
                         <strong>{{ badge.label }}</strong><small>{{ badge.detail }}</small>
                         @if (badge.kind === 'offered') { <span>{{ consumerBreakdown(product) }}</span> }
@@ -215,7 +220,7 @@ import {
                   <div><dt>Geändert</dt><dd>{{ product.updatedAt | date: 'dd.MM.yyyy' }}</dd></div>
                 </dl>
                 <div class="product-list-actions">
-                  <a class="didaca-button is-secondary" [routerLink]="['/products', product.id, 'metadata']">Produktdetails öffnen</a>
+                  <a class="daca-button is-secondary" [routerLink]="['/products', product.id, 'overview']">Produktdetails öffnen</a>
                   <div class="product-context-menu" (click)="$event.stopPropagation()">
                     <button
                       class="product-context-trigger"
@@ -231,7 +236,7 @@ import {
                     </button>
                     @if (activeProductMenuId() === product.id) {
                       <div class="product-context-popover" role="menu" [id]="'product-actions-' + product.id">
-                        <a role="menuitem" [routerLink]="['/products', product.id, 'metadata']">
+                        <a role="menuitem" [routerLink]="['/products', product.id, 'overview']">
                           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.5L19 8v11.5H5z"/><path d="M15.5 4.5V8H19M8 12h8M8 15h6"/></svg>
                           <span>Produktdetails öffnen</span>
                         </a>
@@ -259,7 +264,7 @@ import {
           }
         </div>
       } @else {
-        <div class="didaca-card product-table-shell">
+        <div class="daca-card product-table-shell">
           <table class="product-table">
             <thead>
               <tr>
@@ -276,9 +281,9 @@ import {
               @for (product of filteredProducts(); track product.id) {
                 <tr>
                   <td>
-                    <a class="product-table-title" [routerLink]="['/products', product.id, 'metadata']">
+                    <a class="product-table-title" [routerLink]="['/products', product.id, 'overview']">
                       <strong>{{ product.title }}</strong>
-                      <span>{{ product.domain }} · Revision {{ product.revision }}</span>
+                      <span>{{ product.domain }} · Revision {{ product.revision }} @if (product.qualityMedal) { · <b>{{ qualityLabel(product) }}</b> }</span>
                     </a>
                   </td>
                   <td>
@@ -297,6 +302,7 @@ import {
                         @if (badge.kind === 'offered' && consumerSummary(product).total > 0) {
                           <button
                             type="button"
+                            [class.needs-attention]="badge.tone === 'attention'"
                             [attr.aria-label]="dataConsumerLabel(consumerSummary(product).total) + ' von ' + product.title + ' anzeigen'"
                             (click)="openConsumerDrawer(product, $event)"
                           >
@@ -305,7 +311,7 @@ import {
                             <span>{{ consumerBreakdown(product) }}</span>
                           </button>
                         } @else {
-                          <span>
+                          <span [class.needs-attention]="badge.tone === 'attention'">
                             <strong>{{ badge.label }}</strong>
                             @if (badge.kind === 'offered') {
                               <small>{{ badge.detail }}</small><span>{{ consumerBreakdown(product) }}</span>
@@ -316,7 +322,9 @@ import {
                     </span>
                   </td>
                   <td>
-                    @if (request(product); as access) {
+                    @if (simulationAlerts(product).length) {
+                      <span class="product-table-request is-attention"><strong>{{ simulationAlerts(product)[0].title }}</strong><small>{{ simulationAlerts(product)[0].detail }}</small></span>
+                    } @else if (request(product); as access) {
                       <span class="product-table-request" [class.is-granted]="access.tone === 'granted'" [class.is-rejected]="access.tone === 'rejected'">
                         <strong>{{ access.label }}</strong><small>{{ access.requestId }}</small>
                       </span>
@@ -332,7 +340,7 @@ import {
                   <td><span class="product-table-date">{{ product.updatedAt | date: 'dd.MM.yyyy' }}<small>{{ frequencyLabel(product.updateFrequency) }}</small></span></td>
                   <td>
                     <div class="product-table-actions">
-                      <a [routerLink]="['/products', product.id, 'metadata']">Öffnen</a>
+                      <a [routerLink]="['/products', product.id, 'overview']">Öffnen</a>
                       <div class="product-context-menu" (click)="$event.stopPropagation()">
                         <button
                           class="product-context-trigger"
@@ -348,7 +356,7 @@ import {
                         </button>
                         @if (activeProductMenuId() === product.id) {
                           <div class="product-context-popover" role="menu" [id]="'product-table-actions-' + product.id">
-                            <a role="menuitem" [routerLink]="['/products', product.id, 'metadata']">
+                            <a role="menuitem" [routerLink]="['/products', product.id, 'overview']">
                               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.5L19 8v11.5H5z"/><path d="M15.5 4.5V8H19M8 12h8M8 15h6"/></svg>
                               <span>Produktdetails öffnen</span>
                             </a>
@@ -392,7 +400,7 @@ import {
         >
           <header class="access-consumer-header">
             <div>
-              <p class="didaca-eyebrow">Aktive Zugriffe</p>
+              <p class="daca-eyebrow">Aktive Zugriffe</p>
               <h2 id="access-consumer-title">Datenkonsumenten</h2>
               <p>{{ product.title }}</p>
             </div>
@@ -463,7 +471,7 @@ import {
         <section class="ownership-transfer-dialog" role="dialog" aria-modal="true" aria-labelledby="ownership-transfer-title" (click)="$event.stopPropagation()">
           <header>
             <div>
-              <p class="didaca-eyebrow">Data Governance</p>
+              <p class="daca-eyebrow">Data Governance</p>
               <h2 id="ownership-transfer-title">Ownership transferieren</h2>
             </div>
             <button type="button" (click)="closeOwnershipTransfer()" aria-label="Dialog schliessen">×</button>
@@ -487,8 +495,8 @@ import {
             <p class="ownership-transfer-error" role="alert">{{ error }}</p>
           }
           <footer>
-            <button class="didaca-button is-secondary" type="button" [disabled]="transferSubmitting()" (click)="closeOwnershipTransfer()">Abbrechen</button>
-            <button class="didaca-button is-primary" type="button" [disabled]="!transferTarget() || transferSubmitting()" (click)="prepareOwnershipTransfer()">
+            <button class="daca-button is-secondary" type="button" [disabled]="transferSubmitting()" (click)="closeOwnershipTransfer()">Abbrechen</button>
+            <button class="daca-button is-primary" type="button" [disabled]="!transferTarget() || transferSubmitting()" (click)="prepareOwnershipTransfer()">
               {{ transferSubmitting() ? 'Anfrage wird gespeichert…' : 'Transferanfrage erstellen' }}
             </button>
           </footer>
@@ -514,7 +522,6 @@ export class MyDataProductsComponent implements OnDestroy {
   readonly consumerDrawerProduct = signal<DataProduct | null>(null);
   readonly consumerTypeFilter = signal<'all' | 'person' | 'machine'>('all');
   readonly consumerQuery = signal('');
-  readonly userDisplayName = 'Kassandra Valdata';
   private consumerDrawerReturnFocus: HTMLElement | null = null;
   private bodyOverflowBeforeDrawer: string | null = null;
   readonly filters: readonly { value: ProductRelationshipFilter; label: string }[] = [
@@ -530,7 +537,7 @@ export class MyDataProductsComponent implements OnDestroy {
       product,
       this.query(),
       this.filter(),
-      KASSANDRA_USER_ID,
+      this.api.identityUserId(),
       this.api.ownedAccessConsumers(),
     )),
   );
@@ -565,13 +572,13 @@ export class MyDataProductsComponent implements OnDestroy {
       product,
       '',
       filter,
-      KASSANDRA_USER_ID,
+      this.api.identityUserId(),
       this.api.ownedAccessConsumers(),
     )).length;
   }
 
   badges(product: DataProduct) {
-    return relationshipBadges(product, KASSANDRA_USER_ID, this.api.ownedAccessConsumers());
+    return relationshipBadges(product, this.api.identityUserId(), this.api.ownedAccessConsumers());
   }
 
   consumerSummary(product: DataProduct) {
@@ -595,9 +602,20 @@ export class MyDataProductsComponent implements OnDestroy {
     return deliveryProtocols(product);
   }
 
+  qualityLabel(product: DataProduct): string {
+    const medal = ({ bronze: 'Bronze', silver: 'Silber', gold: 'Gold', platinum: 'Platinum' } as const)[product.qualityMedal ?? 'bronze'];
+    return product.qualityScore === undefined ? medal : `${medal} · ${product.qualityScore}/6`;
+  }
+
+  simulationAlerts(product: DataProduct): Array<{ eventId: string; title: string; detail: string }> {
+    const value = product.additionalMetadata['simulationAlerts'];
+    if (!Array.isArray(value)) return [];
+    return value.filter((item): item is { eventId: string; title: string; detail: string } => Boolean(item && typeof item === 'object' && 'eventId' in item && 'title' in item && 'detail' in item));
+  }
+
   visibleOwner(product: DataProduct): DataOwnerProfile | null {
-    const isRelevantOwner = isConsumedProduct(product, KASSANDRA_USER_ID)
-      || canTransferOwnership(product, KASSANDRA_USER_ID);
+    const isRelevantOwner = isConsumedProduct(product, this.api.identityUserId())
+      || canTransferOwnership(product, this.api.identityUserId());
     return isRelevantOwner ? dataOwner(product) : null;
   }
 
@@ -606,7 +624,7 @@ export class MyDataProductsComponent implements OnDestroy {
   }
 
   ownershipTransferAvailable(product: DataProduct): boolean {
-    return canTransferOwnership(product, KASSANDRA_USER_ID);
+    return canTransferOwnership(product, this.api.identityUserId());
   }
 
   toggleProductMenu(productId: string): void {

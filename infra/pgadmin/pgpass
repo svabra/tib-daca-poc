@@ -1,0 +1,3 @@
+postgres:5432:daca_catalog:daca_catalog:daca_catalog_dev
+postgres:5432:daca_control_plane:daca_control:daca_control_dev
+postgres:5432:daca_sample:daca_sample_owner:daca_sample_owner_dev

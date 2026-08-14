@@ -1,0 +1,34 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "DaCa Catalog",
+      "Group": "DaCa local",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "daca_catalog",
+      "Username": "daca_catalog",
+      "PassFile": "/pgpass",
+      "SSLMode": "prefer"
+    },
+    "2": {
+      "Name": "DaCa Control Plane",
+      "Group": "DaCa local",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "daca_control_plane",
+      "Username": "daca_control",
+      "PassFile": "/pgpass",
+      "SSLMode": "prefer"
+    },
+    "3": {
+      "Name": "DaCa Sample Data Product",
+      "Group": "DaCa local",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "daca_sample",
+      "Username": "daca_sample_owner",
+      "PassFile": "/pgpass",
+      "SSLMode": "prefer"
+    }
+  }
+}

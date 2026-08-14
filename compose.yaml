@@ -1,22 +1,23 @@
-name: bit-didaca
+name: bit-daca
 
 services:
   postgres:
     image: postgres:18.4
     environment:
-      POSTGRES_USER: didaca_admin
-      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-didaca_admin_dev}
+      POSTGRES_USER: daca_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-daca_admin_dev}
       POSTGRES_DB: postgres
-      CONTROL_PLANE_DB_PASSWORD: ${CONTROL_PLANE_DB_PASSWORD:-didaca_control_dev}
-      SAMPLE_DB_OWNER_PASSWORD: ${SAMPLE_DB_OWNER_PASSWORD:-didaca_sample_owner_dev}
-      SAMPLE_DB_PASSWORD: ${SAMPLE_DB_PASSWORD:-didaca_sample_api_dev}
-      POLICY_PROJECTOR_DB_PASSWORD: ${POLICY_PROJECTOR_DB_PASSWORD:-didaca_projector_dev}
-      SG_DB_PASSWORD: ${SG_DB_PASSWORD:-didaca_sg_dev}
-      BERN_DB_PASSWORD: ${BERN_DB_PASSWORD:-didaca_bern_dev}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD:-daca_catalog_dev}
+      CONTROL_PLANE_DB_PASSWORD: ${CONTROL_PLANE_DB_PASSWORD:-daca_control_dev}
+      SAMPLE_DB_OWNER_PASSWORD: ${SAMPLE_DB_OWNER_PASSWORD:-daca_sample_owner_dev}
+      SAMPLE_DB_PASSWORD: ${SAMPLE_DB_PASSWORD:-daca_sample_api_dev}
+      POLICY_PROJECTOR_DB_PASSWORD: ${POLICY_PROJECTOR_DB_PASSWORD:-daca_projector_dev}
+      SG_DB_PASSWORD: ${SG_DB_PASSWORD:-daca_sg_dev}
+      BERN_DB_PASSWORD: ${BERN_DB_PASSWORD:-daca_bern_dev}
     ports:
       - "55432:5432"
     volumes:
-      - didaca-postgres:/var/lib/postgresql
+      - daca-postgres:/var/lib/postgresql
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -29,17 +30,24 @@ services:
     build:
       context: ./services/catalog-api
     environment:
-      DATABASE_URL: sqlite+pysqlite:////data/didaca-catalog.db
-      SEED_ON_STARTUP: "true"
+      DATABASE_URL: postgresql+psycopg://daca_catalog:${CATALOG_DB_PASSWORD:-daca_catalog_dev}@postgres:5432/daca_catalog
+      ROOT_PATH: /catalog-api
+      SEED_ON_STARTUP: "false"
       CORS_ORIGINS: '["http://localhost:8080"]'
-      DIDACA_DEMO_AUTH: ${DIDACA_DEMO_AUTH:-true}
+      DACA_DEMO_AUTH: ${DACA_DEMO_AUTH:-true}
+      DACA_OPEN_METADATA_PUBLICATION: ${DACA_OPEN_METADATA_PUBLICATION:-true}
       SAMPLE_POLICY_PROJECTION_URL: http://sample-data-product:8000/internal/v1/policy-projections
-      SAMPLE_POLICY_PROJECTION_TOKEN: ${DIDACA_POLICY_DEPLOYMENT_TOKEN:-change-me-in-production}
+      SAMPLE_POLICY_PROJECTION_TOKEN: ${DACA_POLICY_DEPLOYMENT_TOKEN:-change-me-in-production}
       INTERNAL_TOKEN: local-development-only
     ports:
       - "8001:8001"
-    volumes:
-      - didaca-catalog-sqlite:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - daca-catalog-api
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health/ready', timeout=2)"]
       interval: 10s
@@ -48,16 +56,35 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+      PGADMIN_DISABLE_POSTFIX: "True"
+    ports:
+      - "5051:80"
+    volumes:
+      - daca-pgadmin:/var/lib/pgadmin
+      - ./infra/pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - ./infra/pgadmin/pgpass:/pgpass:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   control-plane-api:
     build:
       context: ./services/control-plane-api
     environment:
-      DIDACA_CONTROL_DATABASE_URL: postgresql+psycopg://didaca_control:${CONTROL_PLANE_DB_PASSWORD:-didaca_control_dev}@postgres:5432/didaca_control_plane
-      DIDACA_CONTROL_SEED_ON_STARTUP: "false"
-      DIDACA_CONTROL_CORS_ORIGINS: http://localhost:8081
-      DIDACA_CONTROL_HEALTH_POLL_INTERVAL_SECONDS: "15"
-      DIDACA_CONTROL_DEMO_AUTH: ${DIDACA_CONTROL_DEMO_AUTH:-true}
-      DIDACA_CONTROL_ENDPOINT_HOST_ALLOWLIST: ${DIDACA_CONTROL_ENDPOINT_HOST_ALLOWLIST:-catalog-api}
+      DACA_CONTROL_DATABASE_URL: postgresql+psycopg://daca_control:${CONTROL_PLANE_DB_PASSWORD:-daca_control_dev}@postgres:5432/daca_control_plane
+      DACA_CONTROL_SEED_ON_STARTUP: "false"
+      DACA_CONTROL_CORS_ORIGINS: http://localhost:8081
+      DACA_CONTROL_HEALTH_POLL_INTERVAL_SECONDS: "15"
+      DACA_CONTROL_DEMO_AUTH: ${DACA_CONTROL_DEMO_AUTH:-true}
+      DACA_CONTROL_ENDPOINT_HOST_ALLOWLIST: ${DACA_CONTROL_ENDPOINT_HOST_ALLOWLIST:-catalog-api}
     ports:
       - "8002:8002"
     depends_on:
@@ -91,12 +118,13 @@ services:
     build:
       context: ./services/sample-data-product
     environment:
-      ALEMBIC_DATABASE_URL: postgresql+psycopg://didaca_sample_owner:${SAMPLE_DB_OWNER_PASSWORD:-didaca_sample_owner_dev}@postgres:5432/didaca_sample
-      SAMPLE_DATABASE_URL: postgresql+psycopg://didaca_sample_api:${SAMPLE_DB_PASSWORD:-didaca_sample_api_dev}@postgres:5432/didaca_sample
-      POLICY_PROJECTOR_DATABASE_URL: postgresql+psycopg://didaca_policy_projector:${POLICY_PROJECTOR_DB_PASSWORD:-didaca_projector_dev}@postgres:5432/didaca_sample
-      OPA_DECISION_URL: http://opa:8181/v1/data/didaca/authz/decision
-      DIDACA_POLICY_DEPLOYMENT_TOKEN: ${DIDACA_POLICY_DEPLOYMENT_TOKEN:-change-me-in-production}
-      DIDACA_DEMO_AUTH: ${DIDACA_DEMO_AUTH:-true}
+      ALEMBIC_DATABASE_URL: postgresql+psycopg://daca_sample_owner:${SAMPLE_DB_OWNER_PASSWORD:-daca_sample_owner_dev}@postgres:5432/daca_sample
+      ROOT_PATH: /sample-api
+      SAMPLE_DATABASE_URL: postgresql+psycopg://daca_sample_api:${SAMPLE_DB_PASSWORD:-daca_sample_api_dev}@postgres:5432/daca_sample
+      POLICY_PROJECTOR_DATABASE_URL: postgresql+psycopg://daca_policy_projector:${POLICY_PROJECTOR_DB_PASSWORD:-daca_projector_dev}@postgres:5432/daca_sample
+      OPA_DECISION_URL: http://opa:8181/v1/data/daca/authz/decision
+      DACA_POLICY_DEPLOYMENT_TOKEN: ${DACA_POLICY_DEPLOYMENT_TOKEN:-change-me-in-production}
+      DACA_DEMO_AUTH: ${DACA_DEMO_AUTH:-true}
       CATALOG_DEPLOYMENT_ACK_URL: http://catalog-api:8001/internal/v1/policy-deployments/acknowledge
       CATALOG_INTERNAL_TOKEN: local-development-only
     ports:
@@ -106,6 +134,10 @@ services:
         condition: service_healthy
       opa:
         condition: service_started
+    networks:
+      default:
+        aliases:
+          - daca-sample-data-product
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
       interval: 10s
@@ -119,7 +151,7 @@ services:
       context: .
       dockerfile: apps/catalog-ui/Dockerfile
     ports:
-      - "8080:80"
+      - "8080:8080"
     depends_on:
       catalog-api:
         condition: service_healthy
@@ -130,12 +162,12 @@ services:
       context: .
       dockerfile: apps/control-plane-ui/Dockerfile
     ports:
-      - "8081:80"
+      - "8081:8080"
     depends_on:
       control-plane-api:
         condition: service_healthy
     restart: unless-stopped
 
 volumes:
-  didaca-postgres:
-  didaca-catalog-sqlite:
+  daca-postgres:
+  daca-pgadmin:

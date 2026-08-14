@@ -1,31 +1,19 @@
-export interface ExposureAudienceGroup {
-  id: string;
-  label: string;
-  description: string;
-}
-
 export interface ExposureDraft {
-  subjectType: 'person' | 'machine';
+  subjectType: 'person' | 'machine' | 'group';
   subjectId: string;
-  groupIds: readonly string[];
   validFrom: string;
   validUntil: string;
   kobyMetadataAllowed: boolean;
+  i14yMetadataDelivery: boolean;
 }
-
-export const EXPOSURE_AUDIENCE_GROUPS: readonly ExposureAudienceGroup[] = [
-  { id: 'kanton-st-gallen', label: 'Kanton St. Gallen', description: 'Finanzanalyse · produktiver Zugriff' },
-  { id: 'estv-data-stewards', label: 'ESTV Data Stewards', description: 'Qualitätssicherung · interner Zugriff' },
-  { id: 'bund-forschung', label: 'Forschung Bund', description: 'Aggregierte Analysen · projektbezogen' },
-];
 
 export const INITIAL_EXPOSURE_DRAFT: ExposureDraft = {
   subjectType: 'person',
-  subjectId: 'beat.stalder',
-  groupIds: ['kanton-st-gallen'],
-  validFrom: '2026-08-10',
+  subjectId: '',
+  validFrom: '2026-08-12',
   validUntil: '2026-12-31',
   kobyMetadataAllowed: true,
+  i14yMetadataDelivery: false,
 };
 
 export function isExposureDateRangeValid(validFrom: string, validUntil: string): boolean {
@@ -41,7 +29,6 @@ export function exposureDurationDays(validFrom: string, validUntil: string): num
 
 export function isExposurePublishable(draft: ExposureDraft): boolean {
   return isExposureSubjectIdValid(draft.subjectId)
-    && draft.groupIds.length > 0
     && isExposureDateRangeValid(draft.validFrom, draft.validUntil);
 }
 

@@ -2,40 +2,41 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { DacaGlossaryTermComponent } from '@bit-daca/design-system';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { AccessRequestStatus, AccessRequestSubmission, StoredAccessRequest } from '../../core/catalog.models';
 import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/my-data-products';
 
 @Component({
-  selector: 'didaca-access-request-form',
+  selector: 'daca-access-request-form',
   standalone: true,
-  imports: [DatePipe, ReactiveFormsModule, RouterLink],
+  imports: [DatePipe, ReactiveFormsModule, RouterLink, DacaGlossaryTermComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <nav class="access-request-breadcrumb" aria-label="Brotkrümelnavigation">
-      <a routerLink="/metadata">Meine Datenprodukte</a><span aria-hidden="true">›</span><span>Zugriff anfragen</span>
+      <a routerLink="/products">Meine Datenprodukte</a><span aria-hidden="true">›</span><span>Zugriff anfragen</span>
     </nav>
 
-    <section class="didaca-page-heading access-request-heading">
+    <section class="daca-page-heading access-request-heading">
       <div>
-        <p class="didaca-eyebrow">Zugriffsantrag</p>
+        <p class="daca-eyebrow">Zugriffsantrag</p>
         <h1>Zugriff auf Datenprodukt anfragen</h1>
-        <p>Beschreiben Sie den vorgesehenen Datenbezug. Die Data Ownerin oder der Data Owner prüft Identität, Rechtslage und Zugriffskonditionen.</p>
+        <p>Beschreiben Sie den vorgesehenen Datenbezug für eine persönliche <daca-glossary-term term="eIAM" />-Identität oder einen <daca-glossary-term term="M2M" />-Service. Die Data Ownerin oder der Data Owner prüft Identität, Rechtslage und Zugriffskonditionen.</p>
       </div>
     </section>
 
     @if (isOwnProduct()) {
-      <section class="didaca-card access-request-owner-guard">
+      <section class="daca-card access-request-owner-guard">
         <h2>Kein Antrag erforderlich</h2>
         <p>Sie sind für dieses Datenprodukt verantwortlich und verfügen bereits über den benötigten Arbeitszugriff.</p>
-        <a class="didaca-button is-secondary" routerLink="/metadata">Zurück zu meinen Datenprodukten</a>
+        <a class="daca-button is-secondary" routerLink="/products">Zurück zu meinen Datenprodukten</a>
       </section>
     } @else if (createdRequest(); as receipt) {
-      <section class="didaca-card access-request-confirmation" aria-live="polite">
+      <section class="daca-card access-request-confirmation" aria-live="polite">
         <span class="access-request-confirmation-icon" aria-hidden="true">✓</span>
-        <p class="didaca-eyebrow">Antrag gespeichert</p>
+        <p class="daca-eyebrow">Antrag gespeichert</p>
         <h2>Ihre Zugriffsanfrage ist eingegangen</h2>
-        <p>Der Antrag wurde in der lokalen SQLite-Katalogdatenbank gespeichert und an die zuständige Data Ownerin beziehungsweise den zuständigen Data Owner übergeben.</p>
+        <p>Der Antrag wurde in der PostgreSQL-Katalogdatenbank gespeichert und an die zuständige Data Ownerin beziehungsweise den zuständigen Data Owner übergeben.</p>
         <dl>
           <div><dt>Antragsnummer</dt><dd>{{ receipt.requestNumber }}</dd></div>
           <div><dt>Status</dt><dd>{{ statusLabel(receipt.status) }}</dd></div>
@@ -43,15 +44,15 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
           <div><dt>Eingereicht</dt><dd>{{ receipt.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</dd></div>
         </dl>
         <div class="access-request-confirmation-actions">
-          <a class="didaca-button is-primary" routerLink="/metadata" [queryParams]="{ relationship: 'requestedByMe' }">Meine Anfragen anzeigen</a>
-          <button class="didaca-button is-secondary" type="button" (click)="createAnotherRequest()">Weiteren Antrag erstellen</button>
+          <a class="daca-button is-primary" routerLink="/products" [queryParams]="{ relationship: 'requestedByMe' }">Meine Anfragen anzeigen</a>
+          <button class="daca-button is-secondary" type="button" (click)="createAnotherRequest()">Weiteren Antrag erstellen</button>
         </div>
       </section>
     } @else {
       <div class="access-request-layout">
-        <form class="didaca-card access-request-form" [formGroup]="form" (ngSubmit)="submit()">
+        <form class="daca-card access-request-form" [formGroup]="form" (ngSubmit)="submit()">
           <header>
-            <p class="didaca-eyebrow">Antragsangaben</p>
+            <p class="daca-eyebrow">Antragsangaben</p>
             <h2>Wer benötigt welche Daten – und wofür?</h2>
             <p>Mit <span aria-hidden="true">*</span><span class="sr-only">Stern</span> markierte Felder sind erforderlich.</p>
           </header>
@@ -59,8 +60,8 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
           <fieldset>
             <legend>1. Antragstellende Person</legend>
             <div class="access-request-person">
-              <img src="/assets/kassandra-valdata.webp" alt="">
-              <span><strong>Kassandra Valdata</strong><small>Eidgenössische Steuerverwaltung ESTV</small><small>Identität aus dem Demo-Benutzerkontext</small></span>
+              @if (api.identityUser().avatarUrl; as avatarUrl) { <img [src]="avatarUrl" alt=""> }
+              <span><strong>{{ api.identityUser().displayName }}</strong><small>{{ api.identityUser().organization }}</small><small>Identität aus dem Demo-Benutzerkontext</small></span>
             </div>
             <label class="access-request-field">
               <span>Kontakt-E-Mail *</span>
@@ -74,7 +75,7 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
             <div class="access-request-choice-group" role="radiogroup" aria-label="Zugriff für">
               <label [class.is-selected]="form.controls.consumerType.value === 'person'">
                 <input type="radio" formControlName="consumerType" value="person" (change)="consumerTypeChanged()">
-                <span><strong>Für mich persönlich</strong><small>Interaktiver Zugriff durch Kassandra Valdata</small></span>
+                <span><strong>Für mich persönlich</strong><small>Interaktiver Zugriff durch {{ api.identityUser().displayName }}</small></span>
               </label>
               <label [class.is-selected]="form.controls.consumerType.value === 'machine'">
                 <input type="radio" formControlName="consumerType" value="machine" (change)="consumerTypeChanged()">
@@ -152,19 +153,19 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
           </label>
           @if (form.controls.conditionsAccepted.touched && form.controls.conditionsAccepted.invalid) { <p class="field-error">Diese Bestätigung ist für die Einreichung erforderlich.</p> }
 
-          @if (submitError(); as error) { <p class="didaca-alert is-error" role="alert">{{ error }}</p> }
+          @if (submitError(); as error) { <p class="daca-alert is-error" role="alert">{{ error }}</p> }
 
           <footer>
-            <a class="didaca-button is-secondary" routerLink="/metadata">Abbrechen</a>
-            <button class="didaca-button is-primary" type="submit" [disabled]="submitting()">
+            <a class="daca-button is-secondary" routerLink="/products">Abbrechen</a>
+            <button class="daca-button is-primary" type="submit" [disabled]="submitting()">
               {{ submitting() ? 'Antrag wird gespeichert…' : 'Zugriffsanfrage einreichen' }}
             </button>
           </footer>
         </form>
 
         <aside class="access-request-sidebar" aria-label="Datenprodukt und Antragsstatus">
-          <section class="didaca-card access-request-product-card">
-            <p class="didaca-eyebrow">Datenprodukt</p>
+          <section class="daca-card access-request-product-card">
+            <p class="daca-eyebrow">Datenprodukt</p>
             <h2>{{ product().title }}</h2>
             <p>{{ product().description }}</p>
             <dl>
@@ -175,8 +176,8 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
             </dl>
           </section>
 
-          <section class="didaca-card access-request-process">
-            <p class="didaca-eyebrow">Prüfprozess</p>
+          <section class="daca-card access-request-process">
+            <p class="daca-eyebrow">Prüfprozess</p>
             <h2>Was geschieht danach?</h2>
             <ol>
               <li><strong>Anfrage eingegangen</strong><span>Der Antrag erhält eine eindeutige Nummer.</span></li>
@@ -187,8 +188,8 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
           </section>
 
           @if (existingRequests().length) {
-            <section class="didaca-card access-request-history">
-              <p class="didaca-eyebrow">Bisherige Anträge</p>
+            <section class="daca-card access-request-history">
+              <p class="daca-eyebrow">Bisherige Anträge</p>
               @for (request of existingRequests(); track request.id) {
                 <article>
                   <strong>{{ request.requestNumber }}</strong>
@@ -223,18 +224,19 @@ export class AccessRequestFormComponent {
     requestedVariant: this.fb.nonNullable.control<'original' | 'modified' | 'either'>('either'),
     validFrom: [futureDate(7), Validators.required],
     validUntil: [futureDate(372), Validators.required],
-    contactEmail: ['kassandra.valdata@estv.admin.ch', [Validators.required, Validators.email]],
+    contactEmail: ['', [Validators.required, Validators.email]],
     notes: '',
     conditionsAccepted: [false, Validators.requiredTrue],
   });
 
   constructor() {
+    this.form.controls.contactEmail.setValue(this.api.identityUser().email);
     this.api.selectProduct(this.productId);
     this.api.loadMyAccessRequests(this.productId).subscribe((requests) => this.existingRequests.set(requests));
   }
 
   isOwnProduct(): boolean {
-    return canTransferOwnership(this.product());
+    return canTransferOwnership(this.product(), this.api.identityUserId());
   }
 
   ownerName(): string {
@@ -314,6 +316,7 @@ export class AccessRequestFormComponent {
       identity_review: 'Identität wird geprüft',
       legal_review: 'Rechtslage wird geprüft',
       conditions_review: 'Zugriffskonditionen werden geprüft',
+      approved_policy_pending: 'Genehmigt · Policy wird publiziert',
       granted_modified: 'Zugriff gewährt (modifiziert)',
       granted_original: 'Zugriff gewährt (original)',
       rejected: 'Zugriff nicht gewährt',

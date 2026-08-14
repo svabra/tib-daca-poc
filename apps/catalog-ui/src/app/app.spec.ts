@@ -2,7 +2,7 @@ import { FALLBACK_POLICY, FALLBACK_PRODUCT } from './core/catalog.seed';
 
 describe('Catalog preview contract', () => {
   it('uses a stable catalog URN and aggregate-only ESTV product', () => {
-    expect(FALLBACK_PRODUCT.globalId).toBe('urn:didaca:ch:estv:tax-statistics-by-canton');
+    expect(FALLBACK_PRODUCT.globalId).toBe('urn:daca:ch:estv:tax-statistics-by-canton');
     expect(FALLBACK_PRODUCT.description).toContain('keine Personendaten');
   });
 

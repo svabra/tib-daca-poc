@@ -1,25 +1,25 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { StatusBadgeComponent } from '@bit-didaca/design-system';
+import { StatusBadgeComponent } from '@bit-daca/design-system';
 import { CatalogApiService } from '../../core/catalog-api.service';
 
 @Component({
-  selector: 'didaca-catalog-overview',
+  selector: 'daca-catalog-overview',
   standalone: true,
   imports: [RouterLink, StatusBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="didaca-page-heading">
+    <section class="daca-page-heading">
       <div>
-        <p class="didaca-eyebrow">Distributed Data Catalog</p>
+        <p class="daca-eyebrow">Distributed Data Catalog</p>
         <h1>Govern data products with confidence</h1>
         <p>Metadata, lineage, provenance, endpoints and access policy in one revisioned catalog record.</p>
       </div>
-      <didaca-status-badge [tone]="api.usingFallback() ? 'orange' : 'green'">{{ api.connectionLabel() }}</didaca-status-badge>
+      <daca-status-badge [tone]="api.usingFallback() ? 'orange' : 'green'">{{ api.connectionLabel() }}</daca-status-badge>
     </section>
 
     @if (api.usingFallback()) {
-      <p class="didaca-alert is-warning" role="status">
+      <p class="daca-alert is-warning" role="status">
         The live catalog is starting or unavailable. Deterministic preview content is shown; mutations remain network-only.
       </p>
     }
@@ -32,37 +32,37 @@ import { CatalogApiService } from '../../core/catalog-api.service';
     </section>
 
     <div class="catalog-overview-grid">
-      <section class="didaca-card catalog-product-card" aria-labelledby="featured-product-title">
-        <div class="didaca-card-header">
+      <section class="daca-card catalog-product-card" aria-labelledby="featured-product-title">
+        <div class="daca-card-header">
           <div>
-            <p class="didaca-eyebrow">Featured product</p>
+            <p class="daca-eyebrow">Featured product</p>
             <h2 id="featured-product-title">{{ product().title }}</h2>
           </div>
-          <didaca-status-badge tone="red">{{ product().classification }}</didaca-status-badge>
+          <daca-status-badge tone="red">{{ product().classification }}</daca-status-badge>
         </div>
-        <div class="didaca-card-body">
+        <div class="daca-card-body">
           <div class="catalog-product-owner">
             <span class="catalog-owner-mark">CH</span>
             <div><strong>{{ product().owner }}</strong><span>{{ product().domain }} · revision {{ product().revision }}</span></div>
           </div>
           <p>{{ product().description }}</p>
           <dl class="catalog-summary-list">
-            <div><dt>Global identifier</dt><dd class="didaca-code">{{ product().globalId }}</dd></div>
+            <div><dt>Global identifier</dt><dd class="daca-code">{{ product().globalId }}</dd></div>
             <div><dt>Endpoints</dt><dd>HTTP/REST · PostgreSQL</dd></div>
             <div><dt>Update cycle</dt><dd>{{ product().updateFrequency }}</dd></div>
             <div><dt>Policy</dt><dd>PBAC · default deny</dd></div>
           </dl>
           <div class="catalog-actions">
-            <a class="didaca-button" routerLink="/exposure">Freigabe konfigurieren</a>
-            <a class="didaca-button is-secondary" routerLink="/metadata">Meine Datenprodukte bearbeiten</a>
-            <a class="didaca-button is-secondary" routerLink="/lineage">Lineage ansehen</a>
+            <a class="daca-button" routerLink="/exposure">Freigabe konfigurieren</a>
+            <a class="daca-button is-secondary" routerLink="/products">Meine Datenprodukte bearbeiten</a>
+            <a class="daca-button is-secondary" routerLink="/lineage">Lineage ansehen</a>
           </div>
         </div>
       </section>
 
-      <aside class="didaca-card" aria-labelledby="governance-title">
-        <div class="didaca-card-header"><h2 id="governance-title">Governance readiness</h2><span class="catalog-score">92</span></div>
-        <div class="didaca-card-body">
+      <aside class="daca-card" aria-labelledby="governance-title">
+        <div class="daca-card-header"><h2 id="governance-title">Governance readiness</h2><span class="catalog-score">92</span></div>
+        <div class="daca-card-body">
           <div class="catalog-readiness-row"><span>Descriptive metadata</span><meter min="0" max="100" value="96">96%</meter><strong>96%</strong></div>
           <div class="catalog-readiness-row"><span>Lineage & provenance</span><meter min="0" max="100" value="91">91%</meter><strong>91%</strong></div>
           <div class="catalog-readiness-row"><span>Endpoint contract</span><meter min="0" max="100" value="87">87%</meter><strong>87%</strong></div>
@@ -75,9 +75,9 @@ import { CatalogApiService } from '../../core/catalog-api.service';
       </aside>
     </div>
 
-    <section class="didaca-card catalog-flow-card" aria-labelledby="pbac-title">
-      <div class="didaca-card-header"><div><p class="didaca-eyebrow">Policy-based access control</p><h2 id="pbac-title">One policy, two enforcement paths</h2></div><a routerLink="/security">Open policy studio →</a></div>
-      <div class="didaca-card-body catalog-flow">
+    <section class="daca-card catalog-flow-card" aria-labelledby="pbac-title">
+      <div class="daca-card-header"><div><p class="daca-eyebrow">Policy-based access control</p><h2 id="pbac-title">One policy, two enforcement paths</h2></div><a routerLink="/security">Open policy studio →</a></div>
+      <div class="daca-card-body catalog-flow">
         <div><span class="catalog-flow-icon">1</span><strong>Data owner / PAP</strong><small>publishes structured intent</small></div><i aria-hidden="true">→</i>
         <div><span class="catalog-flow-icon">2</span><strong>Catalog / PIP</strong><small>adds trusted attributes</small></div><i aria-hidden="true">→</i>
         <div><span class="catalog-flow-icon">3</span><strong>OPA / PDP</strong><small>decides HTTP access</small></div><i aria-hidden="true">↘</i>

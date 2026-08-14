@@ -22,6 +22,7 @@ export interface RelationshipBadge {
   kind: Exclude<ProductRelationshipFilter, 'all'> | 'machine';
   label: string;
   detail: string;
+  tone: 'normal' | 'attention';
 }
 
 export interface AccessConsumerSummary {
@@ -43,6 +44,7 @@ export type AccessRequestStatus =
   | 'identity_review'
   | 'legal_review'
   | 'conditions_review'
+  | 'approved_policy_pending'
   | 'granted_modified'
   | 'granted_original'
   | 'rejected'
@@ -62,6 +64,7 @@ const ACCESS_REQUEST_STATUS: Record<AccessRequestStatus, Pick<AccessRequest, 'la
   identity_review: { label: 'Identität wird geprüft', tone: 'open' },
   legal_review: { label: 'Rechtslage wird geprüft', tone: 'open' },
   conditions_review: { label: 'Zugriffskonditionen werden geprüft', tone: 'open' },
+  approved_policy_pending: { label: 'Genehmigt · Policy wird publiziert', tone: 'open' },
   granted_modified: { label: 'Zugriff gewährt (modifiziert)', tone: 'granted' },
   granted_original: { label: 'Zugriff gewährt (original)', tone: 'granted' },
   rejected: { label: 'Zugriff nicht gewährt', tone: 'rejected' },
@@ -101,30 +104,43 @@ export function relationshipBadges(
   const isOwner = usage.responsibleUserIds.includes(userId);
   if (isOwner) {
     const summary = accessConsumerSummary(product.id, accessConsumers);
-    badges.push({ kind: 'offered', label: 'Von Ihnen angeboten', detail: dataConsumerCountLabel(summary.total) });
+    badges.push({
+      kind: 'offered',
+      label: 'Von Ihnen angeboten',
+      detail: dataConsumerCountLabel(summary.total),
+      tone: summary.total === 0 ? 'attention' : 'normal',
+    });
   } else if (usage.sharedByUserIds.includes(userId)) {
     const machine = usage.consumerMachineIds[0];
     badges.push({
       kind: 'sharedByMe',
       label: 'Von Ihnen freigegeben',
       detail: machine ? `${machine.label} · ${machine.id}` : 'Aktive Freigabe',
+      tone: 'normal',
     });
   }
-  if (usage.requestedByUserIds.includes(userId)) {
+  if (hasOpenAccessRequest(product, userId)) {
     const machine = usage.consumerMachineIds[0];
     badges.push({
       kind: 'requestedByMe',
       label: 'Von Ihnen angefragt',
       detail: machine ? `Für Machine ID · ${machine.id}` : 'Entscheid ausstehend',
+      tone: 'attention',
     });
   }
   if (usage.sharedWithUserIds.includes(userId)) {
-    badges.push({ kind: 'sharedWithMe', label: 'Für Sie freigegeben', detail: 'Persönlicher Zugriff' });
+    badges.push({ kind: 'sharedWithMe', label: 'Für Sie freigegeben', detail: 'Persönlicher Zugriff', tone: 'normal' });
     for (const machine of usage.consumerMachineIds) {
-      badges.push({ kind: 'machine', label: machine.label, detail: `Machine ID · ${machine.id}` });
+      badges.push({ kind: 'machine', label: machine.label, detail: `Machine ID · ${machine.id}`, tone: 'normal' });
     }
   }
   return badges;
+}
+
+export function hasOpenAccessRequest(product: DataProduct, userId = KASSANDRA_USER_ID): boolean {
+  if (!catalogUsage(product).requestedByUserIds.includes(userId)) return false;
+  const request = accessRequest(product);
+  return request === null || request.tone === 'open';
 }
 
 export function connectedAuthorities(product: DataProduct): readonly string[] {
@@ -171,7 +187,7 @@ export function accessRequest(product: DataProduct): AccessRequest | null {
 export function isConsumedProduct(product: DataProduct, userId = KASSANDRA_USER_ID): boolean {
   const usage = catalogUsage(product);
   return usage.sharedWithUserIds.includes(userId)
-    || usage.requestedByUserIds.includes(userId)
+    || hasOpenAccessRequest(product, userId)
     || usage.sharedByUserIds.includes(userId);
 }
 
@@ -193,7 +209,7 @@ export function matchesProduct(
     all: true,
     offered: usage.responsibleUserIds.includes(userId),
     sharedByMe: productConsumers.length > 0,
-    requestedByMe: usage.requestedByUserIds.includes(userId),
+    requestedByMe: hasOpenAccessRequest(product, userId),
     sharedWithMe: usage.sharedWithUserIds.includes(userId),
   }[filter];
   if (!matchesFilter) return false;

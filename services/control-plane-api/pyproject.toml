@@ -1,7 +1,7 @@
 [project]
-name = "didaca-control-plane-api"
+name = "daca-control-plane-api"
 version = "0.1.0"
-description = "BIT DiDaCa control-plane API"
+description = "BIT DaCa control-plane API"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -21,21 +21,21 @@ test = [
 ]
 
 [project.scripts]
-didaca-control-plane-seed = "didaca_control_plane.seed:main"
+daca-control-plane-seed = "daca_control_plane.seed:main"
 
 [build-system]
 requires = ["hatchling==1.27.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/didaca_control_plane"]
+packages = ["src/daca_control_plane"]
 
 [tool.pytest.ini_options]
 addopts = "-q --strict-markers"
 testpaths = ["tests"]
 
 [tool.coverage.run]
-source = ["didaca_control_plane"]
+source = ["daca_control_plane"]
 branch = true
 
 [tool.coverage.report]

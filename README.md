@@ -1,6 +1,6 @@
-# BIT DiDaCa
+# BIT DaCa
 
-**DiDaCa** means **Distributed Data Catalog**. This proof of concept contains a standalone catalog,
+**DaCa** means **Distributed Data Catalog**. This proof of concept contains a standalone catalog,
 a catalog control plane, and a synthetic ESTV data product protected over both REST and direct
 PostgreSQL access.
 
@@ -9,13 +9,13 @@ PostgreSQL access.
 | Project | Purpose | Local URL |
 |---|---|---|
 | Catalog UI | Metadata, lineage, provenance, endpoints, policy authoring | http://localhost:8080 |
-| Catalog API | Standalone catalog and PAP/PIP | http://localhost:8001/docs |
+| Catalog API | Standalone catalog and PAP/PIP | http://localhost:8080/catalog-api/docs |
 | Control-plane UI | Instances, directed trust, sync intent, status | http://localhost:8081 |
 | Control-plane API | Control-plane REST and SSE | http://localhost:8002/docs |
-| Sample data product | Protected synthetic ESTV aggregates | http://localhost:8003/docs |
+| Sample data product | Protected synthetic ESTV aggregates | http://localhost:8080/sample-api/docs |
 | OPA PDP | Bundle status and local policy decisions | http://localhost:8181 |
-| SQLite | Persistenter lokaler Katalogspeicher | Docker-Volume `didaca-catalog-sqlite` |
-| PostgreSQL | Control Plane, Sample-Daten und direkter Produktzugriff | localhost:55432 |
+| PostgreSQL 18.4 | Catalog, Control Plane, Sample-Daten und direkter Produktzugriff | localhost:55432 |
+| pgAdmin | Nur lokale Verwaltung der drei PostgreSQL-Datenbanken | http://localhost:5051 |
 
 The only supported protocols are HTTP and PostgreSQL wire protocol. Federation configuration is
 persisted but no catalog-to-catalog synchronization is performed.
@@ -24,7 +24,7 @@ persisted but no catalog-to-catalog synchronization is performed.
 
 - Angular 22, Angular PWA/service worker, signals and RxJS
 - Python 3.14, FastAPI, SQLAlchemy, Psycopg and Alembic
-- SQLite 3 for the POC catalog, PostgreSQL 18.4 for control/product data, and OPA 1.18.2
+- PostgreSQL 18.4 for all local persistence contexts and OPA 1.18.2 for policy decisions
 - npm and uv workspaces, pytest and browser-based visual verification
 
 Python is intentional: future metadata extraction, data profiling, normalization, lineage
@@ -39,7 +39,7 @@ byte-identical copies of the supplied reference assets; its monolithic styleshee
 
 1. Start Docker Desktop and select its Linux engine.
 2. Copy `.env.example` to `.env` if you want to change development credentials. All checked-in
-   defaults and both `X-DiDaCa-*` headers are local-demo mechanisms, never production identity.
+   defaults and both `X-DaCa-*` headers are local-demo mechanisms, never production identity.
 3. Build and start everything:
 
    ```powershell
@@ -47,13 +47,29 @@ byte-identical copies of the supplied reference assets; its monolithic styleshee
    docker compose ps
    ```
 
-4. Open the two UI URLs above. Stop without deleting database state with
-   `docker compose down`; add `-v` only when intentionally discarding the SQLite and PostgreSQL
-   volumes.
+4. Open the UI and pgAdmin URLs above. Stop without deleting database state with
+   `docker compose down`; add `-v` only when intentionally discarding the local PostgreSQL and
+   pgAdmin volumes.
 
-The catalog API stores its temporary POC portfolio in `/data/didaca-catalog.db` on the named
-`didaca-catalog-sqlite` volume. PostgreSQL 18 stores its separate control-plane and sample-product
-state at `/var/lib/postgresql`, matching the official image's version-aware layout.
+PostgreSQL 18.4 stores the separate `daca_catalog`, `daca_control_plane` and `daca_sample`
+databases on the named `daca-postgres` volume. pgAdmin is a local-only convenience and uses the
+development credentials from `.env.example`; no pgAdmin or PostgreSQL workload is deployed by
+the production manifests.
+
+The migration does not delete an earlier catalog SQLite volume or a repository-local `*.db`
+file. If such a volume still exists, first identify and back it up; remove it only after checking
+the copied database:
+
+```powershell
+docker volume ls --filter name=catalog-sqlite
+New-Item -ItemType Directory -Force backup
+docker run --rm --mount source=<legacy-volume>,target=/source,readonly `
+  --mount type=bind,source=${PWD}\backup,target=/backup `
+  alpine sh -c "cp /source/*.db /backup/"
+docker volume rm <legacy-volume>
+```
+
+The last command permanently removes only the explicitly named legacy volume and is optional.
 
 Each API container runs its own Alembic migration before startup. To rerun migrations explicitly:
 
@@ -73,7 +89,7 @@ curl.exe -i http://localhost:8001/api/v1/data-products/11111111-1111-4111-8111-1
 curl.exe -X PATCH `
   -H 'Content-Type: application/json' `
   -H 'If-Match: "1"' `
-  -H 'X-DiDaCa-User: didaca-demo-editor' `
+  -H 'X-DaCa-User: daca-demo-editor' `
   -d '{"description":"Updated synthetic aggregate metadata"}' `
   http://localhost:8001/api/v1/data-products/11111111-1111-4111-8111-111111111111
 ```
@@ -81,11 +97,58 @@ curl.exe -X PATCH `
 A missing precondition returns `428`; a stale ETag returns `412`. Errors use
 `application/problem+json` and include a request ID.
 
+## Exercise the DAAIF → DaCa Golden Path
+
+Open `http://localhost:8080/poc-simulation/product-submitted`. The PoC Simulation area exposes three already-created
+DAAIF REST fixtures for each PostgreSQL-backed demo identity. Submitting a fixture calls the open
+metadata-only endpoint `POST /api/v1/metadata-publications`; it creates an owner-scoped product,
+a quality task, and an access-governance task without granting product-data access.
+
+The endpoint is disabled by default outside the local Compose profile and is enabled there with
+`DACA_OPEN_METADATA_PUBLICATION=true`. It accepts only HTTP(S) REST descriptions without URL
+credentials, query strings, fragments, or secret fields. `sourceSystem + sourceProductId` is
+idempotent; a changed replay returns `409`.
+
+DAAIF can integrate against the versioned focused contract
+[`docs/openapi/daca-metadata-publication.openapi.yaml`](docs/openapi/daca-metadata-publication.openapi.yaml).
+With the local stack running, the complete interactive specification is available in
+[Swagger UI](http://localhost:8080/catalog-api/docs) and as
+[OpenAPI JSON](http://localhost:8080/catalog-api/openapi.json).
+Keep the focused contract in sync with the running FastAPI application using:
+
+```powershell
+npm run docs:openapi
+npm run docs:openapi:check
+```
+
+The checked contract is also served by the Catalog UI at
+`http://localhost:8080/openapi/daca-metadata-publication.openapi.yaml` so a DAAIF developer can
+download the exact integration subset without cloning the repository.
+
+The five-step quality wizard keeps DCAT-AP-CH catalog mappings separate from the local
+`DaCa Canonical Tax Ontology · PoC`. Platinum is calculated server-side only when all six stored
+proofs are present: published access governance, confirmed discoverability, technical metadata,
+business metadata, confirmed KOBY Graphify context, and confirmed mappings for the product class
+and every key field. The semantic profile is available as DCAT-oriented JSON-LD at
+`GET /api/v1/data-products/{id}/semantic-profile`; no SPARQL endpoint is exposed.
+
+Access decisions are deliberately two-phase: approval creates a timed PBAC/Rego draft and sets
+the request to `approved_policy_pending`; only successful publication to OPA and PostgreSQL sets
+it to `granted_original` or `granted_modified`. The DAAIF reference fixture can then be exercised
+at `GET http://localhost:8080/sample-api/api/v1/daaif/estv.direct-tax-assessments.v1` with exactly one local
+demo identity header (`X-DaCa-User` or `X-DaCa-Machine`).
+
+The full browser-driven customer journey across a transient DAAIF and DaCa stack lives in
+[`journeys/`](journeys/README.md). It records screenshots, video, Playwright trace, JUnit output,
+container logs and a SHA-qualified result summary, then removes every journey container and
+volume. Run it locally with `npm run journey:data-analyst`; the official GitHub workflow is a
+manual `workflow_dispatch` on `main` only.
+
 ## Exercise the control plane
 
 Catalog registrations, directed grants, sync intent, deployment observations, health history,
 and audit events are available under `http://localhost:8002/api/v1`. Mutations require the local
-`X-DiDaCa-Actor: demo-control-admin` header. A sync configuration can be enabled only when an
+`X-DaCa-Actor: demo-control-admin` header. A sync configuration can be enabled only when an
 approved matching directed grant exists; no federation traffic is sent.
 
 ## Test the protected REST product
@@ -93,13 +156,13 @@ approved matching directed grant exists; no federation traffic is sent.
 Allowed:
 
 ```powershell
-curl.exe -H "X-DiDaCa-User: kanton-st-gallen" http://localhost:8003/api/v1/estv/tax-statistics
+curl.exe -H "X-DaCa-User: kanton-st-gallen" http://localhost:8080/sample-api/api/v1/estv/tax-statistics
 ```
 
 Denied (`403`):
 
 ```powershell
-curl.exe -H "X-DiDaCa-User: kanton-bern" http://localhost:8003/api/v1/estv/tax-statistics
+curl.exe -H "X-DaCa-User: kanton-bern" http://localhost:8080/sample-api/api/v1/estv/tax-statistics
 ```
 
 Missing identity returns `401`; an unavailable or undefined OPA decision returns `503` without
@@ -111,15 +174,15 @@ The seed credentials are development-only and can be changed through `.env` befo
 volume initialization.
 
 ```powershell
-$env:PGPASSWORD="didaca_sg_dev"
-psql -h localhost -p 55432 -U "kanton-st-gallen" -d didaca_sample -c "select * from tax_statistics;"
+$env:PGPASSWORD="daca_sg_dev"
+psql -h localhost -p 55432 -U "kanton-st-gallen" -d daca_sample -c "select * from tax_statistics;"
 ```
 
 The denied user receives no rows:
 
 ```powershell
-$env:PGPASSWORD="didaca_bern_dev"
-psql -h localhost -p 55432 -U "kanton-bern" -d didaca_sample -c "select * from tax_statistics;"
+$env:PGPASSWORD="daca_bern_dev"
+psql -h localhost -p 55432 -U "kanton-bern" -d daca_sample -c "select * from tax_statistics;"
 ```
 
 Forced RLS finds no matching PostgreSQL entitlement. Neither consumer is a table owner,
@@ -135,6 +198,20 @@ npm test
 npm run lint
 ```
 
+The persistent data model for the catalog, control plane, and protected sample product is in
+[`docs/data-model/`](docs/data-model/README.md). DAAIF is treated as an external source; the
+documentation covers only the publication and workflow evidence stored by DaCa. After changing
+SQLAlchemy models, Alembic migrations, persisted JSON structures, PostgreSQL roles, functions, or
+RLS policies, regenerate and verify the model documentation:
+
+```powershell
+npm run docs:data-model
+npm run docs:data-model:check
+```
+
+The second command is part of the root `npm test` pipeline and fails when generated tables,
+columns, relationships, constraints, migration heads, or protected PostgreSQL objects drift.
+
 These root commands build/test both Angular workspaces and all Python services; `npm test` also
 runs both reviewed Rego suites with the pinned OPA image. `npm audit --omit=dev` reports no
 production dependency vulnerabilities at the time of this implementation.
@@ -143,3 +220,13 @@ Architecture and PBAC details are in `docs/architecture.md` and `docs/security/p
 combined component, PBAC, WSO2, PostgreSQL projection, and request-activity diagrams are in
 `docs/architecture-pbac-diagrams.md`. The root `AGENTS.md` is the AI capability harness and records
 the deliberately unimplemented federation contract.
+
+## OpenShift presentation deployment
+
+Production uses the existing PostgreSQL 17 and administration infrastructure in `daai-brs-d`.
+DaCa deploys no PostgreSQL, pgAdmin, PVC or database service there. The database administrator
+creates DaCa-specific databases and roles with
+[`infra/postgres/production/bootstrap-daca.sql`](infra/postgres/production/bootstrap-daca.sql),
+then the application-only manifests are applied as described in [`k8s/README.md`](k8s/README.md).
+DAAIF publishes metadata internally to
+`http://daca-catalog-api:8001/api/v1/metadata-publications`.

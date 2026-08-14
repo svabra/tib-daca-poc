@@ -5,6 +5,6 @@ asks OPA before touching product data, then PostgreSQL forced RLS checks the sam
 entitlement again. Direct PostgreSQL clients are checked by `SESSION_USER`.
 
 The development identities are `kanton-st-gallen` (allowed) and `kanton-bern` (denied). The
-header-based identity mode is deliberately gated by `DIDACA_DEMO_AUTH` and is not production
+header-based identity mode is deliberately gated by `DACA_DEMO_AUTH` and is not production
 authentication.
 

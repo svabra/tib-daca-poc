@@ -1,8 +1,18 @@
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { StatusBadgeComponent } from '@bit-didaca/design-system';
+import { ChangeDetectionStrategy, Component, OnDestroy, computed, effect, inject, signal } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { DacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-daca/design-system';
+import { Subscription } from 'rxjs';
+import { CatalogApiService, PolicyWire } from '../../core/catalog-api.service';
 import {
-  EXPOSURE_AUDIENCE_GROUPS,
+  AdministrativeOrganization,
+  IdentityDirectoryEntry,
+  IdentityDirectorySource,
+  IdentityGroupDetail,
+  IdentityGroupSummary,
+  PolicyDefinition,
+} from '../../core/catalog.models';
+import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav.component';
+import {
   INITIAL_EXPOSURE_DRAFT,
   exposureDurationDays,
   exposureUtcDay,
@@ -11,278 +21,667 @@ import {
   isExposureSubjectIdValid,
 } from './exposure-draft';
 
-type PublicationState = 'draft' | 'published';
+type SubjectType = 'person' | 'machine' | 'group';
+type PublicationState = 'draft' | 'activating' | 'active';
+const DIRECTORY_SEARCH_DEBOUNCE_MS = 250;
+
+function localIsoDate(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function journeyDateRange(): [string, string] {
+  const start = new Date();
+  const end = new Date(start);
+  end.setFullYear(end.getFullYear() + 1);
+  return [localIsoDate(start), localIsoDate(end)];
+}
+
+const [JOURNEY_START_DATE, JOURNEY_END_DATE] = journeyDateRange();
 
 @Component({
-  selector: 'didaca-exposure-studio',
+  selector: 'daca-exposure-studio',
   standalone: true,
-  imports: [RouterLink, StatusBadgeComponent],
+  imports: [ProductWorkspaceNavComponent, RouterLink, StatusBadgeComponent, DacaGlossaryTermComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <nav class="exposure-breadcrumb" aria-label="Brotkrumen-Navigation">
-      <a routerLink="/">Datenprodukte</a><span aria-hidden="true">/</span><span>ESTV-Steuerstatistik nach Kanton</span><span aria-hidden="true">/</span><strong>Freigabe</strong>
-    </nav>
+    <daca-product-workspace-nav
+      [productId]="product().id"
+      [productTitle]="product().title"
+      activeSection="access"
+      accessView="grant"
+    />
 
-    <section class="didaca-page-heading exposure-heading">
+    <section class="daca-page-heading exposure-heading">
       <div>
-        <p class="didaca-eyebrow">Mockup 04 · Sicherheit & Zugriff</p>
-        <h1>Datenprodukt freigeben</h1>
-        <p>Bestimmen Sie, welche eIAM-Identität oder Machine ID das Datenprodukt in welchem Zeitraum nutzen darf und ob KOBY auf freigegebene Metadaten zugreifen kann.</p>
+        <p class="daca-eyebrow">Zugriff · Neue Einstellung</p>
+        <h1>Zugriffseinstellung erstellen</h1>
+        <p>Wählen Sie genau eine vertrauenswürdige Person, Machine ID oder Gruppe und bestimmen Sie Zeitraum sowie Metadatenkanäle.</p>
       </div>
-      <didaca-status-badge [tone]="publicationState() === 'published' ? 'green' : 'orange'">
-        {{ publicationState() === 'published' ? 'Freigabe simuliert' : 'Entwurf' }}
-      </didaca-status-badge>
+      <daca-status-badge [tone]="publicationState() === 'active' ? 'green' : publicationState() === 'activating' ? 'orange' : 'orange'">
+        {{ publicationState() === 'active' ? 'Zugriffseinstellung aktiv' : publicationState() === 'activating' ? 'Aktivierung läuft' : 'Entwurf' }}
+      </daca-status-badge>
     </section>
 
-    <section class="didaca-card exposure-product" aria-labelledby="exposure-product-title">
+    <section class="daca-card exposure-product" aria-labelledby="exposure-product-title">
       <div class="exposure-product-mark" aria-hidden="true">ESTV</div>
       <div class="exposure-product-copy">
         <span>Ausgewähltes Datenprodukt</span>
-        <h2 id="exposure-product-title">ESTV-Steuerstatistik nach Kanton</h2>
-        <small>Eigentümer: ESTV · <span class="didaca-code">urn:didaca:ch:estv:tax-statistics-by-canton</span></small>
+        <h2 id="exposure-product-title">{{ product().title }}</h2>
+        <small>Eigentümerin: {{ product().owner }} · <span class="daca-code">{{ product().globalId }}</span></small>
       </div>
-      <didaca-status-badge tone="red">Eingeschränkt</didaca-status-badge>
-      <a routerLink="/metadata">Metadaten ansehen</a>
+      <daca-status-badge tone="red">Eingeschränkt</daca-status-badge>
+      <a [routerLink]="['/products', product().id, 'metadata']">Metadaten ansehen</a>
     </section>
 
+    @if (isJourneyProduct()) {
+      <div class="exposure-layout">
+        <section class="daca-card exposure-form">
+          <div class="daca-card-header"><div><p class="daca-eyebrow">Customer Journey · Gemeinsame Review-Ansicht</p><h2>Drei Empfänger nach denselben Bedingungen freigeben</h2></div><daca-status-badge tone="orange">Vier-Augen-Prinzip</daca-status-badge></div>
+          <div class="daca-card-body">
+            <p>Joel Ruod übermittelt einen unveröffentlichten Policy-Entwurf. Erst Thomas Kriegli kann exakt diese Revision genehmigen.</p>
+            @if (linkedAccessRequest(); as request) {
+              <p class="daca-alert" role="status" data-testid="journey-linked-access-request"><strong>{{ request.requestNumber }}:</strong> Die Anfrage von {{ request.requesterName }} wird über den bestätigten Snapshot der Gruppe Kanton St. Gallen erfüllt.</p>
+            }
+            <div class="owner-task-list">
+              <article class="daca-card owner-task-card"><div class="owner-task-priority"></div><div class="owner-task-main"><div><span>Gruppe · Kanton</span><code>kanton-st-gallen</code></div><h3>Kanton St. Gallen</h3><p>REST · Originaldaten · Mitgliedersnapshot beim Übermitteln</p></div></article>
+              <article class="daca-card owner-task-card"><div class="owner-task-priority"></div><div class="owner-task-main"><div><span>Gruppe · Bundesamt</span><code>efd-efv-bundestresorerie</code></div><h3>EFD – EFV / Bundestresorerie</h3><p>REST · Originaldaten · Daniel Aebischer im aktuellen Snapshot</p></div></article>
+              <article class="daca-card owner-task-card"><div class="owner-task-priority"></div><div class="owner-task-main"><div><span>Person · Approver</span><code>thomas.kriegli</code></div><h3>Thomas Kriegli</h3><p>Persönlicher REST-Zugriff zusätzlich zur Vier-Augen-Freigabe</p></div></article>
+            </div>
+            <section class="exposure-rule-section">
+              <div class="exposure-section-heading"><div><p class="daca-eyebrow">Gültigkeit und PBAC</p><h3>Durchgehend gültig</h3></div><span>24/7</span></div>
+              <div class="exposure-period-grid">
+                <label>Gültig ab<input type="date" [value]="journeyStartDate()" (input)="journeyStartDate.set($any($event.target).value)"></label>
+                <label>Gültig bis<input type="date" [value]="journeyEndDate()" [min]="journeyStartDate()" (input)="journeyEndDate.set($any($event.target).value)"></label>
+                <div class="exposure-timezone"><span>Zeitfenster</span><strong>Alle Wochentage · 24 Stunden</strong><small>Keine zusätzliche Wochenzeit-Einschränkung</small></div>
+              </div>
+            </section>
+            <div class="exposure-channel-grid">
+              <label class="exposure-koby-consent is-selected"><input type="checkbox" role="switch" [checked]="journeyKoby()" (change)="journeyKoby.set($any($event.target).checked)"><span><strong>KOBY über MCP aktivieren</strong><small>Metadaten und Kontext; keine Produktdaten oder Zugangsdaten.</small></span><b>MCP</b></label>
+              <label class="exposure-koby-consent is-selected"><input type="checkbox" role="switch" [checked]="journeyI14y()" (change)="journeyI14y.set($any($event.target).checked)"><span><strong>I14Y aktivieren</strong><small>Nur Metadaten; keine Produktdaten oder Zugangsdaten. Simulierte Outbox.</small></span><b>I14Y</b></label>
+              <label class="exposure-koby-consent is-selected"><input type="checkbox" role="switch" [checked]="journeyBar()" (change)="journeyBar.set($any($event.target).checked)"><span><strong>Automatische BAR-Archivierung</strong><small>20 Jahre Aufbewahrung; nur persistierte Governance-Evidenz, kein Netzwerkaufruf.</small></span><b>BAR</b></label>
+            </div>
+          </div>
+        </section>
+        <aside class="daca-card exposure-review">
+          <div class="daca-card-header"><div><p class="daca-eyebrow">Übermittlung</p><h2>Publikation beantragen</h2></div></div>
+          <div class="daca-card-body">
+            <dl class="exposure-review-list"><div><dt>Empfänger</dt><dd>2 Gruppen · 1 Person</dd></div><div><dt>Protokoll</dt><dd>HTTP REST</dd></div><div><dt>Datenvariante</dt><dd>Original</dd></div><div><dt>Zeitfenster</dt><dd>24/7</dd></div><div><dt>KOBY / MCP</dt><dd>{{ journeyKoby() ? 'Aktiviert' : 'Deaktiviert' }}</dd></div><div><dt>I14Y</dt><dd>{{ journeyI14y() ? 'Aktiviert' : 'Deaktiviert' }}</dd></div><div><dt>BAR</dt><dd>{{ journeyBar() ? '20 Jahre' : 'Deaktiviert' }}</dd></div></dl>
+            <div class="exposure-guardrail"><strong>Niemand erhält sofort Zugriff</strong><p>Die Policy bleibt bis zu Thomas’ Entscheid und den bestätigten OPA-/PostgreSQL-Deployments ohne Wirkung.</p></div>
+            @if (journeyNotice()) { <p class="daca-alert" role="status">{{ journeyNotice() }}</p> }
+            @if (publicationError()) { <p class="daca-alert is-error" role="alert">{{ publicationError() }}</p> }
+            <button class="daca-button exposure-primary-action" data-testid="journey-submit-governance" type="button" [disabled]="journeySubmitting() || !dateValidForJourney()" (click)="submitJourneyGovernance()">{{ journeySubmitting() ? 'Wird Thomas Kriegli übermittelt …' : 'Zur Vier-Augen-Genehmigung übermitteln' }}</button>
+            <a class="daca-button is-secondary exposure-secondary-action" [routerLink]="['/products', product().id, 'quality']">Metadaten-Vorprüfung öffnen</a>
+          </div>
+        </aside>
+      </div>
+    } @else {
     <div class="exposure-layout">
-      <form id="exposure-form" class="didaca-card exposure-form" (submit)="$event.preventDefault(); publish()">
+      <form id="exposure-form" class="daca-card exposure-form" (submit)="$event.preventDefault(); activate()">
         <section class="exposure-rule-section" aria-labelledby="audience-title">
           <div class="exposure-section-heading">
-            <div><p class="didaca-eyebrow">Schritt 1</p><h2 id="audience-title">Wer darf die Daten nutzen?</h2></div>
-            <span>{{ subjectType() === 'person' ? 'Persönlich · eIAM' : 'Maschine · M2M' }}</span>
+            <div><p class="daca-eyebrow">Schritt 1</p><h2 id="audience-title">Wer darf die Daten nutzen?</h2></div>
+            <span>{{ subjectTypeLabel() }}</span>
           </div>
 
-          <div class="exposure-subject-choice" role="radiogroup" aria-label="Art der Freigabe">
+          <div class="exposure-subject-choice is-three" role="radiogroup" aria-label="Art des Zugriffsziels">
             <label [class.is-selected]="subjectType() === 'person'">
               <input type="radio" name="exposure-subject-type" value="person" [checked]="subjectType() === 'person'" (change)="setSubjectType('person')">
-              <span><strong>Persönlicher Zugriff</strong><small>Eine Person greift mit ihrer eigenen eIAM-Identität zu.</small></span>
-              <b>eIAM</b>
+              <span><strong>Persönlicher Zugriff</strong><small>Eine Person greift mit ihrer eigenen eIAM-Identität zu.</small></span><b>eIAM</b>
             </label>
             <label [class.is-selected]="subjectType() === 'machine'">
               <input type="radio" name="exposure-subject-type" value="machine" [checked]="subjectType() === 'machine'" (change)="setSubjectType('machine')">
-              <span><strong>Maschinenzugriff</strong><small>Ein technischer Client greift Machine-to-Machine zu.</small></span>
-              <b>M2M</b>
+              <span><strong>Maschinenzugriff</strong><small>Ein technischer Client greift Machine-to-Machine zu.</small></span><b>M2M</b>
+            </label>
+            <label [class.is-selected]="subjectType() === 'group'">
+              <input type="radio" name="exposure-subject-type" value="group" [checked]="subjectType() === 'group'" (change)="setSubjectType('group')">
+              <span><strong>Gruppenzugriff</strong><small>Eine vertrauenswürdige Personengruppe erhält Zugriff.</small></span><b>Gruppe</b>
             </label>
           </div>
 
-          <div class="exposure-subject-id" [class.is-invalid]="!subjectValid()">
-            @if (subjectType() === 'person') {
-              <label for="exposure-eiam-id"><span>eIAM-Benutzer-ID *</span><input id="exposure-eiam-id" [value]="eiamIdentity()" (input)="setEiamIdentity($any($event.target).value)" placeholder="z. B. beat.stalder" autocomplete="off"></label>
-              <p>Die Freigabe gilt ausschliesslich für diese persönliche Identität und ist nicht übertragbar.</p>
-            } @else {
+          @if (subjectType() === 'person') {
+            <div class="exposure-directory-panel">
+              <div class="exposure-directory-fields is-person">
+                <label for="person-search">Person suchen
+                  <input id="person-search" type="search" [value]="personQuery()" (input)="onPersonQuery($any($event.target).value)" (keydown.enter)="$event.preventDefault(); searchPeople()" placeholder="Name, Organisation, E-Mail oder eIAM-ID" autocomplete="off">
+                </label>
+                <label for="person-source">Quelle
+                  <select id="person-source" [value]="personSource()" (change)="setPersonSource($any($event.target).value)">
+                    <option value="">Alle Verzeichnisse</option>
+                    <option value="federal">Bund</option>
+                    <option value="cantonal">Kantone</option>
+                    <option value="municipal">Gemeinden</option>
+                    <option value="federal_related">Bundesnahe Betriebe</option>
+                  </select>
+                </label>
+                <label for="person-organization">Departement / Amt
+                  <select id="person-organization" [value]="personOrganizationId()" (change)="setPersonOrganization($any($event.target).value)">
+                    <option value="">Alle Departemente und Ämter</option>
+                    @for (organization of organizations(); track organization.id) {
+                      <option [value]="organization.id">{{ organization.label }} · {{ organization.displayName }}</option>
+                    }
+                  </select>
+                </label>
+                <button class="daca-button is-secondary" type="button" (click)="searchPeople()">Suchen</button>
+              </div>
+              <p class="exposure-help">Die Trefferliste aktualisiert sich während der Eingabe. Erst die bewusste Auswahl eines Suchresultats erzeugt ein gültiges Zugriffsziel.</p>
+              @if (directoryLoading()) { <p class="exposure-directory-state" role="status">Verzeichnis wird durchsucht …</p> }
+              @else if (directoryError()) { <p class="daca-alert is-error" role="alert">{{ directoryError() }}</p> }
+              @else if (!people().length) { <p class="exposure-directory-state">Keine passenden aktiven Personen gefunden.</p> }
+              @else {
+                <div class="exposure-directory-results" role="listbox" aria-label="Gefundene Personen">
+                  @for (person of people(); track person.id) {
+                    <button type="button" role="option" [attr.aria-selected]="selectedPerson()?.id === person.id" [class.is-selected]="selectedPerson()?.id === person.id" (click)="selectPerson(person)">
+                      <span><strong>{{ person.displayName }}</strong><small>{{ person.organization }} · {{ person.email }}</small></span>
+                      <span><code>{{ person.id }}</code><small>{{ sourceLabel(person.source) }} · {{ person.sourceSystem }}</small></span>
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          } @else if (subjectType() === 'machine') {
+            <div class="exposure-subject-id" [class.is-invalid]="!subjectValid()">
               <label for="exposure-machine-id"><span>Machine ID *</span><input id="exposure-machine-id" [value]="machineIdentity()" (input)="setMachineIdentity($any($event.target).value)" placeholder="z. B. svc-estv-tax-analysis" autocomplete="off"></label>
               <p>Nur die technische Identität angeben – keine Passwörter, Tokens oder Secret-Referenzen.</p>
-            }
-            @if (!subjectValid()) { <strong role="alert">Eine gültige {{ subjectType() === 'person' ? 'eIAM-Benutzer-ID' : 'Machine ID' }} ist erforderlich.</strong> }
-          </div>
-
-          <div class="exposure-subsection-heading">
-            <div><strong>Berechtigungskontext</strong><small>Vertrauenswürdige Gruppe der gewählten Identität</small></div>
-            <span>{{ selectedGroups().length }} ausgewählt</span>
-          </div>
-          <div class="exposure-group-grid" role="group" aria-labelledby="audience-title">
-            @for (group of audienceGroups; track group.id) {
-              <label class="exposure-group-card" [class.is-selected]="selectedGroupIds().has(group.id)">
-                <input
-                  type="checkbox"
-                  [checked]="selectedGroupIds().has(group.id)"
-                  (change)="toggleGroup(group.id, $any($event.target).checked)"
-                >
-                <span><strong>{{ group.label }}</strong><small>{{ group.description }}</small><code>{{ group.id }}</code></span>
-              </label>
-            }
-          </div>
-          <p class="exposure-help">eIAM- und Machine-Identitäten sowie ihre Gruppenzugehörigkeiten stammen aus einer vertrauenswürdigen Identitätsquelle. Nicht ausgewählte oder unbekannte Identitäten bleiben gesperrt.</p>
+              @if (!subjectValid()) { <strong role="alert">Eine gültige Machine ID ist erforderlich.</strong> }
+            </div>
+          } @else {
+            <div class="exposure-directory-panel">
+              <div class="exposure-directory-fields">
+                <label for="group-search">Vertrauenswürdige Gruppe suchen
+                  <input id="group-search" type="search" [value]="groupQuery()" (input)="onGroupQuery($any($event.target).value)" (keydown.enter)="$event.preventDefault(); searchGroups()" placeholder="z. B. Kanton Neuchâtel" autocomplete="off">
+                </label>
+                <label for="group-source">Quelle
+                  <select id="group-source" [value]="groupSource()" (change)="setGroupSource($any($event.target).value)">
+                    <option value="">Alle Verzeichnisse</option>
+                    <option value="federal">Bund</option><option value="cantonal">Kantone</option><option value="municipal">Gemeinden</option><option value="federal_related">Bundesnahe Betriebe</option>
+                  </select>
+                </label>
+                <button class="daca-button is-secondary" type="button" (click)="searchGroups()">Suchen</button>
+              </div>
+              @if (directoryLoading()) { <p class="exposure-directory-state" role="status">Gruppen werden durchsucht …</p> }
+              @else if (directoryError()) { <p class="daca-alert is-error" role="alert">{{ directoryError() }}</p> }
+              @else if (!groups().length) { <p class="exposure-directory-state">Keine passende aktive Gruppe gefunden.</p> }
+              @else {
+                <div class="exposure-directory-results" role="listbox" aria-label="Gefundene Gruppen">
+                  @for (group of groups(); track group.id) {
+                    <button type="button" role="option" [attr.aria-selected]="selectedGroup()?.id === group.id" [class.is-selected]="selectedGroup()?.id === group.id" (click)="selectGroup(group)">
+                      <span><strong>{{ group.label }}</strong><small>{{ group.description }}</small></span>
+                      <span><strong>{{ group.memberCount }} Mitglieder</strong><small>{{ group.userManaged ? 'Eigene Gruppe' : sourceLabel(group.source) }} · Revision {{ group.membershipRevision }}</small></span>
+                    </button>
+                  }
+                </div>
+              }
+              @if (selectedGroupDetail(); as detail) {
+                <details class="exposure-member-preview">
+                  <summary>Mitgliedervorschau ({{ detail.members.length }})</summary>
+                  <ul>@for (member of detail.members; track member.id) { <li><strong>{{ member.displayName }}</strong><span>{{ member.organization }} · <code>{{ member.id }}</code></span></li> }</ul>
+                </details>
+              }
+              <button class="daca-button is-secondary exposure-group-create-toggle" type="button" (click)="toggleGroupBuilder()">
+                {{ groupBuilderOpen() ? 'Gruppenerstellung schliessen' : 'Eigene Gruppe erstellen' }}
+              </button>
+              @if (groupBuilderOpen()) {
+                <section class="exposure-group-builder" aria-labelledby="group-builder-title">
+                  <div><p class="daca-eyebrow">Eigene Gruppe</p><h3 id="group-builder-title">Identitäten zusammenfassen</h3></div>
+                  <div class="exposure-group-builder-fields">
+                    <label>Gruppenname *<input [value]="newGroupLabel()" (input)="newGroupLabel.set($any($event.target).value)" placeholder="z. B. BFS Datenanalyse"></label>
+                    <label>Beschreibung *<input [value]="newGroupDescription()" (input)="newGroupDescription.set($any($event.target).value)" placeholder="Zweck und verantwortlicher Personenkreis"></label>
+                  </div>
+                  <label class="exposure-member-search">Mitglieder suchen
+                    <input type="search" [value]="groupMemberQuery()" (input)="groupMemberQuery.set($any($event.target).value)" placeholder="Name, Organisation oder eIAM-ID" autocomplete="off">
+                  </label>
+                  <div class="exposure-member-picker" aria-label="Gruppenmitglieder auswählen">
+                    @for (person of filteredGroupMemberCandidates(); track person.id) {
+                      <label>
+                        <input type="checkbox" [checked]="newGroupMemberIds().includes(person.id)" (change)="toggleGroupMember(person.id)">
+                        <span><strong>{{ person.displayName }}</strong><small>{{ person.organization }} · {{ sourceLabel(person.source) }}</small></span>
+                      </label>
+                    }
+                  </div>
+                  <div class="exposure-group-builder-actions">
+                    <span>{{ newGroupMemberIds().length }} Identitäten ausgewählt</span>
+                    <button class="daca-button" type="button" [disabled]="!canCreateGroup() || groupCreating()" (click)="createGroup()">{{ groupCreating() ? 'Gruppe wird erstellt …' : 'Gruppe erstellen und auswählen' }}</button>
+                  </div>
+                  @if (groupCreateError()) { <p class="daca-alert is-error" role="alert">{{ groupCreateError() }}</p> }
+                </section>
+              }
+              <p class="exposure-help">Bei der Aktivierung speichert DaCa einen serverseitigen Snapshot. Spätere Gruppenänderungen erweitern diesen Zugriff nicht automatisch.</p>
+            </div>
+          }
         </section>
 
         <section class="exposure-rule-section" aria-labelledby="period-title">
-          <div class="exposure-section-heading">
-            <div><p class="didaca-eyebrow">Schritt 2</p><h2 id="period-title">Wie lange gilt die Freigabe?</h2></div>
-            @if (dateValid()) { <span>{{ durationDays() }} Kalendertage</span> }
-          </div>
+          <div class="exposure-section-heading"><div><p class="daca-eyebrow">Schritt 2</p><h2 id="period-title">Wie lange gilt die Zugriffseinstellung?</h2></div>@if (dateValid()) { <span>{{ durationDays() }} Kalendertage</span> }</div>
           <div class="exposure-period-grid">
-            <label>Gültig ab *
-              <input type="date" [value]="startDate()" (input)="setStartDate($any($event.target).value)">
-            </label>
-            <label>Gültig bis *
-              <input type="date" [value]="endDate()" [min]="startDate()" (input)="setEndDate($any($event.target).value)">
-            </label>
+            <label>Gültig ab *<input type="date" [value]="startDate()" (input)="setStartDate($any($event.target).value)"></label>
+            <label>Gültig bis *<input type="date" [value]="endDate()" [min]="startDate()" (input)="setEndDate($any($event.target).value)"></label>
             <div class="exposure-timezone"><span>Zeitzone</span><strong>Europe/Zurich</strong><small>MEZ / MESZ</small></div>
           </div>
-          @if (!dateValid()) {
-            <p class="didaca-alert is-error" role="alert">Das Enddatum muss am oder nach dem Startdatum liegen.</p>
-          } @else {
-            <p class="exposure-help">Vor Beginn und nach Ablauf wird der Zugriff automatisch verweigert.</p>
-          }
+          @if (!dateValid()) { <p class="daca-alert is-error" role="alert">Das Enddatum muss am oder nach dem Startdatum liegen.</p> }
+          @else { <p class="exposure-help">Vor Beginn und nach Ablauf werden Datenzugriff sowie gewählte Metadatenkanäle automatisch unwirksam.</p> }
         </section>
 
-        <section class="exposure-rule-section" aria-labelledby="koby-title">
-          <div class="exposure-section-heading">
-            <div><p class="didaca-eyebrow">Schritt 3 · Explizites Opt-in</p><h2 id="koby-title">Darf KOBY die Metadaten nutzen?</h2></div>
-            <didaca-status-badge [tone]="kobyAllowed() ? 'green' : 'red'">{{ kobyAllowed() ? 'Erlaubt' : 'Nicht erlaubt' }}</didaca-status-badge>
+        <section id="koby" class="exposure-rule-section" aria-labelledby="metadata-channels-title">
+          <div class="exposure-section-heading"><div><p class="daca-eyebrow">Schritt 3 · Explizite Opt-ins</p><h2 id="metadata-channels-title">Metadaten bereitstellen</h2></div><span>{{ metadataChannelCount() }} von 2 gewählt</span></div>
+          <div class="exposure-channel-grid">
+            <label class="exposure-koby-consent" [class.is-selected]="kobyAllowed()">
+              <input type="checkbox" role="switch" [checked]="kobyAllowed()" (change)="setKobyAllowed($any($event.target).checked)">
+              <span><strong>KOBY den Metadatenzugriff über <daca-glossary-term term="MCP" /> erlauben</strong><small>Titel, Schema, Qualität, Lineage und Provenienz – keine Produktdaten oder Secrets.</small></span><b>MCP</b>
+            </label>
+            <label class="exposure-koby-consent" [class.is-selected]="i14yAllowed()">
+              <input type="checkbox" role="switch" [checked]="i14yAllowed()" (change)="setI14yAllowed($any($event.target).checked)">
+              <span><strong>Metadaten und künftige Aktualisierungen an <daca-glossary-term term="I14Y" /> liefern</strong><small>Lokale PoC-Simulation: Beschreibung von Datensätzen und APIs, keine Produktdaten; kein externer Netzwerkaufruf.</small></span><b>I14Y</b>
+            </label>
           </div>
-          <label class="exposure-koby-consent" [class.is-selected]="kobyAllowed()">
-            <input type="checkbox" role="switch" [checked]="kobyAllowed()" (change)="setKobyAllowed($any($event.target).checked)">
-            <span><strong>KOBY AI Services den Metadatenzugriff über MCP erlauben</strong><small>Es gilt derselbe Zeitraum wie für die Datenfreigabe.</small></span>
-            <b aria-hidden="true">MCP</b>
-          </label>
-          @if (kobyAllowed()) {
-            <div class="exposure-mcp-scope">
-              <span>Freigegebener Umfang</span>
-              <ul>
-                <li>Titel, Beschreibung und Schlagwörter</li>
-                <li>Schema- und Endpunktbeschreibungen</li>
-                <li>Qualität, Lineage und Provenienz</li>
-              </ul>
-            </div>
-          }
-          <p class="exposure-help"><strong>Abgrenzung:</strong> MCP ist hier ein Metadatenzugang zum Katalog, kein zusätzlicher Produktauslieferungsweg. Produktdaten, Zugangsdaten und Secret-Referenzen sind ausgeschlossen.</p>
+          <p class="exposure-help">Beide Kanäle sind voneinander unabhängig und gelten exakt im Zeitraum dieser Zugriffseinstellung. MCP und I14Y sind keine Produktauslieferungsprotokolle.</p>
         </section>
       </form>
 
-      <aside class="didaca-card exposure-review" aria-labelledby="review-title">
-        <div class="didaca-card-header">
-          <div><p class="didaca-eyebrow">Live-Vorschau</p><h2 id="review-title">Freigabe prüfen</h2></div>
-          <didaca-status-badge [tone]="canPublish() ? 'blue' : 'red'">{{ canPublish() ? 'Vollständig' : 'Unvollständig' }}</didaca-status-badge>
-        </div>
-        <div class="didaca-card-body">
-          <div class="exposure-policy-sentence" [class.is-blocked]="!canPublish()">
-            <span>{{ canPublish() ? 'ALLOW' : 'DENY' }}</span>
-            @if (canPublish()) {
-              <p><strong>{{ subjectSummary() }}</strong> darf dieses Datenprodukt im Kontext <strong>{{ selectedGroupLabels() }}</strong> vom <strong>{{ formatDate(startDate()) }}</strong> bis <strong>{{ formatDate(endDate()) }}</strong> über REST und PostgreSQL lesen.</p>
-            } @else if (!subjectValid()) {
-              <p>Ohne gültige {{ subjectType() === 'person' ? 'eIAM-Benutzer-ID' : 'Machine ID' }} bleibt das Datenprodukt gesperrt.</p>
-            } @else if (!selectedGroups().length) {
-              <p>Ohne ausgewählte Benutzergruppe bleibt das Datenprodukt gesperrt.</p>
-            } @else {
-              <p>Der Gültigkeitszeitraum ist ungültig. Die ausgewählten Benutzergruppen bleiben gesperrt, bis ein gültiges Start- und Enddatum gesetzt ist.</p>
-            }
+      <aside class="daca-card exposure-review" aria-labelledby="review-title">
+        <div class="daca-card-header"><div><p class="daca-eyebrow">Live-Vorschau</p><h2 id="review-title">Zugriffseinstellung prüfen</h2></div><daca-status-badge [tone]="canActivate() ? 'blue' : 'red'">{{ canActivate() ? 'Vollständig' : 'Unvollständig' }}</daca-status-badge></div>
+        <div class="daca-card-body">
+          <div class="exposure-policy-sentence" [class.is-blocked]="!canActivate()">
+            <span>{{ canActivate() ? 'ALLOW' : 'DENY' }}</span>
+            @if (canActivate()) { <p><strong>{{ subjectSummary() }}</strong> darf dieses Datenprodukt vom <strong>{{ formatDate(startDate()) }}</strong> bis <strong>{{ formatDate(endDate()) }}</strong> über {{ protocolLabel() }} lesen.</p> }
+            @else { <p>Ohne ein explizit ausgewähltes, gültiges Zugriffsziel und einen gültigen Zeitraum bleibt das Datenprodukt gesperrt.</p> }
           </div>
-
           <dl class="exposure-review-list">
-            <div><dt>Zugriffstyp</dt><dd>{{ subjectType() === 'person' ? 'Persönlich · eIAM' : 'Maschine · M2M' }}</dd></div>
-            <div><dt>{{ subjectType() === 'person' ? 'eIAM-ID' : 'Machine ID' }}</dt><dd><code>{{ subjectId() || 'Fehlt' }}</code></dd></div>
-            <div><dt>Benutzergruppen</dt><dd>{{ selectedGroups().length || 'Keine' }}</dd></div>
+            <div><dt>Zugriffstyp</dt><dd>{{ subjectTypeLabel() }}</dd></div>
+            <div><dt>Zugriffsziel</dt><dd><code>{{ subjectId() || 'Fehlt' }}</code></dd></div>
+            @if (subjectType() === 'group') { <div><dt>Snapshot</dt><dd>{{ selectedGroup()?.memberCount ?? 0 }} Personen · Rev. {{ selectedGroup()?.membershipRevision ?? '–' }}</dd></div> }
             <div><dt>Berechtigung</dt><dd><code>data.read</code></dd></div>
-            <div><dt>Zugriffswege</dt><dd>REST · PostgreSQL</dd></div>
+            <div><dt>Zugriffswege</dt><dd>{{ protocolLabel() }}</dd></div>
             <div><dt>Gültigkeit</dt><dd>{{ dateValid() ? durationDays() + ' Tage' : 'Ungültig' }}</dd></div>
             <div><dt>KOBY / MCP</dt><dd [class.is-positive]="kobyAllowed()">{{ kobyAllowed() ? 'Metadaten erlaubt' : 'Nicht erlaubt' }}</dd></div>
+            <div><dt>I14Y</dt><dd [class.is-positive]="i14yAllowed()">{{ i14yAllowed() ? 'Lieferung simuliert' : 'Nicht liefern' }}</dd></div>
           </dl>
-
-          <div class="exposure-guardrail">
-            <strong>Default deny bleibt aktiv</strong>
-            <p>Alle anderen Gruppen, Zeitpunkte und Nutzungsarten werden abgewiesen. Aktiv wird die Regel erst, wenn OPA und PostgreSQL dieselbe Revision bestätigen.</p>
-          </div>
-
-          @if (publicationState() === 'published') {
-            <p class="didaca-alert exposure-success" role="status">Mockup: Die Veröffentlichung wurde um {{ publishedAt() }} Uhr erfolgreich simuliert.</p>
-          }
-
-          <button class="didaca-button exposure-primary-action" form="exposure-form" type="submit" [disabled]="!canPublish()">
-            Freigabe veröffentlichen
-          </button>
-          <button class="didaca-button is-secondary exposure-secondary-action" type="button" (click)="resetDraft()">Entwurf zurücksetzen</button>
-          <small class="exposure-demo-note">Interaktiver UI-Mockup · keine Backend-Publikation</small>
+          <div class="exposure-guardrail"><strong>Default deny bleibt aktiv</strong><p>Alle anderen Identitäten, Zeitpunkte und Nutzungsarten werden abgewiesen. Aktiv wird die Einstellung erst, wenn OPA und PostgreSQL dieselbe Revision bestätigen.</p></div>
+          @if (publicationState() === 'activating') { <p class="daca-alert" role="status">Die Policy wurde publiziert. DaCa wartet auf die gemeinsame Bestätigung von OPA und PostgreSQL.</p> }
+          @if (publicationState() === 'active') { <p class="daca-alert exposure-success" role="status">Zugriffseinstellung seit {{ activatedAt() }} Uhr aktiv. OPA und PostgreSQL verwenden dieselbe Revision.</p> }
+          @if (publicationError()) { <p class="daca-alert is-error" role="alert">{{ publicationError() }}</p> }
+          <button class="daca-button exposure-primary-action" form="exposure-form" type="submit" [disabled]="!canActivate() || publicationState() === 'activating'">Zugriffseinstellung aktivieren</button>
+          <button class="daca-button is-secondary exposure-secondary-action" type="button" (click)="resetDraft()">Entwurf zurücksetzen</button>
+          <small class="exposure-demo-note">Strukturierte PBAC-Definition · Gruppensnapshot und Rego werden serverseitig erzeugt</small>
         </div>
       </aside>
     </div>
+    }
   `,
 })
-export class ExposureStudioComponent {
-  readonly audienceGroups = EXPOSURE_AUDIENCE_GROUPS;
-  readonly subjectType = signal<'person' | 'machine'>(INITIAL_EXPOSURE_DRAFT.subjectType);
-  readonly eiamIdentity = signal(INITIAL_EXPOSURE_DRAFT.subjectType === 'person' ? INITIAL_EXPOSURE_DRAFT.subjectId : '');
-  readonly machineIdentity = signal(INITIAL_EXPOSURE_DRAFT.subjectType === 'machine' ? INITIAL_EXPOSURE_DRAFT.subjectId : '');
-  readonly selectedGroupIds = signal(new Set<string>(INITIAL_EXPOSURE_DRAFT.groupIds));
+export class ExposureStudioComponent implements OnDestroy {
+  readonly api = inject(CatalogApiService);
+  private readonly route = inject(ActivatedRoute);
+  readonly product = this.api.product;
+  readonly subjectType = signal<SubjectType>(INITIAL_EXPOSURE_DRAFT.subjectType);
+  readonly machineIdentity = signal('');
+  readonly selectedPerson = signal<IdentityDirectoryEntry | null>(null);
+  readonly selectedGroup = signal<IdentityGroupSummary | null>(null);
+  readonly selectedGroupDetail = signal<IdentityGroupDetail | null>(null);
+  readonly personQuery = signal('');
+  readonly personSource = signal<IdentityDirectorySource | ''>('');
+  readonly personOrganizationId = signal('');
+  readonly organizations = signal<readonly AdministrativeOrganization[]>([]);
+  readonly groupQuery = signal('');
+  readonly groupSource = signal<IdentityDirectorySource | ''>('');
+  readonly people = signal<readonly IdentityDirectoryEntry[]>([]);
+  readonly groups = signal<readonly IdentityGroupSummary[]>([]);
+  readonly directoryLoading = signal(false);
+  readonly directoryError = signal<string | null>(null);
+  readonly groupBuilderOpen = signal(false);
+  readonly newGroupLabel = signal('');
+  readonly newGroupDescription = signal('');
+  readonly groupMemberQuery = signal('');
+  readonly groupMemberCandidates = signal<readonly IdentityDirectoryEntry[]>([]);
+  readonly newGroupMemberIds = signal<readonly string[]>([]);
+  readonly groupCreating = signal(false);
+  readonly groupCreateError = signal<string | null>(null);
   readonly startDate = signal(INITIAL_EXPOSURE_DRAFT.validFrom);
   readonly endDate = signal(INITIAL_EXPOSURE_DRAFT.validUntil);
   readonly kobyAllowed = signal(INITIAL_EXPOSURE_DRAFT.kobyMetadataAllowed);
+  readonly i14yAllowed = signal(INITIAL_EXPOSURE_DRAFT.i14yMetadataDelivery);
   readonly publicationState = signal<PublicationState>('draft');
-  readonly publishedAt = signal('');
+  readonly activatedAt = signal('');
+  readonly publicationError = signal<string | null>(null);
+  readonly journeyStartDate = signal(JOURNEY_START_DATE);
+  readonly journeyEndDate = signal(JOURNEY_END_DATE);
+  readonly journeyKoby = signal(true);
+  readonly journeyI14y = signal(true);
+  readonly journeyBar = signal(true);
+  readonly journeySubmitting = signal(false);
+  readonly journeyNotice = signal<string | null>(null);
 
-  readonly selectedGroups = computed(() => this.audienceGroups.filter((group) => this.selectedGroupIds().has(group.id)));
-  readonly selectedGroupLabels = computed(() => this.selectedGroups().map((group) => group.label).join(', '));
-  readonly subjectId = computed(() => this.subjectType() === 'person' ? this.eiamIdentity().trim() : this.machineIdentity().trim());
+  private personSearchTimer: ReturnType<typeof setTimeout> | null = null;
+  private groupSearchTimer: ReturnType<typeof setTimeout> | null = null;
+  private personSearchSubscription: Subscription | null = null;
+  private groupSearchSubscription: Subscription | null = null;
+  private linkedRequestInitialized = false;
+
+  readonly subjectId = computed(() => this.subjectType() === 'person'
+    ? this.selectedPerson()?.id ?? ''
+    : this.subjectType() === 'group'
+      ? this.selectedGroup()?.id ?? ''
+      : this.machineIdentity().trim());
+  readonly isJourneyProduct = computed(() => {
+    const sourceProductId = String(this.product().additionalMetadata['sourceProductId'] ?? '');
+    return sourceProductId === 'daaif:kantonale-gewerbesteuer-soll-ist-2022-2026:v1'
+      || this.product().title.includes('Kantonale Gewerbesteuer');
+  });
+  readonly linkedAccessRequestId = this.route.snapshot.queryParamMap.get('request');
+  readonly linkedAccessRequest = computed(() => this.linkedAccessRequestId
+    ? this.api.ownerAccessRequests().find((request) => request.id === this.linkedAccessRequestId) ?? null
+    : null);
+  readonly dateValidForJourney = computed(() => isExposureDateRangeValid(this.journeyStartDate(), this.journeyEndDate()));
   readonly subjectValid = computed(() => isExposureSubjectIdValid(this.subjectId()));
+  readonly subjectTypeLabel = computed(() => this.subjectType() === 'person' ? 'Persönlich · eIAM' : this.subjectType() === 'machine' ? 'Maschine · M2M' : 'Gruppenzugriff');
   readonly subjectSummary = computed(() => this.subjectType() === 'person'
-    ? `Die eIAM-Identität ${this.subjectId()}`
-    : `Die Machine ID ${this.subjectId()}`);
+    ? `${this.selectedPerson()?.displayName ?? 'Keine Person'} · ${this.selectedPerson()?.organization ?? ''}`
+    : this.subjectType() === 'group'
+      ? `Die Gruppe ${this.selectedGroup()?.label ?? ''}`
+      : `Die Machine ID ${this.subjectId()}`);
   readonly dateValid = computed(() => isExposureDateRangeValid(this.startDate(), this.endDate()));
   readonly durationDays = computed(() => exposureDurationDays(this.startDate(), this.endDate()));
-  readonly canPublish = computed(() => isExposurePublishable({
-    subjectType: this.subjectType(),
-    subjectId: this.subjectId(),
-    groupIds: [...this.selectedGroupIds()],
-    validFrom: this.startDate(),
-    validUntil: this.endDate(),
-    kobyMetadataAllowed: this.kobyAllowed(),
+  readonly metadataChannelCount = computed(() => Number(this.kobyAllowed()) + Number(this.i14yAllowed()));
+  readonly protocols = computed<('http' | 'postgresql')[]>(() => {
+    const values = new Set<'http' | 'postgresql'>();
+    for (const endpoint of this.product().endpoints) values.add(endpoint.protocol === 'http-rest' ? 'http' : 'postgresql');
+    return values.size ? [...values] : ['http'];
+  });
+  readonly protocolLabel = computed(() => this.protocols().map((value) => value === 'http' ? 'REST' : 'PostgreSQL').join(' · '));
+  readonly canActivate = computed(() => isExposurePublishable({
+    subjectType: this.subjectType(), subjectId: this.subjectId(), validFrom: this.startDate(), validUntil: this.endDate(),
+    kobyMetadataAllowed: this.kobyAllowed(), i14yMetadataDelivery: this.i14yAllowed(),
   }));
+  readonly filteredGroupMemberCandidates = computed(() => {
+    const needle = this.groupMemberQuery().trim().toLocaleLowerCase('de-CH');
+    if (!needle) return this.groupMemberCandidates();
+    return this.groupMemberCandidates().filter((person) =>
+      [person.displayName, person.organization, person.email, person.id]
+        .some((value) => value.toLocaleLowerCase('de-CH').includes(needle))
+    );
+  });
+  readonly canCreateGroup = computed(() =>
+    this.newGroupLabel().trim().length >= 3
+    && this.newGroupDescription().trim().length >= 3
+    && this.newGroupMemberIds().length > 0
+  );
 
-  setSubjectType(value: 'person' | 'machine'): void {
+  constructor() {
+    this.api.selectProduct(this.route.snapshot.paramMap.get('id'));
+    effect(() => {
+      const request = this.linkedAccessRequest();
+      if (!request || this.linkedRequestInitialized) return;
+      this.linkedRequestInitialized = true;
+      this.startDate.set(request.validFrom);
+      this.endDate.set(request.validUntil);
+      this.journeyStartDate.set(request.validFrom);
+      this.journeyEndDate.set(request.validUntil);
+      if (request.consumerType === 'machine' && request.machineId) {
+        this.subjectType.set('machine');
+        this.machineIdentity.set(request.machineId);
+      }
+    });
+    this.api.loadAdministrativeOrganizations().subscribe({
+      next: (organizations) => this.organizations.set(organizations),
+    });
+    this.searchPeople();
+  }
+
+  setSubjectType(value: SubjectType): void {
+    this.cancelDirectorySearches();
     this.subjectType.set(value);
+    this.directoryError.set(null);
+    if (value === 'person' && !this.people().length) this.searchPeople();
+    if (value === 'group' && !this.groups().length) this.searchGroups();
     this.markDraft();
   }
 
-  setEiamIdentity(value: string): void {
-    this.eiamIdentity.set(value);
+  onPersonQuery(value: string): void {
+    this.personQuery.set(value);
+    this.selectedPerson.set(null);
     this.markDraft();
+    this.schedulePersonSearch();
   }
 
-  setMachineIdentity(value: string): void {
-    this.machineIdentity.set(value);
+  setPersonSource(value: IdentityDirectorySource | ''): void {
+    this.personSource.set(value);
+    this.selectedPerson.set(null);
     this.markDraft();
+    this.searchPeople();
   }
 
-  toggleGroup(groupId: string, checked: boolean): void {
-    const next = new Set(this.selectedGroupIds());
-    if (checked) next.add(groupId);
-    else next.delete(groupId);
-    this.selectedGroupIds.set(next);
+  setPersonOrganization(value: string): void {
+    this.personOrganizationId.set(value);
+    this.selectedPerson.set(null);
     this.markDraft();
+    this.searchPeople();
   }
 
-  setStartDate(value: string): void {
-    this.startDate.set(value);
+  onGroupQuery(value: string): void {
+    this.groupQuery.set(value);
+    this.selectedGroup.set(null);
+    this.selectedGroupDetail.set(null);
     this.markDraft();
+    this.scheduleGroupSearch();
   }
 
-  setEndDate(value: string): void {
-    this.endDate.set(value);
+  setGroupSource(value: IdentityDirectorySource | ''): void {
+    this.groupSource.set(value);
+    this.selectedGroup.set(null);
+    this.selectedGroupDetail.set(null);
     this.markDraft();
+    this.searchGroups();
   }
 
-  setKobyAllowed(value: boolean): void {
-    this.kobyAllowed.set(value);
-    this.markDraft();
+  searchPeople(): void {
+    this.cancelPersonSearch();
+    this.directoryLoading.set(true); this.directoryError.set(null);
+    this.personSearchSubscription = this.api.searchDirectoryPeople(
+      this.personQuery(), this.personSource(), this.personOrganizationId(),
+    ).subscribe({
+      next: (people) => { this.people.set(people); this.directoryLoading.set(false); },
+      error: () => { this.directoryError.set('Das Identitätsverzeichnis ist momentan nicht verfügbar.'); this.directoryLoading.set(false); },
+    });
   }
 
-  publish(): void {
-    if (!this.canPublish()) return;
-    this.publicationState.set('published');
-    this.publishedAt.set(new Intl.DateTimeFormat('de-CH', { hour: '2-digit', minute: '2-digit' }).format(new Date()));
+  searchGroups(): void {
+    this.cancelGroupSearch();
+    this.directoryLoading.set(true); this.directoryError.set(null);
+    this.groupSearchSubscription = this.api.searchIdentityGroups(this.groupQuery(), this.groupSource()).subscribe({
+      next: (groups) => { this.groups.set(groups); this.directoryLoading.set(false); },
+      error: () => { this.directoryError.set('Das Gruppenverzeichnis ist momentan nicht verfügbar.'); this.directoryLoading.set(false); },
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.cancelDirectorySearches();
+  }
+
+  private schedulePersonSearch(): void {
+    this.cancelPersonSearch();
+    this.directoryLoading.set(true);
+    this.directoryError.set(null);
+    this.personSearchTimer = setTimeout(() => this.searchPeople(), DIRECTORY_SEARCH_DEBOUNCE_MS);
+  }
+
+  private scheduleGroupSearch(): void {
+    this.cancelGroupSearch();
+    this.directoryLoading.set(true);
+    this.directoryError.set(null);
+    this.groupSearchTimer = setTimeout(() => this.searchGroups(), DIRECTORY_SEARCH_DEBOUNCE_MS);
+  }
+
+  private cancelDirectorySearches(): void {
+    this.cancelPersonSearch();
+    this.cancelGroupSearch();
+    this.directoryLoading.set(false);
+  }
+
+  private cancelPersonSearch(): void {
+    if (this.personSearchTimer !== null) clearTimeout(this.personSearchTimer);
+    this.personSearchTimer = null;
+    this.personSearchSubscription?.unsubscribe();
+    this.personSearchSubscription = null;
+  }
+
+  private cancelGroupSearch(): void {
+    if (this.groupSearchTimer !== null) clearTimeout(this.groupSearchTimer);
+    this.groupSearchTimer = null;
+    this.groupSearchSubscription?.unsubscribe();
+    this.groupSearchSubscription = null;
+  }
+
+  selectPerson(person: IdentityDirectoryEntry): void { this.selectedPerson.set(person); this.markDraft(); }
+  selectGroup(group: IdentityGroupSummary): void {
+    this.selectedGroup.set(group); this.selectedGroupDetail.set(null); this.markDraft();
+    this.api.loadIdentityGroup(group.id).subscribe({ next: (detail) => this.selectedGroupDetail.set(detail) });
+  }
+  toggleGroupBuilder(): void {
+    this.groupBuilderOpen.update((value) => !value);
+    this.groupCreateError.set(null);
+    if (this.groupBuilderOpen() && !this.groupMemberCandidates().length) {
+      this.api.searchDirectoryPeople('', '').subscribe({
+        next: (people) => this.groupMemberCandidates.set(people),
+        error: () => this.groupCreateError.set('Die verfügbaren Identitäten konnten nicht geladen werden.'),
+      });
+    }
+  }
+  toggleGroupMember(identityId: string): void {
+    this.newGroupMemberIds.update((current) => current.includes(identityId)
+      ? current.filter((item) => item !== identityId)
+      : [...current, identityId]);
+  }
+  createGroup(): void {
+    if (!this.canCreateGroup() || this.groupCreating()) return;
+    this.groupCreating.set(true);
+    this.groupCreateError.set(null);
+    this.api.createIdentityGroup({
+      label: this.newGroupLabel().trim(),
+      description: this.newGroupDescription().trim(),
+      memberIds: [...this.newGroupMemberIds()],
+    }).subscribe({
+      next: (group) => {
+        this.groups.update((groups) => [group, ...groups]);
+        this.selectedGroup.set(group);
+        this.selectedGroupDetail.set(group);
+        this.groupBuilderOpen.set(false);
+        this.groupCreating.set(false);
+        this.newGroupLabel.set('');
+        this.newGroupDescription.set('');
+        this.newGroupMemberIds.set([]);
+        this.markDraft();
+      },
+      error: (error) => {
+        this.groupCreating.set(false);
+        this.groupCreateError.set(error?.error?.detail ?? 'Die Gruppe konnte nicht erstellt werden.');
+      },
+    });
+  }
+  setMachineIdentity(value: string): void { this.machineIdentity.set(value); this.markDraft(); }
+  setStartDate(value: string): void { this.startDate.set(value); this.markDraft(); }
+  setEndDate(value: string): void { this.endDate.set(value); this.markDraft(); }
+  setKobyAllowed(value: boolean): void { this.kobyAllowed.set(value); this.markDraft(); }
+  setI14yAllowed(value: boolean): void { this.i14yAllowed.set(value); this.markDraft(); }
+
+  activate(): void {
+    if (!this.canActivate()) return;
+    this.publicationError.set(null);
+    const grant: NonNullable<PolicyDefinition['grants']>[number] = {
+      subject: { type: this.subjectType(), id: this.subjectId() }, actions: ['data.read'], protocols: this.protocols(),
+      validFrom: this.startDate(), validUntil: this.endDate(), dataVariant: 'original',
+      metadataChannels: { kobyMcp: this.kobyAllowed(), i14y: this.i14yAllowed() },
+    };
+    const accessRequestFulfillments = this.linkedAccessRequestId ? [{
+      accessRequestId: this.linkedAccessRequestId,
+      fulfillmentSubject: { type: this.subjectType(), id: this.subjectId() },
+    }] : [];
+    this.api.upsertAccessSetting(this.product().id, grant, accessRequestFulfillments).subscribe({
+      next: (draft) => this.api.publishPolicy(this.product().id, draft.id, draft.revision).subscribe({
+        next: () => { this.publicationState.set('activating'); this.pollActivation(0); },
+        error: (error) => this.publicationError.set(error?.error?.detail ?? 'Die Zugriffseinstellung konnte nicht aktiviert werden.'),
+      }),
+      error: (error) => this.publicationError.set(error?.error?.detail ?? 'Der Policy-Entwurf konnte nicht erstellt werden.'),
+    });
+  }
+
+  submitJourneyGovernance(): void {
+    if (!this.dateValidForJourney() || this.journeySubmitting()) return;
+    this.journeySubmitting.set(true);
+    this.publicationError.set(null);
+    this.journeyNotice.set(null);
+    const common = {
+      actions: ['data.read'],
+      protocols: ['http'],
+      validFrom: this.journeyStartDate(),
+      validUntil: this.journeyEndDate(),
+      dataVariant: 'original',
+      metadataChannels: { kobyMcp: this.journeyKoby(), i14y: this.journeyI14y() },
+    };
+    this.api.createGovernanceSubmission(this.product().id, {
+      discoverable: true,
+      discoverabilityConfirmed: true,
+      grants: [
+        { ...common, subject: { type: 'group', id: 'kanton-st-gallen' } },
+        { ...common, subject: { type: 'group', id: 'efd-efv-bundestresorerie' } },
+        { ...common, subject: { type: 'person', id: 'thomas.kriegli' } },
+      ],
+      barArchive: { enabled: this.journeyBar(), retentionYears: 20 },
+      accessRequestFulfillments: this.linkedAccessRequestId ? [{
+        accessRequestId: this.linkedAccessRequestId,
+        fulfillmentSubject: { type: 'group', id: 'kanton-st-gallen' },
+      }] : [],
+    }).subscribe({
+      next: (submission) => {
+        this.journeySubmitting.set(false);
+        this.journeyNotice.set(`Zur Prüfung übermittelt. Thomas Kriegli hat die Aufgabe für Policy-Revision ${submission.policyRevision} erhalten.`);
+      },
+      error: (error) => {
+        this.journeySubmitting.set(false);
+        this.publicationError.set(error?.error?.detail ?? 'Die Governance-Einstellungen konnten nicht übermittelt werden.');
+      },
+    });
   }
 
   resetDraft(): void {
-    this.subjectType.set(INITIAL_EXPOSURE_DRAFT.subjectType);
-    this.eiamIdentity.set(INITIAL_EXPOSURE_DRAFT.subjectType === 'person' ? INITIAL_EXPOSURE_DRAFT.subjectId : '');
-    this.machineIdentity.set(INITIAL_EXPOSURE_DRAFT.subjectType === 'machine' ? INITIAL_EXPOSURE_DRAFT.subjectId : '');
-    this.selectedGroupIds.set(new Set<string>(INITIAL_EXPOSURE_DRAFT.groupIds));
-    this.startDate.set(INITIAL_EXPOSURE_DRAFT.validFrom);
-    this.endDate.set(INITIAL_EXPOSURE_DRAFT.validUntil);
-    this.kobyAllowed.set(INITIAL_EXPOSURE_DRAFT.kobyMetadataAllowed);
-    this.markDraft();
+    this.subjectType.set(INITIAL_EXPOSURE_DRAFT.subjectType); this.machineIdentity.set(''); this.selectedPerson.set(null);
+    this.selectedGroup.set(null); this.selectedGroupDetail.set(null); this.startDate.set(INITIAL_EXPOSURE_DRAFT.validFrom);
+    this.endDate.set(INITIAL_EXPOSURE_DRAFT.validUntil); this.kobyAllowed.set(INITIAL_EXPOSURE_DRAFT.kobyMetadataAllowed);
+    this.i14yAllowed.set(INITIAL_EXPOSURE_DRAFT.i14yMetadataDelivery); this.markDraft();
   }
 
   formatDate(value: string): string {
     const timestamp = exposureUtcDay(value);
-    if (!Number.isFinite(timestamp)) return '—';
+    if (!Number.isFinite(timestamp)) return '–';
     return new Intl.DateTimeFormat('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(timestamp);
   }
 
-  private markDraft(): void {
-    this.publicationState.set('draft');
-    this.publishedAt.set('');
+  sourceLabel(source: IdentityDirectorySource): string {
+    return ({ federal: 'Bund', cantonal: 'Kantone', municipal: 'Gemeinden', federal_related: 'Bundesnahe Betriebe' })[source];
   }
 
+  private pollActivation(attempt: number): void {
+    this.api.loadLatestPolicyWire(this.product().id).subscribe({
+      next: (policy) => {
+        if (this.isFullyDeployed(policy)) {
+          this.publicationState.set('active');
+          this.activatedAt.set(new Intl.DateTimeFormat('de-CH', { hour: '2-digit', minute: '2-digit' }).format(new Date()));
+          return;
+        }
+        if (attempt < 14) setTimeout(() => this.pollActivation(attempt + 1), 1000);
+        else this.publicationError.set('Die Einstellung ist publiziert, aber OPA und PostgreSQL haben noch nicht dieselbe Revision bestätigt.');
+      },
+      error: () => this.publicationError.set('Der Aktivierungsstatus konnte nicht geprüft werden.'),
+    });
+  }
+
+  private isFullyDeployed(policy: PolicyWire): boolean {
+    return policy.status === 'published' && ['opa', 'postgresql'].every((target) => {
+      const deployment = policy.deployments.find((item) => item.target === target);
+      return deployment?.observedRevision === deployment?.desiredRevision;
+    });
+  }
+
+  private markDraft(): void { this.publicationState.set('draft'); this.activatedAt.set(''); this.publicationError.set(null); }
 }

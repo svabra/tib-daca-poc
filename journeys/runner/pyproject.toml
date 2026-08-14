@@ -1,0 +1,20 @@
+[project]
+name = "daca-journey-runner"
+version = "0.1.0"
+description = "Transient cross-system Playwright journeys for DAAIF and DaCa"
+requires-python = ">=3.12"
+dependencies = [
+  "httpx>=0.28.1",
+  "playwright>=1.54.0",
+  "pytest>=8.4.0",
+]
+
+[project.scripts]
+daca-journey = "daca_journeys.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/daca_journeys"]

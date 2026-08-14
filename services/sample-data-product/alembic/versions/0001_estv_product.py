@@ -73,7 +73,7 @@ def upgrade() -> None:
                 "tax_year": 2024,
                 "taxpayers": 312450,
                 "taxable_income_million_chf": 18420.50,
-                "source_note": "Synthetic aggregate for the DiDaCa proof of concept",
+                "source_note": "Synthetic aggregate for the DaCa proof of concept",
             },
             {
                 "id": 2,
@@ -82,7 +82,7 @@ def upgrade() -> None:
                 "tax_year": 2024,
                 "taxpayers": 671230,
                 "taxable_income_million_chf": 36510.25,
-                "source_note": "Synthetic aggregate for the DiDaCa proof of concept",
+                "source_note": "Synthetic aggregate for the DaCa proof of concept",
             },
             {
                 "id": 3,
@@ -91,7 +91,7 @@ def upgrade() -> None:
                 "tax_year": 2024,
                 "taxpayers": 954880,
                 "taxable_income_million_chf": 72110.75,
-                "source_note": "Synthetic aggregate for the DiDaCa proof of concept",
+                "source_note": "Synthetic aggregate for the DaCa proof of concept",
             },
         ],
     )
@@ -114,28 +114,28 @@ def upgrade() -> None:
 
     op.execute("REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC")
     op.execute(
-        'GRANT USAGE ON SCHEMA public TO didaca_sample_api, didaca_policy_projector, '
+        'GRANT USAGE ON SCHEMA public TO daca_sample_api, daca_policy_projector, '
         '"kanton-st-gallen", "kanton-bern"'
     )
     op.execute(
-        'GRANT SELECT ON tax_statistics TO didaca_sample_api, "kanton-st-gallen", "kanton-bern"'
+        'GRANT SELECT ON tax_statistics TO daca_sample_api, "kanton-st-gallen", "kanton-bern"'
     )
     op.execute(
-        "GRANT SELECT, INSERT, UPDATE, DELETE ON policy_entitlements TO didaca_policy_projector"
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON policy_entitlements TO daca_policy_projector"
     )
     op.execute(
-        "GRANT SELECT, INSERT, UPDATE, DELETE ON policy_deployments TO didaca_policy_projector"
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON policy_deployments TO daca_policy_projector"
     )
 
     op.execute(
         """
-        CREATE FUNCTION didaca_effective_subject() RETURNS text
+        CREATE FUNCTION daca_effective_subject() RETURNS text
         LANGUAGE sql STABLE SECURITY DEFINER
         SET search_path = public, pg_temp
         AS $$
           SELECT CASE
-            WHEN session_user = 'didaca_sample_api'
-              THEN NULLIF(current_setting('didaca.subject_id', true), '')
+            WHEN session_user = 'daca_sample_api'
+              THEN NULLIF(current_setting('daca.subject_id', true), '')
             ELSE session_user::text
           END
         $$
@@ -143,13 +143,13 @@ def upgrade() -> None:
     )
     op.execute(
         """
-        CREATE FUNCTION didaca_effective_protocol() RETURNS text
+        CREATE FUNCTION daca_effective_protocol() RETURNS text
         LANGUAGE sql STABLE SECURITY DEFINER
         SET search_path = public, pg_temp
         AS $$
           SELECT CASE
-            WHEN session_user = 'didaca_sample_api'
-              THEN COALESCE(NULLIF(current_setting('didaca.protocol', true), ''), 'http-rest')
+            WHEN session_user = 'daca_sample_api'
+              THEN COALESCE(NULLIF(current_setting('daca.protocol', true), ''), 'http-rest')
             ELSE 'postgresql'
           END
         $$
@@ -157,7 +157,7 @@ def upgrade() -> None:
     )
     op.execute(
         """
-        CREATE FUNCTION didaca_can_read(target_product uuid) RETURNS boolean
+        CREATE FUNCTION daca_can_read(target_product uuid) RETURNS boolean
         LANGUAGE sql STABLE SECURITY DEFINER
         SET search_path = public, pg_temp
         AS $$
@@ -165,36 +165,36 @@ def upgrade() -> None:
             SELECT 1
             FROM policy_entitlements entitlement
             WHERE entitlement.product_id = target_product
-              AND entitlement.subject_id = didaca_effective_subject()
+              AND entitlement.subject_id = daca_effective_subject()
               AND entitlement.action = 'data.read'
-              AND entitlement.protocol = didaca_effective_protocol()
+              AND entitlement.protocol = daca_effective_protocol()
               AND entitlement.active
           )
         $$
         """
     )
     op.execute(
-        'REVOKE ALL ON FUNCTION didaca_effective_subject() FROM PUBLIC; '
-        'REVOKE ALL ON FUNCTION didaca_effective_protocol() FROM PUBLIC; '
-        'REVOKE ALL ON FUNCTION didaca_can_read(uuid) FROM PUBLIC'
+        'REVOKE ALL ON FUNCTION daca_effective_subject() FROM PUBLIC; '
+        'REVOKE ALL ON FUNCTION daca_effective_protocol() FROM PUBLIC; '
+        'REVOKE ALL ON FUNCTION daca_can_read(uuid) FROM PUBLIC'
     )
     op.execute(
-        'GRANT EXECUTE ON FUNCTION didaca_effective_subject(), didaca_effective_protocol(), '
-        'didaca_can_read(uuid) TO didaca_sample_api, "kanton-st-gallen", "kanton-bern"'
+        'GRANT EXECUTE ON FUNCTION daca_effective_subject(), daca_effective_protocol(), '
+        'daca_can_read(uuid) TO daca_sample_api, "kanton-st-gallen", "kanton-bern"'
     )
     op.execute("ALTER TABLE tax_statistics ENABLE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE tax_statistics FORCE ROW LEVEL SECURITY")
     op.execute(
-        "CREATE POLICY didaca_product_read ON tax_statistics FOR SELECT USING "
-        "(didaca_can_read(product_id))"
+        "CREATE POLICY daca_product_read ON tax_statistics FOR SELECT USING "
+        "(daca_can_read(product_id))"
     )
 
 
 def downgrade() -> None:
-    op.execute("DROP POLICY IF EXISTS didaca_product_read ON tax_statistics")
-    op.execute("DROP FUNCTION IF EXISTS didaca_can_read(uuid)")
-    op.execute("DROP FUNCTION IF EXISTS didaca_effective_protocol()")
-    op.execute("DROP FUNCTION IF EXISTS didaca_effective_subject()")
+    op.execute("DROP POLICY IF EXISTS daca_product_read ON tax_statistics")
+    op.execute("DROP FUNCTION IF EXISTS daca_can_read(uuid)")
+    op.execute("DROP FUNCTION IF EXISTS daca_effective_protocol()")
+    op.execute("DROP FUNCTION IF EXISTS daca_effective_subject()")
     op.drop_table("policy_deployments")
     op.drop_table("policy_entitlements")
     op.drop_index("ix_tax_statistics_product_id", table_name="tax_statistics")

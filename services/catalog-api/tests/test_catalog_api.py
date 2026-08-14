@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from didaca_catalog.seed import ESTV_PRODUCT_ID
+from daca_catalog.seed import ESTV_PRODUCT_ID
 
 MWST_PRODUCT_ID = "13333333-3333-4333-8333-333333333333"
 
@@ -31,7 +31,7 @@ def test_seeded_product_and_health_are_available(client):
     assert response.headers["etag"] == '"1"'
     assert response.headers["x-request-id"] == "test-request"
     body = response.json()
-    assert body["originCatalog"] == "urn:didaca:catalog:bit-poc"
+    assert body["originCatalog"] == "urn:daca:catalog:bit-poc"
     assert body["activePolicyRevision"] == 1
     assert body["metadata"]["containsPersonalData"] is False
     assert "extra_metadata" not in body
@@ -84,7 +84,7 @@ def test_metadata_updates_are_optimistic_and_audited(client):
 
     updated = client.patch(
         product_url(),
-        headers={"If-Match": '"1"', "X-DiDaCa-User": "estv-editor"},
+        headers={"If-Match": '"1"', "X-DaCa-User": "estv-editor"},
         json={"description": "Updated aggregate description", "updateFrequency": "quarterly"},
     )
     assert updated.status_code == 200
@@ -105,7 +105,7 @@ def test_metadata_updates_are_optimistic_and_audited(client):
 def test_mutations_require_demo_identity(client):
     response = client.patch(
         product_url(),
-        headers={"If-Match": '"1"', "X-DiDaCa-User": ""},
+        headers={"If-Match": '"1"', "X-DaCa-User": ""},
         json={"description": "Anonymous edit"},
     )
     assert response.status_code == 401
@@ -133,7 +133,7 @@ def test_access_request_is_persisted_for_the_authenticated_demo_user(client, ses
         "notes": "Nur aggregierte Daten; keine Personendaten erforderlich.",
         "conditionsAccepted": True,
     }
-    headers = {"X-DiDaCa-User": "kassandra.valdata"}
+    headers = {"X-DaCa-User": "kassandra.valdata"}
 
     created = client.post(
         f"/api/v1/data-products/{MWST_PRODUCT_ID}/access-requests",
@@ -161,7 +161,7 @@ def test_access_request_is_persisted_for_the_authenticated_demo_user(client, ses
     assert all_mine.status_code == 200
     assert [item["requestNumber"] for item in all_mine.json()] == [body["requestNumber"]]
 
-    from didaca_catalog.models import AccessRequest
+    from daca_catalog.models import AccessRequest
 
     with session_factory() as session:
         persisted = session.get(AccessRequest, uuid.UUID(body["id"]))
@@ -182,7 +182,7 @@ def test_access_request_validation_and_owner_guard(client):
         "contactEmail": "kassandra.valdata@estv.admin.ch",
         "conditionsAccepted": True,
     }
-    headers = {"X-DiDaCa-User": "kassandra.valdata"}
+    headers = {"X-DaCa-User": "kassandra.valdata"}
 
     missing_machine = client.post(
         f"/api/v1/data-products/{MWST_PRODUCT_ID}/access-requests",
@@ -202,7 +202,7 @@ def test_access_request_validation_and_owner_guard(client):
 def test_owner_inbox_contains_the_seeded_beat_stalder_request(client):
     inbox = client.get(
         "/api/v1/access-requests/inbox",
-        headers={"X-DiDaCa-User": "kassandra.valdata"},
+        headers={"X-DaCa-User": "kassandra.valdata"},
     )
     assert inbox.status_code == 200
     assert len(inbox.json()) == 1
@@ -216,7 +216,7 @@ def test_owner_inbox_contains_the_seeded_beat_stalder_request(client):
 
     outsider = client.get(
         "/api/v1/access-requests/inbox",
-        headers={"X-DiDaCa-User": "didaca-test-editor"},
+        headers={"X-DaCa-User": "daca-test-editor"},
     )
     assert outsider.status_code == 200
     assert outsider.json() == []
@@ -225,7 +225,7 @@ def test_owner_inbox_contains_the_seeded_beat_stalder_request(client):
 def test_owned_access_consumers_are_active_deduplicated_and_owner_scoped(client):
     response = client.get(
         "/api/v1/access-consumers/owned",
-        headers={"X-DiDaCa-User": "kassandra.valdata"},
+        headers={"X-DaCa-User": "kassandra.valdata"},
     )
     assert response.status_code == 200
     consumers = response.json()
@@ -254,7 +254,7 @@ def test_owned_access_consumers_are_active_deduplicated_and_owner_scoped(client)
 
     outsider = client.get(
         "/api/v1/access-consumers/owned",
-        headers={"X-DiDaCa-User": "didaca-test-editor"},
+        headers={"X-DaCa-User": "daca-test-editor"},
     )
     assert outsider.status_code == 200
     assert outsider.json() == []
@@ -267,7 +267,7 @@ def test_endpoint_union_lineage_and_provenance(client):
     postgres = next(item for item in endpoints.json() if item["protocol"] == "postgresql")
     assert postgres["connection"]["schema"] == "public"
     assert postgres["connection"]["port"] == 55432
-    assert postgres["connection"]["database"] == "didaca_sample"
+    assert postgres["connection"]["database"] == "daca_sample"
     assert "password" not in postgres["connection"]
 
     invalid = client.post(

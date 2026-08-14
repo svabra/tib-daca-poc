@@ -1,4 +1,4 @@
-"""Create the standalone DiDaCa catalog schema.
+"""Create the standalone DaCa catalog schema.
 
 Revision ID: 0001_catalog
 Revises:
@@ -93,13 +93,14 @@ def upgrade() -> None:
     op.create_table(
         "provenance_events",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("data_product_id", sa.Uuid(), nullable=False),
+        sa.Column("data_product_id", sa.Uuid(), nullable=True),
+        sa.Column("product_urn", sa.String(255), nullable=False),
         sa.Column("sequence", sa.Integer(), nullable=False),
         sa.Column("event_type", sa.String(100), nullable=False),
         sa.Column("actor", sa.String(255), nullable=False),
         sa.Column("details", sa.JSON(), nullable=False),
         sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["data_product_id"], ["data_products.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["data_product_id"], ["data_products.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("data_product_id", "sequence", name="uq_provenance_product_sequence"),
     )
@@ -154,4 +155,3 @@ def downgrade() -> None:
     op.drop_index("ix_lineage_source", table_name="lineage_edges")
     op.drop_table("lineage_edges")
     op.drop_table("data_products")
-

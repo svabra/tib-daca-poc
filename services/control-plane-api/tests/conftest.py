@@ -1,9 +1,9 @@
 from collections.abc import Iterator
 
 import pytest
-from didaca_control_plane.config import Settings
-from didaca_control_plane.main import create_app
-from didaca_control_plane.models import Base
+from daca_control_plane.config import Settings
+from daca_control_plane.main import create_app
+from daca_control_plane.models import Base
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
@@ -43,7 +43,7 @@ def client(session_factory: sessionmaker[Session]) -> Iterator[TestClient]:
     )
     application = create_app(settings=settings, session_factory=session_factory)
     with TestClient(application) as test_client:
-        test_client.headers.update({"X-DiDaCa-Actor": "test-control-admin"})
+        test_client.headers.update({"X-DaCa-Actor": "test-control-admin"})
         yield test_client
 
 
@@ -58,7 +58,7 @@ def _create_catalog(client: TestClient, suffix: str, name: str) -> dict:
     response = client.post(
         "/api/v1/catalogs",
         json={
-            "urn": f"urn:didaca:catalog:{suffix}",
+            "urn": f"urn:daca:catalog:{suffix}",
             "name": name,
             "organization": name,
             "environment": "test",

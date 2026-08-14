@@ -1,11 +1,11 @@
 {
-  "name": "BIT DiDaCa Catalog",
-  "short_name": "DiDaCa",
+  "name": "BIT DaCa Catalog",
+  "short_name": "DaCa",
   "description": "Distributed Data Catalog metadata and policy workbench",
   "theme_color": "#e0001a",
   "background_color": "#f4f6f7",
   "display": "standalone",
   "start_url": "/",
   "scope": "/",
-  "icons": [{ "src": "/assets/didaca-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+  "icons": [{ "src": "/assets/daca-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
 }

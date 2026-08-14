@@ -1,0 +1,56 @@
+name: Data Analyst Golden Path
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  golden-path:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out DaCa main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: daca
+
+      - name: Check out DAAIF main
+        uses: actions/checkout@v4
+        with:
+          repository: svabra/tib-daail-evo1-poc-query-engine
+          ref: main
+          path: daaif
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: 0.11.29
+          enable-cache: true
+
+      - name: Install Python and journey dependencies
+        working-directory: daca
+        run: |
+          uv python install 3.14
+          uv sync --package daca-journey-runner
+          uv run --package daca-journey-runner playwright install --with-deps chromium
+
+      - name: Run isolated cross-system journey
+        working-directory: daca
+        run: >-
+          uv run --package daca-journey-runner daca-journey
+          data-analyst-golden-path
+          --daaif-repo ../daaif
+          --artifacts output/playwright/data-analyst-journey/github-${{ github.run_id }}
+          --require-main
+
+      - name: Upload browser and container evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-analyst-golden-path-${{ github.run_id }}
+          path: daca/output/playwright/data-analyst-journey/
+          if-no-files-found: warn
+          retention-days: 14

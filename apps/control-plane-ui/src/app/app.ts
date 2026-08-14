@@ -1,20 +1,20 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { DidacaNavigationItem, FederalShellComponent } from '@bit-didaca/design-system';
+import { DacaNavigationItem, FederalShellComponent } from '@bit-daca/design-system';
 
 @Component({
-  selector: 'didaca-control-root',
+  selector: 'daca-control-root',
   standalone: true,
   imports: [FederalShellComponent, RouterOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <didaca-federal-shell appTitle="BIT DiDaCa Control Plane" [navigation]="navigation">
+    <daca-federal-shell appTitle="BIT DaCa Control Plane" [navigation]="navigation">
       <router-outlet />
-    </didaca-federal-shell>
+    </daca-federal-shell>
   `,
 })
 export class App {
-  readonly navigation: readonly DidacaNavigationItem[] = [
+  readonly navigation: readonly DacaNavigationItem[] = [
     { label: 'Security & federation', path: '/federation' },
     { label: 'Catalog instances', path: '/instances' },
     { label: 'Directed trust', path: '/trust' },

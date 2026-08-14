@@ -8,7 +8,7 @@
       "projectType": "application",
       "root": "",
       "sourceRoot": "src",
-      "prefix": "didaca",
+      "prefix": "daca",
       "architect": {
         "build": {
           "builder": "@angular/build:application",
@@ -33,7 +33,7 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
-          "options": { "prebundle": { "exclude": ["@bit-didaca/design-system"] } },
+          "options": { "prebundle": { "exclude": ["@bit-daca/design-system"] } },
           "configurations": {
             "production": { "buildTarget": "control-plane-ui:build:production" },
             "development": { "buildTarget": "control-plane-ui:build:development" }

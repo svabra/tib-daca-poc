@@ -1,8 +1,8 @@
 from logging.config import fileConfig
 
 from alembic import context
-from didaca_control_plane.config import get_settings
-from didaca_control_plane.models import Base
+from daca_control_plane.config import get_settings
+from daca_control_plane.models import Base
 from sqlalchemy import engine_from_config, pool
 
 config = context.config

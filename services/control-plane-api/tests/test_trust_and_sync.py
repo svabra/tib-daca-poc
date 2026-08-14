@@ -42,7 +42,7 @@ def test_enabled_sync_requires_matching_approved_directed_trust(
     provider, consumer = two_catalogs
     no_grant = client.post("/api/v1/sync-configurations", json=sync_payload(provider, consumer))
     assert no_grant.status_code == 422
-    assert no_grant.json()["type"] == "urn:didaca:problem:sync-not-trusted"
+    assert no_grant.json()["type"] == "urn:daca:problem:sync-not-trusted"
 
     grant, grant_etag = create_grant(client, provider, consumer, state="pending")
     pending = client.post(
@@ -102,7 +102,7 @@ def test_direction_scope_filters_and_policy_opt_in_are_enforced(
         ),
     )
     assert policy.status_code == 422
-    assert policy.json()["type"] == "urn:didaca:problem:policy-sync-disabled"
+    assert policy.json()["type"] == "urn:daca:problem:policy-sync-disabled"
 
 
 def test_revoking_trust_safely_disables_enabled_configuration(
