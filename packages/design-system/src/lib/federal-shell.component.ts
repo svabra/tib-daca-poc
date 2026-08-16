@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, HostListener, input, output, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { DacaGlossaryTermComponent } from './glossary-term.component';
+import { DacaVersionOverlayComponent } from './version-overlay.component';
+import { DacaFeatureScope } from './feature-list';
 
 export interface DacaNavigationItem {
   label: string;
@@ -20,7 +22,7 @@ export interface DacaUserOption {
 @Component({
   selector: 'daca-federal-shell',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, DacaGlossaryTermComponent],
+  imports: [RouterLink, RouterLinkActive, DacaGlossaryTermComponent, DacaVersionOverlayComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <a class="daca-skip-link" href="#main-content">{{ locale() === 'de' ? 'Zum Inhalt springen' : 'Skip to content' }}</a>
@@ -191,6 +193,14 @@ export interface DacaUserOption {
         }
       </div>
     </footer>
+
+    <daca-version-overlay
+      [productName]="versionProductName()"
+      [description]="versionDescription()"
+      [locale]="locale()"
+      [featureScope]="versionFeatureScope()"
+      [ariaLabel]="locale() === 'de' ? 'DaCa-Anwendungsversion' : 'DaCa application version'"
+    />
   `,
 })
 export class FederalShellComponent {
@@ -198,6 +208,9 @@ export class FederalShellComponent {
   readonly appSubtitle = input('Bundesamt f\u00fcr Informatik und Telekommunikation BIT');
   readonly footerProductName = input<string | null>(null);
   readonly footerText = input<string | null>(null);
+  readonly versionProductName = input('DaCa');
+  readonly versionDescription = input('A PoC by BIT and ESTV');
+  readonly versionFeatureScope = input<DacaFeatureScope>('catalog');
   readonly subtitleBelow = input(false);
   readonly locale = input<'de' | 'en'>('en');
   readonly userName = input<string | null>(null);

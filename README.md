@@ -198,6 +198,31 @@ npm test
 npm run lint
 ```
 
+## Release version management
+
+The root [`VERSION`](VERSION) file is the sole DaCa release-version source. The version command
+keeps the first-party Node and Python package metadata and lockfiles, service runtime constants,
+the shared UI version constant, focused OpenAPI documents, and OpenShift image pins synchronized.
+Do not edit those derived release surfaces individually.
+
+Validate the repository before CI/CD builds or publishing images:
+
+```powershell
+npm run version:check
+```
+
+Prepare a release with a strict `X.Y.Z` version. The command first refuses an inconsistent
+repository, then updates all managed surfaces and validates the result:
+
+```powershell
+npm run version:bump -- 0.2.0
+```
+
+The lower-right version box in both web applications also opens a plain-language feature list.
+It shows the capabilities of the current Catalog or Control Plane release in the application's
+language and clearly identifies simulated PoC behavior. Its displayed version is bound to the
+same shared release constant and is covered by `version:check`.
+
 The persistent data model for the catalog, control plane, and protected sample product is in
 [`docs/data-model/`](docs/data-model/README.md). DAAIF is treated as an external source; the
 documentation covers only the publication and workflow evidence stored by DaCa. After changing

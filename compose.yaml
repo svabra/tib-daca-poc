@@ -29,6 +29,8 @@ services:
   catalog-api:
     build:
       context: ./services/catalog-api
+      args:
+        IMAGE_VERSION: ${IMAGE_VERSION:-}
     environment:
       DATABASE_URL: postgresql+psycopg://daca_catalog:${CATALOG_DB_PASSWORD:-daca_catalog_dev}@postgres:5432/daca_catalog
       ROOT_PATH: /catalog-api
@@ -78,6 +80,8 @@ services:
   control-plane-api:
     build:
       context: ./services/control-plane-api
+      args:
+        IMAGE_VERSION: ${IMAGE_VERSION:-}
     environment:
       DACA_CONTROL_DATABASE_URL: postgresql+psycopg://daca_control:${CONTROL_PLANE_DB_PASSWORD:-daca_control_dev}@postgres:5432/daca_control_plane
       DACA_CONTROL_SEED_ON_STARTUP: "false"
@@ -117,6 +121,8 @@ services:
   sample-data-product:
     build:
       context: ./services/sample-data-product
+      args:
+        IMAGE_VERSION: ${IMAGE_VERSION:-}
     environment:
       ALEMBIC_DATABASE_URL: postgresql+psycopg://daca_sample_owner:${SAMPLE_DB_OWNER_PASSWORD:-daca_sample_owner_dev}@postgres:5432/daca_sample
       ROOT_PATH: /sample-api
@@ -150,6 +156,8 @@ services:
     build:
       context: .
       dockerfile: apps/catalog-ui/Dockerfile
+      args:
+        IMAGE_VERSION: ${IMAGE_VERSION:-}
     ports:
       - "8080:8080"
     depends_on:
@@ -161,6 +169,8 @@ services:
     build:
       context: .
       dockerfile: apps/control-plane-ui/Dockerfile
+      args:
+        IMAGE_VERSION: ${IMAGE_VERSION:-}
     ports:
       - "8081:8080"
     depends_on:

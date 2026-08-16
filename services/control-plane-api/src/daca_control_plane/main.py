@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from . import get_runtime_version
 from .api import health_router, router
 from .config import Settings, get_settings
 from .database import create_database_engine, create_session_factory
@@ -58,6 +59,7 @@ def create_app(
             if owned_engine is not None:
                 owned_engine.dispose()
 
+    runtime_version = get_runtime_version()
     application = FastAPI(
         title="BIT DaCa Control Plane API",
         summary="Declarative catalog registration, trust and future sync control.",
@@ -65,7 +67,7 @@ def create_app(
             "Manages desired control-plane state. It deliberately does not transfer "
             "metadata, lineage, provenance, or policies between catalogs."
         ),
-        version="0.1.0",
+        version=runtime_version,
         lifespan=lifespan,
         openapi_url="/openapi.json",
         docs_url="/docs",

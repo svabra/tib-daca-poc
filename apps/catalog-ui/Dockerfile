@@ -1,4 +1,8 @@
+ARG IMAGE_VERSION
+
 FROM node:24-alpine AS build
+ARG IMAGE_VERSION
+ENV IMAGE_VERSION="${IMAGE_VERSION}"
 WORKDIR /workspace
 COPY package.json package-lock.json ./
 COPY packages/design-system/package.json ./packages/design-system/package.json
@@ -11,6 +15,9 @@ COPY docs/openapi/daca-metadata-publication.openapi.yaml ./apps/catalog-ui/publi
 RUN npm run build --workspace @daca/catalog-ui
 
 FROM nginxinc/nginx-unprivileged:1.29-alpine
+ARG IMAGE_VERSION
+ENV IMAGE_VERSION="${IMAGE_VERSION}"
+LABEL org.opencontainers.image.version="${IMAGE_VERSION}"
 COPY apps/catalog-ui/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /workspace/apps/catalog-ui/dist/catalog-ui/browser /usr/share/nginx/html
 EXPOSE 8080

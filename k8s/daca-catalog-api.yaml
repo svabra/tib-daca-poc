@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: catalog-api
-          image: docker-hub.nexus.bit.admin.ch/svabra/tib-daca-catalog-api:0.1.0
+          image: docker-hub.nexus.bit.admin.ch/svabra/tib-daca-catalog-api:0.1.1
           imagePullPolicy: Always
           ports:
             - name: http

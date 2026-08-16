@@ -40,6 +40,17 @@ def test_schema_fingerprint_detects_structural_drift() -> None:
     assert generator.schema_signature(initial) != generator.schema_signature(changed)
 
 
+def test_source_fingerprints_ignore_platform_line_endings(tmp_path: Path) -> None:
+    lf_source = tmp_path / "lf.py"
+    crlf_source = tmp_path / "crlf.py"
+    lf_source.write_bytes(b'revision = "0001"\ndown_revision = None\n')
+    crlf_source.write_bytes(b'revision = "0001"\r\ndown_revision = None\r\n')
+
+    assert generator.normalized_source_bytes(lf_source) == generator.normalized_source_bytes(
+        crlf_source
+    )
+
+
 def test_every_table_requires_a_description() -> None:
     metadata = MetaData()
     Table("undocumented", metadata, Column("id", Integer, primary_key=True))
