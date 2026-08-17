@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/part-of: tib-daca-poc
 spec:
   replicas: 1
+  revisionHistoryLimit: 2
   strategy:
     type: Recreate
   selector:
@@ -31,6 +32,31 @@ spec:
               value: /tmp
             - name: ROOT_PATH
               value: /catalog-api
+            - name: PG_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: tib-daail-evo1-poc-query-engine-config
+                  key: PG_HOST
+            - name: PG_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: tib-daail-evo1-poc-query-engine-config
+                  key: PG_PORT
+            - name: PG_OLTP_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: tib-daail-evo1-poc-query-engine-config
+                  key: PG_OLTP_DATABASE
+            - name: PG_USER
+              valueFrom:
+                secretKeyRef:
+                  name: tib-daail-evo1-poc-query-engine-secret
+                  key: PG_USER
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tib-daail-evo1-poc-query-engine-secret
+                  key: PG_PASSWORD
           envFrom:
             - configMapRef:
                 name: tib-daca-poc-config
@@ -62,8 +88,8 @@ spec:
               cpu: 100m
               memory: 256Mi
             limits:
-              cpu: "1"
-              memory: 1Gi
+              cpu: 500m
+              memory: 512Mi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

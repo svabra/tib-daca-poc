@@ -20,7 +20,7 @@ Update generated sections with `npm run docs:data-model`. Validate them with
 |---|---|---:|---|---|
 | [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 27 | `0010_request_policy_binding` | `1b282e400ed95e43` |
 | [Control-plane data model](control-plane.md) | PostgreSQL (`daca_control_plane`) | 6 | `20260803_0001` | `ff3a5ea9ca863788` |
-| [Sample data-product model](sample-data-product.md) | PostgreSQL (`daca_sample`) | 3 | `0003_weekly_availability` | `62ec28e96d141cf0` |
+| [Sample data-product model](sample-data-product.md) | PostgreSQL (`daca_sample`) | 3 | `0003_weekly_availability` | `938d480b00000576` |
 
 ## Cross-service data flow
 

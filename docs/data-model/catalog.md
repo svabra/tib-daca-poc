@@ -4,6 +4,10 @@ The standalone catalog owns product metadata, workflows, access governance and s
 
 **Storage:** PostgreSQL (`daca_catalog`), version 18.4 locally and version 17 in production.
 
+The RHOS presentation profile stores this model in the `daca_catalog` schema of the shared
+`evo1_oltp` database. Dedicated deployments continue to use the separate `daca_catalog`
+database and its `public` schema.
+
 ## DAAIF boundary
 
 DAAIF is an external source system and its internal data model is outside this repository. DaCa persists only the submitted publication envelope, normalized metadata, product fields and the resulting workflow evidence documented below. No DAAIF credentials or source records are stored.

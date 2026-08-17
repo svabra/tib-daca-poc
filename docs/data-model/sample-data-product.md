@@ -4,6 +4,11 @@ The sample ESTV product owns synthetic product rows and the local PostgreSQL aut
 
 **Storage:** PostgreSQL (`daca_sample`).
 
+The RHOS presentation profile stores this model in the `daca_sample` schema of the shared
+`evo1_oltp` database. It intentionally reuses the DAAIF database login for this PoC only and
+does not expose direct PostgreSQL consumer credentials. Dedicated deployments retain the
+separate database roles described below.
+
 ## Authorization boundary
 
 The catalog policy revision is projected into this database by product ID and revision. This is an application-level projection, not a cross-database foreign key. OPA protects HTTP access; forced PostgreSQL RLS independently evaluates the local entitlement projection.
@@ -13,7 +18,7 @@ The catalog policy revision is projected into this database by product ID and re
 - SQLAlchemy source: [`services/sample-data-product/app/models.py`](../../services/sample-data-product/app/models.py)
 - Alembic head: `0003_weekly_availability`
 - Schema fingerprint: `67830d4b629f4cae`
-- Migration fingerprint: `62ec28e96d141cf0`
+- Migration fingerprint: `938d480b00000576`
 - Tables: `3`
 
 ## Domain status vocabulary

@@ -86,7 +86,7 @@ jobs:
             --env BERN_DB_PASSWORD=daca_bern_test \
             --volume "$PWD/infra/postgres/init:/docker-entrypoint-initdb.d:ro" \
             postgres:${{ matrix.postgres-version }}
-          for attempt in $(seq 1 40); do
+          for _ in $(seq 1 40); do
             if docker exec daca-postgres-compat pg_isready -U daca_admin -d postgres; then
               exit 0
             fi
@@ -109,6 +109,60 @@ jobs:
           uv run --package daca-control-plane-api daca-control-plane-seed
           uv run --package daca-sample-data-product alembic -c services/sample-data-product/alembic.ini upgrade head
           uv run --all-packages pytest services/catalog-api/tests
+      - name: Verify the RHOS shared PostgreSQL schema profile
+        shell: bash
+        run: |
+          docker exec \
+            --env PGPASSWORD=daca_admin_test \
+            daca-postgres-compat \
+            psql -U daca_admin -d postgres -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE daca_shared_test LOGIN PASSWORD 'shared:p@ss' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS" \
+            -c "GRANT CONNECT, CREATE ON DATABASE postgres TO daca_shared_test"
+
+          export PG_HOST=localhost
+          export PG_PORT=55432
+          export PG_OLTP_DATABASE=postgres
+          export PG_USER=daca_shared_test
+          export PG_PASSWORD='shared:p@ss'
+          export DATABASE_URL=''
+          export DACA_CATALOG_SCHEMA=daca_catalog
+          uv run --package daca-catalog-api alembic -c services/catalog-api/alembic.ini upgrade head
+          uv run --package daca-catalog-api daca-catalog-seed
+
+          export ALEMBIC_DATABASE_URL=''
+          export SAMPLE_DATABASE_URL=''
+          export POLICY_PROJECTOR_DATABASE_URL=''
+          export DACA_SAMPLE_SCHEMA=daca_sample
+          export DACA_SHARED_POSTGRES=true
+          uv run --package daca-sample-data-product alembic -c services/sample-data-product/alembic.ini upgrade head
+
+          schema_rows="$(
+            docker exec \
+              --env PGPASSWORD='shared:p@ss' \
+              daca-postgres-compat \
+              psql -h 127.0.0.1 -U daca_shared_test -d postgres -Atc \
+              "SELECT count(*) FROM information_schema.tables WHERE table_schema IN ('daca_catalog', 'daca_sample')"
+          )"
+          test "$schema_rows" = "32"
+
+          ungated_rows="$(
+            docker exec \
+              --env PGPASSWORD='shared:p@ss' \
+              daca-postgres-compat \
+              psql -h 127.0.0.1 -U daca_shared_test -d postgres -Atc \
+              "SELECT count(*) FROM daca_sample.tax_statistics"
+          )"
+          test "$ungated_rows" = "0"
+
+          gated_rows="$(
+            docker exec \
+              --env PGPASSWORD='shared:p@ss' \
+              daca-postgres-compat \
+              psql -h 127.0.0.1 -U daca_shared_test -d postgres -Atc \
+              "BEGIN; SELECT set_config('daca.subject_id','kanton-st-gallen',true); SELECT set_config('daca.subject_type','person',true); SELECT set_config('daca.protocol','http-rest',true); SELECT count(*) FROM daca_sample.tax_statistics WHERE product_id='11111111-1111-4111-8111-111111111111'; COMMIT" \
+              | tail -n 2 | head -n 1
+          )"
+          test "$gated_rows" = "3"
       - name: Show PostgreSQL logs after failure
         if: failure()
         run: docker logs daca-postgres-compat
@@ -126,32 +180,27 @@ jobs:
       matrix:
         image:
           - name: tib-daca-catalog-ui
-            component: catalog-ui
-            repository: docker.io/svabra/tib-daca-poc
+            repository: docker.io/svabra/tib-daca-catalog-ui
             context: .
             dockerfile: apps/catalog-ui/Dockerfile
             archive: /tmp/tib-daca-catalog-ui.tar
           - name: tib-daca-catalog-api
-            component: catalog-api
-            repository: docker.io/svabra/tib-daca-poc
+            repository: docker.io/svabra/tib-daca-catalog-api
             context: services/catalog-api
             dockerfile: services/catalog-api/Dockerfile
             archive: /tmp/tib-daca-catalog-api.tar
           - name: tib-daca-control-plane-ui
-            component: control-plane-ui
-            repository: docker.io/svabra/tib-daca-poc
+            repository: docker.io/svabra/tib-daca-control-plane-ui
             context: .
             dockerfile: apps/control-plane-ui/Dockerfile
             archive: /tmp/tib-daca-control-plane-ui.tar
           - name: tib-daca-control-plane-api
-            component: control-plane-api
-            repository: docker.io/svabra/tib-daca-poc
+            repository: docker.io/svabra/tib-daca-control-plane-api
             context: services/control-plane-api
             dockerfile: services/control-plane-api/Dockerfile
             archive: /tmp/tib-daca-control-plane-api.tar
           - name: tib-daca-sample-data-product
-            component: sample-data-product
-            repository: docker.io/svabra/tib-daca-poc
+            repository: docker.io/svabra/tib-daca-sample-data-product
             context: services/sample-data-product
             dockerfile: services/sample-data-product/Dockerfile
             archive: /tmp/tib-daca-sample-data-product.tar
@@ -187,10 +236,10 @@ jobs:
         with:
           images: ${{ matrix.image.repository }}
           tags: |
-            type=sha,prefix=${{ matrix.image.component }}-sha-
-            type=raw,value=${{ matrix.image.component }}-${{ steps.version.outputs.value }},enable=${{ steps.release.outputs.publish }}
+            type=sha,prefix=sha-
+            type=raw,value=${{ steps.version.outputs.value }},enable=${{ steps.release.outputs.publish }}
           labels: |
-            org.opencontainers.image.title=DaCa ${{ matrix.image.component }}
+            org.opencontainers.image.title=${{ matrix.image.name }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -252,7 +301,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
         with:
-          username: svabra
+          username: ${{ vars.DOCKERHUB_USERNAME || 'svabra' }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Push every generated tag
         shell: bash

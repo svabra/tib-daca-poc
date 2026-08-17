@@ -224,23 +224,22 @@ language and clearly identifies simulated PoC behavior. Its displayed version is
 same shared release constant and is covered by `version:check`.
 
 After the complete GitHub test suite and the PostgreSQL 17/18 compatibility jobs pass, CI builds
-all five first-party Linux images and publishes them to
-[`svabra/tib-daca-poc`](https://hub.docker.com/r/svabra/tib-daca-poc). Because DaCa is a
-multi-container application, every tag starts with its component name instead of using an
-ambiguous shared `latest` tag:
+all five first-party Linux images and publishes each component to its own Docker Hub repository:
 
 ```text
-catalog-ui-sha-<commit>             catalog-ui-<version>
-catalog-api-sha-<commit>            catalog-api-<version>
-control-plane-ui-sha-<commit>       control-plane-ui-<version>
-control-plane-api-sha-<commit>      control-plane-api-<version>
-sample-data-product-sha-<commit>    sample-data-product-<version>
+svabra/tib-daca-catalog-ui
+svabra/tib-daca-catalog-api
+svabra/tib-daca-control-plane-ui
+svabra/tib-daca-control-plane-api
+svabra/tib-daca-sample-data-product
 ```
 
-Immutable commit tags are uploaded on every successful non-PR run. Component version tags are
-uploaded only when `VERSION` changes on `main` or a matching `v<version>` Git tag is built. The
-repository secret `DOCKERHUB_TOKEN` must contain a Docker Hub personal access token for user
-`svabra`; account passwords and email addresses are never stored in the workflow.
+Each repository receives `sha-<commit>` on every successful non-PR run and the exact release
+version, for example `0.1.1`, only when `VERSION` changes on `main` or a matching `v<version>` Git
+tag is built. No mutable `latest` tag is published. The repository secret `DOCKERHUB_TOKEN` must
+contain one Docker Hub personal access token with read/write permission. The optional repository
+variable `DOCKERHUB_USERNAME` defaults to `svabra`; account passwords and email addresses are
+never stored in the workflow.
 
 The persistent data model for the catalog, control plane, and protected sample product is in
 [`docs/data-model/`](docs/data-model/README.md). DAAIF is treated as an external source; the
@@ -267,10 +266,10 @@ the deliberately unimplemented federation contract.
 
 ## OpenShift presentation deployment
 
-Production uses the existing PostgreSQL 17 and administration infrastructure in `daai-brs-d`.
-DaCa deploys no PostgreSQL, pgAdmin, PVC or database service there. The database administrator
-creates DaCa-specific databases and roles with
-[`infra/postgres/production/bootstrap-daca.sql`](infra/postgres/production/bootstrap-daca.sql),
-then the application-only manifests are applied as described in [`k8s/README.md`](k8s/README.md).
+The RHOS presentation profile uses the existing PostgreSQL service and credentials in
+`daai-brs-d`. It isolates Catalog and policy-projection data in the `daca_catalog` and
+`daca_sample` schemas of `evo1_oltp`; DaCa deploys no PostgreSQL, pgAdmin, PVC or database
+service. The dedicated-database and role model remains the default outside this explicit PoC
+profile. Apply the four application-only workloads as described in [`k8s/README.md`](k8s/README.md).
 DAAIF publishes metadata internally to
 `http://daca-catalog-api:8001/api/v1/metadata-publications`.
