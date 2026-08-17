@@ -126,27 +126,32 @@ jobs:
       matrix:
         image:
           - name: tib-daca-catalog-ui
-            repository: docker.io/svabra/tib-daca-catalog-ui
+            component: catalog-ui
+            repository: docker.io/svabra/tib-daca-poc
             context: .
             dockerfile: apps/catalog-ui/Dockerfile
             archive: /tmp/tib-daca-catalog-ui.tar
           - name: tib-daca-catalog-api
-            repository: docker.io/svabra/tib-daca-catalog-api
+            component: catalog-api
+            repository: docker.io/svabra/tib-daca-poc
             context: services/catalog-api
             dockerfile: services/catalog-api/Dockerfile
             archive: /tmp/tib-daca-catalog-api.tar
           - name: tib-daca-control-plane-ui
-            repository: docker.io/svabra/tib-daca-control-plane-ui
+            component: control-plane-ui
+            repository: docker.io/svabra/tib-daca-poc
             context: .
             dockerfile: apps/control-plane-ui/Dockerfile
             archive: /tmp/tib-daca-control-plane-ui.tar
           - name: tib-daca-control-plane-api
-            repository: docker.io/svabra/tib-daca-control-plane-api
+            component: control-plane-api
+            repository: docker.io/svabra/tib-daca-poc
             context: services/control-plane-api
             dockerfile: services/control-plane-api/Dockerfile
             archive: /tmp/tib-daca-control-plane-api.tar
           - name: tib-daca-sample-data-product
-            repository: docker.io/svabra/tib-daca-sample-data-product
+            component: sample-data-product
+            repository: docker.io/svabra/tib-daca-poc
             context: services/sample-data-product
             dockerfile: services/sample-data-product/Dockerfile
             archive: /tmp/tib-daca-sample-data-product.tar
@@ -182,8 +187,11 @@ jobs:
         with:
           images: ${{ matrix.image.repository }}
           tags: |
-            type=sha,prefix=sha-
-            type=raw,value=${{ steps.version.outputs.value }},enable=${{ steps.release.outputs.publish }}
+            type=sha,prefix=${{ matrix.image.component }}-sha-
+            type=raw,value=${{ matrix.image.component }}-${{ steps.version.outputs.value }},enable=${{ steps.release.outputs.publish }}
+          labels: |
+            org.opencontainers.image.title=DaCa ${{ matrix.image.component }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - name: Build image archive

@@ -223,6 +223,25 @@ It shows the capabilities of the current Catalog or Control Plane release in the
 language and clearly identifies simulated PoC behavior. Its displayed version is bound to the
 same shared release constant and is covered by `version:check`.
 
+After the complete GitHub test suite and the PostgreSQL 17/18 compatibility jobs pass, CI builds
+all five first-party Linux images and publishes them to
+[`svabra/tib-daca-poc`](https://hub.docker.com/r/svabra/tib-daca-poc). Because DaCa is a
+multi-container application, every tag starts with its component name instead of using an
+ambiguous shared `latest` tag:
+
+```text
+catalog-ui-sha-<commit>             catalog-ui-<version>
+catalog-api-sha-<commit>            catalog-api-<version>
+control-plane-ui-sha-<commit>       control-plane-ui-<version>
+control-plane-api-sha-<commit>      control-plane-api-<version>
+sample-data-product-sha-<commit>    sample-data-product-<version>
+```
+
+Immutable commit tags are uploaded on every successful non-PR run. Component version tags are
+uploaded only when `VERSION` changes on `main` or a matching `v<version>` Git tag is built. The
+repository secret `DOCKERHUB_TOKEN` must contain a Docker Hub personal access token for user
+`svabra`; account passwords and email addresses are never stored in the workflow.
+
 The persistent data model for the catalog, control plane, and protected sample product is in
 [`docs/data-model/`](docs/data-model/README.md). DAAIF is treated as an external source; the
 documentation covers only the publication and workflow evidence stored by DaCa. After changing

@@ -68,3 +68,29 @@ def test_version_matches_openshift_image_pins() -> None:
             path.read_text(encoding="utf-8") for path in sorted((ROOT / "k8s").glob("*.yaml"))
         )
         assert expected in manifests
+
+
+def test_docker_publish_uses_one_component_tagged_docker_hub_repository() -> None:
+    workflow = (ROOT / ".github/workflows/docker-publish.yml").read_text(encoding="utf-8")
+    repository = "docker.io/svabra/tib-daca-poc"
+    components = (
+        "catalog-ui",
+        "catalog-api",
+        "control-plane-ui",
+        "control-plane-api",
+        "sample-data-product",
+    )
+
+    assert workflow.count(f"repository: {repository}") == len(components)
+    assert "password: ${{ secrets.DOCKERHUB_TOKEN }}" in workflow
+    assert "needs:\n      - test\n      - postgres-compatibility" in workflow
+    for component in components:
+        assert f"component: {component}" in workflow
+
+    assert "type=sha,prefix=${{ matrix.image.component }}-sha-" in workflow
+    assert (
+        "type=raw,value=${{ matrix.image.component }}-"
+        "${{ steps.version.outputs.value }},enable=${{ steps.release.outputs.publish }}"
+    ) in workflow
+    assert "docker.io/svabra/tib-daca-catalog-ui" not in workflow
+    assert "docker.io/svabra/tib-daca-catalog-api" not in workflow
