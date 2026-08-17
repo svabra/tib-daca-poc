@@ -10,6 +10,12 @@ import uuid
 
 import sqlalchemy as sa
 from alembic import op
+from app.migration_context import (
+    function_search_path,
+    proxy_session_condition,
+    sample_schema,
+    shared_postgres_enabled,
+)
 from sqlalchemy.dialects import postgresql
 
 revision = "0001_estv_product"
@@ -21,6 +27,10 @@ PRODUCT_ID = uuid.UUID("11111111-1111-4111-8111-111111111111")
 
 
 def upgrade() -> None:
+    schema = sample_schema()
+    search_path = function_search_path()
+    proxy_condition = proxy_session_condition()
+    shared_postgres = shared_postgres_enabled()
     op.create_table(
         "tax_statistics",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -96,6 +106,10 @@ def upgrade() -> None:
         ],
     )
     op.execute(
+        "SELECT setval(pg_get_serial_sequence('tax_statistics', 'id'), "
+        "COALESCE((SELECT MAX(id) FROM tax_statistics), 1), true)"
+    )
+    op.execute(
         sa.text(
             """
             INSERT INTO policy_entitlements
@@ -112,29 +126,33 @@ def upgrade() -> None:
         ).bindparams(product_id=PRODUCT_ID)
     )
 
-    op.execute("REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC")
-    op.execute(
-        'GRANT USAGE ON SCHEMA public TO daca_sample_api, daca_policy_projector, '
-        '"kanton-st-gallen", "kanton-bern"'
-    )
-    op.execute(
-        'GRANT SELECT ON tax_statistics TO daca_sample_api, "kanton-st-gallen", "kanton-bern"'
-    )
-    op.execute(
-        "GRANT SELECT, INSERT, UPDATE, DELETE ON policy_entitlements TO daca_policy_projector"
-    )
-    op.execute(
-        "GRANT SELECT, INSERT, UPDATE, DELETE ON policy_deployments TO daca_policy_projector"
-    )
+    op.execute(f'REVOKE ALL ON ALL TABLES IN SCHEMA "{schema}" FROM PUBLIC')
+    if not shared_postgres:
+        op.execute(
+            f'GRANT USAGE ON SCHEMA "{schema}" TO daca_sample_api, '
+            'daca_policy_projector, "kanton-st-gallen", "kanton-bern"'
+        )
+        op.execute(
+            'GRANT SELECT ON tax_statistics TO daca_sample_api, '
+            '"kanton-st-gallen", "kanton-bern"'
+        )
+        op.execute(
+            "GRANT SELECT, INSERT, UPDATE, DELETE ON policy_entitlements "
+            "TO daca_policy_projector"
+        )
+        op.execute(
+            "GRANT SELECT, INSERT, UPDATE, DELETE ON policy_deployments "
+            "TO daca_policy_projector"
+        )
 
     op.execute(
-        """
+        f"""
         CREATE FUNCTION daca_effective_subject() RETURNS text
         LANGUAGE sql STABLE SECURITY DEFINER
-        SET search_path = public, pg_temp
+        SET search_path = {search_path}
         AS $$
           SELECT CASE
-            WHEN session_user = 'daca_sample_api'
+            WHEN {proxy_condition}
               THEN NULLIF(current_setting('daca.subject_id', true), '')
             ELSE session_user::text
           END
@@ -142,13 +160,13 @@ def upgrade() -> None:
         """
     )
     op.execute(
-        """
+        f"""
         CREATE FUNCTION daca_effective_protocol() RETURNS text
         LANGUAGE sql STABLE SECURITY DEFINER
-        SET search_path = public, pg_temp
+        SET search_path = {search_path}
         AS $$
           SELECT CASE
-            WHEN session_user = 'daca_sample_api'
+            WHEN {proxy_condition}
               THEN COALESCE(NULLIF(current_setting('daca.protocol', true), ''), 'http-rest')
             ELSE 'postgresql'
           END
@@ -156,10 +174,10 @@ def upgrade() -> None:
         """
     )
     op.execute(
-        """
+        f"""
         CREATE FUNCTION daca_can_read(target_product uuid) RETURNS boolean
         LANGUAGE sql STABLE SECURITY DEFINER
-        SET search_path = public, pg_temp
+        SET search_path = {search_path}
         AS $$
           SELECT EXISTS (
             SELECT 1
@@ -178,10 +196,12 @@ def upgrade() -> None:
         'REVOKE ALL ON FUNCTION daca_effective_protocol() FROM PUBLIC; '
         'REVOKE ALL ON FUNCTION daca_can_read(uuid) FROM PUBLIC'
     )
-    op.execute(
-        'GRANT EXECUTE ON FUNCTION daca_effective_subject(), daca_effective_protocol(), '
-        'daca_can_read(uuid) TO daca_sample_api, "kanton-st-gallen", "kanton-bern"'
-    )
+    if not shared_postgres:
+        op.execute(
+            'GRANT EXECUTE ON FUNCTION daca_effective_subject(), '
+            'daca_effective_protocol(), daca_can_read(uuid) TO daca_sample_api, '
+            '"kanton-st-gallen", "kanton-bern"'
+        )
     op.execute("ALTER TABLE tax_statistics ENABLE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE tax_statistics FORCE ROW LEVEL SECURITY")
     op.execute(

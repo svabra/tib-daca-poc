@@ -8,7 +8,7 @@ import { DacaNavigationItem, FederalShellComponent } from '@bit-daca/design-syst
   imports: [FederalShellComponent, RouterOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <daca-federal-shell appTitle="BIT DaCa Control Plane" [navigation]="navigation">
+    <daca-federal-shell appTitle="BIT DaCa Control Plane" versionProductName="DaCa Control Plane" versionFeatureScope="control-plane" [navigation]="navigation">
       <router-outlet />
     </daca-federal-shell>
   `,

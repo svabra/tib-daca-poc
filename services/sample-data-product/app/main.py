@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app import get_runtime_version
 from app.db import database_ready, fetch_statistics, projector_engine
 from app.models import PolicyDeployment, PolicyEntitlement
 from app.schemas import PolicyProjection
@@ -37,7 +38,7 @@ class ProblemError(Exception):
 
 app = FastAPI(
     title="BIT DaCa Synthetic ESTV Data Product",
-    version="0.1.0",
+    version=get_runtime_version(),
     description="HTTP PEP for a synthetic aggregate ESTV tax-statistics product.",
     root_path=settings.root_path,
 )

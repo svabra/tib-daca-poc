@@ -622,10 +622,10 @@ def readiness(session: SessionDependency) -> dict[str, str]:
 
 
 @health_router.get("/")
-def service_document() -> dict[str, object]:
+def service_document(request: Request) -> dict[str, object]:
     return {
         "title": "BIT DaCa Control Plane",
-        "version": "0.1.0",
+        "version": request.app.version,
         "api": "/api/v1",
         "openapi": "/docs",
         "federationSyncImplemented": False,

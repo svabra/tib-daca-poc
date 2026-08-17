@@ -16,7 +16,7 @@ from pydantic import TypeAdapter
 from sqlalchemy import delete, exists, or_, select, text, update
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
-from . import __version__
+from . import get_runtime_version
 from .database import default_session_factory, get_session
 from .governance import (
     bind_access_request_fulfillments,
@@ -3580,9 +3580,10 @@ def create_app(
                 seed_catalog(session)
         yield
 
+    runtime_version = get_runtime_version()
     app = FastAPI(
         title=resolved_settings.app_name,
-        version=__version__,
+        version=runtime_version,
         summary="Metadata catalog and policy administration point for BIT DaCa",
         root_path=resolved_settings.root_path,
         lifespan=lifespan,
@@ -3612,7 +3613,7 @@ def create_app(
 
     @app.get("/health/live", response_model=HealthResponse, tags=["health"])
     def live() -> HealthResponse:
-        return HealthResponse(status="ok", service="catalog-api", version=__version__)
+        return HealthResponse(status="ok", service="catalog-api", version=runtime_version)
 
     @app.get(
         "/health/ready",
@@ -3625,7 +3626,7 @@ def create_app(
             session.execute(text("SELECT 1"))
         except Exception as exc:
             raise HTTPException(503, "Catalog database is unavailable") from exc
-        return HealthResponse(status="ready", service="catalog-api", version=__version__)
+        return HealthResponse(status="ready", service="catalog-api", version=runtime_version)
 
     @app.put(
         "/internal/v1/policy-deployments/acknowledge",

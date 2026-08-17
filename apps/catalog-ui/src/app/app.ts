@@ -14,6 +14,8 @@ import { DemoIdentityService } from './core/demo-identity.service';
       appTitle="Data Catalog"
       appSubtitle="Data Platform BIT"
       footerText="DaCa · Distributed Data Catalog · Proof of Concept. Teil der der Data Platform BIT. Im Co-Design erarbeitet mit der ESTV, V, BK, BFS und weiteren Ämtern."
+      versionProductName="DaCa Catalog"
+      versionFeatureScope="catalog"
       locale="de"
       [userName]="identity.user().displayName"
       [userId]="identity.userId()"

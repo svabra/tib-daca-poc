@@ -11,14 +11,28 @@ from app.models import TaxStatistic
 from app.settings import get_settings
 
 
+def _engine(database_url: str, schema: str) -> Engine:
+    options: dict[str, object] = {"pool_pre_ping": True}
+    if database_url.startswith("postgresql") and schema != "public":
+        options["connect_args"] = {
+            "options": f"-csearch_path={schema},public",
+        }
+    return create_engine(database_url, **options)
+
+
 @lru_cache
 def sample_engine() -> Engine:
-    return create_engine(get_settings().sample_database_url, pool_pre_ping=True)
+    settings = get_settings()
+    return _engine(settings.resolved_sample_database_url, settings.daca_sample_schema)
 
 
 @lru_cache
 def projector_engine() -> Engine:
-    return create_engine(get_settings().policy_projector_database_url, pool_pre_ping=True)
+    settings = get_settings()
+    return _engine(
+        settings.resolved_policy_projector_database_url,
+        settings.daca_sample_schema,
+    )
 
 
 def fetch_statistics(

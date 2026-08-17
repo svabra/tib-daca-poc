@@ -1,9 +1,12 @@
 FROM ghcr.io/astral-sh/uv:0.11.29 AS uv
 FROM python:3.14-slim
 
+ARG IMAGE_VERSION
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PATH="/app/.venv/bin:$PATH"
+    PATH="/app/.venv/bin:$PATH" \
+    IMAGE_VERSION="${IMAGE_VERSION}"
+LABEL org.opencontainers.image.version="${IMAGE_VERSION}"
 
 WORKDIR /app
 COPY --from=uv /uv /uvx /bin/

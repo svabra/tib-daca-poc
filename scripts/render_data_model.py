@@ -229,12 +229,18 @@ def validate_descriptions(metadata: MetaData, spec: ContextSpec) -> None:
         raise DataModelDocumentationError(f"{spec.key}: {'; '.join(problems)}")
 
 
+def normalized_source_bytes(path: Path) -> bytes:
+    """Return source bytes with platform line endings normalized for stable hashes."""
+
+    return path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
 def migration_state(root: Path, spec: ContextSpec) -> tuple[list[str], str]:
     path = root / spec.migrations_path
     revisions: dict[str, str | None] = {}
     digest = hashlib.sha256()
     for migration in sorted(path.glob("*.py")):
-        content = migration.read_bytes()
+        content = normalized_source_bytes(migration)
         digest.update(migration.name.encode())
         digest.update(b"\0")
         digest.update(content)
@@ -507,7 +513,7 @@ def render_overview_region(root: Path) -> str:
     objects = parse_security_objects(root)
     validate_security_descriptions(objects)
     bootstrap_path = root / "infra/postgres/init/00-create-databases.sh"
-    bootstrap_fingerprint = hashlib.sha256(bootstrap_path.read_bytes()).hexdigest()[:16]
+    bootstrap_fingerprint = hashlib.sha256(normalized_source_bytes(bootstrap_path)).hexdigest()[:16]
     lines = [
         "| Persistence context | Storage | Tables | Alembic head | Migration fingerprint |",
         "|---|---|---:|---|---|",

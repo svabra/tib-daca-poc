@@ -9,6 +9,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from app.migration_context import function_search_path, proxy_session_condition
 
 revision: str = "0002_timed_entitlements"
 down_revision: str | None = "0001_estv_product"
@@ -17,6 +18,8 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    search_path = function_search_path()
+    proxy_condition = proxy_session_condition()
     op.add_column("policy_entitlements", sa.Column("subject_type", sa.String(32), nullable=False, server_default="person"))
     op.add_column("policy_entitlements", sa.Column("valid_from", sa.Date(), nullable=False, server_default="0001-01-01"))
     op.add_column("policy_entitlements", sa.Column("valid_until", sa.Date(), nullable=False, server_default="9999-12-31"))
@@ -39,17 +42,17 @@ def upgrade() -> None:
     )
 
     op.execute(
-        """
+        f"""
         CREATE OR REPLACE FUNCTION daca_can_read(target_product uuid) RETURNS boolean
         LANGUAGE sql STABLE SECURITY DEFINER
-        SET search_path = public, pg_temp
+        SET search_path = {search_path}
         AS $$
           SELECT EXISTS (
             SELECT 1 FROM policy_entitlements entitlement
             WHERE entitlement.product_id = target_product
               AND entitlement.subject_id = daca_effective_subject()
               AND entitlement.subject_type = CASE
-                WHEN session_user = 'daca_sample_api'
+                WHEN {proxy_condition}
                   THEN COALESCE(NULLIF(current_setting('daca.subject_type', true), ''), 'person')
                 ELSE 'person'
               END
@@ -64,12 +67,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    search_path = function_search_path()
     op.execute("DELETE FROM tax_statistics WHERE product_id = '9c9a0112-d4ef-57d0-862c-0d27872c82c2'::uuid")
     op.execute(
-        """
+        f"""
         CREATE OR REPLACE FUNCTION daca_can_read(target_product uuid) RETURNS boolean
         LANGUAGE sql STABLE SECURITY DEFINER
-        SET search_path = public, pg_temp
+        SET search_path = {search_path}
         AS $$
           SELECT EXISTS (
             SELECT 1 FROM policy_entitlements entitlement

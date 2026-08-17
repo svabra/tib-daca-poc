@@ -68,3 +68,77 @@ def test_version_matches_openshift_image_pins() -> None:
             path.read_text(encoding="utf-8") for path in sorted((ROOT / "k8s").glob("*.yaml"))
         )
         assert expected in manifests
+
+
+def test_openshift_presentation_profile_has_four_isolated_workloads() -> None:
+    manifests_by_name = {
+        path.name: path.read_text(encoding="utf-8")
+        for path in sorted((ROOT / "k8s").glob("*.yaml"))
+    }
+    all_manifests = "\n".join(manifests_by_name.values())
+
+    assert all_manifests.count("kind: Deployment") == 4
+    assert "daca-control-plane" not in all_manifests
+    assert "kind: PersistentVolumeClaim" not in all_manifests
+    for name in (
+        "daca-catalog-ui.yaml",
+        "daca-catalog-api.yaml",
+        "daca-sample-data-product.yaml",
+        "daca-opa.yaml",
+    ):
+        manifest = manifests_by_name[name]
+        assert "replicas: 1" in manifest
+        assert "revisionHistoryLimit: 2" in manifest
+        assert "type: Recreate" in manifest
+        assert "imagePullPolicy: Always" in manifest
+        assert "startupProbe:" in manifest
+        assert "readinessProbe:" in manifest
+        assert "livenessProbe:" in manifest
+
+
+def test_openshift_apis_reference_shared_daaif_postgres_keys() -> None:
+    for name in ("daca-catalog-api.yaml", "daca-sample-data-product.yaml"):
+        manifest = (ROOT / "k8s" / name).read_text(encoding="utf-8")
+        assert manifest.count("name: tib-daail-evo1-poc-query-engine-config") == 3
+        assert manifest.count("name: tib-daail-evo1-poc-query-engine-secret") == 2
+        for key in ("PG_HOST", "PG_PORT", "PG_OLTP_DATABASE", "PG_USER", "PG_PASSWORD"):
+            assert f"key: {key}" in manifest
+
+    secret_example = (ROOT / "k8s/daca-secret.example.yaml").read_text(encoding="utf-8")
+    for forbidden in (
+        "DATABASE_URL:",
+        "ALEMBIC_DATABASE_URL:",
+        "SAMPLE_DATABASE_URL:",
+        "POLICY_PROJECTOR_DATABASE_URL:",
+        "S3_ACCESS_KEY_ID:",
+        "S3_SECRET_ACCESS_KEY:",
+    ):
+        assert forbidden not in secret_example
+
+    config = (ROOT / "k8s/daca-configmap.yaml").read_text(encoding="utf-8")
+    assert "DACA_CATALOG_SCHEMA: daca_catalog" in config
+    assert "DACA_SAMPLE_SCHEMA: daca_sample" in config
+    assert 'DACA_SHARED_POSTGRES: "true"' in config
+
+
+def test_docker_publish_uses_separate_version_tagged_docker_hub_repositories() -> None:
+    workflow = (ROOT / ".github/workflows/docker-publish.yml").read_text(encoding="utf-8")
+    repositories = (
+        "tib-daca-catalog-ui",
+        "tib-daca-catalog-api",
+        "tib-daca-control-plane-ui",
+        "tib-daca-control-plane-api",
+        "tib-daca-sample-data-product",
+    )
+
+    for repository in repositories:
+        assert workflow.count(f"repository: docker.io/svabra/{repository}") == 1
+    assert "password: ${{ secrets.DOCKERHUB_TOKEN }}" in workflow
+    assert "username: ${{ vars.DOCKERHUB_USERNAME || 'svabra' }}" in workflow
+    assert "needs:\n      - test\n      - postgres-compatibility" in workflow
+    assert "docker.io/svabra/tib-daca-poc" not in workflow
+    assert "type=sha,prefix=sha-" in workflow
+    assert (
+        "type=raw,value=${{ steps.version.outputs.value }},"
+        "enable=${{ steps.release.outputs.publish }}"
+    ) in workflow

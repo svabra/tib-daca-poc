@@ -38,6 +38,9 @@ metadata:
     app.kubernetes.io/part-of: tib-daca-poc
 spec:
   replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: daca-opa
@@ -49,7 +52,8 @@ spec:
     spec:
       containers:
         - name: opa
-          image: openpolicyagent/opa:1.18.2
+          image: docker-hub.nexus.bit.admin.ch/openpolicyagent/opa:1.18.2
+          imagePullPolicy: Always
           args:
             - run
             - --server
@@ -70,11 +74,18 @@ spec:
               readOnly: true
           readinessProbe:
             httpGet:
-              path: /health
+              path: /health?plugins
               port: http
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 6
+          startupProbe:
+            httpGet:
+              path: /health?plugins
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
           livenessProbe:
             httpGet:
               path: /health
@@ -84,11 +95,11 @@ spec:
             failureThreshold: 3
           resources:
             requests:
-              cpu: 50m
+              cpu: 25m
               memory: 64Mi
             limits:
-              cpu: 500m
-              memory: 256Mi
+              cpu: 200m
+              memory: 128Mi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
