@@ -12,7 +12,9 @@ import {
   dataOwner,
   DataOwnerProfile,
   dataConsumerCountLabel,
+  DEFAULT_PRODUCT_RELATIONSHIP_FILTER,
   deliveryProtocols,
+  initialProductRelationshipFilter,
   isConsumedProduct,
   matchesProduct,
   ProductRelationshipFilter,
@@ -509,7 +511,7 @@ export class MyDataProductsComponent implements OnDestroy {
   readonly api = inject(CatalogApiService);
   private readonly route = inject(ActivatedRoute);
   readonly query = signal('');
-  readonly filter = signal<ProductRelationshipFilter>('all');
+  readonly filter = signal<ProductRelationshipFilter>(DEFAULT_PRODUCT_RELATIONSHIP_FILTER);
   readonly viewMode = signal<'records' | 'table'>('table');
   readonly activeProductMenuId = signal<string | null>(null);
   readonly transferProduct = signal<DataProduct | null>(null);
@@ -557,10 +559,9 @@ export class MyDataProductsComponent implements OnDestroy {
   });
 
   constructor() {
-    const requestedFilter = this.route.snapshot.queryParamMap.get('relationship') as ProductRelationshipFilter | null;
-    if (requestedFilter && this.filters.some((item) => item.value === requestedFilter)) {
-      this.filter.set(requestedFilter);
-    }
+    this.filter.set(initialProductRelationshipFilter(
+      this.route.snapshot.queryParamMap.get('relationship'),
+    ));
   }
 
   updateQuery(event: Event): void {

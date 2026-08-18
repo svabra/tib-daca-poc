@@ -6,12 +6,23 @@ import {
   catalogUsage,
   dataOwner,
   dataConsumerCountLabel,
+  DEFAULT_PRODUCT_RELATIONSHIP_FILTER,
+  initialProductRelationshipFilter,
   isConsumedProduct,
   matchesProduct,
   relationshipBadges,
 } from './my-data-products';
 
 describe('My data products filtering', () => {
+  it('starts with offered products unless a supported URL filter was requested', () => {
+    expect(DEFAULT_PRODUCT_RELATIONSHIP_FILTER).toBe('offered');
+    expect(initialProductRelationshipFilter(null)).toBe('offered');
+    expect(initialProductRelationshipFilter('unknown')).toBe('offered');
+    for (const explicitFilter of ['all', 'offered', 'sharedByMe', 'requestedByMe', 'sharedWithMe'] as const) {
+      expect(initialProductRelationshipFilter(explicitFilter)).toBe(explicitFilter);
+    }
+  });
+
   it('distinguishes the five owner-workspace categories', () => {
     const offered = FALLBACK_PRODUCTS.filter((product) => matchesProduct(product, '', 'offered', undefined, FALLBACK_OWNED_ACCESS_CONSUMERS));
     const sharedByMe = FALLBACK_PRODUCTS.filter((product) => matchesProduct(product, '', 'sharedByMe', undefined, FALLBACK_OWNED_ACCESS_CONSUMERS));

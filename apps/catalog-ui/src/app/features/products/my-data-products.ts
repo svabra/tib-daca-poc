@@ -4,6 +4,21 @@ export const KASSANDRA_USER_ID = 'kassandra.valdata';
 
 export type ProductRelationshipFilter = 'all' | 'offered' | 'sharedByMe' | 'requestedByMe' | 'sharedWithMe';
 
+export const DEFAULT_PRODUCT_RELATIONSHIP_FILTER: ProductRelationshipFilter = 'offered';
+
+export function initialProductRelationshipFilter(value: string | null | undefined): ProductRelationshipFilter {
+  const supportedFilters: readonly ProductRelationshipFilter[] = [
+    'all',
+    'offered',
+    'sharedByMe',
+    'requestedByMe',
+    'sharedWithMe',
+  ];
+  return supportedFilters.includes(value as ProductRelationshipFilter)
+    ? value as ProductRelationshipFilter
+    : DEFAULT_PRODUCT_RELATIONSHIP_FILTER;
+}
+
 export interface MachineConsumer {
   id: string;
   label: string;

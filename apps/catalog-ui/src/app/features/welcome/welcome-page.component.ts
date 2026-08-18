@@ -75,7 +75,7 @@ function selectSessionHeroTheme() {
             </div>
             <p class="welcome-context">
               <span>Proof of Concept</span>
-              PoC Data Catalog · Anmeldung noch nicht verfügbar
+              PoC Data Catalog · Anmeldung noch nicht verfügbar · Co-Design von ESTV und BIT
             </p>
           </div>
 
