@@ -40,14 +40,16 @@ export class App {
     { label: 'Meine Datenprodukte', path: '/products' },
     { label: 'Aufgaben', path: '/tasks' },
     {
-      label: 'PoC Simulation',
-      path: '/poc-simulation',
-      description: 'Bündelt kontrollierte, rücksetzbare Ereignisse, mit denen die wichtigsten DaCa-Abläufe anhand synthetischer Daten demonstriert werden.',
+      label: 'PoC Leitfaden',
+      path: '/poc-guide',
+      description: 'Geführte Customer Journeys erklären Rollen, Möglichkeiten und Grenzen des DaCa Proof of Concept.',
       children: [
-        { label: 'Simulationsereignis: Datenprodukt im DaCa eingereicht', path: '/poc-simulation/product-submitted' },
-        { label: 'Simulationsereignis: Datenqualität zu tief', path: '/poc-simulation/quality-below-threshold' },
-        { label: 'Simulationsereignis: Ihr Datenprodukt ist nicht auffindbar', path: '/poc-simulation/not-discoverable' },
-        { label: 'Simulationsereignis: Ihr Datenprodukt wurde durch den ISBO eingeschränkt', path: '/poc-simulation/isbo-restricted' },
+        { label: 'Übersicht: Was kann der PoC?', path: '/poc-guide' },
+        { label: 'Journey 1: A Data Analyst’s Journey', path: '/poc-guide/data-analysts-journey' },
+        { label: 'Journey 2: Zugriff beantragen', path: '/poc-guide/consumer-access-request' },
+        { label: 'Journey 3: Metadatenqualität', path: '/poc-guide/metadata-quality' },
+        { label: 'Journey 4: Governance-Ausnahmefall', path: '/poc-guide/governance-exception' },
+        { label: 'Simulationen und Grenzfälle', path: '/poc-simulation' },
       ],
     },
   ];

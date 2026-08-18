@@ -47,6 +47,7 @@ The checked-in files are references. Edit the production objects manually in the
 Keep the existing `tib-daca-poc-config` values and add:
 
 ```yaml
+DAAIF_UI_URL: "https://evo1-bdw-daai-brs-d.apps.p-szb-ros-nopi-npr-01.cloud.admin.ch"
 DACA_CATALOG_SCHEMA: daca_catalog
 DACA_SAMPLE_SCHEMA: daca_sample
 DACA_SHARED_POSTGRES: "true"

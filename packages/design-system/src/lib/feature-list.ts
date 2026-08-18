@@ -40,6 +40,10 @@ export const DACA_FEATURE_RELEASE = {
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
           {
+            title: 'PoC anhand geführter Journeys erleben',
+            description: 'Der neue PoC Leitfaden erklärt vier wiederholbare Abläufe mit Rollen, Voraussetzungen, echten Screenshots und klar ausgewiesenen Grenzen.',
+          },
+          {
             title: 'Datenprodukte finden und verstehen',
             description: 'Durchsuchen Sie den Katalog und sehen Sie Beschreibung, Herkunft und verfügbare Schnittstellen auf einen Blick.',
           },
@@ -66,6 +70,10 @@ export const DACA_FEATURE_RELEASE = {
         introduction: 'DaCa brings product information, approvals and tasks together in one place.',
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
+          {
+            title: 'Explore the PoC through guided journeys',
+            description: 'The new PoC guide explains four repeatable workflows with roles, prerequisites, real screenshots and clearly stated limitations.',
+          },
           {
             title: 'Find and understand data products',
             description: 'Search the catalog and see descriptions, origins and available interfaces at a glance.',

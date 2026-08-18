@@ -98,6 +98,7 @@ from .schemas import (
     OntologyTermResponse,
     OntologyVersionResponse,
     OwnedAccessConsumerResponse,
+    PocGuideConfigResponse,
     PocProductFixtureResponse,
     PocProductResetRequest,
     PocSimulationEventResponse,
@@ -969,6 +970,19 @@ def metadata_without_alert(metadata: dict[str, Any], event_id: uuid.UUID) -> dic
 
 def create_router() -> APIRouter:
     router = APIRouter(prefix="/api/v1")
+
+    @router.get(
+        "/poc/guide-config",
+        response_model=PocGuideConfigResponse,
+        tags=["POC"],
+        summary="Return public links used by the PoC guide",
+    )
+    def poc_guide_config(request: Request) -> PocGuideConfigResponse:
+        settings: Settings = request.app.state.settings
+        return PocGuideConfigResponse(
+            daaif_ui_url=settings.daaif_ui_url,
+            environment=settings.environment,
+        )
 
     @router.get("/demo-users", response_model=list[DemoUserResponse], tags=["POC"])
     def list_demo_users(session: SessionDep) -> list[DemoUser]:

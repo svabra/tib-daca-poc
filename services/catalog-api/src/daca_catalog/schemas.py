@@ -696,6 +696,11 @@ class PocProductFixtureResponse(ApiModel):
     injected_product_id: uuid.UUID | None = None
 
 
+class PocGuideConfigResponse(ApiModel):
+    daaif_ui_url: str | None
+    environment: str
+
+
 class WorkflowTaskResponse(ApiModel):
     id: uuid.UUID
     task_type: Literal[
