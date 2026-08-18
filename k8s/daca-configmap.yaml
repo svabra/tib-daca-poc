@@ -17,3 +17,4 @@ data:
   SAMPLE_POLICY_PROJECTION_URL: http://daca-sample-data-product:8000/internal/v1/policy-projections
   OPA_DECISION_URL: http://daca-opa:8181/v1/data/daca/authz/decision
   CATALOG_DEPLOYMENT_ACK_URL: http://daca-catalog-api:8001/internal/v1/policy-deployments/acknowledge
+  DAAIF_UI_URL: https://evo1-bdw-daai-brs-d.apps.p-szb-ros-nopi-npr-01.cloud.admin.ch

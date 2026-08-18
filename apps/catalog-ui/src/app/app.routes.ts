@@ -28,6 +28,18 @@ export const routes: Routes = [
     title: 'Publikationsfreigabe | DaCa',
   },
   {
+    path: 'poc-guide',
+    pathMatch: 'full',
+    loadComponent: () => import('./features/poc-guide/poc-guide-overview.component').then((m) => m.PocGuideOverviewComponent),
+    data: { preload: true },
+    title: 'PoC Leitfaden | DaCa',
+  },
+  {
+    path: 'poc-guide/:journeyId',
+    loadComponent: () => import('./features/poc-guide/poc-guide-detail.component').then((m) => m.PocGuideDetailComponent),
+    title: 'Customer Journey | PoC Leitfaden',
+  },
+  {
     path: 'poc-simulation',
     pathMatch: 'full',
     loadComponent: () => import('./features/poc-simulation/poc-simulation-hub.component').then((m) => m.PocSimulationHubComponent),

@@ -142,3 +142,24 @@ def test_docker_publish_uses_separate_version_tagged_docker_hub_repositories() -
         "type=raw,value=${{ steps.version.outputs.value }},"
         "enable=${{ steps.release.outputs.publish }}"
     ) in workflow
+
+
+def test_poc_guide_ships_fourteen_optimized_webp_screenshots() -> None:
+    image_dir = ROOT / "apps/catalog-ui/public/assets/poc-guide"
+    images = sorted(image_dir.glob("*.webp"))
+
+    assert len(images) == 14
+    assert sum(path.stat().st_size for path in images) < 2_000_000
+    for path in images:
+        header = path.read_bytes()[:12]
+        assert header[:4] == b"RIFF"
+        assert header[8:12] == b"WEBP"
+
+
+def test_openshift_config_exposes_only_the_public_daaif_ui_url() -> None:
+    config = (ROOT / "k8s/daca-configmap.yaml").read_text(encoding="utf-8")
+
+    assert (
+        "DAAIF_UI_URL: "
+        "https://evo1-bdw-daai-brs-d.apps.p-szb-ros-nopi-npr-01.cloud.admin.ch"
+    ) in config

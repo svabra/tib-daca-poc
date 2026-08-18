@@ -1,5 +1,6 @@
 import re
 from functools import lru_cache
+from urllib.parse import urlsplit
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -38,6 +39,7 @@ class Settings(BaseSettings):
     )
     projection_timeout_seconds: float = 3.0
     internal_token: str = "local-development-only"
+    daaif_ui_url: str | None = None
 
     @field_validator("daca_catalog_schema")
     @classmethod
@@ -48,6 +50,21 @@ class Settings(BaseSettings):
                 "DACA_CATALOG_SCHEMA must be a lowercase PostgreSQL identifier"
             )
         return schema
+
+    @field_validator("daaif_ui_url")
+    @classmethod
+    def validate_daaif_ui_url(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        normalized = value.strip().rstrip("/")
+        parsed = urlsplit(normalized)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("DAAIF_UI_URL must be an absolute HTTP(S) URL")
+        if parsed.username is not None or parsed.password is not None:
+            raise ValueError("DAAIF_UI_URL must not contain credentials")
+        if parsed.query or parsed.fragment:
+            raise ValueError("DAAIF_UI_URL must not contain a query or fragment")
+        return normalized
 
     @property
     def resolved_database_url(self) -> str:
