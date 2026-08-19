@@ -143,7 +143,16 @@ jobs:
               psql -h 127.0.0.1 -U daca_shared_test -d postgres -Atc \
               "SELECT count(*) FROM information_schema.tables WHERE table_schema IN ('daca_catalog', 'daca_sample')"
           )"
-          test "$schema_rows" = "32"
+          test "$schema_rows" = "33"
+
+          service_level_table="$(
+            docker exec \
+              --env PGPASSWORD='shared:p@ss' \
+              daca-postgres-compat \
+              psql -h 127.0.0.1 -U daca_shared_test -d postgres -Atc \
+              "SELECT to_regclass('daca_catalog.service_level_revisions') IS NOT NULL"
+          )"
+          test "$service_level_table" = "t"
 
           ungated_rows="$(
             docker exec \
