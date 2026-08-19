@@ -72,6 +72,8 @@ export const FALLBACK_PRODUCT: DataProduct = {
   contact: 'data-products@estv.admin.ch',
   license: 'Confederation data use conditions',
   quality: 'Validated aggregate; completeness 100%',
+  qualityMedal: 'bronze',
+  qualityScore: 0,
   updateFrequency: 'Annual',
   additionalMetadata: {
     spatialCoverage: 'Switzerland',
@@ -97,7 +99,6 @@ export const FALLBACK_PRODUCT: DataProduct = {
       method: 'GET',
       url: '/sample-api/api/v1/estv/tax-statistics',
       mediaType: 'application/json',
-      secretRef: 'demo/header-identity',
     },
     {
       id: 'endpoint-postgres-estv',
@@ -108,7 +109,7 @@ export const FALLBACK_PRODUCT: DataProduct = {
       database: 'daca_sample',
       schema: 'public',
       relation: 'tax_statistics',
-      secretRef: 'demo/consumer-role',
+      sslMode: 'prefer',
     },
   ],
   updatedAt: '2026-08-03T08:30:00Z',

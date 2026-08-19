@@ -79,7 +79,7 @@ import { PocGuideConfigService } from './poc-guide-config.service';
                   <div class="poc-guide-actions">
                     @for (action of step.actions; track action.label) {
                       @if (action.target === 'internal') {
-                        <a class="daca-button is-secondary" [routerLink]="action.path" [queryParams]="action.demoUserId ? { demoUser: action.demoUserId } : null" (click)="selectDemoUser(action)">{{ action.label }}</a>
+                        <a class="daca-button is-secondary" [routerLink]="action.path" [queryParams]="internalQueryParams(action)" [fragment]="action.fragment" (click)="selectDemoUser(action)">{{ action.label }}</a>
                       } @else if (externalHref(action); as href) {
                         <a class="daca-button is-secondary" [href]="href" target="_blank" rel="noopener noreferrer">{{ action.label }} <span aria-hidden="true">↗</span></a>
                       } @else {
@@ -152,6 +152,14 @@ export class PocGuideDetailComponent {
 
   externalHref(action: PocGuideAction): string | null {
     return this.guideConfig.externalHref(action.target);
+  }
+
+  internalQueryParams(action: PocGuideAction): Readonly<Record<string, string>> | null {
+    const queryParams = {
+      ...action.queryParams,
+      ...(action.demoUserId ? { demoUser: action.demoUserId } : {}),
+    };
+    return Object.keys(queryParams).length ? queryParams : null;
   }
 
   selectDemoUser(action: PocGuideAction): void {

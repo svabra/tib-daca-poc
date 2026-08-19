@@ -17,6 +17,7 @@ describe('ProductWorkspaceNavComponent', () => {
     const links = [...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLAnchorElement>('.product-workspace-nav a')];
     expect(links.map((link) => link.textContent?.trim())).toEqual([
       'Übersicht',
+      'Daten & Nutzung',
       'Metadaten',
       'Freigaben',
       'Lineage & Provenienz',

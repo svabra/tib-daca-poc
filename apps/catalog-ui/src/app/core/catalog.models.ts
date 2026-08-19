@@ -3,10 +3,9 @@ export type EndpointDescriptor =
       id: string;
       protocol: 'http-rest';
       title: string;
-      method: string;
+      method: 'GET' | 'POST';
       url: string;
       mediaType: string;
-      secretRef?: string;
     }
   | {
       id: string;
@@ -17,8 +16,65 @@ export type EndpointDescriptor =
       database: string;
       schema: string;
       relation: string;
-      secretRef?: string;
+      sslMode: 'disable' | 'prefer' | 'require' | 'verify-ca' | 'verify-full';
     };
+
+export interface ProductQualityCriterion {
+  id: 'access' | 'discoverability' | 'technical' | 'business' | 'graph' | 'ontology';
+  label: string;
+  complete: boolean;
+}
+
+export interface ProductQualitySummary {
+  dataProductId: string;
+  score: number;
+  medal: 'bronze' | 'silver' | 'gold' | 'platinum';
+  criteria: ProductQualityCriterion[];
+  dcatReviewed: boolean;
+}
+
+export interface ProductDictionaryField {
+  id: string;
+  name: string;
+  dataType: string;
+  nullable: boolean;
+  keyField: boolean;
+  businessDescription: string | null;
+}
+
+export interface ProductQualityMapping {
+  id: string;
+  fieldId: string | null;
+  mappingType: 'product_class' | 'field_property';
+  status: 'suggested' | 'confirmed' | 'unresolved';
+  termUri: string;
+  termLabel: string;
+}
+
+export interface ProductQualityWorkspace {
+  quality: ProductQualitySummary;
+  fields: ProductDictionaryField[];
+  graph: Record<string, unknown> | null;
+  graphStatus: 'missing' | 'suggested' | 'confirmed';
+  mappings: ProductQualityMapping[];
+}
+
+export interface ProductEffectiveAccessGrant {
+  protocols: ('http' | 'postgresql')[];
+  validFrom: string;
+  validUntil: string;
+  weeklyAvailability?: {
+    weekdays: ('monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday')[];
+    startTime: string;
+    endTime: string;
+    timeZone: string;
+  } | null;
+}
+
+export interface ProductEffectiveAccessResponse {
+  granted: boolean;
+  grants: ProductEffectiveAccessGrant[];
+}
 
 export interface DataProduct {
   id: string;

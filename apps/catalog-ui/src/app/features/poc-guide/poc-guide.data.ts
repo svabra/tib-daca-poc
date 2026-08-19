@@ -62,8 +62,109 @@ export const POC_GUIDE_LIMITS: readonly PocGuideCapability[] = [
 
 export const POC_JOURNEYS: readonly PocJourney[] = [
   {
-    id: 'data-analysts-journey',
+    id: 'understand-and-use-product',
     number: '01',
+    title: 'Datenprodukt finden, verstehen und nutzen',
+    summary: 'Ein publiziertes Datenprodukt fachlich einordnen, sein Datenschema lesen und den geschützten REST-Endpunkt sicher ausprobieren.',
+    duration: '8–12 Minuten',
+    difficulty: 'Einfach',
+    systems: ['DaCa', 'DAAIF REST'],
+    roles: [
+      { name: 'Beat Stalder', responsibility: 'Data Consumer · Kanton St. Gallen' },
+      { name: 'Joel Ruod', responsibility: 'Data Owner und fachlicher Ansprechpartner' },
+    ],
+    prerequisites: [
+      'A Data Analyst’s Journey wurde abgeschlossen; das Gewerbesteuer-Datenprodukt ist aktiv und auffindbar.',
+      'Beat Stalder besitzt eine aktive Freigabe für Montag bis Freitag, 07:00–19:00 Uhr Europe/Zurich.',
+      'DaCa und der von DAAIF bereitgestellte REST-Endpunkt sind erreichbar.',
+    ],
+    outcome: 'Beat versteht Inhalt, Qualität und Schlüssel des Datenprodukts und kann den registrierten REST-Endpunkt mit einem sicheren Quickstart selbst verwenden.',
+    repeatability: 'Die Journey ist vollständig read-only und beliebig wiederholbar. Sie verändert weder Metadaten noch Freigaben oder Produktdaten; ein Reset ist nicht nötig.',
+    steps: [
+      {
+        title: 'Datenprodukt als Beat finden',
+        description: 'Öffnen Sie die Expertensuche als Beat und suchen Sie nach «Gewerbesteuer». Wählen Sie das Produkt «Kantonale Gewerbesteuer: Soll/Ist und Jahreshochrechnung 2022–2026».',
+        status: 'implemented',
+        actions: [{
+          label: 'Nach Gewerbesteuer suchen',
+          target: 'internal',
+          path: '/search',
+          demoUserId: 'beat.stalder',
+          queryParams: { q: 'Gewerbesteuer' },
+        }],
+        checkpoint: 'Das Produkt ist auffindbar und als publiziertes DAAIF-Datenprodukt erkennbar.',
+        screenshots: [{
+          src: `${IMAGE_ROOT}/journey-01-product-search.webp`,
+          alt: 'DaCa Expertensuche als Beat Stalder mit dem gefundenen Gewerbesteuer-Datenprodukt aus DAAIF.',
+          caption: 'Die Katalogsuche führt Beat zum publizierten Produkt, ohne ihm dadurch automatisch Zugriff auf dessen Daten zu geben.',
+        }],
+      },
+      {
+        title: 'Produktkontext und Qualität prüfen',
+        description: 'Öffnen Sie die Übersicht. Prüfen Sie Titel, Beschreibung, Data Owner Joel Ruod, Klassifikation, Revision und die Qualitätsmedaille Platinum.',
+        status: 'implemented',
+        actions: [{
+          label: 'Produktübersicht öffnen',
+          target: 'internal',
+          path: `/products/${DATA_ANALYST_JOURNEY_PRODUCT_ID}/overview`,
+          demoUserId: 'beat.stalder',
+        }],
+        checkpoint: 'Die Übersicht nennt 6 von 6 erfüllte Qualitätsbedingungen und Joel als verantwortlichen Data Owner.',
+      },
+      {
+        title: 'Datenwörterbuch lesen',
+        description: 'Öffnen Sie «Daten & Nutzung». Lesen Sie die fachlichen Beschreibungen, Datentypen und Nullable-Angaben der 18 Felder. Achten Sie besonders auf die Schlüssel canton_code und tax_year.',
+        status: 'implemented',
+        actions: [{
+          label: 'Zum Datenwörterbuch',
+          target: 'internal',
+          path: `/products/${DATA_ANALYST_JOURNEY_PRODUCT_ID}/usage`,
+          demoUserId: 'beat.stalder',
+          fragment: 'data-dictionary',
+        }],
+        checkpoint: 'Beat kann erklären, was eine Zeile repräsentiert und welche Felder einen Datensatz fachlich identifizieren.',
+        screenshots: [{
+          src: `${IMAGE_ROOT}/journey-01-data-dictionary.webp`,
+          alt: 'DaCa Datenwörterbuch des Gewerbesteuer-Datenprodukts mit Feldnamen, Datentypen und fachlichen Beschreibungen.',
+          caption: 'Das Datenwörterbuch übersetzt das technisch gelieferte Schema in eine für Data Consumer verständliche Feldübersicht.',
+        }],
+      },
+      {
+        title: 'REST-Quickstart vorbereiten',
+        description: 'Prüfen Sie im Endpoint-Quickstart Methode, registrierte URL und Antwortformat. Kopieren Sie wahlweise nur die URL oder den vorbereiteten curl-Aufruf für Beat.',
+        status: 'implemented',
+        actions: [{
+          label: 'Zum Endpoint-Quickstart',
+          target: 'internal',
+          path: `/products/${DATA_ANALYST_JOURNEY_PRODUCT_ID}/usage`,
+          demoUserId: 'beat.stalder',
+          fragment: 'endpoint-quickstart',
+        }],
+        warning: 'Verwenden Sie die im Katalog registrierte URL. Eine localhost- oder interne Service-Adresse ist nur in der dazugehörigen Umgebung erreichbar.',
+        screenshots: [{
+          src: `${IMAGE_ROOT}/journey-01-endpoint-quickstart.webp`,
+          alt: 'DaCa Endpoint-Quickstart mit registrierter REST-Adresse, Antwortformat und kopierbarem curl-Beispiel für Beat Stalder.',
+          caption: 'Der Quickstart zeigt ausschliesslich konsumierbare Verbindungsangaben und niemals Tokens, Passwörter oder interne Secret-Referenzen.',
+        }],
+      },
+      {
+        title: 'Zugriff am echten Endpoint prüfen',
+        description: 'Führen Sie den kopierten Aufruf innerhalb des Freigabefensters aus. Beat erhält HTTP 200 und paginierte Daten. Ohne Identitätsheader gilt 401; eine nicht berechtigte Identität erhält 403.',
+        status: 'implemented',
+        checkpoint: 'Die Antwort enthält Spalten, maximal 100 Einträge der ersten Seite sowie limit, offset und hasMore.',
+        warning: 'Ein sichtbarer Katalogeintrag ist keine Datenfreigabe. Den HTTP-Status entscheidet die publizierte Policy zur Laufzeit.',
+      },
+      {
+        title: 'Fachliche Nutzung einordnen',
+        description: 'Vergleichen Sie das Datenwörterbuch mit der REST-Antwort und klären Sie offene Bedeutungsfragen mit Joel. Halten Sie fest, dass die Daten synthetisch sind und der PoC keine produktive Nutzungsfreigabe ersetzt.',
+        status: 'implemented',
+        checkpoint: 'Beat kennt Dateninhalt, Schlüssel, Ansprechpartner, technische Nutzung und die Grenze zwischen Metadatensichtbarkeit und Datenzugriff.',
+      },
+    ],
+  },
+  {
+    id: 'data-analysts-journey',
+    number: '02',
     title: 'A Data Analyst’s Journey',
     summary: 'Vom synthetischen Rohdatensatz über SQL und Python zum geprüften, OPA-geschützten REST-Datenprodukt.',
     duration: '25–35 Minuten',
@@ -179,7 +280,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
   },
   {
     id: 'consumer-access-request',
-    number: '02',
+    number: '03',
     title: 'Datenprodukt finden und Zugriff beantragen',
     summary: 'Ein Data Consumer findet ein geeignetes Produkt; der Data Owner prüft und publiziert die zeitlich begrenzte Policy.',
     duration: '10–15 Minuten',
@@ -249,7 +350,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
   },
   {
     id: 'metadata-quality',
-    number: '03',
+    number: '04',
     title: 'Metadatenqualität von Bronze zu Platinum',
     summary: 'Eine kantonale Data Ownerin ergänzt technische, fachliche und semantische Informationen bis zur höchsten PoC-Reifestufe.',
     duration: '10–15 Minuten',
@@ -321,7 +422,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
   },
   {
     id: 'governance-exception',
-    number: '04',
+    number: '05',
     title: 'Governance-Ausnahmefall bearbeiten',
     summary: 'Ein kontrolliertes Ereignis erzeugt einen sichtbaren Produktzustand, eine persönliche Aufgabe und eine bleibende Auditspur.',
     duration: '5–10 Minuten',
@@ -385,7 +486,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
   },
   {
     id: 'change-history',
-    number: '05',
+    number: '06',
     title: 'Änderungen und Freigaben nachvollziehen',
     summary: 'Owner, Approver und Data Consumer prüfen denselben echten Produktverlauf mit passend geschützter Evidenz.',
     duration: '8–12 Minuten',

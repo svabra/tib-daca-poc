@@ -54,6 +54,11 @@ class DataProductResponse(ApiModel):
     updated_at: datetime
 
 
+class DataProductQualitySummary(ApiModel):
+    score: int = Field(ge=0, le=6)
+    medal: Literal["bronze", "silver", "gold", "platinum"]
+
+
 class DataProductSummary(ApiModel):
     id: uuid.UUID
     urn: str
@@ -72,6 +77,7 @@ class DataProductSummary(ApiModel):
     metadata: dict[str, Any] = Field(
         validation_alias="extra_metadata", serialization_alias="metadata"
     )
+    quality: DataProductQualitySummary
     updated_at: datetime
 
 
@@ -229,7 +235,11 @@ class HttpConnection(ApiModel):
     base_url: str = Field(min_length=1, max_length=1000)
     path: str = Field(min_length=1, max_length=1000)
     method: Literal["GET", "POST"] = "GET"
-    media_type: str = Field(default="application/json", max_length=255)
+    media_type: str = Field(
+        default="application/json",
+        max_length=255,
+        pattern=r"^[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+(?:\s*;\s*[A-Za-z0-9!#$&^_.+-]+=[A-Za-z0-9!#$&^_.+-]+)*$",
+    )
 
     @field_validator("base_url")
     @classmethod
@@ -307,6 +317,27 @@ class PostgreSQLEndpointResponse(EndpointIdentity, PostgreSQLEndpointCreate):
 
 EndpointResponse = Annotated[
     HttpEndpointResponse | PostgreSQLEndpointResponse, Field(discriminator="protocol")
+]
+
+
+class EndpointReadBase(ApiModel):
+    name: str
+    description: str | None
+
+
+class HttpEndpointReadResponse(EndpointIdentity, EndpointReadBase):
+    protocol: Literal["http-rest"]
+    connection: HttpConnection
+
+
+class PostgreSQLEndpointReadResponse(EndpointIdentity, EndpointReadBase):
+    protocol: Literal["postgresql"]
+    connection: PostgreSQLConnection
+
+
+EndpointReadResponse = Annotated[
+    HttpEndpointReadResponse | PostgreSQLEndpointReadResponse,
+    Field(discriminator="protocol"),
 ]
 
 
@@ -431,6 +462,18 @@ class WeeklyAvailability(ApiModel):
         except (ZoneInfoNotFoundError, ValueError) as exc:
             raise ValueError("timeZone must be a valid IANA time zone") from exc
         return self
+
+
+class EffectiveAccessGrantResponse(ApiModel):
+    protocols: list[Literal["http", "postgresql"]] = Field(min_length=1)
+    valid_from: date
+    valid_until: date
+    weekly_availability: WeeklyAvailability | None = None
+
+
+class ProductEffectiveAccessResponse(ApiModel):
+    granted: bool
+    grants: list[EffectiveAccessGrantResponse] = Field(default_factory=list)
 
 
 class PolicyGrant(ApiModel):
@@ -842,6 +885,32 @@ class ProductQualityResponse(ApiModel):
     medal: Literal["bronze", "silver", "gold", "platinum"]
     criteria: list[QualityCriterion]
     dcat_reviewed: bool
+
+
+class ProductQualityFieldResponse(ApiModel):
+    id: uuid.UUID
+    name: str
+    data_type: str
+    nullable: bool
+    key_field: bool
+    business_description: str | None
+
+
+class ProductQualityMappingResponse(ApiModel):
+    id: uuid.UUID
+    field_id: uuid.UUID | None
+    mapping_type: Literal["product_class", "field_property"]
+    status: Literal["suggested", "confirmed", "unresolved"]
+    term_uri: str
+    term_label: str
+
+
+class ProductQualityWorkspaceResponse(ApiModel):
+    quality: ProductQualityResponse
+    fields: list[ProductQualityFieldResponse]
+    graph: dict[str, Any] | None
+    graph_status: Literal["missing", "suggested", "confirmed"]
+    mappings: list[ProductQualityMappingResponse]
 
 
 class OntologyVersionResponse(ApiModel):

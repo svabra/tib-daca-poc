@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-export type ProductWorkspaceSection = 'overview' | 'metadata' | 'access' | 'lineage' | 'history';
+export type ProductWorkspaceSection = 'overview' | 'usage' | 'metadata' | 'access' | 'lineage' | 'history';
 export type ProductAccessView = 'overview' | 'grant' | 'technical' | null;
 
 @Component({
@@ -23,6 +23,11 @@ export type ProductAccessView = 'overview' | 'grant' | 'technical' | null;
           [class.is-active]="activeSection() === 'overview'"
           [attr.aria-current]="activeSection() === 'overview' ? 'page' : null"
         >Übersicht</a>
+        <a
+          [routerLink]="['/products', productId(), 'usage']"
+          [class.is-active]="activeSection() === 'usage'"
+          [attr.aria-current]="activeSection() === 'usage' ? 'page' : null"
+        >Daten &amp; Nutzung</a>
         <a
           [routerLink]="['/products', productId(), 'metadata']"
           [class.is-active]="activeSection() === 'metadata'"

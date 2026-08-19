@@ -11,17 +11,36 @@ import { PocGuideOverviewComponent } from './poc-guide-overview.component';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 
 describe('PoC guide contract', () => {
-  it('defines five complete, uniquely addressable German journeys and seventeen screenshots', () => {
+  it('defines six complete, uniquely addressable German journeys and twenty screenshots', () => {
     expect(POC_JOURNEYS.map((journey) => journey.id)).toEqual([
+      'understand-and-use-product',
       'data-analysts-journey',
       'consumer-access-request',
       'metadata-quality',
       'governance-exception',
       'change-history',
     ]);
-    expect(POC_JOURNEYS[0].verification?.label).toBe('Durchgängig verifiziert');
-    expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(5);
-    expect(POC_JOURNEYS.flatMap((journey) => journey.steps.flatMap((step) => step.screenshots ?? [])).length).toBe(17);
+    expect(POC_JOURNEYS.map((journey) => journey.number)).toEqual(['01', '02', '03', '04', '05', '06']);
+    expect(POC_JOURNEYS[1].verification?.label).toBe('Durchgängig verifiziert');
+    expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(6);
+    const screenshots = POC_JOURNEYS.flatMap((journey) => journey.steps.flatMap((step) => step.screenshots ?? []));
+    expect(screenshots.length).toBe(20);
+    expect(screenshots.slice(0, 3).map((screenshot) => screenshot.src)).toEqual([
+      '/assets/poc-guide/journey-01-product-search.webp',
+      '/assets/poc-guide/journey-01-data-dictionary.webp',
+      '/assets/poc-guide/journey-01-endpoint-quickstart.webp',
+    ]);
+    const consumerActions = POC_JOURNEYS[0].steps.flatMap((step) => step.actions ?? []);
+    expect(consumerActions).toContainEqual(expect.objectContaining({
+      path: '/products/3a2930ed-3eee-599b-82b5-e138b149d1a2/usage',
+      fragment: 'data-dictionary',
+      demoUserId: 'beat.stalder',
+    }));
+    expect(consumerActions).toContainEqual(expect.objectContaining({
+      path: '/products/3a2930ed-3eee-599b-82b5-e138b149d1a2/usage',
+      fragment: 'endpoint-quickstart',
+      demoUserId: 'beat.stalder',
+    }));
     for (const journey of POC_JOURNEYS) {
       expect(journey.roles.length).toBeGreaterThan(0);
       expect(journey.prerequisites.length).toBeGreaterThan(0);
@@ -46,7 +65,9 @@ describe('PoC guide contract', () => {
 
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('h1')?.textContent).toContain('PoC Leitfaden');
-    expect(root.querySelectorAll('[data-poc-guide-journey]').length).toBe(5);
+    const journeyCards = root.querySelectorAll('[data-poc-guide-journey]');
+    expect(journeyCards.length).toBe(6);
+    expect(journeyCards.item(0).getAttribute('data-poc-guide-journey')).toBe('understand-and-use-product');
     expect(root.textContent).toContain('Das können Sie testen');
     expect(root.textContent).toContain('Das ist nicht Teil des PoC');
     expect(root.querySelector('a[href="/poc-simulation"]')).not.toBeNull();
@@ -142,6 +163,41 @@ describe('PoC guide detail', () => {
     expect(root.querySelectorAll('.poc-guide-external-unavailable').length).toBe(2);
     expect(root.textContent).toContain('DAAIF-Link ist in dieser Umgebung nicht konfiguriert.');
     expect(root.querySelector('a[href*="data-analysts-journey-cantonal-business-tax"]')).toBeNull();
+  });
+
+  it('renders the read-only consumer journey with prefilled search and anchored usage actions', async () => {
+    const { fixture, identity } = await render('understand-and-use-product');
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(root.querySelector('h1')?.textContent).toContain('Datenprodukt finden, verstehen und nutzen');
+    expect(root.textContent).toContain('Beat Stalder');
+    expect(root.textContent).toContain('Joel Ruod');
+    expect(root.textContent).toContain('vollständig read-only');
+    expect(root.querySelectorAll('[data-poc-guide-step]').length).toBe(6);
+    expect(root.querySelectorAll('.poc-guide-screenshot-list button').length).toBe(3);
+
+    const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('.poc-guide-actions a'));
+    expect(links.some((link) => {
+      const url = new URL(link.href);
+      return url.pathname === '/search'
+        && url.searchParams.get('q') === 'Gewerbesteuer'
+        && url.searchParams.get('demoUser') === 'beat.stalder';
+    })).toBe(true);
+    expect(links.some((link) => {
+      const url = new URL(link.href);
+      return url.pathname.endsWith('/overview') && url.searchParams.get('demoUser') === 'beat.stalder';
+    })).toBe(true);
+    expect(links.some((link) => link.hash === '#data-dictionary')).toBe(true);
+    expect(links.some((link) => link.hash === '#endpoint-quickstart')).toBe(true);
+
+    const searchAction = POC_JOURNEYS[0].steps[0].actions?.[0];
+    expect(searchAction).toBeDefined();
+    expect(fixture.componentInstance.internalQueryParams(searchAction!)).toEqual({
+      q: 'Gewerbesteuer',
+      demoUser: 'beat.stalder',
+    });
+    fixture.componentInstance.selectDemoUser(searchAction!);
+    expect(identity.select).toHaveBeenCalledWith('beat.stalder');
   });
 
   it('renders the read-only change-history journey for owner, approver and consumer', async () => {

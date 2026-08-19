@@ -9,10 +9,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import date
 from typing import Annotated, Any, Literal
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import delete, exists, or_, select, text, update
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
@@ -78,11 +79,14 @@ from .schemas import (
     AuditEventResponse,
     DataProductPage,
     DataProductPatch,
+    DataProductQualitySummary,
     DataProductResponse,
     DataProductSummary,
     DemoUserResponse,
     DeploymentAcknowledgement,
+    EffectiveAccessGrantResponse,
     EndpointCreate,
+    EndpointReadResponse,
     EndpointResponse,
     GovernanceDecisionCreate,
     GovernanceSubmissionCreate,
@@ -107,13 +111,16 @@ from .schemas import (
     PocSimulationResetResponse,
     PocSimulationTriggerResponse,
     PolicyCreate,
+    PolicyDefinition,
     PolicyDeploymentResponse,
     PolicyRevisionPage,
     PolicyRevisionResponse,
     PolicySubject,
     ProductActivityResponse,
+    ProductEffectiveAccessResponse,
     ProductQualityResponse,
     ProductQualityReview,
+    ProductQualityWorkspaceResponse,
     ProvenanceEventResponse,
     SemanticMappingResponse,
     SemanticMappingsUpdate,
@@ -126,6 +133,7 @@ from .workflow_seed import ONTOLOGY_URI, stable_id, term_uri
 
 SessionDep = Annotated[Session, Depends(get_session)]
 endpoint_adapter = TypeAdapter(EndpointResponse)
+endpoint_read_adapter = TypeAdapter(EndpointReadResponse)
 
 
 def require_demo_actor(
@@ -613,6 +621,30 @@ def endpoint_response(endpoint: Endpoint) -> Any:
     )
 
 
+def endpoint_read_response(endpoint: Endpoint) -> Any:
+    """Describe connectivity without returning the stored secret reference."""
+    public_connection_keys = (
+        ("baseUrl", "path", "method", "mediaType")
+        if endpoint.protocol == "http-rest"
+        else ("host", "port", "database", "schema", "relation", "sslMode")
+    )
+    return endpoint_read_adapter.validate_python(
+        {
+            "id": endpoint.id,
+            "dataProductId": endpoint.data_product_id,
+            "name": endpoint.name,
+            "description": endpoint.description,
+            "protocol": endpoint.protocol,
+            "connection": {
+                key: endpoint.connection[key]
+                for key in public_connection_keys
+                if key in endpoint.connection
+            },
+            "createdAt": endpoint.created_at,
+        }
+    )
+
+
 def encode_cursor(value: uuid.UUID) -> str:
     return base64.urlsafe_b64encode(value.bytes).decode().rstrip("=")
 
@@ -713,44 +745,69 @@ def active_published_policy(session: Session, product: DataProduct) -> PolicyRev
     )
 
 
-def quality_response(session: Session, product: DataProduct) -> ProductQualityResponse:
-    assessment = session.get(ProductQualityAssessment, product.id)
-    if assessment is None:
-        assessment = ProductQualityAssessment(data_product_id=product.id)
-        session.add(assessment)
-        session.flush()
-    fields = list(
+def quality_medal(score: int) -> Literal["bronze", "silver", "gold", "platinum"]:
+    if score == 6:
+        return "platinum"
+    if score == 5:
+        return "gold"
+    if score == 4:
+        return "silver"
+    return "bronze"
+
+
+def quality_responses(
+    session: Session,
+    products: list[DataProduct],
+    *,
+    persist: bool = False,
+) -> dict[uuid.UUID, ProductQualityResponse]:
+    """Calculate canonical quality for a product set with a fixed number of queries."""
+    if not products:
+        return {}
+
+    product_ids = [product.id for product in products]
+    assessments = {
+        assessment.data_product_id: assessment
+        for assessment in session.scalars(
+            select(ProductQualityAssessment).where(
+                ProductQualityAssessment.data_product_id.in_(product_ids)
+            )
+        )
+    }
+
+    fields_by_product: dict[uuid.UUID, list[DataProductField]] = {
+        product_id: [] for product_id in product_ids
+    }
+    for field in session.scalars(
+        select(DataProductField).where(DataProductField.data_product_id.in_(product_ids))
+    ):
+        fields_by_product[field.data_product_id].append(field)
+
+    endpoint_product_ids = set(
         session.scalars(
-            select(DataProductField).where(DataProductField.data_product_id == product.id)
+            select(Endpoint.data_product_id).where(Endpoint.data_product_id.in_(product_ids))
         )
     )
-    endpoints = list(
-        session.scalars(select(Endpoint).where(Endpoint.data_product_id == product.id))
-    )
-    graph = session.get(ProductContextGraph, product.id)
+    graphs = {
+        graph.data_product_id: graph
+        for graph in session.scalars(
+            select(ProductContextGraph).where(ProductContextGraph.data_product_id.in_(product_ids))
+        )
+    }
+    mappings_by_product: dict[uuid.UUID, list[ProductSemanticMapping]] = {
+        product_id: [] for product_id in product_ids
+    }
+    for mapping in session.scalars(
+        select(ProductSemanticMapping).where(
+            ProductSemanticMapping.data_product_id.in_(product_ids)
+        )
+    ):
+        mappings_by_product[mapping.data_product_id].append(mapping)
+
     active_version = session.scalar(
         select(CanonicalOntologyVersion).where(CanonicalOntologyVersion.active.is_(True)).limit(1)
     )
-    mappings = list(
-        session.scalars(
-            select(ProductSemanticMapping).where(
-                ProductSemanticMapping.data_product_id == product.id
-            )
-        )
-    )
-    confirmed = [mapping for mapping in mappings if mapping.status == "confirmed"]
-    product_classes = [
-        mapping
-        for mapping in confirmed
-        if mapping.mapping_type == "product_class" and mapping.data_product_field_id is None
-    ]
-    key_fields = [field for field in fields if field.key_field]
-    mapped_field_ids = {
-        mapping.data_product_field_id
-        for mapping in confirmed
-        if mapping.mapping_type == "field_property"
-    }
-    active_term_ids = set()
+    active_term_ids: set[uuid.UUID] = set()
     if active_version is not None:
         active_term_ids = set(
             session.scalars(
@@ -760,67 +817,153 @@ def quality_response(session: Session, product: DataProduct) -> ProductQualityRe
             )
         )
 
-    assessment.technical_metadata_complete = bool(
-        fields and endpoints and all(field.name and field.data_type for field in fields)
-    )
-    assessment.business_metadata_complete = bool(
-        assessment.dcat_reviewed
-        and product.title.strip()
-        and len(product.description.strip()) >= 20
-        and product.domain.strip()
-        and product.contact.get("email")
-        and product.update_frequency
-        and all(
-            field.business_description and field.business_description.strip() for field in fields
+    published_policies = list(
+        session.scalars(
+            select(PolicyRevision)
+            .where(
+                PolicyRevision.data_product_id.in_(product_ids),
+                PolicyRevision.status == "published",
+            )
+            .options(selectinload(PolicyRevision.deployments))
         )
     )
-    assessment.graph_confirmed = graph is not None and graph.status == "confirmed"
-    assessment.ontology_embedded = bool(
-        active_version
-        and len(product_classes) == 1
-        and product_classes[0].ontology_term_id in active_term_ids
-        and key_fields
-        and all(field.id in mapped_field_ids for field in key_fields)
-        and all(mapping.ontology_term_id in active_term_ids for mapping in confirmed)
-        and not any(mapping.status != "confirmed" for mapping in mappings)
-    )
-    assessment.access_management_defined = policy_is_fully_deployed(
-        session, active_published_policy(session, product)
-    )
-    criteria = [
-        ("access", assessment.access_management_defined),
-        (
-            "discoverability",
-            assessment.discoverability_confirmed
-            and product.discoverable
-            and product.lifecycle == "active",
-        ),
-        ("technical", assessment.technical_metadata_complete),
-        ("business", assessment.business_metadata_complete),
-        ("graph", assessment.graph_confirmed),
-        ("ontology", assessment.ontology_embedded),
-    ]
-    assessment.score = sum(1 for _, complete in criteria if complete)
-    assessment.medal = (
-        "platinum"
-        if assessment.score == 6
-        else "gold"
-        if assessment.score == 5
-        else "silver"
-        if assessment.score == 4
-        else "bronze"
-    )
-    assessment.updated_at = utc_now()
-    session.flush()
-    return ProductQualityResponse(
-        data_product_id=product.id,
-        score=assessment.score,
-        medal=assessment.medal,
-        criteria=[
-            {"id": criterion_id, "label": QUALITY_LABELS[criterion_id], "complete": complete}
-            for criterion_id, complete in criteria
-        ],
-        dcat_reviewed=assessment.dcat_reviewed,
+    policies_by_revision = {
+        (policy.data_product_id, policy.revision): policy for policy in published_policies
+    }
+
+    responses: dict[uuid.UUID, ProductQualityResponse] = {}
+    now = utc_now()
+    for product in products:
+        assessment = assessments.get(product.id)
+        fields = fields_by_product[product.id]
+        mappings = mappings_by_product[product.id]
+        confirmed = [mapping for mapping in mappings if mapping.status == "confirmed"]
+        product_classes = [
+            mapping
+            for mapping in confirmed
+            if mapping.mapping_type == "product_class"
+            and mapping.data_product_field_id is None
+        ]
+        key_fields = [field for field in fields if field.key_field]
+        mapped_field_ids = {
+            mapping.data_product_field_id
+            for mapping in confirmed
+            if mapping.mapping_type == "field_property"
+        }
+        policy = policies_by_revision.get((product.id, product.active_policy_revision))
+        deployment_states = (
+            {deployment.target: deployment.state for deployment in policy.deployments}
+            if policy is not None
+            else {}
+        )
+
+        access_management_defined = bool(
+            deployment_states.get("opa") == "deployed"
+            and deployment_states.get("postgresql") == "deployed"
+        )
+        discoverability_confirmed = bool(
+            assessment is not None and assessment.discoverability_confirmed
+        )
+        dcat_reviewed = bool(assessment is not None and assessment.dcat_reviewed)
+        technical_metadata_complete = bool(
+            fields
+            and product.id in endpoint_product_ids
+            and all(field.name and field.data_type for field in fields)
+        )
+        business_metadata_complete = bool(
+            dcat_reviewed
+            and product.title.strip()
+            and len(product.description.strip()) >= 20
+            and product.domain.strip()
+            and product.contact.get("email")
+            and product.update_frequency
+            and all(
+                field.business_description and field.business_description.strip()
+                for field in fields
+            )
+        )
+        graph = graphs.get(product.id)
+        graph_confirmed = graph is not None and graph.status == "confirmed"
+        ontology_embedded = bool(
+            active_version
+            and len(product_classes) == 1
+            and product_classes[0].ontology_term_id in active_term_ids
+            and key_fields
+            and all(field.id in mapped_field_ids for field in key_fields)
+            and all(mapping.ontology_term_id in active_term_ids for mapping in confirmed)
+            and not any(mapping.status != "confirmed" for mapping in mappings)
+        )
+        criteria = [
+            ("access", access_management_defined),
+            (
+                "discoverability",
+                discoverability_confirmed
+                and product.discoverable
+                and product.lifecycle == "active",
+            ),
+            ("technical", technical_metadata_complete),
+            ("business", business_metadata_complete),
+            ("graph", graph_confirmed),
+            ("ontology", ontology_embedded),
+        ]
+        score = sum(1 for _, complete in criteria if complete)
+        medal = quality_medal(score)
+
+        if persist:
+            if assessment is None:
+                assessment = ProductQualityAssessment(data_product_id=product.id)
+                session.add(assessment)
+                assessments[product.id] = assessment
+            assessment.access_management_defined = access_management_defined
+            assessment.technical_metadata_complete = technical_metadata_complete
+            assessment.business_metadata_complete = business_metadata_complete
+            assessment.graph_confirmed = graph_confirmed
+            assessment.ontology_embedded = ontology_embedded
+            assessment.score = score
+            assessment.medal = medal
+            assessment.updated_at = now
+
+        responses[product.id] = ProductQualityResponse(
+            data_product_id=product.id,
+            score=score,
+            medal=medal,
+            criteria=[
+                {"id": criterion_id, "label": QUALITY_LABELS[criterion_id], "complete": complete}
+                for criterion_id, complete in criteria
+            ],
+            dcat_reviewed=dcat_reviewed,
+        )
+
+    if persist:
+        session.flush()
+    return responses
+
+
+def quality_response(session: Session, product: DataProduct) -> ProductQualityResponse:
+    return quality_responses(session, [product], persist=True)[product.id]
+
+
+def data_product_summary(
+    product: DataProduct, quality: ProductQualityResponse
+) -> DataProductSummary:
+    return DataProductSummary(
+        id=product.id,
+        urn=product.urn,
+        origin_catalog=product.origin_catalog,
+        revision=product.revision,
+        owner_user_id=product.owner_user_id,
+        discoverable=product.discoverable,
+        title=product.title,
+        description=product.description,
+        owner=product.owner,
+        domain=product.domain,
+        lifecycle=product.lifecycle,
+        classification=product.classification,
+        keywords=product.keywords,
+        update_frequency=product.update_frequency,
+        metadata=product.extra_metadata,
+        quality=DataProductQualitySummary(score=quality.score, medal=quality.medal),
+        updated_at=product.updated_at,
     )
 
 
@@ -1947,8 +2090,11 @@ def create_router() -> APIRouter:
         rows = list(session.scalars(statement))
         has_more = len(rows) > limit
         items = rows[:limit]
+        quality_by_product = quality_responses(session, items)
         return DataProductPage(
-            items=[DataProductSummary.model_validate(item) for item in items],
+            items=[
+                data_product_summary(item, quality_by_product[item.id]) for item in items
+            ],
             next_cursor=encode_cursor(items[-1].id) if has_more and items else None,
         )
 
@@ -2065,10 +2211,14 @@ def create_router() -> APIRouter:
             )
         ]
 
-    @router.get("/data-products/{product_id}/quality", tags=["quality"])
+    @router.get(
+        "/data-products/{product_id}/quality",
+        response_model=ProductQualityWorkspaceResponse,
+        tags=["quality"],
+    )
     def get_product_quality(
         product_id: uuid.UUID, session: SessionDep, actor: OptionalActorDep
-    ) -> dict[str, Any]:
+    ) -> ProductQualityWorkspaceResponse:
         product = find_product(session, product_id)
         if not can_view_private_product(session, product, actor):
             raise HTTPException(404, "Data product not found")
@@ -2101,9 +2251,8 @@ def create_router() -> APIRouter:
             if mappings
             else {}
         )
-        quality = quality_response(session, product)
-        session.commit()
-        return {
+        quality = quality_responses(session, [product], persist=False)[product.id]
+        return ProductQualityWorkspaceResponse.model_validate({
             "quality": quality.model_dump(mode="json", by_alias=True),
             "fields": [
                 {
@@ -2132,7 +2281,7 @@ def create_router() -> APIRouter:
                 for mapping in mappings
                 if mapping.ontology_term_id in terms
             ],
-        }
+        })
 
     @router.put(
         "/data-products/{product_id}/quality",
@@ -3022,7 +3171,7 @@ def create_router() -> APIRouter:
 
     @router.get(
         "/data-products/{product_id}/endpoints",
-        response_model=list[EndpointResponse],
+        response_model=list[EndpointReadResponse],
         tags=["endpoints"],
     )
     def list_endpoints(
@@ -3033,7 +3182,7 @@ def create_router() -> APIRouter:
         endpoints = session.scalars(
             select(Endpoint).where(Endpoint.data_product_id == product_id).order_by(Endpoint.name)
         )
-        return [endpoint_response(endpoint) for endpoint in endpoints]
+        return [endpoint_read_response(endpoint) for endpoint in endpoints]
 
     @router.post(
         "/data-products/{product_id}/endpoints",
@@ -3207,6 +3356,59 @@ def create_router() -> APIRouter:
             )
         )
         return PolicyRevisionPage(items=[policy_response(policy) for policy in policies])
+
+    @router.get(
+        "/data-products/{product_id}/effective-access",
+        response_model=ProductEffectiveAccessResponse,
+        tags=["access requests"],
+    )
+    def get_effective_access(
+        product_id: uuid.UUID,
+        session: SessionDep,
+        actor: ActorDep,
+    ) -> ProductEffectiveAccessResponse:
+        """Return only the current actor's safe, active grant summary."""
+        product = find_product(session, product_id)
+        require_product_view(session, product, actor)
+        policy = active_published_policy(session, product)
+        if policy is None:
+            if product.active_policy_revision is not None:
+                raise HTTPException(503, "Effective access status is unavailable")
+            return ProductEffectiveAccessResponse(granted=False)
+
+        try:
+            definition = PolicyDefinition.model_validate(definition_as_camel(policy.definition))
+        except ValidationError:
+            raise HTTPException(503, "Effective access status is unavailable") from None
+        if definition.effect != "allow":
+            return ProductEffectiveAccessResponse(granted=False)
+
+        today = utc_now().astimezone(ZoneInfo("Europe/Zurich")).date()
+        grants: list[EffectiveAccessGrantResponse] = []
+        for grant in definition.grants:
+            subject = grant.subject
+            applies_to_actor = (
+                subject.type == "person" and subject.id == actor
+            ) or (
+                subject.type == "group"
+                and grant.group_snapshot is not None
+                and actor in grant.group_snapshot.member_ids
+            )
+            if not applies_to_actor:
+                continue
+            if "data.read" not in grant.actions:
+                continue
+            if not grant.valid_from <= today <= grant.valid_until:
+                continue
+            grants.append(
+                EffectiveAccessGrantResponse(
+                    protocols=list(dict.fromkeys(grant.protocols)),
+                    valid_from=grant.valid_from,
+                    valid_until=grant.valid_until,
+                    weekly_availability=grant.weekly_availability,
+                )
+            )
+        return ProductEffectiveAccessResponse(granted=bool(grants), grants=grants)
 
     @router.get(
         "/data-products/{product_id}/policies/latest",

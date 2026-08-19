@@ -144,11 +144,17 @@ def test_docker_publish_uses_separate_version_tagged_docker_hub_repositories() -
     ) in workflow
 
 
-def test_poc_guide_ships_seventeen_optimized_webp_screenshots() -> None:
+def test_poc_guide_ships_twenty_optimized_webp_screenshots() -> None:
     image_dir = ROOT / "apps/catalog-ui/public/assets/poc-guide"
     images = sorted(image_dir.glob("*.webp"))
+    expected_consumer_journey_images = {
+        "journey-01-product-search.webp",
+        "journey-01-data-dictionary.webp",
+        "journey-01-endpoint-quickstart.webp",
+    }
 
-    assert len(images) == 17
+    assert expected_consumer_journey_images <= {path.name for path in images}
+    assert len(images) == 20
     assert sum(path.stat().st_size for path in images) < 2_000_000
     for path in images:
         header = path.read_bytes()[:12]
