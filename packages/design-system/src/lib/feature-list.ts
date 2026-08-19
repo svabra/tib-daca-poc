@@ -48,6 +48,10 @@ export const DACA_FEATURE_RELEASE = {
             description: 'Durchsuchen Sie den Katalog und sehen Sie Beschreibung, Herkunft und verfügbare Schnittstellen auf einen Blick.',
           },
           {
+            title: 'Änderungen nachvollziehen',
+            description: 'Der echte Änderungsverlauf zeigt verständlich, wer Metadaten, Qualität, Freigaben oder die technische Aktivierung eines Datenprodukts verändert hat.',
+          },
+          {
             title: 'Eigene Datenprodukte verwalten',
             description: 'Ergänzen und prüfen Sie Metadaten, damit andere Personen die Daten richtig einordnen und verwenden können.',
           },
@@ -77,6 +81,10 @@ export const DACA_FEATURE_RELEASE = {
           {
             title: 'Find and understand data products',
             description: 'Search the catalog and see descriptions, origins and available interfaces at a glance.',
+          },
+          {
+            title: 'Understand what changed',
+            description: 'A real product history explains who changed metadata, quality, approvals or the technical activation of a data product.',
           },
           {
             title: 'Manage your data products',

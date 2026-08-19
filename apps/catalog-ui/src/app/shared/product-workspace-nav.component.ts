@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-export type ProductWorkspaceSection = 'overview' | 'metadata' | 'access' | 'lineage';
+export type ProductWorkspaceSection = 'overview' | 'metadata' | 'access' | 'lineage' | 'history';
 export type ProductAccessView = 'overview' | 'grant' | 'technical' | null;
 
 @Component({
@@ -38,6 +38,11 @@ export type ProductAccessView = 'overview' | 'grant' | 'technical' | null;
           [class.is-active]="activeSection() === 'lineage'"
           [attr.aria-current]="activeSection() === 'lineage' ? 'page' : null"
         >Lineage &amp; Provenienz</a>
+        <a
+          [routerLink]="['/products', productId(), 'history']"
+          [class.is-active]="activeSection() === 'history'"
+          [attr.aria-current]="activeSection() === 'history' ? 'page' : null"
+        >Änderungsverlauf</a>
       </nav>
 
       @if (activeSection() === 'access') {

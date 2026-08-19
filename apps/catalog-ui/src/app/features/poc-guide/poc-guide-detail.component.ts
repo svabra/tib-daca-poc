@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { DemoIdentityService } from '../../core/demo-identity.service';
 import { POC_GUIDE_STATUS_LABELS, pocJourneyById } from './poc-guide.data';
 import { PocGuideAction, PocGuideScreenshot } from './poc-guide.models';
 import { PocGuideConfigService } from './poc-guide-config.service';
@@ -78,7 +79,7 @@ import { PocGuideConfigService } from './poc-guide-config.service';
                   <div class="poc-guide-actions">
                     @for (action of step.actions; track action.label) {
                       @if (action.target === 'internal') {
-                        <a class="daca-button is-secondary" [routerLink]="action.path" [queryParams]="action.demoUserId ? { demoUser: action.demoUserId } : null">{{ action.label }}</a>
+                        <a class="daca-button is-secondary" [routerLink]="action.path" [queryParams]="action.demoUserId ? { demoUser: action.demoUserId } : null" (click)="selectDemoUser(action)">{{ action.label }}</a>
                       } @else if (externalHref(action); as href) {
                         <a class="daca-button is-secondary" [href]="href" target="_blank" rel="noopener noreferrer">{{ action.label }} <span aria-hidden="true">↗</span></a>
                       } @else {
@@ -140,6 +141,7 @@ export class PocGuideDetailComponent {
   private readonly routeParams = toSignal(this.route.paramMap, { initialValue: this.route.snapshot.paramMap });
   private returnFocus: HTMLElement | null = null;
   readonly guideConfig = inject(PocGuideConfigService);
+  private readonly identity = inject(DemoIdentityService);
   readonly journey = computed(() => pocJourneyById(this.routeParams().get('journeyId')));
   readonly selectedScreenshot = signal<PocGuideScreenshot | null>(null);
   readonly statusLabels = POC_GUIDE_STATUS_LABELS;
@@ -150,6 +152,10 @@ export class PocGuideDetailComponent {
 
   externalHref(action: PocGuideAction): string | null {
     return this.guideConfig.externalHref(action.target);
+  }
+
+  selectDemoUser(action: PocGuideAction): void {
+    if (action.demoUserId) this.identity.select(action.demoUserId);
   }
 
   openScreenshot(screenshot: PocGuideScreenshot, event: Event): void {

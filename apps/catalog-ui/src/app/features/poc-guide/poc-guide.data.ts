@@ -1,6 +1,7 @@
 import { PocGuideCapability, PocGuideStatus, PocJourney } from './poc-guide.models';
 
 const IMAGE_ROOT = '/assets/poc-guide';
+const DATA_ANALYST_JOURNEY_PRODUCT_ID = '3a2930ed-3eee-599b-82b5-e138b149d1a2';
 
 export const POC_GUIDE_STATUS_LABELS: Readonly<Record<PocGuideStatus, string>> = {
   implemented: 'Technisch umgesetzt',
@@ -22,6 +23,11 @@ export const POC_GUIDE_CAPABILITIES: readonly PocGuideCapability[] = [
   {
     title: 'Zugriffe prüfen und technisch durchsetzen',
     description: 'Policy-Entwürfe, Vier-Augen-Freigabe, OPA-Entscheide und der geschützte REST-Endpunkt sind wirksam.',
+    status: 'implemented',
+  },
+  {
+    title: 'Änderungen und Entscheidungen nachvollziehen',
+    description: 'Der echte Produktverlauf verbindet Metadaten, Qualität, Freigaben und technische Aktivierung in einer rollenabhängig geschützten Timeline.',
     status: 'implemented',
   },
   {
@@ -374,6 +380,117 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
           alt: 'DaCa Simulationsansicht mit aktivem Ereignis und sichtbarer Aktion zum gezielten Zurücksetzen.',
           caption: 'Reset bedeutet Zustandswiederherstellung, nicht das Löschen der nachvollziehbaren Auditspur.',
         }],
+      },
+    ],
+  },
+  {
+    id: 'change-history',
+    number: '05',
+    title: 'Änderungen und Freigaben nachvollziehen',
+    summary: 'Owner, Approver und Data Consumer prüfen denselben echten Produktverlauf mit passend geschützter Evidenz.',
+    duration: '8–12 Minuten',
+    difficulty: 'Einfach',
+    systems: ['DaCa'],
+    roles: [
+      { name: 'Joel Ruod', responsibility: 'Data Owner · freigegebene technische Evidenz' },
+      { name: 'Thomas Kriegli', responsibility: 'Publication Approver · freigegebene Prüfevidenz' },
+      { name: 'Beat Stalder', responsibility: 'Data Consumer · sichere fachliche Zusammenfassung' },
+    ],
+    prerequisites: [
+      'A Data Analyst’s Journey wurde bis zur bestätigten Aktivierung abgeschlossen.',
+      'Das Gewerbesteuer-Datenprodukt ist in DaCa aktiv und auffindbar.',
+    ],
+    outcome: 'Die Testperson kann reale Zustandsänderungen zeitlich einordnen, Rollenrechte vergleichen und Änderungsverlauf klar von Lineage unterscheiden.',
+    repeatability: 'Die Journey ist vollständig read-only. Sie erzeugt und verändert keine Audit-Ereignisse und benötigt deshalb keinen Reset.',
+    verification: {
+      label: 'Rollenbasiert verifiziert',
+      detail: 'Owner und Approver sehen freigegebene technische Evidenz; gewöhnliche Betrachter erhalten denselben fachlichen Verlauf ohne interne IDs, Kommentare oder Fehlerdetails.',
+    },
+    steps: [
+      {
+        title: 'Änderungsverlauf als Joel öffnen',
+        description: 'Öffnen Sie das Journey-Datenprodukt als Joel und wählen Sie den Reiter «Änderungsverlauf». Die Ansicht liest ausschliesslich persistierte Audit-Ereignisse.',
+        status: 'implemented',
+        actions: [{
+          label: 'Änderungsverlauf als Joel öffnen',
+          target: 'internal',
+          path: `/products/${DATA_ANALYST_JOURNEY_PRODUCT_ID}/history`,
+          demoUserId: 'joel.ruod',
+        }],
+        screenshots: [{
+          src: `${IMAGE_ROOT}/journey-05-history-owner.webp`,
+          alt: 'DaCa Änderungsverlauf des Gewerbesteuer-Datenprodukts aus Sicht von Joel Ruod mit technischer Evidenz.',
+          caption: 'Der Data Owner sieht die verständliche Aktivität und darf zusätzlich freigegebene technische Korrelations- und Deployment-Evidenz aufklappen.',
+        }],
+      },
+      {
+        title: 'Lebenszyklus vollständig lesen',
+        description: 'Lesen Sie die Ereignisse von unten nach oben: Übernahme aus DAAIF, Qualitätsprüfung, Vier-Augen-Einreichung, Genehmigung und bestätigte Aktivierung.',
+        status: 'implemented',
+        checkpoint: 'Der Verlauf enthält mindestens fünf echte fachliche Meilensteine und ist absteigend nach Zeitpunkt sortiert.',
+      },
+      {
+        title: 'Filter und technische Aktivierung prüfen',
+        description: 'Filtern Sie nach «Metadaten & Qualität», «Zugriff & Freigabe» und «Technische Aktivierung». Öffnen Sie als Joel die technische Evidenz einer Aktivierung.',
+        status: 'implemented',
+        checkpoint: 'Policy-Revision und fachliche Zielsysteme bleiben sichtbar; nur interne Korrelations- und Prüfevidenz ist Owner oder Approver vorbehalten. Tokens und Zugangsdaten erscheinen nie.',
+      },
+      {
+        title: 'Approver-Sicht mit Thomas vergleichen',
+        description: 'Wechseln Sie zu Thomas. Als zugewiesener Approver kann er die für seine Vier-Augen-Entscheidung freigegebene Evidenz nachvollziehen, ohne einen neuen Entscheid auszulösen.',
+        status: 'implemented',
+        actions: [{
+          label: 'Änderungsverlauf als Thomas öffnen',
+          target: 'internal',
+          path: `/products/${DATA_ANALYST_JOURNEY_PRODUCT_ID}/history`,
+          demoUserId: 'thomas.kriegli',
+        }],
+      },
+      {
+        title: 'Sichere Consumer-Sicht mit Beat prüfen',
+        description: 'Wechseln Sie zu Beat. Der fachliche Lebenszyklus bleibt verständlich, aber interne Korrelations-IDs, Subject-IDs, Prüfungskommentare und technische Fehlerdetails sind ausgeblendet.',
+        status: 'implemented',
+        warning: 'Die Timeline ist kein Rohdaten-Dump. Rollenabhängige Reduktion ist Teil des Sicherheitsmodells.',
+        actions: [{
+          label: 'Änderungsverlauf als Beat öffnen',
+          target: 'internal',
+          path: `/products/${DATA_ANALYST_JOURNEY_PRODUCT_ID}/history`,
+          demoUserId: 'beat.stalder',
+        }],
+        screenshots: [{
+          src: `${IMAGE_ROOT}/journey-05-history-viewer.webp`,
+          alt: 'DaCa Änderungsverlauf aus Sicht von Beat Stalder mit fachlichen Ereignissen und ohne technische Evidenz.',
+          caption: 'Ein berechtigter Data Consumer versteht den Lebenszyklus, erhält aber keine internen Identifikatoren oder vertraulichen Prüfdetails.',
+        }],
+      },
+      {
+        title: 'Letzte Änderungen im Metadata Studio prüfen',
+        description: 'Öffnen Sie als Joel das Metadata Studio. Die Seitenleiste zeigt die drei neuesten echten Ereignisse statt erfundener Beispiele und führt zurück zum vollständigen Verlauf.',
+        status: 'implemented',
+        actions: [{
+          label: 'Metadata Studio als Joel öffnen',
+          target: 'internal',
+          path: `/products/${DATA_ANALYST_JOURNEY_PRODUCT_ID}/metadata`,
+          demoUserId: 'joel.ruod',
+        }],
+        screenshots: [{
+          src: `${IMAGE_ROOT}/journey-05-history-metadata.webp`,
+          alt: 'DaCa Metadata Studio mit den drei neuesten echten Aktivitäten und Link zum vollständigen Änderungsverlauf.',
+          caption: 'Die kompakte Vorschau bleibt mit dem vollständigen Verlauf synchron und enthält keine statisch erfundenen Audit-Beispiele.',
+        }],
+      },
+      {
+        title: 'Änderungsverlauf und Lineage unterscheiden',
+        description: 'Öffnen Sie abschliessend «Lineage & Provenienz». Lineage erklärt Quelle und Verarbeitung der Daten; der Änderungsverlauf dokumentiert Zustandsänderungen, Entscheidungen und technische Aktivierung.',
+        status: 'implemented',
+        actions: [{
+          label: 'Lineage & Provenienz öffnen',
+          target: 'internal',
+          path: `/products/${DATA_ANALYST_JOURNEY_PRODUCT_ID}/lineage`,
+          demoUserId: 'joel.ruod',
+        }],
+        checkpoint: 'Keine Aktion dieser Journey hat Produkt, Policy oder Auditspur verändert.',
+        warning: 'Der Änderungsverlauf ist nachvollziehbare Produktevidenz, aber kein formeller Audit-Workflow mit Feststellungen und Sign-off.',
       },
     ],
   },

@@ -44,7 +44,8 @@ Key routes:
 - `GET|POST /api/v1/data-products/{id}/endpoints` — endpoint descriptors
 - `GET /api/v1/data-products/{id}/lineage`
 - `GET /api/v1/data-products/{id}/provenance`
-- `GET /api/v1/data-products/{id}/audit-events`
+- `GET /api/v1/data-products/{id}/activity` — safely aggregated product lifecycle for every viewer who may see the product
+- `GET /api/v1/data-products/{id}/audit-events` — raw technical audit details, restricted to the data owner and assigned approvers
 - `POST /api/v1/data-products/{id}/access-requests` — submit an access request
 - `GET /api/v1/data-products/{id}/access-requests/mine` — current actor's requests for one product
 - `GET /api/v1/access-requests/mine` — current actor's requests across the catalog

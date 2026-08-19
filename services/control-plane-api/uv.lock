@@ -117,7 +117,7 @@ wheels = [
 
 [[package]]
 name = "daca-control-plane-api"
-version = "0.1.4"
+version = "0.1.6"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },

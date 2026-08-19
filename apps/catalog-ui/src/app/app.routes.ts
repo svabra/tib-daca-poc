@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { WelcomePageComponent } from './features/welcome/welcome-page.component';
+import { PRODUCT_ACTIVITY_ROUTE } from './features/activity/product-activity.route';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', component: WelcomePageComponent, title: 'Willkommen | DaCa' },
@@ -112,6 +113,7 @@ export const routes: Routes = [
     loadComponent: () => import('./features/lineage/lineage-explorer.component').then((m) => m.LineageExplorerComponent),
     title: 'Produkt-Lineage | DaCa',
   },
+  PRODUCT_ACTIVITY_ROUTE,
   {
     path: 'products/:id/access/grant',
     loadComponent: () => import('./features/exposure/exposure-studio.component').then((m) => m.ExposureStudioComponent),

@@ -15,6 +15,7 @@ import {
   LineageNode,
   OwnedAccessConsumer,
   PolicyDefinition,
+  ProductActivityResponse,
   ProvenanceEvent,
   StoredAccessRequest,
 } from './catalog.models';
@@ -207,8 +208,12 @@ export class CatalogApiService {
 
   updateMetadata(patch: Partial<DataProduct>): Observable<DataProduct> {
     const current = this.productState();
+    return this.updateProductMetadata(current, patch);
+  }
+
+  updateProductMetadata(current: DataProduct, patch: Partial<DataProduct>): Observable<DataProduct> {
     const headers = new HttpHeaders({
-      'If-Match': this.etag(),
+      'If-Match': `"${current.revision}"`,
       'X-DaCa-User': this.identity.userId(),
     });
     const body = {
@@ -348,6 +353,13 @@ export class CatalogApiService {
       }),
       catchError(() => of({ nodes: FALLBACK_NODES, edges: FALLBACK_EDGES, provenance: FALLBACK_PROVENANCE })),
     );
+  }
+
+  loadProductActivity(productId: string): Observable<ProductActivityResponse> {
+    return this.http.get<ProductActivityResponse>(
+      `/api/v1/data-products/${encodeURIComponent(productId)}/activity`,
+      { headers: this.identity.headers() },
+    ).pipe(timeout(3000));
   }
 
   loadPolicy(): Observable<PolicyDefinition> {

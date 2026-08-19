@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 import uuid
 
 from daca_catalog.seed import ESTV_PRODUCT_ID
@@ -95,11 +97,146 @@ def test_metadata_updates_are_optimistic_and_audited(client):
     stale = client.patch(product_url(), headers={"If-Match": '"1"'}, json={"title": "Stale"})
     assert stale.status_code == 412
 
-    audit = client.get(f"{product_url()}/audit-events")
+    audit = client.get(
+        f"{product_url()}/audit-events",
+        headers={"X-DaCa-User": "kassandra.valdata"},
+    )
     events = audit.json()
     assert events[0]["action"] == "metadata-updated"
     assert events[0]["actor"] == "estv-editor"
     assert events[0]["details"]["changedFields"] == ["description", "updateFrequency"]
+
+
+def test_product_activity_is_safe_and_raw_audit_is_privileged(client, session_factory):
+    from daca_catalog.models import AuditEvent, utc_now
+
+    leaked_uuid = uuid.uuid4()
+    with session_factory() as session:
+        session.add_all(
+            [
+                AuditEvent(
+                    id=uuid.uuid4(),
+                    resource_type="data-product",
+                    resource_id=str(ESTV_PRODUCT_ID),
+                    action="metadata-publication-received",
+                    actor="daca-bootstrap",
+                    revision=1,
+                    details={"sourceProductId": "private-source-id"},
+                    occurred_at=utc_now(),
+                ),
+                AuditEvent(
+                    id=uuid.uuid4(),
+                    resource_type="data-product",
+                    resource_id=str(ESTV_PRODUCT_ID),
+                    action="future-unclassified-action",
+                    actor="private.actor@example.test",
+                    revision=1,
+                    details={
+                        "token": "top-secret-token",
+                        "subjectId": "svc-private-subject",
+                        "comment": "private review comment",
+                        "correlationId": str(leaked_uuid),
+                    },
+                    occurred_at=utc_now(),
+                ),
+            ]
+        )
+        session.commit()
+
+    summary = client.get(
+        f"{product_url()}/activity",
+        headers={"X-DaCa-User": ""},
+    )
+    assert summary.status_code == 200
+    assert summary.json()["detailLevel"] == "summary"
+    assert all(not item["technicalEvidence"] for item in summary.json()["items"])
+    assert "technical-catalog-event" in {
+        item["eventType"] for item in summary.json()["items"]
+    }
+    source_event = next(
+        item
+        for item in summary.json()["items"]
+        if item["eventType"] == "metadata-publication-received"
+    )
+    assert source_event["title"] == "Datenprodukt aus Quellsystem übernommen"
+    assert source_event["actor"] == {"displayName": "Quellsystem", "kind": "role"}
+
+    privileged = client.get(
+        f"{product_url()}/activity",
+        headers={"X-DaCa-User": "kassandra.valdata"},
+    )
+    assert privileged.status_code == 200
+    assert privileged.json()["detailLevel"] == "privileged"
+    serialized_activity = json.dumps(privileged.json())
+    assert "top-secret-token" not in serialized_activity
+    assert "svc-private-subject" not in serialized_activity
+    assert "private review comment" not in serialized_activity
+    assert "private-source-id" not in serialized_activity
+    assert "private.actor@example.test" not in serialized_activity
+    assert str(leaked_uuid) not in serialized_activity
+    assert re.search(
+        r"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
+        serialized_activity,
+        re.IGNORECASE,
+    ) is None
+
+    assert client.get(
+        f"{product_url()}/audit-events",
+        headers={"X-DaCa-User": ""},
+    ).status_code == 403
+    assert client.get(
+        f"{product_url()}/audit-events",
+        headers={"X-DaCa-User": "beat.stalder"},
+    ).status_code == 403
+    raw = client.get(
+        f"{product_url()}/audit-events",
+        headers={"X-DaCa-User": "kassandra.valdata"},
+    )
+    assert raw.status_code == 200
+    assert raw.json()[0]["details"]["token"] == "top-secret-token"
+
+
+def test_product_activity_order_is_stable_when_timestamps_match(client, session_factory):
+    from daca_catalog.models import AuditEvent, utc_now
+
+    occurred_at = utc_now()
+    with session_factory() as session:
+        session.add_all(
+            [
+                AuditEvent(
+                    id=uuid.UUID("00000000-0000-4000-8000-000000000001"),
+                    resource_type="data-product",
+                    resource_id=str(ESTV_PRODUCT_ID),
+                    action="endpoint-created",
+                    actor="kassandra.valdata",
+                    revision=2,
+                    details={},
+                    occurred_at=occurred_at,
+                ),
+                AuditEvent(
+                    id=uuid.UUID("ffffffff-ffff-4fff-8fff-ffffffffffff"),
+                    resource_type="data-product",
+                    resource_id=str(ESTV_PRODUCT_ID),
+                    action="metadata-updated",
+                    actor="kassandra.valdata",
+                    revision=3,
+                    details={"changedFields": ["description"]},
+                    occurred_at=occurred_at,
+                ),
+            ]
+        )
+        session.commit()
+
+    activity = client.get(
+        f"{product_url()}/activity",
+        headers={"X-DaCa-User": "kassandra.valdata"},
+    ).json()
+    matching = [
+        item["eventType"]
+        for item in activity["items"]
+        if item["eventType"] in {"metadata-updated", "endpoint-created"}
+    ]
+    assert matching == ["metadata-updated", "endpoint-created"]
 
 
 def test_mutations_require_demo_identity(client):

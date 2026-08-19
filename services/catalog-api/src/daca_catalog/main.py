@@ -65,6 +65,8 @@ from .policy import (
     project_to_postgresql,
 )
 from .problems import install_problem_handlers
+from .product_activity import is_privileged_product_auditor
+from .product_activity import product_activity as build_product_activity
 from .schemas import (
     AccessGovernanceCreate,
     AccessRequestCreate,
@@ -109,6 +111,7 @@ from .schemas import (
     PolicyRevisionPage,
     PolicyRevisionResponse,
     PolicySubject,
+    ProductActivityResponse,
     ProductQualityResponse,
     ProductQualityReview,
     ProvenanceEventResponse,
@@ -1875,6 +1878,12 @@ def create_router() -> APIRouter:
                 select(PolicyRevision.id).where(PolicyRevision.data_product_id == product.id)
             )
         )
+        session.execute(delete(WorkflowTask).where(WorkflowTask.data_product_id == product.id))
+        session.execute(
+            delete(GovernanceSubmission).where(
+                GovernanceSubmission.data_product_id == product.id
+            )
+        )
         if policy_ids:
             session.execute(
                 delete(PolicyDeployment).where(PolicyDeployment.policy_revision_id.in_(policy_ids))
@@ -1895,7 +1904,6 @@ def create_router() -> APIRouter:
                 ProductQualityAssessment.data_product_id == product.id
             )
         )
-        session.execute(delete(WorkflowTask).where(WorkflowTask.data_product_id == product.id))
         session.execute(
             delete(MetadataPublication).where(MetadataPublication.data_product_id == product.id)
         )
@@ -3125,6 +3133,18 @@ def create_router() -> APIRouter:
         )
 
     @router.get(
+        "/data-products/{product_id}/activity",
+        response_model=ProductActivityResponse,
+        tags=["audit"],
+    )
+    def get_product_activity(
+        product_id: uuid.UUID, session: SessionDep, actor: OptionalActorDep
+    ) -> ProductActivityResponse:
+        product = find_product(session, product_id)
+        require_product_view(session, product, actor)
+        return build_product_activity(session, product, actor)
+
+    @router.get(
         "/data-products/{product_id}/audit-events",
         response_model=list[AuditEventResponse],
         tags=["audit"],
@@ -3134,11 +3154,19 @@ def create_router() -> APIRouter:
     ) -> list[AuditEvent]:
         product = find_product(session, product_id)
         require_product_view(session, product, actor)
+        if not is_privileged_product_auditor(session, product, actor):
+            raise HTTPException(
+                403,
+                "Raw audit details are restricted to the data owner and assigned approvers",
+            )
         return list(
             session.scalars(
                 select(AuditEvent)
-                .where(AuditEvent.resource_id == str(product_id))
-                .order_by(AuditEvent.occurred_at.desc())
+                .where(
+                    AuditEvent.resource_type.in_(("data-product", "policy")),
+                    AuditEvent.resource_id == str(product_id),
+                )
+                .order_by(AuditEvent.occurred_at.desc(), AuditEvent.id.desc())
             )
         )
 

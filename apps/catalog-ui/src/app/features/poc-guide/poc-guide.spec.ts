@@ -8,18 +8,20 @@ import { POC_GUIDE_CAPABILITIES, POC_GUIDE_LIMITS, POC_JOURNEYS } from './poc-gu
 import { PocGuideConfigService } from './poc-guide-config.service';
 import { PocGuideDetailComponent } from './poc-guide-detail.component';
 import { PocGuideOverviewComponent } from './poc-guide-overview.component';
+import { DemoIdentityService } from '../../core/demo-identity.service';
 
 describe('PoC guide contract', () => {
-  it('defines four complete, uniquely addressable German journeys and fourteen screenshots', () => {
+  it('defines five complete, uniquely addressable German journeys and seventeen screenshots', () => {
     expect(POC_JOURNEYS.map((journey) => journey.id)).toEqual([
       'data-analysts-journey',
       'consumer-access-request',
       'metadata-quality',
       'governance-exception',
+      'change-history',
     ]);
     expect(POC_JOURNEYS[0].verification?.label).toBe('Durchgängig verifiziert');
-    expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(4);
-    expect(POC_JOURNEYS.flatMap((journey) => journey.steps.flatMap((step) => step.screenshots ?? [])).length).toBe(14);
+    expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(5);
+    expect(POC_JOURNEYS.flatMap((journey) => journey.steps.flatMap((step) => step.screenshots ?? [])).length).toBe(17);
     for (const journey of POC_JOURNEYS) {
       expect(journey.roles.length).toBeGreaterThan(0);
       expect(journey.prerequisites.length).toBeGreaterThan(0);
@@ -44,7 +46,7 @@ describe('PoC guide contract', () => {
 
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('h1')?.textContent).toContain('PoC Leitfaden');
-    expect(root.querySelectorAll('[data-poc-guide-journey]').length).toBe(4);
+    expect(root.querySelectorAll('[data-poc-guide-journey]').length).toBe(5);
     expect(root.textContent).toContain('Das können Sie testen');
     expect(root.textContent).toContain('Das ist nicht Teil des PoC');
     expect(root.querySelector('a[href="/poc-simulation"]')).not.toBeNull();
@@ -91,21 +93,23 @@ describe('PoC guide detail', () => {
           : target === 'daaif-loader' ? `${daaifUiUrl}/loader-workbench` : null;
       },
     };
+    const identity = { select: vi.fn() };
     await TestBed.configureTestingModule({
       imports: [PocGuideDetailComponent],
       providers: [
         provideRouter([]),
         { provide: ActivatedRoute, useValue: { paramMap: of(paramMap), snapshot: { paramMap } } },
         { provide: PocGuideConfigService, useValue: guideConfig },
+        { provide: DemoIdentityService, useValue: identity },
       ],
     }).compileComponents();
     const fixture = TestBed.createComponent(PocGuideDetailComponent);
     fixture.detectChanges();
-    return fixture;
+    return { fixture, identity };
   }
 
   it('renders roles, checkpoints, safe external links and accessible screenshots', async () => {
-    const fixture = await render('data-analysts-journey');
+    const { fixture } = await render('data-analysts-journey');
     const root = fixture.nativeElement as HTMLElement;
 
     expect(root.querySelector('h1')?.textContent).toContain('A Data Analyst’s Journey');
@@ -132,7 +136,7 @@ describe('PoC guide detail', () => {
   });
 
   it('explains why DAAIF actions are unavailable when no public URL is configured', async () => {
-    const fixture = await render('data-analysts-journey', '');
+    const { fixture } = await render('data-analysts-journey', '');
     const root = fixture.nativeElement as HTMLElement;
 
     expect(root.querySelectorAll('.poc-guide-external-unavailable').length).toBe(2);
@@ -140,8 +144,31 @@ describe('PoC guide detail', () => {
     expect(root.querySelector('a[href*="data-analysts-journey-cantonal-business-tax"]')).toBeNull();
   });
 
+  it('renders the read-only change-history journey for owner, approver and consumer', async () => {
+    const { fixture, identity } = await render('change-history');
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(root.querySelector('h1')?.textContent).toContain('Änderungen und Freigaben nachvollziehen');
+    expect(root.textContent).toContain('Joel Ruod');
+    expect(root.textContent).toContain('Thomas Kriegli');
+    expect(root.textContent).toContain('Beat Stalder');
+    expect(root.textContent).toContain('vollständig read-only');
+    expect(root.querySelectorAll('[data-poc-guide-step]').length).toBe(7);
+    expect(root.querySelectorAll('.poc-guide-screenshot-list button').length).toBe(3);
+    expect(root.querySelector('a[href*="/history?demoUser=joel.ruod"]')).not.toBeNull();
+    expect(root.querySelector('a[href*="/history?demoUser=beat.stalder"]')).not.toBeNull();
+    expect(root.textContent).toContain('Lineage erklärt Quelle und Verarbeitung');
+
+    fixture.componentInstance.selectDemoUser({
+      label: 'Änderungsverlauf als Beat öffnen',
+      target: 'internal',
+      demoUserId: 'beat.stalder',
+    });
+    expect(identity.select).toHaveBeenCalledWith('beat.stalder');
+  });
+
   it('shows a stable not-found state for unknown journey IDs', async () => {
-    const fixture = await render('does-not-exist');
+    const { fixture } = await render('does-not-exist');
 
     expect((fixture.nativeElement as HTMLElement).querySelector('[data-poc-guide-not-found]')).not.toBeNull();
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Journey nicht gefunden');

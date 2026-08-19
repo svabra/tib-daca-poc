@@ -1,17 +1,19 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StatusBadgeComponent } from '@bit-daca/design-system';
 import { finalize } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
-import { DataProduct } from '../../core/catalog.models';
+import { DataProduct, ProductActivityItem } from '../../core/catalog.models';
 import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav.component';
+import { presentProductActivity } from '../activity/product-activity.presenter';
+import { recentProductActivity } from './metadata-activity-preview';
 
 @Component({
   selector: 'daca-metadata-studio',
   standalone: true,
-  imports: [DatePipe, ProductWorkspaceNavComponent, ReactiveFormsModule, StatusBadgeComponent],
+  imports: [DatePipe, ProductWorkspaceNavComponent, ReactiveFormsModule, RouterLink, StatusBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <daca-product-workspace-nav
@@ -70,7 +72,7 @@ import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav
         </div>
         <div class="metadata-form-actions">
           <span>@if (form.dirty) { Unsaved changes } @else { All fields reflect revision {{ product().revision }} }</span>
-          <button class="daca-button" type="submit" [disabled]="form.invalid || saving()">
+          <button class="daca-button" type="submit" [disabled]="form.invalid || saving() || !productReady()">
             {{ saving() ? 'Saving…' : 'Save new revision' }}
           </button>
         </div>
@@ -108,11 +110,35 @@ import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav
           </div>
         </section>
 
-        <section class="daca-card">
-          <div class="daca-card-header"><h2>Recent audit</h2></div>
-          <div class="daca-card-body metadata-audit">
-            <p><span></span><strong>Policy revision 3 published</strong><small>ESTV Data Owner · 08:30</small></p>
-            <p><span></span><strong>Metadata revision 7 created</strong><small>estv-pipeline · 01 Aug</small></p>
+        <section class="daca-card" aria-labelledby="metadata-activity-title">
+          <div class="daca-card-header metadata-activity-header">
+            <h2 id="metadata-activity-title">Letzte Änderungen</h2>
+            <a [routerLink]="['/products', routeProductId, 'history']">Vollständigen Verlauf öffnen</a>
+          </div>
+          <div class="daca-card-body metadata-audit" aria-live="polite">
+            @if (activityLoading()) {
+              <p class="metadata-activity-state" role="status">Aktivitäten werden geladen …</p>
+            } @else if (activityError()) {
+              <div class="metadata-activity-state is-error" role="alert">
+                <p>Die letzten Änderungen konnten nicht geladen werden. Der Metadateneditor bleibt verfügbar.</p>
+                <button class="daca-button is-secondary" type="button" (click)="loadRecentActivity()">Erneut versuchen</button>
+              </div>
+            } @else if (recentActivity().length === 0) {
+              <p class="metadata-activity-state">Noch keine protokollierten Änderungen.</p>
+            } @else {
+              <ol class="metadata-activity-list">
+                @for (item of recentActivity(); track item.key) {
+                  <li>
+                    <span aria-hidden="true"></span>
+                    <strong>{{ presentActivity(item).title }}</strong>
+                    <small>
+                      {{ item.actor.displayName }} ·
+                      <time [attr.datetime]="item.occurredAt">{{ item.occurredAt | date: 'dd.MM.yyyy, HH:mm' }}</time>
+                    </small>
+                  </li>
+                }
+              </ol>
+            }
           </div>
         </section>
       </aside>
@@ -123,10 +149,22 @@ export class MetadataStudioComponent {
   readonly api = inject(CatalogApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly fb = inject(FormBuilder);
-  readonly product = this.api.product;
+  readonly routeProductId = this.route.snapshot.paramMap.get('id') ?? this.api.product().id;
+  readonly product = signal<DataProduct>({
+    ...this.api.product(),
+    id: this.routeProductId,
+    title: 'Datenprodukt wird geladen',
+    revision: 0,
+    endpoints: [],
+  });
+  readonly productReady = signal(false);
   readonly saving = signal(false);
   readonly message = signal('');
   readonly messageTone = signal<'info' | 'error'>('info');
+  readonly recentActivity = signal<readonly ProductActivityItem[]>([]);
+  readonly activityLoading = signal(true);
+  readonly activityError = signal(false);
+  readonly presentActivity = presentProductActivity;
   private appliedRevision = 0;
 
   readonly form = this.fb.nonNullable.group({
@@ -144,7 +182,22 @@ export class MetadataStudioComponent {
   });
 
   constructor() {
-    this.api.selectProduct(this.route.snapshot.paramMap.get('id'));
+    this.api.loadProduct(this.routeProductId).subscribe({
+      next: (product) => {
+        if (product.id !== this.routeProductId) {
+          this.messageTone.set('error');
+          this.message.set('Das geladene Datenprodukt stimmt nicht mit der angeforderten Metadatenseite überein.');
+          return;
+        }
+        this.product.set(product);
+        this.productReady.set(true);
+      },
+      error: () => {
+        this.messageTone.set('error');
+        this.message.set('Die Produktmetadaten konnten nicht geladen werden. Es werden keine Ersatzdaten angezeigt.');
+      },
+    });
+    this.loadRecentActivity();
     effect(() => {
       const product = this.product();
       if (product.revision === this.appliedRevision || this.form.dirty) return;
@@ -167,23 +220,43 @@ export class MetadataStudioComponent {
 
   save(): void {
     this.form.markAllAsTouched();
-    if (this.form.invalid || this.saving()) return;
+    if (this.form.invalid || this.saving() || !this.productReady()) return;
     const value = this.form.getRawValue();
+    const current = this.product();
     this.saving.set(true);
     this.message.set('');
     this.api
-      .updateMetadata({ ...value, keywords: value.keywords.split(',').map((keyword) => keyword.trim()).filter(Boolean) })
+      .updateProductMetadata(current, {
+        ...value,
+        keywords: value.keywords.split(',').map((keyword) => keyword.trim()).filter(Boolean),
+      })
       .pipe(finalize(() => this.saving.set(false)))
       .subscribe({
         next: (updated) => {
+          this.product.set(updated);
           this.appliedRevision = updated.revision;
           this.form.markAsPristine();
           this.messageTone.set('info');
           this.message.set(`Revision ${updated.revision} saved and added to the audit trail.`);
+          this.loadRecentActivity();
         },
         error: (error: Error) => {
           this.messageTone.set('error');
           this.message.set(error.message);
+        },
+      });
+  }
+
+  loadRecentActivity(): void {
+    this.activityLoading.set(true);
+    this.activityError.set(false);
+    this.api.loadProductActivity(this.routeProductId)
+      .pipe(finalize(() => this.activityLoading.set(false)))
+      .subscribe({
+        next: (response) => this.recentActivity.set(recentProductActivity(response.items)),
+        error: () => {
+          this.recentActivity.set([]);
+          this.activityError.set(true);
         },
       });
   }

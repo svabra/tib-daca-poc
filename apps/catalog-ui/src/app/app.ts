@@ -49,6 +49,7 @@ export class App {
         { label: 'Journey 2: Zugriff beantragen', path: '/poc-guide/consumer-access-request' },
         { label: 'Journey 3: Metadatenqualität', path: '/poc-guide/metadata-quality' },
         { label: 'Journey 4: Governance-Ausnahmefall', path: '/poc-guide/governance-exception' },
+        { label: 'Journey 5: Änderungsverlauf', path: '/poc-guide/change-history' },
         { label: 'Simulationen und Grenzfälle', path: '/poc-simulation' },
       ],
     },

@@ -144,11 +144,11 @@ def test_docker_publish_uses_separate_version_tagged_docker_hub_repositories() -
     ) in workflow
 
 
-def test_poc_guide_ships_fourteen_optimized_webp_screenshots() -> None:
+def test_poc_guide_ships_seventeen_optimized_webp_screenshots() -> None:
     image_dir = ROOT / "apps/catalog-ui/public/assets/poc-guide"
     images = sorted(image_dir.glob("*.webp"))
 
-    assert len(images) == 14
+    assert len(images) == 17
     assert sum(path.stat().st_size for path in images) < 2_000_000
     for path in images:
         header = path.read_bytes()[:12]
@@ -163,3 +163,10 @@ def test_openshift_config_exposes_only_the_public_daaif_ui_url() -> None:
         "DAAIF_UI_URL: "
         "https://evo1-bdw-daai-brs-d.apps.p-szb-ros-nopi-npr-01.cloud.admin.ch"
     ) in config
+
+
+def test_catalog_service_worker_never_caches_identity_dependent_api_responses() -> None:
+    config = (ROOT / "apps/catalog-ui/ngsw-config.json").read_text(encoding="utf-8")
+
+    assert '"dataGroups"' not in config
+    assert '"!/api/**"' in config

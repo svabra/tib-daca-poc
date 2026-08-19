@@ -113,6 +113,11 @@ def test_quality_requires_canonical_product_and_all_key_field_mappings(client):
     assert quality["score"] == 5
     assert quality["medal"] == "gold"
     assert next(item for item in quality["criteria"] if item["id"] == "ontology")["complete"] is True
+    activity = client.get(
+        f"/api/v1/data-products/{product_id}/activity",
+        headers={"X-DaCa-User": "kassandra.valdata"},
+    ).json()
+    assert "quality-reviewed" in {item["eventType"] for item in activity["items"]}
 
     semantic = client.get(f"/api/v1/data-products/{product_id}/semantic-profile", headers={"X-DaCa-User": "kassandra.valdata"})
     assert semantic.status_code == 200
@@ -176,6 +181,13 @@ def test_approval_creates_timed_policy_draft_and_publish_grants_request(client, 
     grant = decided.json()["policy"]["definition"]["grants"][0]
     assert grant["subject"] == {"type": "person", "id": "beat.stalder"}
     assert grant["validFrom"] == "2026-09-01"
+    activity = client.get(
+        f"/api/v1/data-products/{product_id}/activity",
+        headers={"X-DaCa-User": "kassandra.valdata"},
+    ).json()
+    activity_types = [item["eventType"] for item in activity["items"]]
+    assert activity_types.count("access-request-submitted") == 1
+    assert activity_types.count("access-request-approved") == 1
 
     monkeypatch.setattr("daca_catalog.main.project_to_postgresql", lambda settings, product_id, revision, definition: ProjectionResult("deployed", observed_revision=revision))
     published = client.post(
@@ -202,3 +214,22 @@ def test_approval_creates_timed_policy_draft_and_publish_grants_request(client, 
     assert acknowledged.status_code == 200
     mine = client.get(f"/api/v1/data-products/{product_id}/access-requests/mine", headers={"X-DaCa-User": "beat.stalder"}).json()
     assert mine[0]["status"] == "granted_modified"
+
+    reset = client.post(
+        f"/api/v1/poc/data-products/{product_id}/reset",
+        headers={"X-DaCa-User": "kassandra.valdata"},
+        json={"confirmationName": "Kassandra Valdata"},
+    )
+    assert reset.status_code == 200
+    republished = client.post("/api/v1/metadata-publications", json=payload)
+    assert republished.status_code == 201
+    assert republished.json()["productId"] == product_id
+    historical_activity = client.get(
+        f"/api/v1/data-products/{product_id}/activity",
+        headers={"X-DaCa-User": "kassandra.valdata"},
+    ).json()
+    historical_types = [item["eventType"] for item in historical_activity["items"]]
+    assert historical_types.count("access-request-submitted") == 1
+    assert historical_types.count("access-request-approved") == 1
+    assert "policy-published" in historical_types
+    assert "poc-fixture-reset" in historical_types

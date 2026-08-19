@@ -347,6 +347,47 @@ class AuditEventResponse(ApiModel):
     occurred_at: datetime
 
 
+ProductActivityCategory = Literal[
+    "metadata",
+    "quality",
+    "access",
+    "governance",
+    "deployment",
+    "poc_system",
+]
+ProductActivityStatus = Literal["info", "pending", "success", "warning", "failure"]
+
+
+class ProductActivityActor(ApiModel):
+    display_name: str
+    kind: Literal["person", "system", "role"]
+
+
+class ProductActivityFact(ApiModel):
+    label: str
+    value: str
+
+
+class ProductActivityItem(ApiModel):
+    key: str
+    event_type: str
+    category: ProductActivityCategory
+    status: ProductActivityStatus
+    title: str
+    description: str
+    occurred_at: datetime
+    actor: ProductActivityActor
+    product_revision: int | None = None
+    policy_revision: int | None = None
+    facts: list[ProductActivityFact] = Field(default_factory=list)
+    technical_evidence: list[ProductActivityFact] = Field(default_factory=list)
+
+
+class ProductActivityResponse(ApiModel):
+    detail_level: Literal["summary", "privileged"]
+    items: list[ProductActivityItem]
+
+
 class SubjectSelectors(ApiModel):
     user_ids: list[str] = Field(default_factory=list)
     machine_ids: list[str] = Field(default_factory=list)

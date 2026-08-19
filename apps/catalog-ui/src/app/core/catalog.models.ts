@@ -228,3 +228,43 @@ export interface OwnedAccessConsumer {
   organization: string;
   grants: AccessConsumerGrant[];
 }
+
+export type ProductActivityCategory =
+  | 'metadata'
+  | 'quality'
+  | 'access'
+  | 'governance'
+  | 'deployment'
+  | 'poc_system';
+
+export type ProductActivityStatus = 'info' | 'pending' | 'success' | 'warning' | 'failure';
+
+export interface ProductActivityActor {
+  displayName: string;
+  kind: 'person' | 'system' | 'role';
+}
+
+export interface ProductActivityFact {
+  label: string;
+  value: string;
+}
+
+export interface ProductActivityItem {
+  key: string;
+  eventType: string;
+  category: ProductActivityCategory;
+  status: ProductActivityStatus;
+  title: string;
+  description: string;
+  occurredAt: string;
+  actor: ProductActivityActor;
+  productRevision: number | null;
+  policyRevision: number | null;
+  facts: ProductActivityFact[];
+  technicalEvidence: ProductActivityFact[];
+}
+
+export interface ProductActivityResponse {
+  detailLevel: 'summary' | 'privileged';
+  items: ProductActivityItem[];
+}
