@@ -3,8 +3,10 @@ import {
   CATALOG_LIVE_RESULT_LIMIT,
   catalogProductMatches,
   catalogSearchIsReady,
+  expertSearchQueryParams,
   normalizeCatalogSearch,
   searchCatalogProducts,
+  shouldExpandWelcomeSearch,
 } from './welcome-search';
 
 describe('welcome catalog search', () => {
@@ -41,5 +43,18 @@ describe('welcome catalog search', () => {
   it('searches complete product metadata for the expert results', () => {
     expect(searchCatalogProducts(FALLBACK_PRODUCTS, 'Mehrwertsteuer').map((product) => product.title))
       .toContain('Mehrwertsteuer – Branchenindikatoren');
+  });
+  it('preserves a trimmed quick-search query for the expert-search link', () => {
+    expect(expertSearchQueryParams('  ESTV  ')).toEqual({ q: 'ESTV' });
+    expect(expertSearchQueryParams('   ')).toBeNull();
+  });
+
+  it('does not expand the quick search when the expert-search action receives focus', () => {
+    const expertLink = document.createElement('a');
+    expertLink.className = 'welcome-search-expert-link';
+    expect(shouldExpandWelcomeSearch(expertLink)).toBe(false);
+
+    const searchInput = document.createElement('input');
+    expect(shouldExpandWelcomeSearch(searchInput)).toBe(true);
   });
 });

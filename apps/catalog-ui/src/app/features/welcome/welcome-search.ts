@@ -3,6 +3,15 @@ import { DataProduct } from '../../core/catalog.models';
 export const CATALOG_SEARCH_MIN_LENGTH = 2;
 export const CATALOG_LIVE_RESULT_LIMIT = 3;
 
+export function expertSearchQueryParams(value: string): { q: string } | null {
+  const query = value.trim();
+  return query ? { q: query } : null;
+}
+
+export function shouldExpandWelcomeSearch(target: EventTarget | null): boolean {
+  return !(target instanceof Element) || target.closest('.welcome-search-expert-link') === null;
+}
+
 export function normalizeCatalogSearch(value: string): string {
   return value
     .normalize('NFKD')

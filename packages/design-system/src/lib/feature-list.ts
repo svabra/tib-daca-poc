@@ -48,6 +48,10 @@ export const DACA_FEATURE_RELEASE = {
             description: 'Kompakte Qualitätsmedaillen, ein durchsuchbares Datenwörterbuch und sichere Schnittstellenbeispiele helfen bei der Einordnung und Nutzung.',
           },
           {
+            title: 'Schnell oder gezielt suchen',
+            description: 'Die Startseite zeigt bis zu drei Treffer über die volle verfügbare Breite. Die Expertensuche übernimmt den Suchbegriff und bietet erweiterte Filter.',
+          },
+          {
             title: 'Service Level gemeinsam festlegen',
             description: 'Versionierte SLA und Nutzungsbedingungen machen Gültigkeit, Supportziele und fachliche Grenzen sichtbar. Eine gespeicherte Kontrollperson gibt jede neue Fassung im Vier-Augen-Prinzip frei.',
           },
@@ -85,6 +89,10 @@ export const DACA_FEATURE_RELEASE = {
           {
             title: 'Find and understand data products',
             description: 'Compact quality medals, a searchable data dictionary and safe interface examples make products easier to assess and use.',
+          },
+          {
+            title: 'Search quickly or precisely',
+            description: 'The Home page shows up to three results across the full available width. Expert search preserves the query and provides advanced filters.',
           },
           {
             title: 'Agree service levels together',
