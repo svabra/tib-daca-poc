@@ -9,7 +9,9 @@ import {
   CATALOG_LIVE_RESULT_LIMIT,
   CATALOG_SEARCH_MIN_LENGTH,
   catalogSearchIsReady,
+  expertSearchQueryParams,
   searchCatalogProducts,
+  shouldExpandWelcomeSearch,
 } from './welcome-search';
 
 type SearchStatus = 'idle' | 'empty' | 'short' | 'match' | 'none';
@@ -84,7 +86,7 @@ function selectSessionHeroTheme() {
             role="search"
             [class.is-expanded]="searchExpanded()"
             (submit)="submitSearch($event)"
-            (focusin)="expandSearch()"
+            (focusin)="expandSearch($event)"
             (focusout)="collapseSearchIfFocusLeaves($event)"
           >
             <div>
@@ -143,6 +145,14 @@ function selectSessionHeroTheme() {
                 }
               }
             </div>
+            <a
+              class="welcome-search-expert-link"
+              [routerLink]="['/search']"
+              [queryParams]="expertSearchQueryParams()"
+            >
+              <span class="welcome-search-expert-meta">Alle Produkte · Erweiterte Filter</span>
+              <strong>Expertensuche öffnen</strong>
+            </a>
           </form>
       </section>
 
@@ -310,6 +320,7 @@ export class WelcomePageComponent {
   readonly searchResults = signal<readonly DataProduct[]>([]);
   readonly searchResultCount = signal(0);
   readonly searchExpanded = signal(false);
+  readonly expertSearchQueryParams = computed(() => expertSearchQueryParams(this.searchQuery()));
   readonly searchMinimumLength = CATALOG_SEARCH_MIN_LENGTH;
   readonly ownerRequests = this.api.ownerAccessRequests;
   readonly ownerInboxLoading = this.api.ownerAccessRequestLoading;
@@ -351,7 +362,8 @@ export class WelcomePageComponent {
     this.runLiveSearch(normalizedQuery);
   }
 
-  expandSearch(): void {
+  expandSearch(event: FocusEvent): void {
+    if (!shouldExpandWelcomeSearch(event.target)) return;
     this.searchExpanded.set(true);
   }
 

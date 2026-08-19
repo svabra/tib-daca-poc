@@ -214,3 +214,84 @@ final result: blocked
 - None required for this revert.
 
 final result: passed
+
+---
+
+# Design QA — Full-width quick-search results beside the expert CTA
+
+## Comparison target
+
+- Source visual truth: the user-supplied DAAIF wrapping finding, applied consistently to the shared DaCa quick-search pattern.
+- Rendered implementation: `C:/Users/braya/apps/BIT/tib-daail-evo1-poc-query-engine-alias-fix/output/playwright/expert-search-result-width/daca-after.png`.
+- Combined DAAIF/DaCa comparison: `C:/Users/braya/apps/BIT/tib-daail-evo1-poc-query-engine-alias-fix/output/playwright/expert-search-result-width/comparison.png`.
+- Viewport: 1440 × 1000 CSS pixels, device scale factor 1; DaCa query `st` with 11 catalog matches and three preview cards.
+
+## Findings and verification
+
+- Expanded DaCa results now use the complete 467 px feedback width instead of reserving 264 px beside the CTA across the whole result stack.
+- The compact hover/focus state retains its right-side reservation, so the expert action cannot cover short guidance or validation text.
+- Browser geometry found zero overlap between preview cards, the all-results link, and the expert CTA. The list has no inner scrollbar.
+- At 430 px, all three results remain visible with no inner or page-level horizontal scrollbar and no browser page errors.
+- The focused welcome-search suite passed all 7 tests. The production Angular build completed successfully.
+
+final result: passed
+
+---
+
+# Design QA — Quick-search preview without an inner scrollbar
+
+## Comparison target
+
+- Source visual truth: the supplied DAAIF scrollbar finding, applied to the shared DaCa quick-search pattern.
+- Rendered implementation: `C:/Users/braya/apps/BIT/tib-daail-evo1-poc-query-engine-alias-fix/output/playwright/expert-search-hover/daca-scrollbar-fixed.png`.
+- Viewport: 1600 × 1000 CSS pixels, device scale factor 1; search query `st` with 11 catalog matches and three preview cards.
+
+## Findings and verification
+
+- The redundant 218 px result-list cap and nested vertical scrolling were removed while the three-result preview limit remains unchanged.
+- DaCa's longer product titles require 253 px. The expanded feedback area and widget were therefore sized to contain all three cards plus the all-results link without clipping.
+- Browser measurements reported `clientHeight == scrollHeight`, computed `overflow-y: visible`, and both the feedback and form bounds containing the all-results link.
+- The focused seven-test welcome-search suite and the production Angular build passed.
+
+final result: passed
+
+---
+
+# Design QA — Expertensuche CTA refinement and one-click navigation
+
+## Comparison target
+
+- Source visual truth: the user-rejected first implementation in `output/playwright/expert-search-hover/daca-desktop-hover.png`, together with the supplied federal landing-page reference.
+- Rendered implementation: `output/playwright/expert-search-hover/daca-desktop-hover-refined-final.png`.
+- Combined DAAIF/DaCa before-and-after evidence: `C:/Users/braya/apps/BIT/tib-daail-evo1-poc-query-engine-alias-fix/output/playwright/expert-search-hover/refinement-comparison.png`.
+- Viewport: 1440 × 1000 CSS pixels, device scale factor 1; source and implementation are both 1440 × 1000 pixels, so no density normalization was required.
+- State: blank quick-search widget, pointer hovering over the widget.
+
+## Findings
+
+- The earlier P1 visual finding is resolved: the generic white secondary button is now a deliberate BIT-blue action surface with federal-red top rule, supporting microcopy, stronger label hierarchy, and controlled elevation.
+- The earlier P0 interaction finding is resolved: the expert action is excluded from the form's focus-driven expansion, so the target remains stationary from pointer-down to pointer-up and the first click opens `/search`.
+- A P2 feedback collision found in the first refinement was resolved by reserving a left feedback column while the hover action occupies the lower-right action area.
+
+## Required fidelity surfaces
+
+- Fonts and typography: shared Noto Sans typography is retained; the small uppercase context line and high-emphasis action label match DAAIF exactly.
+- Spacing and layout rhythm: the action uses the established 22 px/18 px card insets; feedback reflows beside it without moving the hero, input, or search action.
+- Colors and visual tokens: existing DaCa blue and federal red are used with white text and the catalog's neutral shadow language.
+- Image quality and asset fidelity: responsive AVIF/WebP hero imagery, crop, and wash remain untouched; the action needs no new image or icon.
+- Copy and content: `Alle Produkte · Erweiterte Filter` is domain-specific while `Expertensuche öffnen` remains identical to DAAIF.
+
+## Interaction and runtime evidence
+
+- Resting state hidden, hover reveal, current-query propagation, first pointer-down stability, first-click navigation to `/search?q=ESTV`, expert-page rendering, and zero horizontal layout drift were exercised in Chromium.
+- Browser console and page-error checks reported zero errors.
+- Production build passed. The welcome-search regression test passed within the catalog test run; unrelated concurrent service-level tests remain outside this patch.
+
+## Comparison history
+
+1. The initial implementation was visually too generic and expanded the search widget during the first click.
+2. The CTA became a branded two-level action surface and its focus no longer mutates widget geometry.
+3. The first CSS pass revealed a design-system specificity conflict and feedback overlap; both were corrected.
+4. Final browser evidence shows the same visual language and one-click behavior in DaCa and DAAIF with no remaining P0/P1/P2 issue.
+
+final result: passed

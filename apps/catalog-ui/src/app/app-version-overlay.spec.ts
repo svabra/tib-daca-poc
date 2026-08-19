@@ -39,11 +39,12 @@ describe('Catalog runtime version overlay', () => {
     expect(dialog?.textContent).toContain(`Featureliste · V${DACA_VERSION}`);
     expect(dialog?.textContent).toContain('Was kann DaCa Catalog?');
     expect(dialog?.textContent).toContain('Datenprodukte finden und verstehen');
+    expect(dialog?.textContent).toContain('Schnell oder gezielt suchen');
     expect(dialog?.textContent).toContain('Service Level gemeinsam festlegen');
     expect(dialog?.textContent).toContain('Änderungen nachvollziehen');
     expect(dialog?.textContent).toContain('PoC anhand geführter Journeys erleben');
     expect(dialog?.textContent).toContain('aktuellen PoC-Stand');
-    expect(features.length).toBe(8);
+    expect(features.length).toBe(9);
     expect(trigger?.getAttribute('aria-expanded')).toBe('true');
 
     const close = fixture.nativeElement.querySelector('.daca-feature-dialog-close') as HTMLButtonElement | null;
