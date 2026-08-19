@@ -4,6 +4,8 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DataProduct } from '../../core/catalog.models';
+import { QualityMedalComponent, QualityMedalLevel } from '../../shared/quality-medal.component';
+import { deliveryProtocols } from '../products/my-data-products';
 import {
   CATALOG_SEARCH_MIN_LENGTH,
   catalogSearchIsReady,
@@ -13,7 +15,7 @@ import {
 @Component({
   selector: 'daca-catalog-expert-search',
   standalone: true,
-  imports: [DatePipe, RouterLink],
+  imports: [DatePipe, RouterLink, QualityMedalComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <nav class="expert-search-breadcrumb" aria-label="Brotkrümelnavigation">
@@ -108,6 +110,7 @@ import {
                   <span>{{ product.domain }}</span>
                   <span>{{ product.owner }}</span>
                   <span>{{ lifecycleLabel(product) }}</span>
+                  <daca-quality-medal [medal]="qualityMedal(product)" [score]="product.qualityScore ?? 0" />
                 </div>
                 <h3><a [routerLink]="['/products', product.id, 'overview']">{{ product.title }}</a></h3>
                 <p>{{ product.description }}</p>
@@ -177,8 +180,12 @@ export class CatalogExpertSearchComponent {
     return ({ draft: 'Entwurf', active: 'Aktiv', deprecated: 'Veraltet', retired: 'Ausser Betrieb' } as const)[product.lifecycle];
   }
 
+  qualityMedal(product: DataProduct): QualityMedalLevel {
+    return product.qualityMedal ?? 'bronze';
+  }
+
   protocolLabel(product: DataProduct): string {
-    const protocols = product.endpoints.map((endpoint) => endpoint.protocol === 'http-rest' ? 'REST' : 'PostgreSQL');
+    const protocols = deliveryProtocols(product);
     return [...new Set(protocols)].join(' · ') || 'Nicht angegeben';
   }
 

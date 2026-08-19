@@ -41,11 +41,11 @@ export const DACA_FEATURE_RELEASE = {
         features: [
           {
             title: 'PoC anhand geführter Journeys erleben',
-            description: 'Der neue PoC Leitfaden erklärt vier wiederholbare Abläufe mit Rollen, Voraussetzungen, echten Screenshots und klar ausgewiesenen Grenzen.',
+            description: 'Der PoC Leitfaden erklärt sechs wiederholbare Abläufe mit Rollen, Voraussetzungen, echten Screenshots und klar ausgewiesenen Grenzen.',
           },
           {
             title: 'Datenprodukte finden und verstehen',
-            description: 'Durchsuchen Sie den Katalog und sehen Sie Beschreibung, Herkunft und verfügbare Schnittstellen auf einen Blick.',
+            description: 'Kompakte Qualitätsmedaillen, ein durchsuchbares Datenwörterbuch und sichere Schnittstellenbeispiele helfen bei der Einordnung und Nutzung.',
           },
           {
             title: 'Änderungen nachvollziehen',
@@ -76,11 +76,11 @@ export const DACA_FEATURE_RELEASE = {
         features: [
           {
             title: 'Explore the PoC through guided journeys',
-            description: 'The new PoC guide explains four repeatable workflows with roles, prerequisites, real screenshots and clearly stated limitations.',
+            description: 'The PoC guide explains six repeatable workflows with roles, prerequisites, real screenshots and clearly stated limitations.',
           },
           {
             title: 'Find and understand data products',
-            description: 'Search the catalog and see descriptions, origins and available interfaces at a glance.',
+            description: 'Compact quality medals, a searchable data dictionary and safe interface examples make products easier to assess and use.',
           },
           {
             title: 'Understand what changed',

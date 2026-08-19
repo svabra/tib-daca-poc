@@ -11,6 +11,8 @@ export interface PocGuideAction {
   readonly target: PocGuideActionTarget;
   readonly path?: string;
   readonly demoUserId?: string;
+  readonly queryParams?: Readonly<Record<string, string>>;
+  readonly fragment?: string;
 }
 
 export interface PocGuideScreenshot {

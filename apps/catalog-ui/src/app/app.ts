@@ -45,11 +45,12 @@ export class App {
       description: 'Geführte Customer Journeys erklären Rollen, Möglichkeiten und Grenzen des DaCa Proof of Concept.',
       children: [
         { label: 'Übersicht: Was kann der PoC?', path: '/poc-guide' },
-        { label: 'Journey 1: A Data Analyst’s Journey', path: '/poc-guide/data-analysts-journey' },
-        { label: 'Journey 2: Zugriff beantragen', path: '/poc-guide/consumer-access-request' },
-        { label: 'Journey 3: Metadatenqualität', path: '/poc-guide/metadata-quality' },
-        { label: 'Journey 4: Governance-Ausnahmefall', path: '/poc-guide/governance-exception' },
-        { label: 'Journey 5: Änderungsverlauf', path: '/poc-guide/change-history' },
+        { label: 'Journey 01: Finden, verstehen und nutzen', path: '/poc-guide/understand-and-use-product' },
+        { label: 'Journey 02: A Data Analyst’s Journey', path: '/poc-guide/data-analysts-journey' },
+        { label: 'Journey 03: Zugriff beantragen', path: '/poc-guide/consumer-access-request' },
+        { label: 'Journey 04: Metadatenqualität', path: '/poc-guide/metadata-quality' },
+        { label: 'Journey 05: Governance-Ausnahmefall', path: '/poc-guide/governance-exception' },
+        { label: 'Journey 06: Änderungsverlauf', path: '/poc-guide/change-history' },
         { label: 'Simulationen und Grenzfälle', path: '/poc-simulation' },
       ],
     },
@@ -57,8 +58,5 @@ export class App {
 
   switchUser(userId: string): void {
     this.identity.select(userId);
-    this.api.refreshProducts();
-    this.api.refreshOwnerAccessRequestInbox();
-    this.api.refreshWorkflowTasks();
   }
 }

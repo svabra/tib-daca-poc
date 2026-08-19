@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, HostListener, inject, OnD
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DataProduct, OwnedAccessConsumer } from '../../core/catalog.models';
+import { QualityMedalComponent, QualityMedalLevel } from '../../shared/quality-medal.component';
 import {
   accessConsumerSummary,
   connectedAuthorities,
@@ -25,7 +26,7 @@ import {
 @Component({
   selector: 'daca-my-data-products',
   standalone: true,
-  imports: [DatePipe, RouterLink],
+  imports: [DatePipe, RouterLink, QualityMedalComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="daca-page-heading product-index-heading">
@@ -139,7 +140,7 @@ import {
                   <span>{{ product.owner }}</span>
                   <span>{{ classificationLabel(product.classification) }}</span>
                   <span>{{ lifecycleLabel(product.lifecycle) }}</span>
-                  @if (product.qualityMedal) { <span class="product-quality-medal" [class]="'product-quality-medal is-' + product.qualityMedal">{{ qualityLabel(product) }}</span> }
+                  <daca-quality-medal [medal]="qualityMedal(product)" [score]="product.qualityScore ?? 0" />
                 </div>
                 <h3>{{ product.title }}</h3>
                 <p>{{ product.description }}</p>
@@ -285,7 +286,10 @@ import {
                   <td>
                     <a class="product-table-title" [routerLink]="['/products', product.id, 'overview']">
                       <strong>{{ product.title }}</strong>
-                      <span>{{ product.domain }} · Revision {{ product.revision }} @if (product.qualityMedal) { · <b>{{ qualityLabel(product) }}</b> }</span>
+                      <span class="product-table-summary">
+                        <span>{{ product.domain }} · Revision {{ product.revision }}</span>
+                        <daca-quality-medal [medal]="qualityMedal(product)" [score]="product.qualityScore ?? 0" />
+                      </span>
                     </a>
                   </td>
                   <td>
@@ -603,9 +607,8 @@ export class MyDataProductsComponent implements OnDestroy {
     return deliveryProtocols(product);
   }
 
-  qualityLabel(product: DataProduct): string {
-    const medal = ({ bronze: 'Bronze', silver: 'Silber', gold: 'Gold', platinum: 'Platinum' } as const)[product.qualityMedal ?? 'bronze'];
-    return product.qualityScore === undefined ? medal : `${medal} · ${product.qualityScore}/6`;
+  qualityMedal(product: DataProduct): QualityMedalLevel {
+    return product.qualityMedal ?? 'bronze';
   }
 
   simulationAlerts(product: DataProduct): Array<{ eventId: string; title: string; detail: string }> {

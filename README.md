@@ -132,6 +132,11 @@ business metadata, confirmed KOBY Graphify context, and confirmed mappings for t
 and every key field. The semantic profile is available as DCAT-oriented JSON-LD at
 `GET /api/v1/data-products/{id}/semantic-profile`; no SPARQL endpoint is exposed.
 
+The catalog list shows this canonical score as a compact Bronze, Silver, Gold, or Platinum medal.
+The read-only `Daten & Nutzung` product tab turns the same stored schema and semantic mappings into
+a searchable data dictionary and safe REST/PostgreSQL quickstarts. It never renders credentials or
+secret references and does not execute product-data requests from the catalog UI.
+
 Access decisions are deliberately two-phase: approval creates a timed PBAC/Rego draft and sets
 the request to `approved_policy_pending`; only successful publication to OPA and PostgreSQL sets
 it to `granted_original` or `granted_modified`. The DAAIF reference fixture can then be exercised

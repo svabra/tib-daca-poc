@@ -1,5 +1,5 @@
 import { HttpClient, HttpErrorResponse, HttpHeaders, HttpResponse } from '@angular/common/http';
-import { computed, inject, Injectable, signal } from '@angular/core';
+import { computed, effect, inject, Injectable, signal } from '@angular/core';
 import { catchError, forkJoin, map, Observable, of, switchMap, tap, throwError, timeout } from 'rxjs';
 import {
   AccessRequestSubmission,
@@ -16,6 +16,8 @@ import {
   OwnedAccessConsumer,
   PolicyDefinition,
   ProductActivityResponse,
+  ProductEffectiveAccessResponse,
+  ProductQualityWorkspace,
   ProvenanceEvent,
   StoredAccessRequest,
 } from './catalog.models';
@@ -32,13 +34,63 @@ type ProductWire = Partial<Omit<DataProduct, 'contact' | 'quality' | 'license'>>
   updateFrequency?: string | null;
   metadata?: Record<string, unknown>;
 };
-type EndpointWire = {
+
+type QualitySummary = Required<Pick<DataProduct, 'qualityMedal' | 'qualityScore'>>;
+
+const IDENTITY_LOADING_PRODUCT: DataProduct = {
+  ...FALLBACK_PRODUCT,
+  id: '',
+  globalId: '',
+  revision: 0,
+  title: 'Datenprodukt wird geladen',
+  description: 'Die sichtbaren Produktdaten werden für die gewählte Demo-Identität neu geladen.',
+  owner: '',
+  domain: '',
+  lifecycle: 'draft',
+  classification: 'internal',
+  keywords: [],
+  contact: '',
+  license: '',
+  quality: '',
+  qualityMedal: 'bronze',
+  qualityScore: 0,
+  updateFrequency: '',
+  additionalMetadata: { deliveryProtocols: [] },
+  endpoints: [],
+  updatedAt: '',
+};
+
+export function resolveProductQuality(
+  quality: ProductWire['quality'],
+  cached: Pick<DataProduct, 'qualityMedal' | 'qualityScore'> | undefined,
+  preserveCached: boolean,
+): QualitySummary {
+  const qualityObject = quality && typeof quality === 'object' ? quality : null;
+  const receivedMedal = qualityObject && ['bronze', 'silver', 'gold', 'platinum'].includes(String(qualityObject['medal']))
+    ? qualityObject['medal'] as QualitySummary['qualityMedal']
+    : undefined;
+  const scoreCandidate = qualityObject ? Number(qualityObject['score']) : Number.NaN;
+  const receivedScore = Number.isInteger(scoreCandidate) && scoreCandidate >= 0 && scoreCandidate <= 6
+    ? scoreCandidate
+    : undefined;
+
+  return preserveCached
+    ? {
+        qualityMedal: cached?.qualityMedal ?? receivedMedal ?? 'bronze',
+        qualityScore: cached?.qualityScore ?? receivedScore ?? 0,
+      }
+    : {
+        qualityMedal: receivedMedal ?? cached?.qualityMedal ?? 'bronze',
+        qualityScore: receivedScore ?? cached?.qualityScore ?? 0,
+      };
+}
+
+export type EndpointWire = {
   id: string;
   name: string;
   description?: string | null;
   protocol: 'http-rest' | 'postgresql';
   connection: Record<string, unknown>;
-  secretRef?: string | null;
 };
 type LineageWire = {
   productUrn: string;
@@ -96,12 +148,20 @@ export class CatalogApiService {
   private readonly http = inject(HttpClient);
   private readonly identity = inject(DemoIdentityService);
   private readonly productState = signal<DataProduct>(FALLBACK_PRODUCT);
+  private readonly productIdentityState = signal(this.identity.userId());
   private readonly productsState = signal<readonly DataProduct[]>(FALLBACK_PRODUCTS);
   private readonly ownerAccessRequestState = signal<readonly StoredAccessRequest[]>([]);
   private readonly ownedAccessConsumerState = signal<readonly OwnedAccessConsumer[]>(FALLBACK_OWNED_ACCESS_CONSUMERS);
   private readonly workflowTaskState = signal<readonly WorkflowTaskWire[]>([]);
+  private productsRefreshGeneration = 0;
+  private ownerInboxRefreshGeneration = 0;
+  private workflowTasksRefreshGeneration = 0;
+  private lastRefreshedIdentity = this.identity.userId();
+  private selectedProductId: string | null = null;
 
-  readonly product = this.productState.asReadonly();
+  readonly product = computed(() => this.productIdentityState() === this.identity.userId()
+    ? this.productState()
+    : IDENTITY_LOADING_PRODUCT);
   readonly products = this.productsState.asReadonly();
   readonly ownerAccessRequests = this.ownerAccessRequestState.asReadonly();
   readonly ownedAccessConsumers = this.ownedAccessConsumerState.asReadonly();
@@ -116,12 +176,28 @@ export class CatalogApiService {
   readonly etag = signal(`"${FALLBACK_PRODUCT.revision}"`);
 
   constructor() {
+    effect(() => {
+      const userId = this.identity.userId();
+      if (userId === this.lastRefreshedIdentity) return;
+      this.lastRefreshedIdentity = userId;
+      this.productsState.set([]);
+      this.ownerAccessRequestState.set([]);
+      this.ownedAccessConsumerState.set([]);
+      this.workflowTaskState.set([]);
+      this.setCurrentProduct(IDENTITY_LOADING_PRODUCT);
+      this.etag.set('"0"');
+      this.refreshProducts();
+      this.refreshOwnerAccessRequestInbox();
+      this.refreshWorkflowTasks();
+    });
     this.refreshProducts();
     this.refreshOwnerAccessRequestInbox();
     this.refreshWorkflowTasks();
   }
 
   refreshProducts(): void {
+    const refreshGeneration = ++this.productsRefreshGeneration;
+    const userId = this.identity.userId();
     this.loading.set(true);
     this.usingFallback.set(false);
     const identityHeaders = this.identity.headers();
@@ -142,36 +218,51 @@ export class CatalogApiService {
           accessConsumers,
         })),
         map(({ items, accessRequests, accessConsumers }) => ({
-          items: this.withAccessRequests(items, accessRequests),
+          items: this.withAccessRequests(items, accessRequests, userId),
           accessConsumers,
+          usingFallback: false,
         })),
-        catchError(() => {
-          this.usingFallback.set(true);
-          return of({ items: FALLBACK_PRODUCTS, accessConsumers: FALLBACK_OWNED_ACCESS_CONSUMERS });
-        }),
+        catchError(() => of({
+          items: FALLBACK_PRODUCTS,
+          accessConsumers: FALLBACK_OWNED_ACCESS_CONSUMERS,
+          usingFallback: true,
+        })),
       )
-      .subscribe(({ items, accessConsumers }) => {
-        const products = items.length > 0 ? items : FALLBACK_PRODUCTS;
+      .subscribe(({ items, accessConsumers, usingFallback }) => {
+        if (refreshGeneration !== this.productsRefreshGeneration) return;
+        const products = items;
+        this.usingFallback.set(usingFallback);
         this.productsState.set(products);
         this.ownedAccessConsumerState.set(accessConsumers);
-        this.productState.set(products[0]);
-        this.etag.set(`"${products[0].revision}"`);
         this.loading.set(false);
-        if (!this.usingFallback()) this.hydrateProduct(products[0].id);
+        const selectedProduct = this.selectedProductId
+          ? products.find((product) => product.id === this.selectedProductId)
+          : products[0];
+        if (selectedProduct) {
+          this.setCurrentProduct(selectedProduct);
+          this.etag.set(`"${selectedProduct.revision}"`);
+        }
+        if (!usingFallback && this.selectedProductId) {
+          this.hydrateProduct(this.selectedProductId);
+        } else if (!usingFallback && selectedProduct) {
+          this.hydrateProduct(selectedProduct.id);
+        }
       });
   }
 
   selectProduct(id: string | null | undefined): void {
     if (!id) return;
+    this.selectedProductId = id;
     const cached = this.productsState().find((product) => product.id === id);
     if (cached) {
-      this.productState.set(cached);
+      this.setCurrentProduct(cached);
       this.etag.set(`"${cached.revision}"`);
     }
     this.hydrateProduct(id);
   }
 
   loadProduct(id: string): Observable<DataProduct> {
+    const requestedUserId = this.identity.userId();
     const headers = this.identity.headers();
     return forkJoin({
       product: this.http.get<ProductWire>(
@@ -185,14 +276,18 @@ export class CatalogApiService {
     }).pipe(
       timeout(3000),
       map((result) => {
+        if (this.identity.userId() !== requestedUserId) {
+          throw new Error('The active demo identity changed while the product was loading.');
+        }
         if (!result.product.body || result.product.body.id !== id) {
           throw new Error('The catalog returned a different or empty product.');
         }
         const product = this.normalizeProduct(
           result.product.body,
-          result.endpoints.map((endpoint) => this.normalizeEndpoint(endpoint)),
+          result.endpoints.map((endpoint) => normalizeEndpoint(endpoint)),
+          true,
         );
-        this.productState.set(product);
+        this.setCurrentProduct(product);
         this.productsState.update((products) => {
           const existing = products.some((item) => item.id === product.id);
           return existing
@@ -235,8 +330,8 @@ export class CatalogApiService {
       .pipe(
         map((response: HttpResponse<ProductWire>) => {
           if (!response.body) throw new Error('The catalog returned an empty update response.');
-          const updated = this.normalizeProduct(response.body);
-          this.productState.set(updated);
+          const updated = this.normalizeProduct(response.body, undefined, true);
+          this.setCurrentProduct(updated);
           this.productsState.update((products) => products.map((product) => (product.id === updated.id ? updated : product)));
           this.etag.set(response.headers.get('etag') ?? `"${updated.revision}"`);
           this.usingFallback.set(false);
@@ -259,23 +354,21 @@ export class CatalogApiService {
           const products = this.withAccessRequests(this.productsState(), [created]);
           this.productsState.set(products);
           const selected = products.find((product) => product.id === this.productState().id);
-          if (selected) this.productState.set(selected);
+          if (selected) this.setCurrentProduct(selected);
         }),
         catchError((error: unknown) => throwError(() => this.describeAccessRequestError(error))),
       );
   }
 
-  loadMyAccessRequests(productId: string): Observable<readonly StoredAccessRequest[]> {
+  loadMyAccessRequests(productId: string, strict = false): Observable<readonly StoredAccessRequest[]> {
     const headers = this.identity.headers();
-    return this.http
+    const request = this.http
       .get<StoredAccessRequest[]>(
         `/api/v1/data-products/${encodeURIComponent(productId)}/access-requests/mine`,
         { headers },
       )
-      .pipe(
-        timeout(3000),
-        catchError(() => of([])),
-      );
+      .pipe(timeout(3000));
+    return strict ? request : request.pipe(catchError(() => of([])));
   }
 
   loadOwnerAccessRequestInbox(): Observable<readonly StoredAccessRequest[]> {
@@ -289,17 +382,23 @@ export class CatalogApiService {
   }
 
   refreshOwnerAccessRequestInbox(): void {
+    const refreshGeneration = ++this.ownerInboxRefreshGeneration;
     this.ownerAccessRequestLoading.set(true);
     this.loadOwnerAccessRequestInbox().subscribe((requests) => {
+      if (refreshGeneration !== this.ownerInboxRefreshGeneration) return;
       this.ownerAccessRequestState.set(requests);
       this.ownerAccessRequestLoading.set(false);
     });
   }
 
   refreshWorkflowTasks(): void {
+    const refreshGeneration = ++this.workflowTasksRefreshGeneration;
     this.http.get<WorkflowTaskWire[]>('/api/v1/tasks/mine', { headers: this.identity.headers() })
       .pipe(timeout(3000), catchError(() => of([])))
-      .subscribe((tasks) => this.workflowTaskState.set(tasks));
+      .subscribe((tasks) => {
+        if (refreshGeneration !== this.workflowTasksRefreshGeneration) return;
+        this.workflowTaskState.set(tasks);
+      });
   }
 
   identityUserId(): string { return this.identity.userId(); }
@@ -353,6 +452,13 @@ export class CatalogApiService {
       }),
       catchError(() => of({ nodes: FALLBACK_NODES, edges: FALLBACK_EDGES, provenance: FALLBACK_PROVENANCE })),
     );
+  }
+
+  loadProductQuality(productId: string): Observable<ProductQualityWorkspace> {
+    return this.http.get<ProductQualityWorkspace>(
+      `/api/v1/data-products/${encodeURIComponent(productId)}/quality`,
+      { headers: this.identity.headers() },
+    ).pipe(timeout(3000));
   }
 
   loadProductActivity(productId: string): Observable<ProductActivityResponse> {
@@ -532,7 +638,14 @@ export class CatalogApiService {
     return this.http.get<PolicyWire>(
       `/api/v1/data-products/${encodeURIComponent(productId)}/policies/latest`,
       { headers: this.identity.headers() },
-    );
+    ).pipe(timeout(3000));
+  }
+
+  loadEffectiveAccess(productId: string): Observable<ProductEffectiveAccessResponse> {
+    return this.http.get<ProductEffectiveAccessResponse>(
+      `/api/v1/data-products/${encodeURIComponent(productId)}/effective-access`,
+      { headers: this.identity.headers() },
+    ).pipe(timeout(3000));
   }
 
   publishPolicy(productId: string, policyId: string, revision: number): Observable<PolicyWire> {
@@ -552,8 +665,23 @@ export class CatalogApiService {
     this.loadProduct(id).pipe(catchError(() => of(null))).subscribe();
   }
 
-  private normalizeProduct(product: ProductWire, endpoints?: EndpointDescriptor[]): DataProduct {
+  private setCurrentProduct(product: DataProduct): void {
+    this.productState.set(product);
+    this.productIdentityState.set(this.identity.userId());
+  }
+
+  private normalizeProduct(
+    product: ProductWire,
+    endpoints?: EndpointDescriptor[],
+    preserveCachedQuality = false,
+  ): DataProduct {
     const qualityObject = product.quality && typeof product.quality === 'object' ? product.quality : null;
+    const cachedProduct = this.productsState().find((item) => item.id === product.id);
+    const qualitySummary = resolveProductQuality(
+      product.quality,
+      cachedProduct,
+      preserveCachedQuality,
+    );
     const quality = typeof product.quality === 'string'
       ? product.quality
       : product.quality
@@ -566,48 +694,18 @@ export class CatalogApiService {
       contact: typeof product.contact === 'string' ? product.contact : product.contact?.email ?? FALLBACK_PRODUCT.contact,
       license: product.license ?? FALLBACK_PRODUCT.license,
       quality,
-      qualityMedal: qualityObject && ['bronze', 'silver', 'gold', 'platinum'].includes(String(qualityObject['medal']))
-        ? qualityObject['medal'] as DataProduct['qualityMedal']
-        : undefined,
-      qualityScore: qualityObject && Number.isFinite(Number(qualityObject['score'])) ? Number(qualityObject['score']) : undefined,
+      ...qualitySummary,
       updateFrequency: product.updateFrequency ?? FALLBACK_PRODUCT.updateFrequency,
       additionalMetadata: product.additionalMetadata ?? product.metadata ?? FALLBACK_PRODUCT.additionalMetadata,
-      endpoints: endpoints ?? product.endpoints ?? FALLBACK_PRODUCT.endpoints,
+      endpoints: endpoints ?? product.endpoints ?? [],
       updatedAt: product.updatedAt ?? FALLBACK_PRODUCT.updatedAt,
-    };
-  }
-
-  private normalizeEndpoint(endpoint: EndpointWire): EndpointDescriptor {
-    const connection = endpoint.connection;
-    if (endpoint.protocol === 'http-rest') {
-      const baseUrl = String(connection['baseUrl'] ?? '');
-      const path = String(connection['path'] ?? '');
-      return {
-        id: endpoint.id,
-        protocol: 'http-rest',
-        title: endpoint.name,
-        method: String(connection['method'] ?? 'GET'),
-        url: `${baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`,
-        mediaType: 'application/json',
-        secretRef: endpoint.secretRef ?? undefined,
-      };
-    }
-    return {
-      id: endpoint.id,
-      protocol: 'postgresql',
-      title: endpoint.name,
-      host: String(connection['host'] ?? 'postgres'),
-      port: Number(connection['port'] ?? 5432),
-      database: String(connection['database'] ?? ''),
-      schema: String(connection['schema'] ?? ''),
-      relation: String(connection['relation'] ?? ''),
-      secretRef: endpoint.secretRef ?? undefined,
     };
   }
 
   private withAccessRequests(
     products: readonly DataProduct[],
     requests: readonly StoredAccessRequest[],
+    userId = this.identity.userId(),
   ): readonly DataProduct[] {
     const latestByProduct = new Map<string, StoredAccessRequest>();
     for (const request of requests) {
@@ -631,7 +729,7 @@ export class CatalogApiService {
           ...metadata,
           catalogUsage: {
             ...usage,
-            requestedByUserIds: [...new Set([...requestedIds, this.identity.userId()])],
+            requestedByUserIds: [...new Set([...requestedIds, userId])],
           },
           accessRequest: {
             requestId: request.requestNumber,
@@ -674,4 +772,41 @@ export class CatalogApiService {
     }
     return error instanceof Error ? error : new Error('Der Antrag konnte nicht gespeichert werden.');
   }
+}
+
+export function normalizeEndpoint(endpoint: EndpointWire): EndpointDescriptor {
+  const connection = endpoint.connection;
+  if (endpoint.protocol === 'http-rest') {
+    const baseUrl = String(connection['baseUrl'] ?? '');
+    const path = String(connection['path'] ?? '');
+    const method = connection['method'] === 'POST' ? 'POST' : 'GET';
+    const mediaType = typeof connection['mediaType'] === 'string' && connection['mediaType'].trim()
+      ? connection['mediaType'].trim()
+      : 'application/json';
+    return {
+      id: endpoint.id,
+      protocol: 'http-rest',
+      title: endpoint.name,
+      method,
+      url: `${baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`,
+      mediaType,
+    };
+  }
+  const sslMode = connection['sslMode'];
+  return {
+    id: endpoint.id,
+    protocol: 'postgresql',
+    title: endpoint.name,
+    host: String(connection['host'] ?? 'postgres'),
+    port: Number(connection['port'] ?? 5432),
+    database: String(connection['database'] ?? ''),
+    schema: String(connection['schema'] ?? ''),
+    relation: String(connection['relation'] ?? ''),
+    sslMode: sslMode === 'disable'
+      || sslMode === 'require'
+      || sslMode === 'verify-ca'
+      || sslMode === 'verify-full'
+      ? sslMode
+      : 'prefer',
+  };
 }

@@ -26,6 +26,17 @@ def test_seeded_product_and_health_are_available(client):
     assert len(page.json()["items"]) == 7
     assert page.json()["items"][0]["title"] == "ESTV-Steuerstatistik nach Kanton"
     assert page.json()["items"][0]["metadata"]["catalogUsage"]["responsibleUserIds"] == ["kassandra.valdata"]
+    for item in page.json()["items"]:
+        assert 0 <= item["quality"]["score"] <= 6
+        assert item["quality"]["medal"] == (
+            "platinum"
+            if item["quality"]["score"] == 6
+            else "gold"
+            if item["quality"]["score"] == 5
+            else "silver"
+            if item["quality"]["score"] == 4
+            else "bronze"
+        )
     assert "nextCursor" in page.json()
 
     response = client.get(product_url(), headers={"X-Request-ID": "test-request"})
@@ -462,6 +473,53 @@ def test_endpoint_union_lineage_and_provenance(client):
     assert len(lineage.json()["edges"]) == 2
     provenance = client.get(f"{product_url()}/provenance")
     assert [event["sequence"] for event in provenance.json()] == [1, 2]
+
+
+def test_endpoint_reads_hide_secret_references_from_public_and_consumer_views(
+    client, session_factory
+):
+    from daca_catalog.models import Endpoint
+    from sqlalchemy import select
+
+    with session_factory() as session:
+        stored = session.scalar(
+            select(Endpoint).where(Endpoint.secret_ref.is_not(None))
+        )
+        assert stored is not None
+        assert stored.secret_ref == "env://ESTV_POSTGRES_CREDENTIALS"
+        stored.connection = {
+            **stored.connection,
+            "password": "must-never-leave-the-catalog",
+            "username": "internal-role",
+        }
+        session.commit()
+
+    for headers in (
+        {"X-DaCa-User": ""},
+        {"X-DaCa-User": "beat.stalder"},
+    ):
+        response = client.get(f"{product_url()}/endpoints", headers=headers)
+        assert response.status_code == 200
+        serialized = json.dumps(response.json())
+        assert "secretRef" not in serialized
+        assert "ESTV_POSTGRES_CREDENTIALS" not in serialized
+        assert "must-never-leave-the-catalog" not in serialized
+        assert "internal-role" not in serialized
+        for endpoint in response.json():
+            assert not {
+                "apiKey",
+                "authorization",
+                "headers",
+                "password",
+                "token",
+                "user",
+                "username",
+            }.intersection(endpoint["connection"])
+
+    schemas = client.get("/openapi.json").json()["components"]["schemas"]
+    assert "secretRef" not in schemas["HttpEndpointReadResponse"]["properties"]
+    assert "secretRef" not in schemas["PostgreSQLEndpointReadResponse"]["properties"]
+    assert "secretRef" in schemas["HttpEndpointResponse"]["properties"]
 
 
 def test_not_found_is_a_problem_document(client):
