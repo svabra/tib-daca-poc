@@ -31,6 +31,11 @@ export const POC_GUIDE_CAPABILITIES: readonly PocGuideCapability[] = [
     status: 'implemented',
   },
   {
+    title: 'Service Level nachvollziehbar vereinbaren',
+    description: 'Versionierte SLA und Nutzungsbedingungen zeigen Gültigkeit, Kontrollperson, Supportziel und fachliche Grenzen; eine zweite Person gibt jede Fassung frei.',
+    status: 'implemented',
+  },
+  {
     title: 'I14Y und BAR nachvollziehbar konfigurieren',
     description: 'I14Y erzeugt im PoC eine simulierte Outbox; BAR speichert Evidenz, startet aber keinen Archivierungsauftrag.',
     status: 'simulation',
@@ -78,7 +83,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
       'Beat Stalder besitzt eine aktive Freigabe für Montag bis Freitag, 07:00–19:00 Uhr Europe/Zurich.',
       'DaCa und der von DAAIF bereitgestellte REST-Endpunkt sind erreichbar.',
     ],
-    outcome: 'Beat versteht Inhalt, Qualität und Schlüssel des Datenprodukts und kann den registrierten REST-Endpunkt mit einem sicheren Quickstart selbst verwenden.',
+    outcome: 'Beat versteht Inhalt, Qualität, SLA, Schlüssel und Nutzungsgrenzen des Datenprodukts und kann den registrierten REST-Endpunkt mit einem sicheren Quickstart selbst verwenden.',
     repeatability: 'Die Journey ist vollständig read-only und beliebig wiederholbar. Sie verändert weder Metadaten noch Freigaben oder Produktdaten; ein Reset ist nicht nötig.',
     steps: [
       {
@@ -130,6 +135,24 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
         }],
       },
       {
+        title: 'SLA und Nutzungsgrenzen einordnen',
+        description: 'Öffnen Sie «SLA & Nutzungsbedingungen». Da diese Journey selbst keine SLA publiziert, sehen Sie deterministisch die «DaCa PoC-Standardvorlage». Prüfen Sie Data Owner, Kontrollperson, Supportfenster, Ziel für die erste Rückmeldung sowie Nutzungsgrenzen.',
+        status: 'implemented',
+        actions: [{
+          label: 'SLA & Nutzungsbedingungen öffnen',
+          target: 'internal',
+          path: `/products/${DATA_ANALYST_JOURNEY_PRODUCT_ID}/sla`,
+          demoUserId: 'beat.stalder',
+        }],
+        checkpoint: 'Beat erkennt die unverbindliche PoC-Basis und versteht: Eine später im Vier-Augen-Prinzip publizierte, zeitlich gültige Produkt-SLA würde sie ersetzen. Weder Katalogsichtbarkeit noch SLA erteilen Datenzugriff.',
+        warning: 'Die Angaben sind eine unverbindliche PoC-Orientierung und weder gesetzlicher Bundesstandard noch Rechts- oder Produktionsfreigabe.',
+        screenshots: [{
+          src: `${IMAGE_ROOT}/journey-01-service-level.webp`,
+          alt: 'DaCa SLA-Seite des Gewerbesteuer-Datenprodukts mit PoC-Standardvorlage, Kontrollperson, Supportziel und Nutzungsgrenzen.',
+          caption: 'Die nicht persistierte PoC-Standardvorlage bietet Orientierung, bis eine freigegebene Produkt-SLA gilt; die Zugriffspolicy bleibt technisch getrennt.',
+        }],
+      },
+      {
         title: 'REST-Quickstart vorbereiten',
         description: 'Prüfen Sie im Endpoint-Quickstart Methode, registrierte URL und Antwortformat. Kopieren Sie wahlweise nur die URL oder den vorbereiteten curl-Aufruf für Beat.',
         status: 'implemented',
@@ -172,7 +195,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
     systems: ['DAAIF', 'DaCa', 'OPA'],
     roles: [
       { name: 'Joel Ruod', responsibility: 'Data Analyst und Data Owner' },
-      { name: 'Thomas Kriegli', responsibility: 'Publication Approver' },
+      { name: 'Thomas Kriegli', responsibility: 'Gespeicherte Kontrollperson und Publication Approver' },
       { name: 'Beat Stalder', responsibility: 'Data Consumer · Kanton St. Gallen' },
       { name: 'Daniel Aebischer', responsibility: 'Data Consumer · Bundestresorerie' },
     ],
@@ -180,6 +203,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
       'DAAIF ist erreichbar und der Journey-Loader wurde noch nicht bereinigt.',
       'DaCa Catalog API, Sample Data Product und OPA sind bereit.',
       'Der DAAIF-Publish-Preview zeigt ein Relation-Schema mit mindestens einem Feld.',
+      'Thomas Kriegli ist am Datenprodukt als Kontrollperson für sämtliche Vier-Augen-Prüfungen gespeichert.',
     ],
     outcome: 'Ein in DaCa freigegebenes Datenprodukt, dessen DAAIF-REST-Endpunkt nur berechtigten Personen innerhalb der Bürozeiten Daten liefert.',
     repeatability: 'Die stabile Produktidentität wird bei Wiederholungen über den DAAIF-Overwrite-/Replay-Pfad weiterverwendet. Es gibt keinen globalen Cross-App-Reset.',
@@ -254,9 +278,9 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
       },
       {
         title: 'Governance-Submission übermitteln',
-        description: 'Erstellen Sie Grants für Kanton St. Gallen, EFD–EFV/Bundestresorerie und Thomas Kriegli. Verwenden Sie Montag bis Freitag, 07:00–19:00 Europe/Zurich, I14Y und 20 Jahre BAR-Evidenz.',
+        description: 'Erstellen Sie Grants für Kanton St. Gallen, EFD–EFV/Bundestresorerie und Thomas Kriegli. Verwenden Sie Montag bis Freitag, 07:00–19:00 Europe/Zurich, I14Y und 20 Jahre BAR-Evidenz. DaCa weist die Prüfung der am Produkt gespeicherten Kontrollperson Thomas zu.',
         status: 'implemented',
-        checkpoint: 'Die Submission steht auf «pending_approval» und nennt Thomas als Approver.',
+        checkpoint: 'Die Submission steht auf «pending_approval» und nennt Thomas als gespeicherte Kontrollperson und Approver.',
       },
       {
         title: 'Vier-Augen-Freigabe durchführen',

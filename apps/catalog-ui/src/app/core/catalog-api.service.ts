@@ -57,6 +57,7 @@ const IDENTITY_LOADING_PRODUCT: DataProduct = {
   updateFrequency: '',
   additionalMetadata: { deliveryProtocols: [] },
   endpoints: [],
+  createdAt: '',
   updatedAt: '',
 };
 
@@ -129,13 +130,14 @@ export type PolicyWire = {
 
 export interface WorkflowTaskWire {
   id: string;
-  taskType: 'metadata_quality' | 'access_governance' | 'access_request_review' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed' | 'publication_approval' | 'governance_correction';
+  taskType: 'metadata_quality' | 'access_governance' | 'access_request_review' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed' | 'publication_approval' | 'governance_correction' | 'service_level_approval';
   status: 'open' | 'in_progress' | 'completed';
   assigneeUserId: string;
   dataProductId: string;
   accessRequestId: string | null;
   simulationEventId?: string | null;
   governanceSubmissionId?: string | null;
+  serviceLevelRevisionId?: string | null;
   title: string;
   detail: string;
   createdAt: string;
@@ -698,6 +700,7 @@ export class CatalogApiService {
       updateFrequency: product.updateFrequency ?? FALLBACK_PRODUCT.updateFrequency,
       additionalMetadata: product.additionalMetadata ?? product.metadata ?? FALLBACK_PRODUCT.additionalMetadata,
       endpoints: endpoints ?? product.endpoints ?? [],
+      createdAt: product.createdAt ?? FALLBACK_PRODUCT.createdAt,
       updatedAt: product.updatedAt ?? FALLBACK_PRODUCT.updatedAt,
     };
   }

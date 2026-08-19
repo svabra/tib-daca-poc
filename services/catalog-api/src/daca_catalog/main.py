@@ -18,6 +18,7 @@ from sqlalchemy import delete, exists, or_, select, text, update
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
 from . import get_runtime_version
+from .control_people import assign_default_control_person, is_active_publication_approver
 from .database import default_session_factory, get_session
 from .governance import (
     bind_access_request_fulfillments,
@@ -54,6 +55,7 @@ from .models import (
     ProductQualityAssessment,
     ProductSemanticMapping,
     ProvenanceEvent,
+    ServiceLevelRevision,
     WorkflowTask,
     utc_now,
 )
@@ -77,6 +79,8 @@ from .schemas import (
     AccessSettingUpsert,
     AdministrativeOrganizationResponse,
     AuditEventResponse,
+    ControlPersonUpdate,
+    ControlPersonUpdateResponse,
     DataProductPage,
     DataProductPatch,
     DataProductQualitySummary,
@@ -124,10 +128,59 @@ from .schemas import (
     ProvenanceEventResponse,
     SemanticMappingResponse,
     SemanticMappingsUpdate,
+    ServiceLevelDecisionCreate,
+    ServiceLevelRevisionListResponse,
+    ServiceLevelRevisionResponse,
+    ServiceLevelRevisionWrite,
+    ServiceLevelSummaryResponse,
     WorkflowTaskResponse,
     to_camel,
 )
 from .seed import seed_catalog
+from .service_levels import (
+    actor_can_view_revision as can_view_service_level_revision,
+)
+from .service_levels import (
+    actor_is_revision_privileged as is_service_level_revision_privileged,
+)
+from .service_levels import (
+    audit_control_person_change,
+    control_person_change_blocked,
+    product_control_person,
+)
+from .service_levels import (
+    create_revision as create_service_level_revision,
+)
+from .service_levels import (
+    decide_revision as decide_service_level_revision,
+)
+from .service_levels import (
+    lock_product as lock_service_level_product,
+)
+from .service_levels import (
+    lock_revision as lock_service_level_revision,
+)
+from .service_levels import (
+    revision_etag as service_level_etag,
+)
+from .service_levels import (
+    revision_response as service_level_revision_response,
+)
+from .service_levels import (
+    submit_revision as submit_service_level_revision,
+)
+from .service_levels import (
+    summary_response as service_level_summary_response,
+)
+from .service_levels import (
+    update_revision as update_service_level_revision,
+)
+from .service_levels import (
+    visible_revisions as visible_service_level_revisions,
+)
+from .service_levels import (
+    withdraw_revision as withdraw_service_level_revision,
+)
 from .settings import Settings, get_settings
 from .workflow_seed import ONTOLOGY_URI, stable_id, term_uri
 
@@ -701,8 +754,10 @@ def requires_four_eyes(session: Session, product: DataProduct) -> bool:
             MetadataPublication.publication_mode == "governance_review",
         )
     )
-    owner = session.get(DemoUser, product.owner_user_id) if product.owner_user_id else None
-    return publication is not None and owner is not None and bool(owner.supervisor_user_id)
+    # Four-eyes is a property of the publication contract. A missing or
+    # ineligible controller must fail closed during submission; it must never
+    # reopen the legacy single-person publication path.
+    return publication is not None
 
 
 def reject_legacy_governance_path(session: Session, product: DataProduct) -> None:
@@ -963,6 +1018,7 @@ def data_product_summary(
         update_frequency=product.update_frequency,
         metadata=product.extra_metadata,
         quality=DataProductQualitySummary(score=quality.score, medal=quality.medal),
+        created_at=product.created_at,
         updated_at=product.updated_at,
     )
 
@@ -1469,6 +1525,7 @@ def create_router() -> APIRouter:
         )
         session.add(product)
         session.flush()
+        assign_default_control_person(session, product)
         endpoint = body.technical_metadata.endpoint
         session.add(
             Endpoint(
@@ -3282,6 +3339,268 @@ def create_router() -> APIRouter:
         )
 
     @router.get(
+        "/data-products/{product_id}/service-level",
+        response_model=ServiceLevelSummaryResponse,
+        tags=["service level"],
+    )
+    def get_service_level(
+        product_id: uuid.UUID, session: SessionDep, actor: OptionalActorDep
+    ) -> ServiceLevelSummaryResponse:
+        product = find_product(session, product_id)
+        require_product_view(session, product, actor)
+        return service_level_summary_response(session, product, actor)
+
+    @router.get(
+        "/data-products/{product_id}/service-level/revisions",
+        response_model=ServiceLevelRevisionListResponse,
+        tags=["service level"],
+    )
+    def list_service_level_revisions(
+        product_id: uuid.UUID,
+        response: Response,
+        session: SessionDep,
+        actor: OptionalActorDep,
+    ) -> ServiceLevelRevisionListResponse:
+        product = find_product(session, product_id)
+        require_product_view(session, product, actor)
+        rows = visible_service_level_revisions(session, product, actor)
+        rows_by_id = {row.id: row for row in rows}
+        privileged = bool(
+            actor is not None
+            and (
+                actor == product.owner_user_id
+                or any(row.control_person_user_id == actor for row in rows)
+            )
+        )
+        latest_visible = max((row.revision for row in rows), default=0)
+        etag = service_level_etag(latest_visible)
+        response.headers["ETag"] = etag
+        return ServiceLevelRevisionListResponse(
+            items=[
+                service_level_revision_response(
+                    session,
+                    product,
+                    row,
+                    privileged=is_service_level_revision_privileged(
+                        product, row, actor
+                    ),
+                    rows_by_id=rows_by_id,
+                )
+                for row in rows
+            ],
+            detail_level="privileged" if privileged else "public",
+            latest_revision=latest_visible,
+            etag=etag,
+        )
+
+    @router.get(
+        "/data-products/{product_id}/service-level/revisions/{revision_id}",
+        response_model=ServiceLevelRevisionResponse,
+        tags=["service level"],
+    )
+    def get_service_level_revision(
+        product_id: uuid.UUID,
+        revision_id: uuid.UUID,
+        response: Response,
+        session: SessionDep,
+        actor: OptionalActorDep,
+    ) -> ServiceLevelRevisionResponse:
+        product = find_product(session, product_id)
+        row = session.scalar(
+            select(ServiceLevelRevision).where(
+                ServiceLevelRevision.id == revision_id,
+                ServiceLevelRevision.data_product_id == product_id,
+            )
+        )
+        if row is None or not can_view_service_level_revision(product, row, actor):
+            raise HTTPException(404, "SLA revision not found")
+        require_product_view(session, product, actor)
+        response.headers["ETag"] = service_level_etag(row.lock_version)
+        return service_level_revision_response(
+            session,
+            product,
+            row,
+            privileged=is_service_level_revision_privileged(product, row, actor),
+        )
+
+    @router.post(
+        "/data-products/{product_id}/service-level/revisions",
+        response_model=ServiceLevelRevisionResponse,
+        status_code=201,
+        tags=["service level"],
+    )
+    def create_product_service_level_revision(
+        product_id: uuid.UUID,
+        body: ServiceLevelRevisionWrite,
+        response: Response,
+        session: SessionDep,
+        actor: ActorDep,
+        if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    ) -> ServiceLevelRevisionResponse:
+        product = lock_service_level_product(session, product_id)
+        row = create_service_level_revision(session, product, body, actor, if_match)
+        session.flush()
+        payload = service_level_revision_response(
+            session, product, row, privileged=True
+        )
+        session.commit()
+        response.headers["ETag"] = service_level_etag(row.lock_version)
+        return payload
+
+    @router.put(
+        "/data-products/{product_id}/service-level/revisions/{revision_id}",
+        response_model=ServiceLevelRevisionResponse,
+        tags=["service level"],
+    )
+    def update_product_service_level_revision(
+        product_id: uuid.UUID,
+        revision_id: uuid.UUID,
+        body: ServiceLevelRevisionWrite,
+        response: Response,
+        session: SessionDep,
+        actor: ActorDep,
+        if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    ) -> ServiceLevelRevisionResponse:
+        product = lock_service_level_product(session, product_id)
+        row = lock_service_level_revision(session, product_id, revision_id)
+        update_service_level_revision(session, product, row, body, actor, if_match)
+        session.flush()
+        payload = service_level_revision_response(
+            session, product, row, privileged=True
+        )
+        session.commit()
+        response.headers["ETag"] = service_level_etag(row.lock_version)
+        return payload
+
+    @router.post(
+        "/data-products/{product_id}/service-level/revisions/{revision_id}/submit",
+        response_model=ServiceLevelRevisionResponse,
+        tags=["service level"],
+    )
+    def submit_product_service_level_revision(
+        product_id: uuid.UUID,
+        revision_id: uuid.UUID,
+        response: Response,
+        session: SessionDep,
+        actor: ActorDep,
+        if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    ) -> ServiceLevelRevisionResponse:
+        product = lock_service_level_product(session, product_id)
+        row = lock_service_level_revision(session, product_id, revision_id)
+        submit_service_level_revision(session, product, row, actor, if_match)
+        session.flush()
+        payload = service_level_revision_response(
+            session, product, row, privileged=True
+        )
+        session.commit()
+        response.headers["ETag"] = service_level_etag(row.lock_version)
+        return payload
+
+    @router.post(
+        "/data-products/{product_id}/service-level/revisions/{revision_id}/withdraw",
+        response_model=ServiceLevelRevisionResponse,
+        tags=["service level"],
+    )
+    def withdraw_product_service_level_revision(
+        product_id: uuid.UUID,
+        revision_id: uuid.UUID,
+        response: Response,
+        session: SessionDep,
+        actor: ActorDep,
+        if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    ) -> ServiceLevelRevisionResponse:
+        product = lock_service_level_product(session, product_id)
+        row = lock_service_level_revision(session, product_id, revision_id)
+        withdraw_service_level_revision(session, product, row, actor, if_match)
+        session.flush()
+        payload = service_level_revision_response(
+            session, product, row, privileged=True
+        )
+        session.commit()
+        response.headers["ETag"] = service_level_etag(row.lock_version)
+        return payload
+
+    @router.post(
+        "/data-products/{product_id}/service-level/revisions/{revision_id}/decision",
+        response_model=ServiceLevelRevisionResponse,
+        tags=["service level"],
+    )
+    def decide_product_service_level_revision(
+        product_id: uuid.UUID,
+        revision_id: uuid.UUID,
+        body: ServiceLevelDecisionCreate,
+        response: Response,
+        session: SessionDep,
+        actor: ActorDep,
+        if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    ) -> ServiceLevelRevisionResponse:
+        product = lock_service_level_product(session, product_id)
+        row = lock_service_level_revision(session, product_id, revision_id)
+        decide_service_level_revision(session, product, row, body, actor, if_match)
+        session.flush()
+        payload = service_level_revision_response(
+            session, product, row, privileged=True
+        )
+        session.commit()
+        response.headers["ETag"] = service_level_etag(row.lock_version)
+        return payload
+
+    @router.put(
+        "/data-products/{product_id}/control-person",
+        response_model=ControlPersonUpdateResponse,
+        tags=["service level"],
+    )
+    def update_product_control_person(
+        product_id: uuid.UUID,
+        body: ControlPersonUpdate,
+        response: Response,
+        session: SessionDep,
+        actor: ActorDep,
+        if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    ) -> ControlPersonUpdateResponse:
+        product = lock_service_level_product(session, product_id)
+        require_product_owner(product, actor)
+        require_revision(if_match, product.revision)
+        candidate = session.get(DemoUser, body.control_person_user_id)
+        if not is_active_publication_approver(candidate):
+            raise HTTPException(
+                422, "controlPersonUserId must identify an active publication approver"
+            )
+        if candidate is None or candidate.id == product.owner_user_id:
+            raise HTTPException(409, "The control person must differ from the data owner")
+        if candidate.id == product.control_person_user_id:
+            safe_controller = product_control_person(session, product)
+            if safe_controller is None:
+                raise HTTPException(409, "The current control person is unavailable")
+            response.headers["ETag"] = etag_for_revision(product.revision)
+            return ControlPersonUpdateResponse(
+                data_product_id=product.id,
+                product_revision=product.revision,
+                control_person=safe_controller,
+            )
+        if control_person_change_blocked(session, product.id):
+            raise HTTPException(
+                409,
+                "The control person cannot change while an approval workflow is active",
+            )
+        product.control_person_user_id = candidate.id
+        product.revision += 1
+        product.updated_at = utc_now()
+        audit_control_person_change(session, product, actor)
+        session.flush()
+        safe_controller = product_control_person(session, product)
+        if safe_controller is None:
+            raise HTTPException(409, "The selected control person is unavailable")
+        payload = ControlPersonUpdateResponse(
+            data_product_id=product.id,
+            product_revision=product.revision,
+            control_person=safe_controller,
+        )
+        session.commit()
+        response.headers["ETag"] = etag_for_revision(product.revision)
+        return payload
+
+    @router.get(
         "/data-products/{product_id}/activity",
         response_model=ProductActivityResponse,
         tags=["audit"],
@@ -3312,7 +3631,7 @@ def create_router() -> APIRouter:
             session.scalars(
                 select(AuditEvent)
                 .where(
-                    AuditEvent.resource_type.in_(("data-product", "policy")),
+                    AuditEvent.resource_type.in_(("data-product", "policy", "service-level")),
                     AuditEvent.resource_id == str(product_id),
                 )
                 .order_by(AuditEvent.occurred_at.desc(), AuditEvent.id.desc())
@@ -3606,6 +3925,7 @@ def create_router() -> APIRouter:
         if_match: Annotated[str | None, Header(alias="If-Match")] = None,
     ) -> PolicyRevisionResponse:
         product = find_product(session, product_id)
+        reject_legacy_governance_path(session, product)
         source = session.get(PolicyRevision, policy_id)
         current = latest_policy(session, product_id)
         if source is None or source.data_product_id != product_id:

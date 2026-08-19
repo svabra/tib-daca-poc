@@ -28,7 +28,7 @@ import { StoredAccessRequest } from '../../core/catalog.models';
         <div class="owner-tasks-section-heading"><div><p class="daca-eyebrow"><daca-glossary-term term="DAAIF" /> → <daca-glossary-term term="DaCa" /></p><h2 id="workflow-title">Qualität, Governance und Alerts</h2></div><span>{{ workflowTasks().length }}</span></div>
         <div class="owner-task-list">
           @for (task of workflowTasks(); track task.id) {
-            <article class="daca-card owner-task-card" [class.is-simulation-alert]="task.taskType.startsWith('simulation_')"><div class="owner-task-priority" aria-hidden="true"></div><div class="owner-task-main"><div><span>{{ taskLabel(task.taskType) }}</span><time>{{ task.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</time></div><h3>{{ task.title }}</h3><p>{{ task.detail }}</p></div><a class="daca-button" [routerLink]="taskRoute(task)">Aufgabe öffnen</a></article>
+            <article class="daca-card owner-task-card" [class.is-simulation-alert]="task.taskType.startsWith('simulation_')"><div class="owner-task-priority" aria-hidden="true"></div><div class="owner-task-main"><div><span>{{ taskLabel(task.taskType) }}</span><time>{{ task.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</time></div><h3>{{ task.title }}</h3><p>{{ task.detail }}</p></div><a class="daca-button" [routerLink]="taskRoute(task)" [queryParams]="taskQueryParams(task)">Aufgabe öffnen</a></article>
           }
         </div>
       </section>
@@ -129,14 +129,22 @@ export class OwnerTasksComponent {
       simulation_isbo_restriction: 'Dringender Sicherheitsalarm',
       publication_approval: 'Vier-Augen-Freigabe',
       governance_correction: 'Korrektur erforderlich',
+      service_level_approval: 'SLA-Kontrolle',
     } as Record<string, string>)[value] ?? 'Aufgabe';
   }
 
   taskRoute(task: { taskType: string; dataProductId: string; governanceSubmissionId?: string | null }): unknown[] {
     if (task.taskType === 'publication_approval' && task.governanceSubmissionId) return ['/governance-submissions', task.governanceSubmissionId];
+    if (task.taskType === 'service_level_approval') return ['/products', task.dataProductId, 'sla'];
     if (task.taskType === 'metadata_quality' || task.taskType === 'simulation_quality_alert') return ['/products', task.dataProductId, 'quality'];
     if (task.taskType.startsWith('simulation_')) return ['/products', task.dataProductId, 'overview'];
     return ['/products', task.dataProductId, 'access', 'grant'];
+  }
+
+  taskQueryParams(task: { taskType: string; serviceLevelRevisionId?: string | null }): Record<string, string> | null {
+    return task.taskType === 'service_level_approval' && task.serviceLevelRevisionId
+      ? { review: task.serviceLevelRevisionId }
+      : null;
   }
 
   statusLabel(value: StoredAccessRequest['status']): string {

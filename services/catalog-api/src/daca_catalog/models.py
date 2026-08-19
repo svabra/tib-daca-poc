@@ -17,6 +17,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -47,6 +48,9 @@ class DataProduct(Base):
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     active_policy_revision: Mapped[int | None] = mapped_column(Integer)
     owner_user_id: Mapped[str | None] = mapped_column(ForeignKey("demo_users.id"))
+    control_person_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("demo_users.id", ondelete="SET NULL")
+    )
     discoverable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
@@ -81,6 +85,11 @@ class DataProduct(Base):
     )
     access_requests: Mapped[list[AccessRequest]] = relationship(
         back_populates="data_product", cascade="all, delete-orphan"
+    )
+    service_level_revisions: Mapped[list[ServiceLevelRevision]] = relationship(
+        back_populates="data_product",
+        cascade="all, delete-orphan",
+        foreign_keys="ServiceLevelRevision.data_product_id",
     )
 
 
@@ -504,6 +513,94 @@ class GovernanceSubmission(Base):
     )
 
 
+class ServiceLevelRevision(Base):
+    """Versioned product SLA whose published business payload is immutable."""
+
+    __tablename__ = "service_level_revisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "data_product_id", "revision", name="uq_service_level_product_revision"
+        ),
+        CheckConstraint(
+            "status IN ('draft', 'pending_approval', 'published', 'rejected', 'withdrawn')",
+            name="ck_service_level_status",
+        ),
+        CheckConstraint(
+            "valid_until IS NULL OR valid_until >= valid_from",
+            name="ck_service_level_validity",
+        ),
+        CheckConstraint(
+            "control_person_user_id IS NULL OR control_person_user_id <> created_by_owner_user_id",
+            name="ck_service_level_four_eyes",
+        ),
+        CheckConstraint(
+            "decision IS NULL OR decision IN ('approve', 'reject')",
+            name="ck_service_level_decision",
+        ),
+        Index("ix_service_level_product", "data_product_id", "revision"),
+        Index(
+            "uq_service_level_single_open_workflow",
+            "data_product_id",
+            unique=True,
+            postgresql_where=text("status IN ('draft', 'pending_approval')"),
+            sqlite_where=text("status IN ('draft', 'pending_approval')"),
+        ),
+        Index(
+            "ix_service_level_controller",
+            "control_person_user_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    data_product_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("data_products.id", ondelete="CASCADE"), nullable=False
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    valid_from: Mapped[date] = mapped_column(Date, nullable=False)
+    valid_until: Mapped[date | None] = mapped_column(Date)
+    definition: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_by_owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("demo_users.id"), nullable=False
+    )
+    updated_by_owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("demo_users.id"), nullable=False
+    )
+    control_person_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("demo_users.id", ondelete="SET NULL")
+    )
+    control_person_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    product_revision_at_submission: Mapped[int | None] = mapped_column(Integer)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decision: Mapped[str | None] = mapped_column(String(16))
+    decided_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("demo_users.id"))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejection_reason: Mapped[str | None] = mapped_column(Text)
+    supersedes_revision_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("service_level_revisions.id", ondelete="SET NULL")
+    )
+    superseded_by_revision_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("service_level_revisions.id", ondelete="SET NULL")
+    )
+    superseded_from: Mapped[date | None] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+    data_product: Mapped[DataProduct] = relationship(
+        back_populates="service_level_revisions",
+        foreign_keys=[data_product_id],
+    )
+
+
 class MetadataDeliveryOutbox(Base):
     __tablename__ = "metadata_delivery_outbox"
     __table_args__ = (
@@ -682,6 +779,9 @@ class WorkflowTask(Base):
     )
     governance_submission_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("governance_submissions.id", ondelete="CASCADE")
+    )
+    service_level_revision_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("service_level_revisions.id", ondelete="CASCADE")
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     detail: Mapped[str] = mapped_column(Text, nullable=False)

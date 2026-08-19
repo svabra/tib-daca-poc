@@ -48,6 +48,10 @@ export const DACA_FEATURE_RELEASE = {
             description: 'Kompakte Qualitätsmedaillen, ein durchsuchbares Datenwörterbuch und sichere Schnittstellenbeispiele helfen bei der Einordnung und Nutzung.',
           },
           {
+            title: 'Service Level gemeinsam festlegen',
+            description: 'Versionierte SLA und Nutzungsbedingungen machen Gültigkeit, Supportziele und fachliche Grenzen sichtbar. Eine gespeicherte Kontrollperson gibt jede neue Fassung im Vier-Augen-Prinzip frei.',
+          },
+          {
             title: 'Änderungen nachvollziehen',
             description: 'Der echte Änderungsverlauf zeigt verständlich, wer Metadaten, Qualität, Freigaben oder die technische Aktivierung eines Datenprodukts verändert hat.',
           },
@@ -81,6 +85,10 @@ export const DACA_FEATURE_RELEASE = {
           {
             title: 'Find and understand data products',
             description: 'Compact quality medals, a searchable data dictionary and safe interface examples make products easier to assess and use.',
+          },
+          {
+            title: 'Agree service levels together',
+            description: 'Versioned service levels and usage terms make validity, support targets and functional limits visible. A designated control person approves every new revision.',
           },
           {
             title: 'Understand what changed',

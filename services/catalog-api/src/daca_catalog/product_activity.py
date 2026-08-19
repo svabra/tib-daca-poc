@@ -14,6 +14,7 @@ from .models import (
     DemoUser,
     GovernanceSubmission,
     PolicyRevision,
+    ServiceLevelRevision,
 )
 from .schemas import (
     ProductActivityActor,
@@ -61,7 +62,7 @@ def is_privileged_product_auditor(
         return False
     if product.owner_user_id == actor:
         return True
-    return (
+    return bool(
         session.scalar(
             select(GovernanceSubmission.id)
             .where(
@@ -72,6 +73,29 @@ def is_privileged_product_auditor(
         )
         is not None
     )
+
+
+def _can_view_service_level_event(
+    event: AuditEvent,
+    *,
+    product: DataProduct,
+    actor: str | None,
+    revision_by_number: dict[int, ServiceLevelRevision],
+) -> bool:
+    if event.resource_type != "service-level":
+        return True
+    if event.action in {
+        "service-level-published",
+        "service-level-superseded",
+        "control-person-updated",
+    }:
+        return True
+    if actor is None:
+        return False
+    if actor == product.owner_user_id:
+        return True
+    row = revision_by_number.get(event.revision or -1)
+    return row is not None and row.control_person_user_id == actor
 
 
 def product_activity(
@@ -95,11 +119,19 @@ def product_activity(
             select(PolicyRevision).where(PolicyRevision.data_product_id == product.id)
         )
     )
+    service_levels = list(
+        session.scalars(
+            select(ServiceLevelRevision).where(
+                ServiceLevelRevision.data_product_id == product.id
+            )
+        )
+    )
+    service_level_by_revision = {item.revision: item for item in service_levels}
 
     direct_events = list(
         session.scalars(
             select(AuditEvent).where(
-                AuditEvent.resource_type.in_(("data-product", "policy")),
+                AuditEvent.resource_type.in_(("data-product", "policy", "service-level")),
                 AuditEvent.resource_id == str(product.id),
             )
         )
@@ -125,7 +157,7 @@ def product_activity(
 
     conditions = [
         and_(
-            AuditEvent.resource_type.in_(("data-product", "policy")),
+            AuditEvent.resource_type.in_(("data-product", "policy", "service-level")),
             AuditEvent.resource_id == str(product.id),
         )
     ]
@@ -150,6 +182,16 @@ def product_activity(
             .order_by(AuditEvent.occurred_at.desc(), AuditEvent.id.desc())
         )
     )
+    events = [
+        event
+        for event in events
+        if _can_view_service_level_event(
+            event,
+            product=product,
+            actor=actor,
+            revision_by_number=service_level_by_revision,
+        )
+    ]
 
     actors = {
         user.id: user
@@ -212,9 +254,19 @@ def product_activity(
             submission_id = event.details.get("submissionId")
             if isinstance(submission_id, str):
                 correlated_submission_id = submission_id
+        event_privileged = privileged
+        if event.resource_type == "service-level":
+            row = service_level_by_revision.get(event.revision or -1)
+            event_privileged = bool(
+                actor is not None
+                and (
+                    actor == product.owner_user_id
+                    or (row is not None and actor == row.control_person_user_id)
+                )
+            )
         item = _activity_item(
             event,
-            privileged=privileged,
+            privileged=event_privileged,
             actor_user=actors.get(event.actor),
             submission=related_submission,
             policy_revision_by_id=policy_revision_by_id,
@@ -329,6 +381,78 @@ def _presentation(event: AuditEvent) -> ActivityPresentation:
             "success",
             "Schnittstelle registriert",
             "Eine neue technische Schnittstelle wurde für das Datenprodukt dokumentiert.",
+        )
+    if action == "service-level-draft-created":
+        return ActivityPresentation(
+            action,
+            "governance",
+            "info",
+            "Service-Level-Entwurf erstellt",
+            "Der Data Owner hat einen neuen Entwurf mit Nutzungs- und Supportbedingungen angelegt.",
+        )
+    if action == "service-level-draft-updated":
+        return ActivityPresentation(
+            action,
+            "governance",
+            "info",
+            "Service-Level-Entwurf aktualisiert",
+            "Die noch nicht publizierten Service-Level-Bedingungen wurden überarbeitet.",
+        )
+    if action == "service-level-submitted":
+        return ActivityPresentation(
+            action,
+            "governance",
+            "pending",
+            "Service Level zur Prüfung übermittelt",
+            "Die zuständige Kontrollperson prüft Gültigkeit, Nutzung und Best-Effort-Ziele.",
+        )
+    if action == "service-level-withdrawn":
+        return ActivityPresentation(
+            action,
+            "governance",
+            "warning",
+            "Service-Level-Prüfung zurückgezogen",
+            "Der Data Owner hat die eingereichte Revision vor der Entscheidung zurückgezogen.",
+        )
+    if action == "service-level-rejected":
+        return ActivityPresentation(
+            action,
+            "governance",
+            "warning",
+            "Service Level abgelehnt",
+            "Die Kontrollperson hat die Revision abgelehnt; private Begründungen werden hier nicht offengelegt.",
+        )
+    if action == "service-level-approved":
+        return ActivityPresentation(
+            action,
+            "governance",
+            "success",
+            "Service Level genehmigt",
+            "Die unabhängige Vier-Augen-Prüfung wurde erfolgreich abgeschlossen.",
+        )
+    if action == "service-level-published":
+        return ActivityPresentation(
+            action,
+            "governance",
+            "success",
+            "Service Level publiziert",
+            "Die genehmigte Revision ist publiziert und gilt im PoC ab dem dokumentierten Startdatum als unverbindliche Orientierung.",
+        )
+    if action == "service-level-superseded":
+        return ActivityPresentation(
+            action,
+            "governance",
+            "info",
+            "Service-Level-Revision abgelöst",
+            "Eine neuere publizierte Revision begrenzt die effektive Gültigkeit dieser Revision.",
+        )
+    if action == "control-person-updated":
+        return ActivityPresentation(
+            action,
+            "governance",
+            "info",
+            "Kontrollperson geändert",
+            "Der Data Owner hat die unabhängige Kontrollperson für künftige Prüfungen geändert.",
         )
     if action == "access-governance-draft-created":
         return ActivityPresentation(
@@ -507,6 +631,28 @@ def _facts(
         count = _safe_int(details.get("fieldMappings"), lower=0, upper=100_000)
         if count is not None:
             facts.append(ProductActivityFact(label="Feldzuordnungen", value=str(count)))
+    elif event.resource_type == "service-level":
+        revision = _positive_int(details.get("serviceLevelRevision"))
+        if revision is not None:
+            facts.append(
+                ProductActivityFact(label="Service-Level-Revision", value=str(revision))
+            )
+        status = details.get("serviceLevelStatus")
+        status_labels = {
+            "draft": "Entwurf",
+            "pending_approval": "In Prüfung",
+            "published": "Publiziert",
+            "rejected": "Abgelehnt",
+            "withdrawn": "Zurückgezogen",
+        }
+        if isinstance(status, str) and status in status_labels:
+            facts.append(ProductActivityFact(label="Status", value=status_labels[status]))
+        valid_from = details.get("validFrom")
+        valid_until = details.get("effectiveValidUntil") or details.get("validUntil")
+        if isinstance(valid_from, str):
+            validity = valid_from
+            validity += f" bis {valid_until}" if isinstance(valid_until, str) else " bis auf Weiteres"
+            facts.append(ProductActivityFact(label="Gültigkeit", value=validity))
     elif event.action == "access-governance-draft-created":
         count = _safe_int(details.get("grants"), lower=0, upper=100_000)
         if count is not None:
@@ -644,6 +790,15 @@ def _actor_role(resource_type: str, action: str) -> str:
         return "Datenkonsument/in" if action == "submitted" else "Data Owner"
     if resource_type == "governance-submission":
         return "Publikationsfreigabe"
+    if resource_type == "service-level":
+        if action in {
+            "service-level-approved",
+            "service-level-published",
+            "service-level-rejected",
+            "service-level-superseded",
+        }:
+            return "Kontrollperson"
+        return "Data Owner"
     if resource_type in {"data-product", "policy"}:
         return "Data Owner"
     return "Katalogrolle"

@@ -132,7 +132,7 @@ import {
       } @else if (viewMode() === 'records') {
         <div class="product-list">
           @for (product of filteredProducts(); track product.id) {
-            <article class="daca-card product-list-item">
+            <article class="daca-card product-list-item" [class.has-open-menu]="activeProductMenuId() === product.id">
               <div class="product-list-accent" aria-hidden="true"></div>
               <div class="product-list-body">
                 <div class="product-list-meta">
@@ -220,7 +220,8 @@ import {
                 <dl>
                   <div><dt>Aktualisierung</dt><dd>{{ frequencyLabel(product.updateFrequency) }}</dd></div>
                   <div><dt>Revision</dt><dd>{{ product.revision }}</dd></div>
-                  <div><dt>Geändert</dt><dd>{{ product.updatedAt | date: 'dd.MM.yyyy' }}</dd></div>
+                  <div><dt>Im Katalog erstellt</dt><dd><time [attr.datetime]="product.createdAt">{{ product.createdAt | date: 'dd.MM.yyyy' }}</time></dd></div>
+                  <div><dt>Im Katalog geändert</dt><dd><time [attr.datetime]="product.updatedAt">{{ product.updatedAt | date: 'dd.MM.yyyy' }}</time></dd></div>
                 </dl>
                 <div class="product-list-actions">
                   <a class="daca-button is-secondary" [routerLink]="['/products', product.id, 'overview']">Produktdetails öffnen</a>
@@ -233,12 +234,18 @@ import {
                       [attr.aria-controls]="'product-actions-' + product.id"
                       aria-label="Weitere Aktionen für dieses Datenprodukt"
                       title="Weitere Aktionen"
-                      (click)="toggleProductMenu(product.id)"
+                      (click)="toggleProductMenu(product.id, $event)"
+                      (keydown)="onProductMenuTriggerKeydown($event, product.id)"
                     >
                       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
                     </button>
                     @if (activeProductMenuId() === product.id) {
-                      <div class="product-context-popover" role="menu" [id]="'product-actions-' + product.id">
+                      <div
+                        class="product-context-popover"
+                        role="menu"
+                        [id]="'product-actions-' + product.id"
+                        (keydown)="onProductMenuKeydown($event)"
+                      >
                         <a role="menuitem" [routerLink]="['/products', product.id, 'overview']">
                           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.5L19 8v11.5H5z"/><path d="M15.5 4.5V8H19M8 12h8M8 15h6"/></svg>
                           <span>Produktdetails öffnen</span>
@@ -258,6 +265,10 @@ import {
                             <span>Zugriff anfragen</span>
                           </a>
                         }
+                        <a class="product-context-sla" role="menuitem" [routerLink]="['/products', product.id, 'sla']">
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h11l3 3v14H5z"/><path d="M16 3.5v3h3M8 11h8M8 14h8M8 17h5"/><path d="m8.2 7.2 1.1 1.1 2-2"/></svg>
+                          <span>SLA &amp; Nutzungsbedingungen</span>
+                        </a>
                       </div>
                     }
                   </div>
@@ -276,19 +287,20 @@ import {
                 <th scope="col">Beziehung</th>
                 <th scope="col">Status</th>
                 <th scope="col">Schnittstellen</th>
-                <th scope="col">Aktualisiert</th>
+                <th scope="col">Zeitstand</th>
                 <th scope="col"><span class="sr-only">Aktionen</span></th>
               </tr>
             </thead>
             <tbody>
               @for (product of filteredProducts(); track product.id) {
-                <tr>
+                <tr [class.has-open-menu]="activeProductMenuId() === product.id">
                   <td>
                     <a class="product-table-title" [routerLink]="['/products', product.id, 'overview']">
                       <strong>{{ product.title }}</strong>
                       <span class="product-table-summary">
-                        <span>{{ product.domain }} · Revision {{ product.revision }}</span>
-                        <daca-quality-medal [medal]="qualityMedal(product)" [score]="product.qualityScore ?? 0" />
+                        <span class="product-table-domain">{{ product.domain }}</span>
+                        <span class="product-table-progressive product-table-revision">Revision {{ product.revision }}</span>
+                        <span class="product-table-progressive product-table-medal"><daca-quality-medal [medal]="qualityMedal(product)" [score]="product.qualityScore ?? 0" /></span>
                       </span>
                     </a>
                   </td>
@@ -343,7 +355,13 @@ import {
                       @for (protocol of protocols(product); track protocol) { <span>{{ protocol }}</span> }
                     </span>
                   </td>
-                  <td><span class="product-table-date">{{ product.updatedAt | date: 'dd.MM.yyyy' }}<small>{{ frequencyLabel(product.updateFrequency) }}</small></span></td>
+                  <td>
+                    <span class="product-table-date">
+                      <span class="product-table-progressive product-table-created"><small>Im Katalog erstellt</small><time [attr.datetime]="product.createdAt">{{ product.createdAt | date: 'dd.MM.yyyy' }}</time></span>
+                      <span><small>Im Katalog geändert</small><time [attr.datetime]="product.updatedAt">{{ product.updatedAt | date: 'dd.MM.yyyy' }}</time></span>
+                      <span><small>Rhythmus</small>{{ frequencyLabel(product.updateFrequency) }}</span>
+                    </span>
+                  </td>
                   <td>
                     <div class="product-table-actions">
                       <a [routerLink]="['/products', product.id, 'overview']">Öffnen</a>
@@ -356,12 +374,19 @@ import {
                           [attr.aria-controls]="'product-table-actions-' + product.id"
                           aria-label="Weitere Aktionen für dieses Datenprodukt"
                           title="Weitere Aktionen"
-                          (click)="toggleProductMenu(product.id)"
+                          (click)="toggleProductMenu(product.id, $event)"
+                          (keydown)="onProductMenuTriggerKeydown($event, product.id)"
                         >
                           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
                         </button>
                         @if (activeProductMenuId() === product.id) {
-                          <div class="product-context-popover" role="menu" [id]="'product-table-actions-' + product.id">
+                          <div
+                            class="product-context-popover"
+                            [class.opens-up]="$index >= $count - 2"
+                            role="menu"
+                            [id]="'product-table-actions-' + product.id"
+                            (keydown)="onProductMenuKeydown($event)"
+                          >
                             <a role="menuitem" [routerLink]="['/products', product.id, 'overview']">
                               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.5L19 8v11.5H5z"/><path d="M15.5 4.5V8H19M8 12h8M8 15h6"/></svg>
                               <span>Produktdetails öffnen</span>
@@ -381,6 +406,10 @@ import {
                                 <span>Zugriff anfragen</span>
                               </a>
                             }
+                            <a class="product-context-sla" role="menuitem" [routerLink]="['/products', product.id, 'sla']">
+                              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h11l3 3v14H5z"/><path d="M16 3.5v3h3M8 11h8M8 14h8M8 17h5"/><path d="m8.2 7.2 1.1 1.1 2-2"/></svg>
+                              <span>SLA &amp; Nutzungsbedingungen</span>
+                            </a>
                           </div>
                         }
                       </div>
@@ -530,6 +559,7 @@ export class MyDataProductsComponent implements OnDestroy {
   readonly consumerQuery = signal('');
   private consumerDrawerReturnFocus: HTMLElement | null = null;
   private bodyOverflowBeforeDrawer: string | null = null;
+  private productMenuReturnFocus: HTMLElement | null = null;
   readonly filters: readonly { value: ProductRelationshipFilter; label: string }[] = [
     { value: 'all', label: 'Alle Datenprodukte' },
     { value: 'offered', label: 'Von mir angeboten' },
@@ -631,8 +661,57 @@ export class MyDataProductsComponent implements OnDestroy {
     return canTransferOwnership(product, this.api.identityUserId());
   }
 
-  toggleProductMenu(productId: string): void {
+  toggleProductMenu(productId: string, event?: Event): void {
+    const trigger = event?.currentTarget;
+    if (trigger instanceof HTMLElement) this.productMenuReturnFocus = trigger;
     this.activeProductMenuId.update((activeId) => activeId === productId ? null : productId);
+  }
+
+  onProductMenuTriggerKeydown(event: KeyboardEvent, productId: string): void {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.productMenuReturnFocus = event.currentTarget as HTMLElement;
+    const menuId = this.productMenuReturnFocus.getAttribute('aria-controls') ?? '';
+    this.activeProductMenuId.set(productId);
+    setTimeout(() => {
+      const menu = document.getElementById(menuId);
+      const items = this.productMenuItems(menu);
+      (event.key === 'ArrowUp' ? items.at(-1) : items[0])?.focus();
+    });
+  }
+
+  onProductMenuKeydown(event: KeyboardEvent): void {
+    const menu = event.currentTarget as HTMLElement;
+    const items = this.productMenuItems(menu);
+    if (items.length === 0) return;
+    const currentIndex = Math.max(0, items.indexOf(document.activeElement as HTMLElement));
+    let nextIndex: number | null = null;
+
+    if (event.key === 'ArrowDown') nextIndex = (currentIndex + 1) % items.length;
+    else if (event.key === 'ArrowUp') nextIndex = (currentIndex - 1 + items.length) % items.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = items.length - 1;
+    else if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.closeProductMenu(true);
+      return;
+    } else if (event.key === 'Tab') {
+      const leavesMenu = (!event.shiftKey && currentIndex === items.length - 1)
+        || (event.shiftKey && currentIndex === 0);
+      if (leavesMenu) setTimeout(() => this.closeProductMenu(false));
+      return;
+    } else return;
+
+    event.preventDefault();
+    nextIndex !== null && items[nextIndex].focus();
+  }
+
+  private productMenuItems(menu: HTMLElement | null): HTMLElement[] {
+    if (!menu) return [];
+    return [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+      .filter((item) => !item.hasAttribute('disabled'));
   }
 
   openConsumerDrawer(product: DataProduct, event: Event): void {
@@ -781,15 +860,19 @@ export class MyDataProductsComponent implements OnDestroy {
   }
 
   @HostListener('document:click')
-  closeProductMenu(): void {
+  closeProductMenu(restoreFocus = false): void {
     this.activeProductMenuId.set(null);
+    if (restoreFocus) {
+      const returnFocus = this.productMenuReturnFocus;
+      queueMicrotask(() => returnFocus?.focus());
+    }
   }
 
   @HostListener('document:keydown.escape')
   closeTransientUi(): void {
     if (this.consumerDrawerProduct()) this.closeConsumerDrawer();
     else if (this.transferProduct()) this.closeOwnershipTransfer();
-    else this.activeProductMenuId.set(null);
+    else if (this.activeProductMenuId()) this.closeProductMenu(true);
   }
 
   classificationLabel(value: DataProduct['classification']): string {

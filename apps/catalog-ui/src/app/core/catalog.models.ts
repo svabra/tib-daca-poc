@@ -98,6 +98,7 @@ export interface DataProduct {
   updateFrequency: string;
   additionalMetadata: Record<string, unknown>;
   endpoints: EndpointDescriptor[];
+  createdAt: string;
   updatedAt: string;
 }
 
