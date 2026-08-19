@@ -8,9 +8,11 @@ import pytest
 from daca_catalog.models import (
     AccessRequest,
     DataProduct,
+    DemoUser,
     GovernanceSubmission,
     MetadataPublication,
     PocProductFixture,
+    PolicyRevision,
     ProductQualityAssessment,
     WorkflowTask,
 )
@@ -108,6 +110,66 @@ def create_ready_submission(client, session_factory, suffix: str = "v1") -> tupl
     )
     assert created.status_code == 201
     return product_id, created.json()
+
+
+@pytest.mark.parametrize("invalid_controller", ["missing", "inactive", "owner"])
+def test_governance_review_fails_closed_for_invalid_control_person(
+    client, session_factory, invalid_controller
+):
+    product_id = client.post(
+        "/api/v1/metadata-publications",
+        json=journey_payload(client, f"invalid-controller-{invalid_controller}"),
+    ).json()["productId"]
+    complete_metadata_task(session_factory, product_id)
+    policy_id = uuid.uuid4()
+    with session_factory() as session:
+        product = session.get(DataProduct, uuid.UUID(product_id))
+        assert product.control_person_user_id == "thomas.kriegli"
+        if invalid_controller == "missing":
+            product.control_person_user_id = None
+        elif invalid_controller == "inactive":
+            controller = session.get(DemoUser, product.control_person_user_id)
+            assert controller is not None
+            controller.active = False
+        else:
+            product.control_person_user_id = product.owner_user_id
+        session.add(
+            PolicyRevision(
+                id=policy_id,
+                data_product_id=product.id,
+                revision=1,
+                status="draft",
+                definition={},
+                generated_rego="",
+                created_by="joel.ruod",
+            )
+        )
+        session.commit()
+
+    assert client.patch(
+        f"/api/v1/data-products/{product_id}",
+        headers={"X-DaCa-User": "beat.stalder", "If-Match": '"1"'},
+        json={"description": "Unberechtigte Metadatenänderung"},
+    ).status_code == 403
+    assert client.post(
+        f"/api/v1/data-products/{product_id}/access-governance",
+        headers={"X-DaCa-User": "joel.ruod"},
+        json={
+            "discoverable": True,
+            "discoverabilityConfirmed": True,
+            "grants": governance_body()["grants"],
+        },
+    ).status_code == 409
+    assert client.post(
+        f"/api/v1/data-products/{product_id}/policies/{policy_id}/publish",
+        headers={"X-DaCa-User": "joel.ruod", "If-Match": '"1"'},
+    ).status_code == 409
+    submission = client.post(
+        f"/api/v1/data-products/{product_id}/governance-submissions",
+        headers={"X-DaCa-User": "joel.ruod"},
+        json=governance_body(),
+    )
+    assert submission.status_code == 409
 
 
 def test_four_eyes_approval_activates_only_after_both_targets(

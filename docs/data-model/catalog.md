@@ -15,17 +15,18 @@ DAAIF is an external source system and its internal data model is outside this r
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
-- Alembic head: `0010_request_policy_binding`
-- Schema fingerprint: `438246ffe447acbf`
-- Migration fingerprint: `1b282e400ed95e43`
-- Tables: `27`
+- Alembic head: `0011_service_level_revisions`
+- Schema fingerprint: `a25fde5fb5c193e4`
+- Migration fingerprint: `b5e664ef68580c2d`
+- Tables: `28`
 
 ## Domain status vocabulary
 
 - Product lifecycle is `draft`, `active`, `deprecated` or `retired`; classification is `public`, `internal`, `confidential` or `restricted`.
 - Access requests progress through `submitted`, `identity_review`, `legal_review`, `conditions_review`, `approved_policy_pending`, a granted state, `rejected` or `withdrawn`. Granted states distinguish `granted_original` and `granted_modified`.
-- Workflow task types include `metadata_quality`, `access_governance`, `publication_approval`, `governance_correction`, `access_request_review`, simulation alerts and `group_membership_changed`; task states are `open`, `in_progress` and `completed`.
+- Workflow task types include `metadata_quality`, `access_governance`, `publication_approval`, `service_level_approval`, `governance_correction`, `access_request_review`, simulation alerts and `group_membership_changed`; task states are `open`, `in_progress` and `completed`.
 - Governance submissions progress through `pending_approval`, `approved_deploying`, `approved`, `rejected` or `deployment_failed`. Discoverability and metadata publication become active only after both PostgreSQL and OPA confirm the reviewed revision.
+- Service-level revisions progress through `draft`, `pending_approval`, `published`, `rejected` or `withdrawn`. At most one draft or pending review exists per product, and a later publication records the effective end of the superseded revision.
 - Identity sources are `federal`, `cantonal`, `municipal` and `federal_related`. Federal organizations are ordered by department and office and displayed as, for example, `EFD - BIT`. System groups are globally visible; custom groups are owner-isolated. Group membership revisions increase monotonically; existing policy snapshots never expand automatically.
 - I14Y outbox entries use channel `i14y` and status `scheduled` or `simulated_delivered`; the PoC performs no external network request.
 - Metadata publication modes are `governance_review` and `automatic`; stored states are `pending_review`, `published_incomplete` and `published`.
@@ -41,6 +42,7 @@ DAAIF is an external source system and its internal data model is outside this r
 - `metadata_delivery_outbox.payload` is a DCAT-oriented metadata snapshot for the local I14Y simulation. It contains no product data and no external delivery URL.
 - `metadata_publications.normalized_payload` and `poc_product_fixtures.payload` retain normalized PoC metadata, never secrets.
 - `product_context_graphs.graph` stores deterministic nodes and edges; flexible provenance/audit `details` contain metadata only.
+- `service_level_revisions.definition` stores typed best-effort usage, freshness, support-window, maintenance and review-date commitments. Draft and rejection text remains private; published definitions are immutable and supersession is recorded explicitly.
 
 ## Entity relationships
 
@@ -127,6 +129,7 @@ erDiagram
         integer revision
         integer active_policy_revision
         string owner_user_id FK
+        string control_person_user_id FK
         boolean discoverable
         string title
         text description
@@ -342,6 +345,32 @@ erDiagram
         string name PK
         datetime applied_at
     }
+    service_level_revisions {
+        uuid id PK
+        uuid data_product_id FK
+        integer revision
+        integer lock_version
+        string status
+        date valid_from
+        date valid_until
+        json definition
+        string created_by_owner_user_id FK
+        string updated_by_owner_user_id FK
+        string control_person_user_id FK
+        json control_person_snapshot
+        datetime submitted_at
+        integer product_revision_at_submission
+        datetime decided_at
+        string decision
+        string decided_by_user_id FK
+        datetime published_at
+        text rejection_reason
+        uuid supersedes_revision_id FK
+        uuid superseded_by_revision_id FK
+        date superseded_from
+        datetime created_at
+        datetime updated_at
+    }
     workflow_tasks {
         uuid id PK
         string task_type
@@ -351,6 +380,7 @@ erDiagram
         uuid access_request_id FK
         uuid simulation_event_id FK
         uuid governance_submission_id FK
+        uuid service_level_revision_id FK
         string title
         text detail
         datetime created_at
@@ -362,6 +392,7 @@ erDiagram
     canonical_ontology_versions ||--o{ canonical_ontology_terms : "ontology_version_id"
     data_products ||--o{ data_product_fields : "data_product_id"
     demo_users o|--o{ data_products : "owner_user_id"
+    demo_users o|--o{ data_products : "control_person_user_id"
     demo_users o|--o{ demo_users : "supervisor_user_id"
     data_products ||--o{ endpoints : "data_product_id"
     data_products ||--o{ governance_submissions : "data_product_id"
@@ -386,11 +417,19 @@ erDiagram
     data_product_fields o|--o{ product_semantic_mappings : "data_product_field_id"
     canonical_ontology_terms ||--o{ product_semantic_mappings : "ontology_term_id"
     data_products o|--o{ provenance_events : "data_product_id"
+    data_products ||--o{ service_level_revisions : "data_product_id"
+    demo_users ||--o{ service_level_revisions : "created_by_owner_user_id"
+    demo_users ||--o{ service_level_revisions : "updated_by_owner_user_id"
+    demo_users o|--o{ service_level_revisions : "control_person_user_id"
+    demo_users o|--o{ service_level_revisions : "decided_by_user_id"
+    service_level_revisions o|--o{ service_level_revisions : "supersedes_revision_id"
+    service_level_revisions o|--o{ service_level_revisions : "superseded_by_revision_id"
     demo_users ||--o{ workflow_tasks : "assignee_user_id"
     data_products ||--o{ workflow_tasks : "data_product_id"
     access_requests o|--o{ workflow_tasks : "access_request_id"
     poc_simulation_events o|--o{ workflow_tasks : "simulation_event_id"
     governance_submissions o|--o{ workflow_tasks : "governance_submission_id"
+    service_level_revisions o|--o{ workflow_tasks : "service_level_revision_id"
 ```
 
 Relationships in this diagram are physical foreign keys inside this database only.
@@ -555,6 +594,7 @@ Catalog aggregate root for metadata, ownership, lifecycle and discoverability.
 | `revision` | `INTEGER` | no | — | `1` |
 | `active_policy_revision` | `INTEGER` | yes | — | — |
 | `owner_user_id` | `VARCHAR(200)` | yes | FK | — |
+| `control_person_user_id` | `VARCHAR(200)` | yes | FK | — |
 | `discoverable` | `BOOLEAN` | no | — | `True` |
 | `title` | `VARCHAR(255)` | no | — | — |
 | `description` | `TEXT` | no | — | — |
@@ -577,6 +617,7 @@ Constraints and indexes:
 - Check `ck_product_classification`: `classification IN ('public', 'internal', 'confidential', 'restricted')`
 - Check `ck_product_lifecycle`: `lifecycle IN ('draft', 'active', 'deprecated', 'retired')`
 - Foreign key `owner_user_id` → `demo_users.id`
+- Foreign key `control_person_user_id` → `demo_users.id`; on delete `SET NULL`
 
 ### `demo_users`
 
@@ -994,9 +1035,58 @@ Constraints and indexes:
 
 - No additional constraints or explicit indexes.
 
+### `service_level_revisions`
+
+Versioned, four-eyes-reviewed best-effort service-level definitions for a data product.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `data_product_id` | `CHAR(32)` | no | FK | — |
+| `revision` | `INTEGER` | no | — | — |
+| `lock_version` | `INTEGER` | no | — | `1` |
+| `status` | `VARCHAR(32)` | no | — | `draft` |
+| `valid_from` | `DATE` | no | — | — |
+| `valid_until` | `DATE` | yes | — | — |
+| `definition` | `JSON` | no | — | — |
+| `created_by_owner_user_id` | `VARCHAR(200)` | no | FK | — |
+| `updated_by_owner_user_id` | `VARCHAR(200)` | no | FK | — |
+| `control_person_user_id` | `VARCHAR(200)` | yes | FK | — |
+| `control_person_snapshot` | `JSON` | no | — | `dict` |
+| `submitted_at` | `DATETIME` | yes | — | — |
+| `product_revision_at_submission` | `INTEGER` | yes | — | — |
+| `decided_at` | `DATETIME` | yes | — | — |
+| `decision` | `VARCHAR(16)` | yes | — | — |
+| `decided_by_user_id` | `VARCHAR(200)` | yes | FK | — |
+| `published_at` | `DATETIME` | yes | — | — |
+| `rejection_reason` | `TEXT` | yes | — | — |
+| `supersedes_revision_id` | `CHAR(32)` | yes | FK | — |
+| `superseded_by_revision_id` | `CHAR(32)` | yes | FK | — |
+| `superseded_from` | `DATE` | yes | — | — |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Check `ck_service_level_decision`: `decision IS NULL OR decision IN ('approve', 'reject')`
+- Check `ck_service_level_four_eyes`: `control_person_user_id IS NULL OR control_person_user_id <> created_by_owner_user_id`
+- Check `ck_service_level_status`: `status IN ('draft', 'pending_approval', 'published', 'rejected', 'withdrawn')`
+- Check `ck_service_level_validity`: `valid_until IS NULL OR valid_until >= valid_from`
+- Unique `uq_service_level_product_revision`: `data_product_id, revision`
+- Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
+- Foreign key `created_by_owner_user_id` → `demo_users.id`
+- Foreign key `updated_by_owner_user_id` → `demo_users.id`
+- Foreign key `control_person_user_id` → `demo_users.id`; on delete `SET NULL`
+- Foreign key `decided_by_user_id` → `demo_users.id`
+- Foreign key `supersedes_revision_id` → `service_level_revisions.id`; on delete `SET NULL`
+- Foreign key `superseded_by_revision_id` → `service_level_revisions.id`; on delete `SET NULL`
+- Index `ix_service_level_controller` on `control_person_user_id, status`
+- Index `ix_service_level_product` on `data_product_id, revision`
+- Index `uq_service_level_single_open_workflow` on `data_product_id` unique
+
 ### `workflow_tasks`
 
-Owner work items for quality, access governance and request processing.
+Owner and approver work items for quality, access governance, SLA review and request processing.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -1008,6 +1098,7 @@ Owner work items for quality, access governance and request processing.
 | `access_request_id` | `CHAR(32)` | yes | FK | — |
 | `simulation_event_id` | `CHAR(32)` | yes | FK | — |
 | `governance_submission_id` | `CHAR(32)` | yes | FK | — |
+| `service_level_revision_id` | `CHAR(32)` | yes | FK | — |
 | `title` | `VARCHAR(255)` | no | — | — |
 | `detail` | `TEXT` | no | — | — |
 | `created_at` | `DATETIME` | no | — | `utc_now` |
@@ -1021,6 +1112,7 @@ Constraints and indexes:
 - Foreign key `access_request_id` → `access_requests.id`; on delete `CASCADE`
 - Foreign key `simulation_event_id` → `poc_simulation_events.id`; on delete `SET NULL`
 - Foreign key `governance_submission_id` → `governance_submissions.id`; on delete `CASCADE`
+- Foreign key `service_level_revision_id` → `service_level_revisions.id`; on delete `CASCADE`
 - Index `ix_workflow_task_assignee` on `assignee_user_id, status`
 - Index `ix_workflow_task_product` on `data_product_id`
 

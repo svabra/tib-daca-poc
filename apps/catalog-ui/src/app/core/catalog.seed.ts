@@ -112,6 +112,7 @@ export const FALLBACK_PRODUCT: DataProduct = {
       sslMode: 'prefer',
     },
   ],
+  createdAt: '2026-07-21T10:10:00Z',
   updatedAt: '2026-08-03T08:30:00Z',
 };
 
@@ -138,6 +139,7 @@ export const FALLBACK_PRODUCTS: readonly DataProduct[] = [
       },
     },
     endpoints: [],
+    createdAt: '2026-07-29T13:40:00Z',
     updatedAt: '2026-08-08T09:15:00Z',
   },
   {
@@ -161,6 +163,7 @@ export const FALLBACK_PRODUCTS: readonly DataProduct[] = [
       },
     },
     endpoints: [],
+    createdAt: '2026-07-31T09:05:00Z',
     updatedAt: '2026-08-09T07:30:00Z',
   },
   {
@@ -197,6 +200,7 @@ export const FALLBACK_PRODUCTS: readonly DataProduct[] = [
       },
     },
     endpoints: [],
+    createdAt: '2026-07-17T14:25:00Z',
     updatedAt: '2026-08-07T16:45:00Z',
   },
   {
@@ -234,6 +238,7 @@ export const FALLBACK_PRODUCTS: readonly DataProduct[] = [
       },
     },
     endpoints: [],
+    createdAt: '2026-07-24T08:15:00Z',
     updatedAt: '2026-08-09T10:10:00Z',
   },
   {
@@ -262,6 +267,7 @@ export const FALLBACK_PRODUCTS: readonly DataProduct[] = [
       },
     },
     endpoints: [],
+    createdAt: '2026-07-18T11:30:00Z',
     updatedAt: '2026-08-06T11:00:00Z',
   },
   {
@@ -289,6 +295,7 @@ export const FALLBACK_PRODUCTS: readonly DataProduct[] = [
       },
     },
     endpoints: [],
+    createdAt: '2026-08-01T09:45:00Z',
     updatedAt: '2026-08-05T13:20:00Z',
   },
 ];

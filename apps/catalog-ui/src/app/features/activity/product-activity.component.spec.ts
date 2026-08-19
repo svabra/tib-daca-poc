@@ -123,6 +123,22 @@ describe('ProductActivityComponent', () => {
     expect(root.textContent).not.toContain('must-not-render');
   });
 
+  it('renders the safe SLA lifecycle events as first-class governance activity', async () => {
+    const items = [
+      activity(1, { eventType: 'control-person-updated', category: 'governance', title: 'Kontrollperson geändert' }),
+      activity(2, { eventType: 'service-level-submitted', category: 'governance', status: 'pending', title: 'Service Level zur Prüfung übermittelt' }),
+      activity(3, { eventType: 'service-level-approved', category: 'governance', title: 'Service Level genehmigt' }),
+      activity(4, { eventType: 'service-level-published', category: 'governance', title: 'Service Level publiziert' }),
+      activity(5, { eventType: 'service-level-rejected', category: 'governance', status: 'warning', title: 'Service Level abgelehnt' }),
+      activity(6, { eventType: 'service-level-superseded', category: 'governance', title: 'Service-Level-Revision abgelöst' }),
+    ];
+    const fixture = await render(apiStub(() => of(response(items))));
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+
+    for (const item of items) expect(text).toContain(item.title);
+    expect(text).not.toContain('Technisches Katalogereignis');
+  });
+
   it('announces loading and distinguishes a filter-empty result', async () => {
     const result = new Subject<ProductActivityResponse>();
     const fixture = await render(apiStub(() => result));

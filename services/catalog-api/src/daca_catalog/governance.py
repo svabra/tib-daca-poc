@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from .control_people import is_active_publication_approver
 from .models import (
     AccessRequest,
     AuditEvent,
@@ -19,6 +20,7 @@ from .models import (
     PolicyDeployment,
     PolicyRevision,
     ProductQualityAssessment,
+    ServiceLevelRevision,
     WorkflowTask,
     utc_now,
 )
@@ -191,6 +193,15 @@ def can_view_private_product(session: Session, product: DataProduct, actor: str 
             .limit(1)
         )
         is not None
+        or session.scalar(
+            select(ServiceLevelRevision.id)
+            .where(
+                ServiceLevelRevision.data_product_id == product.id,
+                ServiceLevelRevision.control_person_user_id == actor,
+            )
+            .limit(1)
+        )
+        is not None
     )
 
 
@@ -268,10 +279,14 @@ def create_submission(
         raise HTTPException(409, "An active governance submission already exists")
 
     owner = session.get(DemoUser, actor)
-    approver = session.get(DemoUser, owner.supervisor_user_id) if owner else None
-    if owner is None or approver is None or not approver.active:
+    approver = (
+        session.get(DemoUser, product.control_person_user_id)
+        if product.control_person_user_id
+        else None
+    )
+    if owner is None or not is_active_publication_approver(approver):
         raise HTTPException(409, "The data owner has no active publication approver")
-    if approver.id == actor:
+    if approver is None or approver.id == actor:
         raise HTTPException(409, "Four-eyes approval requires a different person")
 
     current = latest_policy(session, product.id)

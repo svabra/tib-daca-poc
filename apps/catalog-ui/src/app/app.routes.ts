@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { WelcomePageComponent } from './features/welcome/welcome-page.component';
 import { PRODUCT_ACTIVITY_ROUTE } from './features/activity/product-activity.route';
+import { PRODUCT_SERVICE_LEVEL_ROUTE } from './features/service-level/product-service-level.route';
 import { PRODUCT_USAGE_ROUTE } from './features/usage/product-usage.route';
 
 export const routes: Routes = [
@@ -105,6 +106,7 @@ export const routes: Routes = [
     title: 'Datenprodukt | DaCa',
   },
   PRODUCT_USAGE_ROUTE,
+  PRODUCT_SERVICE_LEVEL_ROUTE,
   {
     path: 'products/:id/metadata',
     loadComponent: () => import('./features/metadata/metadata-studio.component').then((m) => m.MetadataStudioComponent),

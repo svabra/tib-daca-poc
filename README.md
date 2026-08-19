@@ -137,6 +137,14 @@ The read-only `Daten & Nutzung` product tab turns the same stored schema and sem
 a searchable data dictionary and safe REST/PostgreSQL quickstarts. It never renders credentials or
 secret references and does not execute product-data requests from the catalog UI.
 
+On pointer-based desktop devices, revision, quality medal and catalog creation date stay visually
+reserved but appear only when a product row is hovered, focused or has its context menu open. They
+remain permanently visible on touch devices and in forced-colors mode. The product menu links to the
+versioned `SLA & Nutzungsbedingungen` page, where the Data Owner and a separate stored control person
+use four-eyes approval: the owner maintains time-valid PoC service targets and the control person
+reviews the exact revision. Publishing an SLA never changes
+access grants, OPA/PostgreSQL policies, I14Y evidence or BAR evidence.
+
 Access decisions are deliberately two-phase: approval creates a timed PBAC/Rego draft and sets
 the request to `approved_policy_pending`; only successful publication to OPA and PostgreSQL sets
 it to `granted_original` or `granted_modified`. The DAAIF reference fixture can then be exercised

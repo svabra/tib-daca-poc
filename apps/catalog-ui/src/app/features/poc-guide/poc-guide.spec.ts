@@ -11,7 +11,7 @@ import { PocGuideOverviewComponent } from './poc-guide-overview.component';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 
 describe('PoC guide contract', () => {
-  it('defines six complete, uniquely addressable German journeys and twenty screenshots', () => {
+  it('defines six complete, uniquely addressable German journeys and twenty-one screenshots', () => {
     expect(POC_JOURNEYS.map((journey) => journey.id)).toEqual([
       'understand-and-use-product',
       'data-analysts-journey',
@@ -24,13 +24,18 @@ describe('PoC guide contract', () => {
     expect(POC_JOURNEYS[1].verification?.label).toBe('Durchgängig verifiziert');
     expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(6);
     const screenshots = POC_JOURNEYS.flatMap((journey) => journey.steps.flatMap((step) => step.screenshots ?? []));
-    expect(screenshots.length).toBe(20);
-    expect(screenshots.slice(0, 3).map((screenshot) => screenshot.src)).toEqual([
+    expect(screenshots.length).toBe(21);
+    expect(screenshots.slice(0, 4).map((screenshot) => screenshot.src)).toEqual([
       '/assets/poc-guide/journey-01-product-search.webp',
       '/assets/poc-guide/journey-01-data-dictionary.webp',
+      '/assets/poc-guide/journey-01-service-level.webp',
       '/assets/poc-guide/journey-01-endpoint-quickstart.webp',
     ]);
     const consumerActions = POC_JOURNEYS[0].steps.flatMap((step) => step.actions ?? []);
+    expect(consumerActions).toContainEqual(expect.objectContaining({
+      path: '/products/3a2930ed-3eee-599b-82b5-e138b149d1a2/sla',
+      demoUserId: 'beat.stalder',
+    }));
     expect(consumerActions).toContainEqual(expect.objectContaining({
       path: '/products/3a2930ed-3eee-599b-82b5-e138b149d1a2/usage',
       fragment: 'data-dictionary',
@@ -173,8 +178,8 @@ describe('PoC guide detail', () => {
     expect(root.textContent).toContain('Beat Stalder');
     expect(root.textContent).toContain('Joel Ruod');
     expect(root.textContent).toContain('vollständig read-only');
-    expect(root.querySelectorAll('[data-poc-guide-step]').length).toBe(6);
-    expect(root.querySelectorAll('.poc-guide-screenshot-list button').length).toBe(3);
+    expect(root.querySelectorAll('[data-poc-guide-step]').length).toBe(7);
+    expect(root.querySelectorAll('.poc-guide-screenshot-list button').length).toBe(4);
 
     const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('.poc-guide-actions a'));
     expect(links.some((link) => {
@@ -188,6 +193,7 @@ describe('PoC guide detail', () => {
       return url.pathname.endsWith('/overview') && url.searchParams.get('demoUser') === 'beat.stalder';
     })).toBe(true);
     expect(links.some((link) => link.hash === '#data-dictionary')).toBe(true);
+    expect(links.some((link) => link.pathname.endsWith('/sla'))).toBe(true);
     expect(links.some((link) => link.hash === '#endpoint-quickstart')).toBe(true);
 
     const searchAction = POC_JOURNEYS[0].steps[0].actions?.[0];

@@ -62,7 +62,8 @@ CATALOG_TABLES = {
     "product_semantic_mappings": "Confirmed or proposed product/field mappings to canonical ontology terms.",
     "provenance_events": "Ordered, append-only history for a data product.",
     "seed_markers": "Idempotency markers for deterministic PoC seed operations.",
-    "workflow_tasks": "Owner work items for quality, access governance and request processing.",
+    "service_level_revisions": "Versioned, four-eyes-reviewed best-effort service-level definitions for a data product.",
+    "workflow_tasks": "Owner and approver work items for quality, access governance, SLA review and request processing.",
 }
 
 CONTROL_PLANE_TABLES = {
@@ -97,12 +98,14 @@ CONTEXTS = (
             "`metadata_delivery_outbox.payload` is a DCAT-oriented metadata snapshot for the local I14Y simulation. It contains no product data and no external delivery URL.",
             "`metadata_publications.normalized_payload` and `poc_product_fixtures.payload` retain normalized PoC metadata, never secrets.",
             "`product_context_graphs.graph` stores deterministic nodes and edges; flexible provenance/audit `details` contain metadata only.",
+            "`service_level_revisions.definition` stores typed best-effort usage, freshness, support-window, maintenance and review-date commitments. Draft and rejection text remains private; published definitions are immutable and supersession is recorded explicitly.",
         ),
         status_notes=(
             "Product lifecycle is `draft`, `active`, `deprecated` or `retired`; classification is `public`, `internal`, `confidential` or `restricted`.",
             "Access requests progress through `submitted`, `identity_review`, `legal_review`, `conditions_review`, `approved_policy_pending`, a granted state, `rejected` or `withdrawn`. Granted states distinguish `granted_original` and `granted_modified`.",
-            "Workflow task types include `metadata_quality`, `access_governance`, `publication_approval`, `governance_correction`, `access_request_review`, simulation alerts and `group_membership_changed`; task states are `open`, `in_progress` and `completed`.",
+            "Workflow task types include `metadata_quality`, `access_governance`, `publication_approval`, `service_level_approval`, `governance_correction`, `access_request_review`, simulation alerts and `group_membership_changed`; task states are `open`, `in_progress` and `completed`.",
             "Governance submissions progress through `pending_approval`, `approved_deploying`, `approved`, `rejected` or `deployment_failed`. Discoverability and metadata publication become active only after both PostgreSQL and OPA confirm the reviewed revision.",
+            "Service-level revisions progress through `draft`, `pending_approval`, `published`, `rejected` or `withdrawn`. At most one draft or pending review exists per product, and a later publication records the effective end of the superseded revision.",
             "Identity sources are `federal`, `cantonal`, `municipal` and `federal_related`. Federal organizations are ordered by department and office and displayed as, for example, `EFD - BIT`. System groups are globally visible; custom groups are owner-isolated. Group membership revisions increase monotonically; existing policy snapshots never expand automatically.",
             "I14Y outbox entries use channel `i14y` and status `scheduled` or `simulated_delivered`; the PoC performs no external network request.",
             "Metadata publication modes are `governance_review` and `automatic`; stored states are `pending_review`, `published_incomplete` and `published`.",

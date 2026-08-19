@@ -78,7 +78,7 @@ wheels = [
 
 [[package]]
 name = "daca-sample-data-product"
-version = "0.1.8"
+version = "0.1.9"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },

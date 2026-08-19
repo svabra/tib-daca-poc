@@ -1421,3 +1421,35 @@
 @media (prefers-reduced-motion: reduce) {
   .product-usage-loader { animation: none; }
 }
+
+/* Compact product facts and keyboard-safe context menus */
+.product-table-title .product-table-summary { min-height: 22px; }
+.product-table-domain { align-self: center; }
+.product-table-progressive { display: inline-flex; align-items: center; min-width: 0; }
+.product-table-revision { white-space: nowrap; }
+.product-table-medal { min-width: 82px; }
+.product-table-date { gap: 5px; min-width: 126px; }
+.product-table-date > span { display: grid; grid-template-columns: 1fr; gap: 1px; min-height: 30px; }
+.product-table-date > span:not(:first-child) { border-top: 1px solid var(--daca-border); padding-top: 4px; }
+.product-table-date time { color: var(--daca-ink); font-size: .66rem; font-weight: 750; }
+.product-context-popover { width: 278px; }
+.product-context-popover > .product-context-sla { border-top: 2px solid var(--daca-border-strong); }
+.product-context-popover > a:focus-visible, .product-context-popover > button:focus-visible { z-index: 2; outline: 3px solid var(--daca-blue); outline-offset: -3px; }
+.product-table-actions .product-context-popover.opens-up { top: auto; bottom: calc(100% + 7px); transform-origin: right bottom; }
+.product-table-actions .product-context-popover.opens-up::after { top: auto; bottom: -6px; border: 0; border-right: 1px solid var(--daca-border-strong); border-bottom: 1px solid var(--daca-border-strong); }
+
+@media (hover: hover) and (pointer: fine) {
+  .product-table-progressive { opacity: 0; transition: opacity 140ms ease-out; }
+  .product-table tbody tr:hover .product-table-progressive,
+  .product-table tbody tr:focus-within .product-table-progressive,
+  .product-table tbody tr.has-open-menu .product-table-progressive { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-table-progressive { transition: none; }
+}
+
+@media (forced-colors: active) {
+  .product-table-progressive { opacity: 1 !important; }
+  .product-context-popover > .product-context-sla { border-top-color: CanvasText; }
+}

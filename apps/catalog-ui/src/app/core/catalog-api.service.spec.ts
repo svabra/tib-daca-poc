@@ -148,6 +148,7 @@ describe('CatalogApiService identity refresh', () => {
 
     expect(api.product().id).toBe(selectedId);
     expect(api.product().title).toBe('Routed product');
+    expect(api.product().createdAt).toBe('2026-08-13T08:00:00Z');
   });
 });
 
@@ -215,6 +216,7 @@ function wireProduct(
     contact: { email: 'owner@example.test' },
     quality: { medal: 'gold', score: 5 },
     metadata: { deliveryProtocols: ['REST'], catalogUsage: {} },
+    createdAt: '2026-08-13T08:00:00Z',
     updatedAt: '2026-08-19T08:00:00Z',
   };
 }

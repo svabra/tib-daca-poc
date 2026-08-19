@@ -40,6 +40,25 @@ describe('product activity presenter', () => {
     expect(JSON.stringify(presentation)).not.toContain('token=do-not-render');
   });
 
+  it.each([
+    'control-person-updated',
+    'service-level-submitted',
+    'service-level-approved',
+    'service-level-published',
+    'service-level-rejected',
+    'service-level-superseded',
+  ])('preserves the sanitized title for the known SLA event %s', (eventType) => {
+    const presentation = presentProductActivity({
+      ...item,
+      eventType,
+      title: 'Sicheres SLA-Ereignis',
+      description: 'Fachlich freigegebene Beschreibung.',
+    });
+
+    expect(presentation.title).toBe('Sicheres SLA-Ereignis');
+    expect(presentation.description).toBe('Fachlich freigegebene Beschreibung.');
+  });
+
   it('groups metadata and quality without mixing deployment activity', () => {
     expect(productActivityMatchesFilter(item, 'metadata_quality')).toBe(true);
     expect(productActivityMatchesFilter(item, 'deployment')).toBe(false);

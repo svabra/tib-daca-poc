@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .control_people import assign_default_control_person, is_active_publication_approver
 from .models import (
     AccessRequest,
     AdministrativeOrganization,
@@ -572,6 +573,25 @@ def seed_workflow_reference_data(session: Session) -> bool:
             product.owner_user_id = owner_id
             product.discoverable = True
             changed = True
+
+    # Every product has an explicit, eligible four-eyes control person. Preserve
+    # an existing valid assignment; repair legacy/missing assignments
+    # deterministically so repeated startup seeding remains idempotent.
+    for product in session.scalars(select(DataProduct).order_by(DataProduct.id)):
+        current = (
+            session.get(DemoUser, product.control_person_user_id)
+            if product.control_person_user_id
+            else None
+        )
+        if (
+            not is_active_publication_approver(current)
+            or current is None
+            or current.id == product.owner_user_id
+        ):
+            previous = product.control_person_user_id
+            assign_default_control_person(session, product)
+            if product.control_person_user_id != previous:
+                changed = True
 
     beat_request = session.scalar(select(AccessRequest).where(AccessRequest.requester_id == "beat.stalder", AccessRequest.status == "submitted"))
     if beat_request is not None:

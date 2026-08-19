@@ -1,12 +1,36 @@
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
+
+_HTML_PATTERN = re.compile(r"<\s*(?:!--|/?\s*[A-Za-z])[^>]*>")
+_CREDENTIAL_PATTERN = re.compile(
+    r"(?:"
+    r"\b(?:password|passwd|pwd|secret|token|api[\s_-]*key|access[\s_-]*key|"
+    r"private[\s_-]*key|authorization)\s*[:=]\s*\S+"
+    r"|\bbearer\s+[A-Za-z0-9._~+/=-]{8,}"
+    r"|-----BEGIN\s+[A-Z ]*PRIVATE KEY-----"
+    r"|\bAKIA[0-9A-Z]{16}\b"
+    r"|\b[a-z][a-z0-9+.-]*://[^\s/:@]+:[^\s/@]+@"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def reject_unsafe_service_level_text(value: str) -> str:
+    """Reject markup and credential-like values before they reach JSON or audit state."""
+    normalized = value.strip()
+    if _HTML_PATTERN.search(normalized):
+        raise ValueError("HTML is not accepted in service-level text")
+    if _CREDENTIAL_PATTERN.search(normalized):
+        raise ValueError("Credentials and secrets are not accepted in service-level text")
+    return normalized
 
 
 def to_camel(value: str) -> str:
@@ -78,6 +102,7 @@ class DataProductSummary(ApiModel):
         validation_alias="extra_metadata", serialization_alias="metadata"
     )
     quality: DataProductQualitySummary
+    created_at: datetime
     updated_at: datetime
 
 
@@ -464,6 +489,211 @@ class WeeklyAvailability(ApiModel):
         return self
 
 
+ServiceLevelStatus = Literal[
+    "draft", "pending_approval", "published", "rejected", "withdrawn"
+]
+ServiceLevelText = Annotated[str, Field(min_length=1, max_length=500)]
+FIXED_BEST_EFFORT_LIMITATION = "Keine Uptime-, RTO-/RPO- oder Lösungszeitgarantie."
+
+
+class ServiceLevelSupportWindow(ApiModel):
+    weekdays: list[
+        Literal[
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+        ]
+    ] = Field(min_length=1, max_length=7)
+    start: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    end: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    timezone: Literal["Europe/Zurich"] = "Europe/Zurich"
+
+    @model_validator(mode="after")
+    def valid_support_window(self) -> ServiceLevelSupportWindow:
+        if len(set(self.weekdays)) != len(self.weekdays):
+            raise ValueError("weekdays must not contain duplicates")
+        if self.end <= self.start:
+            raise ValueError("end must be later than start")
+        return self
+
+
+class ServiceLevelDefinition(ApiModel):
+    template_version: Literal[1] = 1
+    purpose_and_suitable_use: str = Field(min_length=20, max_length=2000)
+    availability_commitment: Literal["best_effort"] = "best_effort"
+    freshness_tolerance_business_days: int = Field(ge=0, le=365)
+    support_window: ServiceLevelSupportWindow
+    initial_response_target_support_hours: int = Field(ge=1, le=120)
+    planned_maintenance_notice_hours: int = Field(ge=0, le=720)
+    usage_conditions: list[ServiceLevelText] = Field(min_length=1, max_length=8)
+    known_limitations: list[ServiceLevelText] = Field(min_length=1, max_length=8)
+    next_review_on: date
+
+    @field_validator("purpose_and_suitable_use")
+    @classmethod
+    def normalized_purpose(cls, value: str) -> str:
+        normalized = reject_unsafe_service_level_text(value)
+        if len(normalized) < 20:
+            raise ValueError("purposeAndSuitableUse must contain at least 20 characters")
+        return normalized
+
+    @field_validator("usage_conditions", "known_limitations")
+    @classmethod
+    def normalized_unique_texts(
+        cls, value: list[str], info: ValidationInfo
+    ) -> list[str]:
+        normalized = [reject_unsafe_service_level_text(item) for item in value]
+        if any(not item for item in normalized):
+            raise ValueError("entries must not be empty")
+        if len({item.casefold() for item in normalized}) != len(normalized):
+            raise ValueError("entries must be unique")
+        if (
+            info.field_name == "known_limitations"
+            and FIXED_BEST_EFFORT_LIMITATION.casefold()
+            not in {item.casefold() for item in normalized}
+        ):
+            if len(normalized) >= 8:
+                raise ValueError(
+                    "knownLimitations must leave room for the fixed best-effort limitation"
+                )
+            normalized.append(FIXED_BEST_EFFORT_LIMITATION)
+        return normalized
+
+
+class ServiceLevelRevisionWrite(ApiModel):
+    valid_from: date
+    valid_until: date | None = None
+    definition: ServiceLevelDefinition
+
+    @model_validator(mode="after")
+    def valid_dates(self) -> ServiceLevelRevisionWrite:
+        today = datetime.now(ZoneInfo("Europe/Zurich")).date()
+        if self.valid_from < today:
+            raise ValueError("validFrom must not be before today in Europe/Zurich")
+        if self.valid_until is not None and self.valid_until < self.valid_from:
+            raise ValueError("validUntil must be on or after validFrom")
+        if self.definition.next_review_on < self.valid_from:
+            raise ValueError("nextReviewOn must be within the SLA validity period")
+        if (
+            self.valid_until is not None
+            and self.definition.next_review_on > self.valid_until
+        ):
+            raise ValueError("nextReviewOn must be within the SLA validity period")
+        return self
+
+
+class ServiceLevelPersonResponse(ApiModel):
+    display_name: str
+    organization: str
+    role: Literal["data_owner", "control_person"]
+
+
+class ServiceLevelChangeResponse(ApiModel):
+    field: str
+    previous_value: Any | None = None
+    current_value: Any | None = None
+
+
+class ServiceLevelRevisionResponse(ApiModel):
+    revision_id: uuid.UUID
+    data_product_id: uuid.UUID
+    revision: int
+    lock_version: int
+    status: ServiceLevelStatus
+    source: Literal["published", "owner_draft"]
+    valid_from: date
+    valid_until: date | None
+    effective_valid_until: date | None
+    definition: ServiceLevelDefinition
+    owner: ServiceLevelPersonResponse
+    control_person: ServiceLevelPersonResponse | None
+    created_at: datetime
+    updated_at: datetime
+    submitted_at: datetime | None
+    decided_at: datetime | None
+    published_at: datetime | None
+    decision: Literal["approve", "reject"] | None = None
+    rejection_reason: str | None = None
+    supersedes_revision: int | None = None
+    superseded_by_revision: int | None = None
+    superseded_from: date | None = None
+    changes: list[ServiceLevelChangeResponse] = Field(default_factory=list)
+
+
+class ServiceLevelBaselineResponse(ApiModel):
+    revision_id: None = None
+    revision: Literal[0] = 0
+    lock_version: Literal[0] = 0
+    status: Literal["baseline"] = "baseline"
+    source: Literal["platform_default"] = "platform_default"
+    valid_from: date
+    valid_until: None = None
+    effective_valid_until: None = None
+    definition: ServiceLevelDefinition
+    published_at: None = None
+
+
+class ServiceLevelLegalReference(ApiModel):
+    code: Literal["ISG", "ISV", "DSG", "DSV", "EMBAG", "BGÖ", "VBGÖ", "BGA", "VBGA"]
+    title: str
+    reference: str
+    url: str
+    applicability: str
+
+
+class ServiceLevelSummaryResponse(ApiModel):
+    data_product_id: uuid.UUID
+    as_of: date
+    source: Literal["platform_default", "published"]
+    state: Literal["baseline", "active", "scheduled", "expired"]
+    current: ServiceLevelBaselineResponse | ServiceLevelRevisionResponse
+    next_scheduled: ServiceLevelRevisionResponse | None
+    can_edit: bool
+    can_review: bool
+    owner: ServiceLevelPersonResponse
+    control_person: ServiceLevelPersonResponse | None
+    legal_references: list[ServiceLevelLegalReference]
+
+
+class ServiceLevelRevisionListResponse(ApiModel):
+    items: list[ServiceLevelRevisionResponse]
+    detail_level: Literal["public", "privileged"]
+    latest_revision: int
+    etag: str
+
+
+class ServiceLevelDecisionCreate(ApiModel):
+    decision: Literal["approve", "reject"]
+    reason: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def reason_matches_decision(self) -> ServiceLevelDecisionCreate:
+        self.reason = (
+            reject_unsafe_service_level_text(self.reason)
+            if self.reason and self.reason.strip()
+            else None
+        )
+        if self.decision == "reject" and self.reason is None:
+            raise ValueError("reason is required when rejecting an SLA revision")
+        if self.decision == "approve" and self.reason is not None:
+            raise ValueError("reason is only accepted when rejecting an SLA revision")
+        return self
+
+
+class ControlPersonUpdate(ApiModel):
+    control_person_user_id: str = Field(min_length=1, max_length=200)
+
+
+class ControlPersonUpdateResponse(ApiModel):
+    data_product_id: uuid.UUID
+    product_revision: int
+    control_person: ServiceLevelPersonResponse
+
+
 class EffectiveAccessGrantResponse(ApiModel):
     protocols: list[Literal["http", "postgresql"]] = Field(min_length=1)
     valid_from: date
@@ -797,6 +1027,7 @@ class WorkflowTaskResponse(ApiModel):
         "group_membership_changed",
         "publication_approval",
         "governance_correction",
+        "service_level_approval",
     ]
     status: Literal["open", "in_progress", "completed"]
     assignee_user_id: str
@@ -804,6 +1035,7 @@ class WorkflowTaskResponse(ApiModel):
     access_request_id: uuid.UUID | None
     simulation_event_id: uuid.UUID | None = None
     governance_submission_id: uuid.UUID | None = None
+    service_level_revision_id: uuid.UUID | None = None
     title: str
     detail: str
     created_at: datetime

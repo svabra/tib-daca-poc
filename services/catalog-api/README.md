@@ -9,6 +9,7 @@ This independently runnable FastAPI project is the PostgreSQL-backed metadata st
 - Read-only lineage and append-only provenance/audit history
 - Persistent access requests for people and machine identities, without credentials or secrets
 - Structured PBAC policy drafting, immutable publication/revocation revisions, and generated Rego
+- Versioned best-effort service levels with a separate control person and four-eyes publication
 - OPA bundle distribution with trusted Policy Information Point (PIP) resource attributes
 - PostgreSQL entitlement projection to the sample data product
 
@@ -46,6 +47,13 @@ Key routes:
 - `GET /api/v1/data-products/{id}/provenance`
 - `GET /api/v1/data-products/{id}/activity` — safely aggregated product lifecycle for every viewer who may see the product
 - `GET /api/v1/data-products/{id}/audit-events` — raw technical audit details, restricted to the data owner and assigned approvers
+- `GET /api/v1/data-products/{id}/service-level` — effective published SLA or the platform baseline, including scheduled successors and legal context
+- `GET|POST /api/v1/data-products/{id}/service-level/revisions` — public published history or the owner/control-person review view
+- `GET|PUT /api/v1/data-products/{id}/service-level/revisions/{revisionId}` — one visible revision; only an owner draft is editable
+- `POST /api/v1/data-products/{id}/service-level/revisions/{revisionId}/submit` — submit the exact owner draft for four-eyes review
+- `POST /api/v1/data-products/{id}/service-level/revisions/{revisionId}/withdraw` — withdraw a pending review as owner
+- `POST /api/v1/data-products/{id}/service-level/revisions/{revisionId}/decision` — approve or reject as the assigned control person
+- `PUT /api/v1/data-products/{id}/control-person` — assign an active publication approver distinct from the owner
 - `POST /api/v1/data-products/{id}/access-requests` — submit an access request
 - `GET /api/v1/data-products/{id}/access-requests/mine` — current actor's requests for one product
 - `GET /api/v1/access-requests/mine` — current actor's requests across the catalog
@@ -58,6 +66,13 @@ Key routes:
 - `GET /health/live` and `GET /health/ready`
 
 Metadata, endpoint, and policy writes require `If-Match`. Read the resource’s `ETag` first. Missing preconditions return `428`; stale revisions return `412`.
+
+Service-level writes use the same optimistic concurrency rules. Creation compares `If-Match`
+with the latest SLA revision (`"0"` before the first draft); mutations compare it with the row's
+lock version. Exactly one draft or pending review may exist per product. Published definitions are
+immutable, dates are inclusive in `Europe/Zurich`, and a newer publication explicitly supersedes
+the prior published revision. SLA publication records catalog evidence only: it does not mutate
+access requests, policy deployments, OPA/PostgreSQL grants, I14Y delivery or BAR evidence.
 
 ```bash
 curl -i http://localhost:8001/api/v1/data-products/11111111-1111-4111-8111-111111111111

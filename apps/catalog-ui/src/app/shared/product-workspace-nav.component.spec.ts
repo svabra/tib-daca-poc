@@ -18,11 +18,13 @@ describe('ProductWorkspaceNavComponent', () => {
     expect(links.map((link) => link.textContent?.trim())).toEqual([
       'Übersicht',
       'Daten & Nutzung',
+      'SLA',
       'Metadaten',
       'Freigaben',
       'Lineage & Provenienz',
       'Änderungsverlauf',
     ]);
+    expect(links[2]?.getAttribute('href')).toBe('/products/product-1/sla');
     expect(links.at(-1)?.getAttribute('href')).toBe('/products/product-1/history');
     expect(links.at(-1)?.getAttribute('aria-current')).toBe('page');
   });
