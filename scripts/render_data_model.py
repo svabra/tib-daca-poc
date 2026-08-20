@@ -36,7 +36,10 @@ class ContextSpec:
 
 
 CATALOG_TABLES = {
-    "access_requests": "Requests by people or machines for time-bounded access to a data product.",
+    "access_requests": (
+        "Requests by people or machines for time-bounded access, including renewals linked "
+        "to immutable source-grant evidence."
+    ),
     "administrative_organizations": "Ordered federal organization hierarchy covering the Federal Council, Chancellery, departments, offices and affiliated units.",
     "audit_events": "Append-only catalog audit trail keyed by stable resource type and identifier.",
     "canonical_ontology_terms": "Classes and properties belonging to one canonical ontology version.",
@@ -202,9 +205,7 @@ def discover_persistence_models(root: Path) -> set[str]:
     return discovered
 
 
-def validate_context_inventory(
-    root: Path, contexts: tuple[ContextSpec, ...] = CONTEXTS
-) -> None:
+def validate_context_inventory(root: Path, contexts: tuple[ContextSpec, ...] = CONTEXTS) -> None:
     discovered = discover_persistence_models(root)
     documented = {Path(spec.model_path).as_posix() for spec in contexts}
     unknown = sorted(discovered - documented)
@@ -263,7 +264,9 @@ def migration_state(root: Path, spec: ContextSpec) -> tuple[list[str], str]:
             raise DataModelDocumentationError(f"Cannot read revision from {migration}")
         down = values.get("down_revision")
         if down is not None and not isinstance(down, str):
-            raise DataModelDocumentationError(f"Branching migrations are not supported by the documentation generator: {migration}")
+            raise DataModelDocumentationError(
+                f"Branching migrations are not supported by the documentation generator: {migration}"
+            )
         revisions[revision] = down
     referenced = {down for down in revisions.values() if down is not None}
     heads = sorted(set(revisions) - referenced)
@@ -340,7 +343,8 @@ def schema_signature(metadata: MetaData) -> str:
                         "flags": column_flags(table, column),
                         "default": default_text(column),
                         "foreign_keys": sorted(
-                            f"{fk.target_fullname}:{fk.ondelete or ''}" for fk in column.foreign_keys
+                            f"{fk.target_fullname}:{fk.ondelete or ''}"
+                            for fk in column.foreign_keys
                         ),
                     }
                     for column in table.columns
@@ -381,7 +385,7 @@ def render_mermaid(metadata: MetaData) -> str:
                 parent_cardinality = "o|" if column.nullable else "||"
                 child_cardinality = "o|" if column.primary_key or column.unique else "o{"
                 lines.append(
-                    f'    {parent} {parent_cardinality}--{child_cardinality} '
+                    f"    {parent} {parent_cardinality}--{child_cardinality} "
                     f'{table.name} : "{column.name}"'
                 )
     lines.append("```")
@@ -390,7 +394,9 @@ def render_mermaid(metadata: MetaData) -> str:
 
 def render_constraints(table: Any) -> list[str]:
     rows: list[str] = []
-    for constraint in sorted(table.constraints, key=lambda item: item.name or item.__class__.__name__):
+    for constraint in sorted(
+        table.constraints, key=lambda item: item.name or item.__class__.__name__
+    ):
         if isinstance(constraint, CheckConstraint):
             rows.append(f"- Check `{constraint.name or 'unnamed'}`: `{constraint.sqltext}`")
         elif isinstance(constraint, UniqueConstraint):
@@ -408,11 +414,20 @@ def render_constraints(table: Any) -> list[str]:
 
 
 def render_table(table: Any, description: str) -> str:
-    lines = [f"### `{table.name}`", "", description, "", "| Column | Type | Null | Keys | Default |", "|---|---|:---:|---|---|"]
+    lines = [
+        f"### `{table.name}`",
+        "",
+        description,
+        "",
+        "| Column | Type | Null | Keys | Default |",
+        "|---|---|:---:|---|---|",
+    ]
     for column in table.columns:
         nullable = "yes" if column.nullable else "no"
         keys = ", ".join(column_flags(table, column)) or "—"
-        lines.append(f"| `{column.name}` | `{type_name(column)}` | {nullable} | {keys} | {default_text(column)} |")
+        lines.append(
+            f"| `{column.name}` | `{type_name(column)}` | {nullable} | {keys} | {default_text(column)} |"
+        )
     lines.extend(["", "Constraints and indexes:", "", *render_constraints(table)])
     return "\n".join(lines)
 
@@ -478,16 +493,48 @@ def context_template(spec: ContextSpec) -> str:
 def parse_security_objects(root: Path) -> dict[str, list[str]]:
     init_path = root / "infra/postgres/init/00-create-databases.sh"
     init_text = init_path.read_text(encoding="utf-8")
-    roles = sorted({match.group(1) or match.group(2) for match in re.finditer(r'CREATE ROLE\s+(?:"([^"]+)"|([\w-]+))', init_text)})
+    roles = sorted(
+        {
+            match.group(1) or match.group(2)
+            for match in re.finditer(r'CREATE ROLE\s+(?:"([^"]+)"|([\w-]+))', init_text)
+        }
+    )
     databases = sorted(set(re.findall(r"CREATE DATABASE\s+([\w-]+)", init_text)))
     migration_text = "\n".join(
         path.read_text(encoding="utf-8")
         for path in sorted((root / "services/sample-data-product/alembic/versions").glob("*.py"))
     )
-    functions = sorted({f"{name}({args.strip()})" for name, args in re.findall(r"CREATE(?: OR REPLACE)? FUNCTION\s+([\w-]+)\(([^)]*)\)", migration_text)})
-    rls = sorted({f"{table}: {mode.lower()}" for table, mode in re.findall(r"ALTER TABLE\s+([\w-]+)\s+(ENABLE|FORCE) ROW LEVEL SECURITY", migration_text)})
-    policies = sorted({f"{policy} on {table}" for policy, table in re.findall(r"CREATE POLICY\s+([\w-]+)\s+ON\s+([\w-]+)", migration_text)})
-    return {"roles": roles, "databases": databases, "functions": functions, "rls": rls, "policies": policies}
+    functions = sorted(
+        {
+            f"{name}({args.strip()})"
+            for name, args in re.findall(
+                r"CREATE(?: OR REPLACE)? FUNCTION\s+([\w-]+)\(([^)]*)\)", migration_text
+            )
+        }
+    )
+    rls = sorted(
+        {
+            f"{table}: {mode.lower()}"
+            for table, mode in re.findall(
+                r"ALTER TABLE\s+([\w-]+)\s+(ENABLE|FORCE) ROW LEVEL SECURITY", migration_text
+            )
+        }
+    )
+    policies = sorted(
+        {
+            f"{policy} on {table}"
+            for policy, table in re.findall(
+                r"CREATE POLICY\s+([\w-]+)\s+ON\s+([\w-]+)", migration_text
+            )
+        }
+    )
+    return {
+        "roles": roles,
+        "databases": databases,
+        "functions": functions,
+        "rls": rls,
+        "policies": policies,
+    }
 
 
 def validate_security_descriptions(objects: dict[str, list[str]]) -> None:
@@ -531,7 +578,7 @@ def render_overview_region(root: Path) -> str:
         '    CATALOG -->|entitlements + revision| SAMPLE["Sample data product\\nPostgreSQL"]',
         '    CONTROL["Optional control plane\\nPostgreSQL"] -.->|health and desired configuration| CATALOG',
         '    CONSUMER["Person or machine"] -->|HTTP via PEP| SAMPLE',
-        '    CONSUMER -->|PostgreSQL wire + RLS| SAMPLE',
+        "    CONSUMER -->|PostgreSQL wire + RLS| SAMPLE",
         "```",
         "",
         "Arrows are API calls or projections, never cross-database foreign keys. The control plane is not a runtime dependency of a standalone catalog.",
@@ -556,7 +603,10 @@ def render_overview_region(root: Path) -> str:
         "",
         "| Database | Purpose |",
         "|---|---|",
-        *(f"| `{database}` | {DATABASE_DESCRIPTIONS[database]} |" for database in objects["databases"]),
+        *(
+            f"| `{database}` | {DATABASE_DESCRIPTIONS[database]} |"
+            for database in objects["databases"]
+        ),
         "",
         "Sample-product security objects:",
         "",
@@ -594,7 +644,9 @@ def replace_generated(document: str, generated: str) -> str:
     replacement = f"{GENERATED_START}\n\n{generated.rstrip()}\n\n{GENERATED_END}"
     updated, count = pattern.subn(lambda _match: replacement, document)
     if count != 1:
-        raise DataModelDocumentationError("Document must contain exactly one generated data-model region")
+        raise DataModelDocumentationError(
+            "Document must contain exactly one generated data-model region"
+        )
     return updated.rstrip() + "\n"
 
 
@@ -603,7 +655,9 @@ def expected_documents(root: Path) -> dict[Path, str]:
     docs_dir = root / "docs/data-model"
     expected: dict[Path, str] = {}
     index_path = docs_dir / "README.md"
-    index_current = index_path.read_text(encoding="utf-8") if index_path.exists() else overview_template()
+    index_current = (
+        index_path.read_text(encoding="utf-8") if index_path.exists() else overview_template()
+    )
     expected[index_path] = replace_generated(index_current, render_overview_region(root))
     for spec in CONTEXTS:
         path = docs_dir / f"{spec.key}.md"
@@ -633,8 +687,7 @@ def validate_document_set(expected: dict[Path, str]) -> None:
     extra = sorted(
         path.name
         for path in data_model_dir.glob("*.md")
-        if path.resolve() not in known
-        and GENERATED_START in path.read_text(encoding="utf-8")
+        if path.resolve() not in known and GENERATED_START in path.read_text(encoding="utf-8")
     )
     if extra:
         raise DataModelDocumentationError(
@@ -658,8 +711,12 @@ def update_documents(root: Path, check: bool) -> list[str]:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Render or verify the DaCa persistent data-model documentation.")
-    parser.add_argument("--check", action="store_true", help="Fail if generated documentation is stale.")
+    parser = argparse.ArgumentParser(
+        description="Render or verify the DaCa persistent data-model documentation."
+    )
+    parser.add_argument(
+        "--check", action="store_true", help="Fail if generated documentation is stale."
+    )
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     return parser.parse_args()
 

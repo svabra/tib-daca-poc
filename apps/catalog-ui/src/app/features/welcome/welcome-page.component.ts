@@ -162,12 +162,19 @@ function selectSessionHeroTheme() {
             <p class="daca-eyebrow">Für {{ api.identityUser().displayName }}</p>
             <h2 id="welcome-alerts-title">Handlungsbedarf</h2>
           </div>
-          @if (!ownerInboxLoading()) {
+          @if (taskLoadError()) {
+            <span><strong>–</strong> Status unbekannt</span>
+          } @else if (!ownerInboxLoading()) {
             <span><strong>{{ actionCount() }}</strong> {{ actionCount() === 1 ? 'offene Aufgabe' : 'offene Aufgaben' }}</span>
           }
         </div>
 
-        @if (ownerInboxLoading()) {
+        @if (taskLoadError(); as loadError) {
+          <div class="daca-card welcome-alert-empty is-error" role="alert">
+            <strong>Aufgabenstatus unbekannt</strong><p>{{ loadError }}</p>
+            <button class="daca-button is-secondary" type="button" (click)="retryTaskStatus()">Erneut laden</button>
+          </div>
+        } @else if (ownerInboxLoading()) {
           <div class="daca-card welcome-alert-empty" aria-live="polite">Aufgaben werden geladen…</div>
         } @else if (actionCount()) {
           <div class="welcome-alert-list">
@@ -323,7 +330,8 @@ export class WelcomePageComponent {
   readonly expertSearchQueryParams = computed(() => expertSearchQueryParams(this.searchQuery()));
   readonly searchMinimumLength = CATALOG_SEARCH_MIN_LENGTH;
   readonly ownerRequests = this.api.ownerAccessRequests;
-  readonly ownerInboxLoading = this.api.ownerAccessRequestLoading;
+  readonly ownerInboxLoading = computed(() => this.api.ownerAccessRequestLoading() || this.api.workflowTasksLoading());
+  readonly taskLoadError = computed(() => this.api.ownerAccessRequestError() || this.api.workflowTasksError());
   readonly actionTasks = computed(() => this.api.workflowTasks().filter((task) => task.taskType.startsWith('simulation_') || task.taskType === 'publication_approval' || task.taskType === 'service_level_approval'));
   readonly actionCount = computed(() => this.ownerRequests().length + this.actionTasks().length);
   readonly heroTheme = selectSessionHeroTheme();
@@ -331,6 +339,11 @@ export class WelcomePageComponent {
   readonly heroWebpSrcset = `/assets/${this.heroTheme.assetName}-960.webp 960w, /assets/${this.heroTheme.assetName}-1600.webp 1600w`;
   readonly heroFallbackSrc = `/assets/${this.heroTheme.assetName}-1600.webp`;
   readonly heroImageLoaded = signal(false);
+
+  retryTaskStatus(): void {
+    this.api.refreshOwnerAccessRequestInbox();
+    this.api.refreshWorkflowTasks();
+  }
 
   requestProductTitle(request: StoredAccessRequest): string {
     return this.api.products().find((product) => product.id === request.dataProductId)?.title ?? 'Datenprodukt';

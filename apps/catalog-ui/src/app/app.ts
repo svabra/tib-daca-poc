@@ -51,6 +51,7 @@ export class App {
         { label: 'Journey 04: Metadatenqualität', path: '/poc-guide/metadata-quality' },
         { label: 'Journey 05: Governance-Ausnahmefall', path: '/poc-guide/governance-exception' },
         { label: 'Journey 06: Änderungsverlauf', path: '/poc-guide/change-history' },
+        { label: 'Journey 07: Zugriff verlängern', path: '/poc-guide/access-renewal' },
         { label: 'Simulationen und Grenzfälle', path: '/poc-simulation' },
       ],
     },

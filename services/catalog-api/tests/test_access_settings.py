@@ -17,9 +17,7 @@ OWNER_HEADERS = {"X-DaCa-User": "kassandra.valdata"}
 
 
 def test_federal_organizations_are_ordered_and_bfs_is_searchable(client):
-    response = client.get(
-        "/api/v1/identity-directory/organizations", headers=OWNER_HEADERS
-    )
+    response = client.get("/api/v1/identity-directory/organizations", headers=OWNER_HEADERS)
     assert response.status_code == 200
     organizations = response.json()
     labels = [item["label"] for item in organizations]
@@ -63,11 +61,14 @@ def test_directory_search_covers_all_sources_and_excludes_inactive(client, sessi
     with session_factory() as session:
         session.get(IdentityDirectoryEntry, "martin.baumann").active = False
         session.commit()
-    assert client.get(
-        "/api/v1/identity-directory/people",
-        headers=OWNER_HEADERS,
-        params={"q": "martin.baumann"},
-    ).json() == []
+    assert (
+        client.get(
+            "/api/v1/identity-directory/people",
+            headers=OWNER_HEADERS,
+            params={"q": "martin.baumann"},
+        ).json()
+        == []
+    )
 
 
 def test_group_search_returns_member_preview(client):
@@ -78,9 +79,7 @@ def test_group_search_returns_member_preview(client):
     )
     assert groups.status_code == 200
     assert groups.json()[0]["memberCount"] == 2
-    detail = client.get(
-        "/api/v1/identity-directory/groups/kanton-neuchatel", headers=OWNER_HEADERS
-    )
+    detail = client.get("/api/v1/identity-directory/groups/kanton-neuchatel", headers=OWNER_HEADERS)
     assert {member["id"] for member in detail.json()["members"]} == {
         "noemie.rochat",
         "lucien.morel",
@@ -93,17 +92,13 @@ def test_group_search_returns_member_preview(client):
     assert treasury.status_code == 200
     assert treasury.json()["organizationId"] == "efd-efv"
     assert treasury.json()["userManaged"] is False
-    assert [member["id"] for member in treasury.json()["members"]] == [
-        "daniel.aebischer"
-    ]
+    assert [member["id"] for member in treasury.json()["members"]] == ["daniel.aebischer"]
     filtered = client.get(
         "/api/v1/identity-directory/groups",
         headers=OWNER_HEADERS,
         params={"organization_id": "efd-efv"},
     )
-    assert [group["id"] for group in filtered.json()] == [
-        "efd-efv-bundestresorerie"
-    ]
+    assert [group["id"] for group in filtered.json()] == ["efd-efv-bundestresorerie"]
 
 
 def test_owner_can_create_mixed_custom_group_and_other_users_cannot_read_it(client):
@@ -131,10 +126,13 @@ def test_owner_can_create_mixed_custom_group_and_other_users_cannot_read_it(clie
         params={"q": "BFS Präsentation"},
     )
     assert [item["id"] for item in own_groups.json()] == [group_id]
-    assert client.get(
-        f"/api/v1/identity-directory/groups/{group_id}",
-        headers={"X-DaCa-User": "beat.stalder"},
-    ).status_code == 404
+    assert (
+        client.get(
+            f"/api/v1/identity-directory/groups/{group_id}",
+            headers={"X-DaCa-User": "beat.stalder"},
+        ).status_code
+        == 404
+    )
 
 
 def access_grant(subject_type: str, subject_id: str, *, i14y: bool = False) -> dict:
@@ -203,7 +201,15 @@ def test_group_snapshot_and_postgresql_projection_are_server_generated(
     }
     with session_factory():
         result = project_to_postgresql(
-            type("S", (), {"sample_policy_projection_url": "http://sample", "sample_policy_projection_token": None, "projection_timeout_seconds": 1})(),
+            type(
+                "S",
+                (),
+                {
+                    "sample_policy_projection_url": "http://sample",
+                    "sample_policy_projection_token": None,
+                    "projection_timeout_seconds": 1,
+                },
+            )(),
             ESTV_PRODUCT_ID,
             42,
             response.json()["definition"],
@@ -238,9 +244,7 @@ def test_upsert_preserves_active_grants_and_requires_current_revision(client):
     assert subjects == {"kanton-st-gallen", "svc-new-consumer"}
 
 
-def test_i14y_outbox_waits_for_both_targets_and_deduplicates(
-    client, session_factory, monkeypatch
-):
+def test_i14y_outbox_waits_for_both_targets_and_deduplicates(client, session_factory, monkeypatch):
     monkeypatch.setattr(
         "daca_catalog.main.project_to_postgresql",
         lambda settings, product_id, revision, definition: ProjectionResult(
@@ -314,7 +318,13 @@ def test_future_i14y_consent_is_scheduled_not_delivered(client, session_factory,
     client.put(
         "/internal/v1/policy-deployments/acknowledge",
         headers={"Authorization": "Bearer test-internal-token"},
-        json={"policyRevisionId": published["id"], "target": "opa", "observedRevision": published["revision"], "state": "deployed", "error": None},
+        json={
+            "policyRevisionId": published["id"],
+            "target": "opa",
+            "observedRevision": published["revision"],
+            "state": "deployed",
+            "error": None,
+        },
     )
     with session_factory() as session:
         outbox = session.scalar(select(MetadataDeliveryOutbox))
@@ -343,7 +353,13 @@ def test_group_revision_drift_creates_owner_task_without_expanding_snapshot(
     client.put(
         "/internal/v1/policy-deployments/acknowledge",
         headers={"Authorization": "Bearer test-internal-token"},
-        json={"policyRevisionId": published["id"], "target": "opa", "observedRevision": published["revision"], "state": "deployed", "error": None},
+        json={
+            "policyRevisionId": published["id"],
+            "target": "opa",
+            "observedRevision": published["revision"],
+            "state": "deployed",
+            "error": None,
+        },
     )
     with session_factory() as session:
         group = session.get(IdentityGroup, "kanton-st-gallen")
@@ -351,5 +367,8 @@ def test_group_revision_drift_creates_owner_task_without_expanding_snapshot(
         session.commit()
     tasks = client.get("/api/v1/tasks/mine", headers=OWNER_HEADERS).json()
     assert any(task["taskType"] == "group_membership_changed" for task in tasks)
-    latest = client.get(f"/api/v1/data-products/{ESTV_PRODUCT_ID}/policies/latest").json()
+    latest = client.get(
+        f"/api/v1/data-products/{ESTV_PRODUCT_ID}/policies/latest",
+        headers=OWNER_HEADERS,
+    ).json()
     assert latest["definition"]["grants"][-1]["groupSnapshot"]["membershipRevision"] == 1

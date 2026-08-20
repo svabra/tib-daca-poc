@@ -55,6 +55,11 @@ export const routes: Routes = [
     title: 'Datenprodukt im DaCa eingereicht | PoC Simulation',
   },
   {
+    path: 'poc-simulation/access-renewal',
+    loadComponent: () => import('./features/poc-simulation/access-renewal-fixture.component').then((m) => m.AccessRenewalFixtureComponent),
+    title: 'Auslaufende Freigabe | PoC Simulation',
+  },
+  {
     path: 'poc-simulation/quality-below-threshold',
     loadComponent: () => import('./features/poc-simulation/poc-state-event.component').then((m) => m.PocStateEventComponent),
     data: { eventType: 'quality_below_threshold' },
@@ -99,6 +104,11 @@ export const routes: Routes = [
     path: 'products/:id/access-request',
     loadComponent: () => import('./features/access-request/access-request-form.component').then((m) => m.AccessRequestFormComponent),
     title: 'Zugriff anfragen | DaCa',
+  },
+  {
+    path: 'products/:id/access-renewal/:grantId',
+    loadComponent: () => import('./features/access-request/access-renewal-form.component').then((m) => m.AccessRenewalFormComponent),
+    title: 'Freigabe verlängern | DaCa',
   },
   {
     path: 'products/:id/overview',

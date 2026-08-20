@@ -11,7 +11,7 @@ import { PocGuideOverviewComponent } from './poc-guide-overview.component';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 
 describe('PoC guide contract', () => {
-  it('defines six complete, uniquely addressable German journeys and twenty-one screenshots', () => {
+  it('defines seven complete, uniquely addressable journeys and twenty-six screenshot contracts', () => {
     expect(POC_JOURNEYS.map((journey) => journey.id)).toEqual([
       'understand-and-use-product',
       'data-analysts-journey',
@@ -19,17 +19,25 @@ describe('PoC guide contract', () => {
       'metadata-quality',
       'governance-exception',
       'change-history',
+      'access-renewal',
     ]);
-    expect(POC_JOURNEYS.map((journey) => journey.number)).toEqual(['01', '02', '03', '04', '05', '06']);
+    expect(POC_JOURNEYS.map((journey) => journey.number)).toEqual(['01', '02', '03', '04', '05', '06', '07']);
     expect(POC_JOURNEYS[1].verification?.label).toBe('Durchgängig verifiziert');
-    expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(6);
+    expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(7);
     const screenshots = POC_JOURNEYS.flatMap((journey) => journey.steps.flatMap((step) => step.screenshots ?? []));
-    expect(screenshots.length).toBe(21);
+    expect(screenshots.length).toBe(26);
     expect(screenshots.slice(0, 4).map((screenshot) => screenshot.src)).toEqual([
       '/assets/poc-guide/journey-01-product-search.webp',
       '/assets/poc-guide/journey-01-data-dictionary.webp',
       '/assets/poc-guide/journey-01-service-level.webp',
       '/assets/poc-guide/journey-01-endpoint-quickstart.webp',
+    ]);
+    expect(screenshots.slice(-5).map((screenshot) => screenshot.src)).toEqual([
+      '/assets/poc-guide/journey-07-expiry.webp',
+      '/assets/poc-guide/journey-07-request.webp',
+      '/assets/poc-guide/journey-07-owner-review.webp',
+      '/assets/poc-guide/journey-07-four-eyes.webp',
+      '/assets/poc-guide/journey-07-runtime.webp',
     ]);
     const consumerActions = POC_JOURNEYS[0].steps.flatMap((step) => step.actions ?? []);
     expect(consumerActions).toContainEqual(expect.objectContaining({
@@ -57,7 +65,9 @@ describe('PoC guide contract', () => {
       }
     }
     expect(POC_GUIDE_CAPABILITIES.every((item) => item.status !== 'out-of-scope')).toBe(true);
+    expect(POC_GUIDE_CAPABILITIES.map((item) => item.title)).toContain('Auslaufende Freigaben rechtzeitig verlängern');
     expect(POC_GUIDE_LIMITS.every((item) => item.status === 'out-of-scope')).toBe(true);
+    expect(POC_GUIDE_LIMITS.map((item) => item.title)).toContain('Keine Rezertifizierungskampagnen');
   });
 
   it('renders the overview with journey links, boundaries and the simulation compatibility link', async () => {
@@ -71,8 +81,10 @@ describe('PoC guide contract', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('h1')?.textContent).toContain('PoC Leitfaden');
     const journeyCards = root.querySelectorAll('[data-poc-guide-journey]');
-    expect(journeyCards.length).toBe(6);
+    expect(journeyCards.length).toBe(7);
     expect(journeyCards.item(0).getAttribute('data-poc-guide-journey')).toBe('understand-and-use-product');
+    expect(journeyCards.item(6).getAttribute('data-poc-guide-journey')).toBe('access-renewal');
+    expect(journeyCards.item(6).textContent).toContain('Zugriff vor Ablauf verlängern');
     expect(root.textContent).toContain('Das können Sie testen');
     expect(root.textContent).toContain('Das ist nicht Teil des PoC');
     expect(root.querySelector('a[href="/poc-simulation"]')).not.toBeNull();
@@ -227,6 +239,51 @@ describe('PoC guide detail', () => {
       demoUserId: 'beat.stalder',
     });
     expect(identity.select).toHaveBeenCalledWith('beat.stalder');
+  });
+
+  it('renders the access-renewal journey with stable entry routes and dynamic-ID hand-offs', async () => {
+    const { fixture, identity } = await render('access-renewal');
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(root.querySelector('h1')?.textContent).toContain('Zugriff vor Ablauf verlängern');
+    expect(root.textContent).toContain('Beat Stalder');
+    expect(root.textContent).toContain('Kassandra Valdata');
+    expect(root.textContent).toContain('Thomas Kriegli');
+    expect(root.textContent).toContain('14 verbleibende Tage');
+    expect(root.textContent).toContain('OPA und PostgreSQL');
+    expect(root.textContent).toContain('200');
+    expect(root.textContent).toContain('403');
+    expect(root.querySelectorAll('[data-poc-guide-step]').length).toBe(7);
+    expect(root.querySelectorAll('.poc-guide-screenshot-list button').length).toBe(5);
+
+    const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('.poc-guide-actions a'));
+    expect(links.some((link) => {
+      const url = new URL(link.href);
+      return url.pathname === '/poc-simulation/access-renewal'
+        && url.searchParams.get('demoUser') === 'kassandra.valdata';
+    })).toBe(true);
+    expect(links.some((link) => {
+      const url = new URL(link.href);
+      return url.pathname === '/products/11111111-1111-4111-8111-111111111111/usage'
+        && url.searchParams.get('demoUser') === 'beat.stalder';
+    })).toBe(true);
+    expect(links.some((link) => {
+      const url = new URL(link.href);
+      return url.pathname === '/tasks'
+        && url.searchParams.get('product') === '11111111-1111-4111-8111-111111111111'
+        && url.searchParams.get('demoUser') === 'kassandra.valdata';
+    })).toBe(true);
+    expect(links.some((link) => {
+      const url = new URL(link.href);
+      return url.pathname === '/tasks'
+        && url.searchParams.get('demoUser') === 'thomas.kriegli';
+    })).toBe(true);
+    expect(links.every((link) => !link.pathname.includes('/access-renewal/'))).toBe(true);
+
+    const thomasAction = POC_JOURNEYS[6].steps[4].actions?.[0];
+    expect(thomasAction).toBeDefined();
+    fixture.componentInstance.selectDemoUser(thomasAction!);
+    expect(identity.select).toHaveBeenCalledWith('thomas.kriegli');
   });
 
   it('shows a stable not-found state for unknown journey IDs', async () => {

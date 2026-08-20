@@ -15,26 +15,41 @@ vi.mock('@bit-daca/design-system', async () => {
   return { StatusBadgeComponent: StatusBadgeStub, DacaGlossaryTermComponent: GlossaryTermStub };
 });
 
+function apiStub() {
+  return {
+    ownerAccessRequests: signal([]),
+    ownerAccessRequestLoading: signal(false),
+    ownerAccessRequestError: signal<string | null>(null),
+    workflowTasks: signal([]),
+    workflowTasksLoading: signal(false),
+    workflowTasksError: signal<string | null>(null),
+    products: signal([]),
+    refreshOwnerAccessRequestInbox: vi.fn(),
+    refreshWorkflowTasks: vi.fn(),
+  };
+}
+
+async function render(api = apiStub()) {
+  const emptyQuery = convertToParamMap({});
+  await TestBed.configureTestingModule({
+    imports: [OwnerTasksComponent],
+    providers: [
+      provideRouter([]),
+      { provide: CatalogApiService, useValue: api },
+      { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: emptyQuery }, queryParamMap: of(emptyQuery) } },
+    ],
+  }).compileComponents();
+  const fixture = TestBed.createComponent(OwnerTasksComponent);
+  fixture.detectChanges();
+  return { fixture, api };
+}
+
 describe('OwnerTasksComponent service-level workflow task', () => {
   afterEach(() => TestBed.resetTestingModule());
 
   it('links an SLA approval task directly to its assigned revision review', async () => {
-    const emptyQuery = convertToParamMap({});
-    const api = {
-      ownerAccessRequests: signal([]),
-      ownerAccessRequestLoading: signal(false),
-      workflowTasks: signal([]),
-      products: signal([]),
-    };
-    await TestBed.configureTestingModule({
-      imports: [OwnerTasksComponent],
-      providers: [
-        provideRouter([]),
-        { provide: CatalogApiService, useValue: api },
-        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: emptyQuery }, queryParamMap: of(emptyQuery) } },
-      ],
-    }).compileComponents();
-    const component = TestBed.createComponent(OwnerTasksComponent).componentInstance;
+    const { fixture } = await render();
+    const component = fixture.componentInstance;
     const task = {
       taskType: 'service_level_approval',
       dataProductId: 'product-1',
@@ -44,5 +59,31 @@ describe('OwnerTasksComponent service-level workflow task', () => {
     expect(component.taskLabel(task.taskType)).toBe('SLA-Kontrolle');
     expect(component.taskRoute(task)).toEqual(['/products', 'product-1', 'sla']);
     expect(component.taskQueryParams(task)).toEqual({ review: 'revision-2' });
+  });
+
+  it('shows an unknown owner-inbox status with retry instead of claiming that the inbox is empty', async () => {
+    const api = apiStub();
+    api.ownerAccessRequestError.set('Zugriffsanfragen konnten nicht geladen werden. Der Aufgabenstatus ist unbekannt.');
+    const { fixture } = await render(api);
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(root.textContent).toContain('Aufgabenstatus unbekannt');
+    expect(root.textContent).toContain('Zugriffsanfragen konnten nicht geladen werden');
+    expect(root.textContent).not.toContain('Keine offenen Zugriffsanfragen');
+    root.querySelector<HTMLButtonElement>('[data-testid="retry-owner-inbox"]')!.click();
+    expect(api.refreshOwnerAccessRequestInbox).toHaveBeenCalledOnce();
+  });
+
+  it('shows an unknown approver-task status with retry instead of presenting a zero-task result', async () => {
+    const api = apiStub();
+    api.workflowTasksError.set('Weitere Aufgaben konnten nicht geladen werden. Der Aufgabenstatus ist unbekannt.');
+    const { fixture } = await render(api);
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(root.textContent).toContain('Aufgabenstatus unbekannt');
+    expect(root.textContent).toContain('Weitere Aufgaben konnten nicht geladen werden');
+    expect(root.textContent).not.toContain('0 offene Aufgaben');
+    root.querySelector<HTMLButtonElement>('[data-testid="retry-workflow-tasks"]')!.click();
+    expect(api.refreshWorkflowTasks).toHaveBeenCalledOnce();
   });
 });

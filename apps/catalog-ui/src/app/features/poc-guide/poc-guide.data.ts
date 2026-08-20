@@ -2,6 +2,7 @@ import { PocGuideCapability, PocGuideStatus, PocJourney } from './poc-guide.mode
 
 const IMAGE_ROOT = '/assets/poc-guide';
 const DATA_ANALYST_JOURNEY_PRODUCT_ID = '3a2930ed-3eee-599b-82b5-e138b149d1a2';
+const ACCESS_RENEWAL_PRODUCT_ID = '11111111-1111-4111-8111-111111111111';
 
 export const POC_GUIDE_STATUS_LABELS: Readonly<Record<PocGuideStatus, string>> = {
   implemented: 'Technisch umgesetzt',
@@ -22,7 +23,12 @@ export const POC_GUIDE_CAPABILITIES: readonly PocGuideCapability[] = [
   },
   {
     title: 'Zugriffe prüfen und technisch durchsetzen',
-    description: 'Policy-Entwürfe, Vier-Augen-Freigabe, OPA-Entscheide und der geschützte REST-Endpunkt sind wirksam.',
+    description: 'Neue und verlängerte Freigaben durchlaufen Policy-Entwurf, Vier-Augen-Prüfung sowie dieselbe OPA- und PostgreSQL-Projektion.',
+    status: 'implemented',
+  },
+  {
+    title: 'Auslaufende Freigaben rechtzeitig verlängern',
+    description: 'Data Consumer sehen das Ablaufdatum, beantragen eine vorbefüllte Verlängerung und setzen den Zugriff erst nach erneutem Entscheid über das bisherige Enddatum hinaus fort.',
     status: 'implemented',
   },
   {
@@ -61,6 +67,11 @@ export const POC_GUIDE_LIMITS: readonly PocGuideCapability[] = [
   {
     title: 'Keine Produktionsfreigabe',
     description: 'Der PoC ersetzt keine Datenschutz-, Sicherheits-, Archivierungs- oder Betriebsfreigabe.',
+    status: 'out-of-scope',
+  },
+  {
+    title: 'Keine Rezertifizierungskampagnen',
+    description: 'Die Journey verlängert eine einzelne Freigabe; E-Mail-Erinnerungen, periodische Kampagnen und Massenprüfungen sind nicht umgesetzt.',
     status: 'out-of-scope',
   },
 ];
@@ -616,6 +627,169 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
         }],
         checkpoint: 'Keine Aktion dieser Journey hat Produkt, Policy oder Auditspur verändert.',
         warning: 'Der Änderungsverlauf ist nachvollziehbare Produktevidenz, aber kein formeller Audit-Workflow mit Feststellungen und Sign-off.',
+      },
+    ],
+  },
+  {
+    id: 'access-renewal',
+    number: '07',
+    title: 'Zugriff vor Ablauf verlängern',
+    summary: 'Eine in 14 Tagen auslaufende Freigabe verlängern, erneut im Vier-Augen-Prinzip prüfen und bis zur technischen Durchsetzung nachvollziehen.',
+    duration: '10–15 Minuten',
+    difficulty: 'Mittel',
+    systems: ['DaCa', 'API', 'OPA', 'PostgreSQL', 'geschützter REST-Endpunkt'],
+    roles: [
+      { name: 'Beat Stalder', responsibility: 'Data Consumer · beantragt die Verlängerung' },
+      { name: 'Kassandra Valdata', responsibility: 'Data Owner · prüft Alt und Neu und erstellt den Policy-Entwurf' },
+      { name: 'Thomas Kriegli', responsibility: 'Kontrollperson · führt die Vier-Augen-Freigabe durch' },
+    ],
+    prerequisites: [
+      'Die deterministische Verlängerungs-Fixture für «ESTV-Steuerstatistik nach Kanton» ist vorbereitet oder wurde zurückgesetzt.',
+      'Beat besitzt darin einen aktiven persönlichen REST-Zugriff, der exakt in 14 Tagen abläuft.',
+      'DaCa API, OPA, PostgreSQL und der geschützte REST-Endpunkt sind erreichbar.',
+    ],
+    outcome: 'Beats bestehende Freigabe ist mit dem Verlängerungsantrag verknüpft. Nach dem konvergierten Deployment gilt das neue Enddatum, OPA und PostgreSQL melden dieselbe Revision und der REST-Endpunkt liefert Beat 200 sowie einer fremden Identität 403.',
+    repeatability: 'Der bestätigungspflichtige Fixture-Reset entfernt nur die erzeugten Verlängerungsartefakte und stellt den deterministischen Ausgangszustand mit 14 Tagen Restlaufzeit wieder her.',
+    steps: [
+      {
+        title: 'Ablauf in 14 Tagen als Beat erkennen',
+        description: 'Öffnen Sie zuerst die Verlängerungs-Fixture und stellen Sie den Ausgangszustand her. Wechseln Sie dann zu «Daten & Nutzung» als Beat. Prüfen Sie den Hinweis «Läuft in 14 Tagen ab», das bisherige Enddatum sowie Protokoll, Variante und erlaubtes Zeitfenster der aktiven Freigabe.',
+        status: 'implemented',
+        actions: [
+          {
+            label: 'Verlängerungs-Fixture vorbereiten',
+            target: 'internal',
+            path: '/poc-simulation/access-renewal',
+            demoUserId: 'kassandra.valdata',
+          },
+          {
+            label: 'Auslaufenden Zugriff als Beat öffnen',
+            target: 'internal',
+            path: `/products/${ACCESS_RENEWAL_PRODUCT_ID}/usage`,
+            demoUserId: 'beat.stalder',
+          },
+        ],
+        checkpoint: 'Die Freigabe ist noch aktiv und DaCa zeigt exakt 14 verbleibende Tage; der Warnhinweis erteilt selbst keinen zusätzlichen Zugriff.',
+        warning: 'Nur das Vorbereiten und Zurücksetzen der synthetischen Fixture ist eine PoC-Hilfe; Ablaufberechnung und Freigabestatus stammen aus dem echten Zugriffsvertrag.',
+        screenshots: [{
+          src: `${IMAGE_ROOT}/journey-07-expiry.webp`,
+          alt: 'DaCa Daten-und-Nutzung-Seite als Beat Stalder mit einer aktiven REST-Freigabe, die in 14 Tagen abläuft.',
+          caption: 'Beat erkennt Enddatum, verbleibende 14 Tage und die Verlängerungsaktion direkt bei seiner bestehenden Freigabe.',
+        }],
+      },
+      {
+        title: 'Vorbefüllte Verlängerung beantragen',
+        description: 'Wählen Sie «Zugriff verlängern». Identität, REST-Protokoll, Datenvariante und Zeitfenster werden unverändert aus der aktiven Freigabe übernommen. Prüfen Sie den Verwendungszweck, bestätigen Sie das vorgeschlagene neue Enddatum und senden Sie den Antrag ab.',
+        status: 'implemented',
+        actions: [{
+          label: 'Verlängerung bei der Freigabe starten',
+          target: 'internal',
+          path: `/products/${ACCESS_RENEWAL_PRODUCT_ID}/usage`,
+          demoUserId: 'beat.stalder',
+        }],
+        checkpoint: 'Der neue Antrag nennt die bisherige Freigabe als Ursprung und steht auf «Eingereicht»; die alte Freigabe bleibt bis zu ihrem Enddatum unverändert.',
+        warning: 'Vorbefüllt bedeutet nicht automatisch genehmigt. Beat bestätigt Zweck und neues Enddatum bewusst.',
+        screenshots: [{
+          src: `${IMAGE_ROOT}/journey-07-request.webp`,
+          alt: 'Vorbefüllter DaCa Verlängerungsantrag für Beat Stalder mit bisheriger Freigabe und vorgeschlagenem neuem Enddatum.',
+          caption: 'Die Verlängerung übernimmt die vorhandenen Nutzungsparameter, bleibt aber ein eigener, nachvollziehbarer Antrag.',
+        }],
+      },
+      {
+        title: 'Alt und Neu als Kassandra vergleichen',
+        description: 'Öffnen Sie Kassandras Aufgaben und wählen Sie Beats Verlängerungsantrag. Vergleichen Sie nebeneinander Identität, Zweck, Protokoll, Variante, Gültigkeit und Zeitfenster der bisherigen und beantragten Freigabe.',
+        status: 'implemented',
+        actions: [{
+          label: 'Verlängerungsaufgabe als Kassandra öffnen',
+          target: 'internal',
+          path: '/tasks',
+          demoUserId: 'kassandra.valdata',
+          queryParams: { product: ACCESS_RENEWAL_PRODUCT_ID },
+        }],
+        checkpoint: 'Der technische Freigabeumfang bleibt unverändert; nur Zweck und Enddatum werden bewusst neu bestätigt. Kassandra kann die bestehende Freigabe eindeutig zum neuen Antrag zurückverfolgen.',
+        screenshots: [{
+          src: `${IMAGE_ROOT}/journey-07-owner-review.webp`,
+          alt: 'DaCa Aufgabenansicht für Kassandra Valdata mit Alt-Neu-Vergleich einer beantragten Zugriffsverlängerung.',
+          caption: 'Der strukturierte Vergleich macht sichtbar, welche Nutzungsparameter unverändert bleiben und welches Enddatum neu beantragt wird.',
+        }],
+      },
+      {
+        title: 'Neue Policy-Revision vorbereiten',
+        description: 'Genehmigen Sie den fachlichen Verlängerungsantrag. DaCa erzeugt daraus eine unveränderliche neue Policy-Revision und übermittelt sie direkt an die gespeicherte Kontrollperson. Öffnen Sie danach die Policy-Evidenz und kontrollieren Sie Subjekt, REST-Protokoll, Datenvariante, Zeitfenster und neues Enddatum.',
+        status: 'implemented',
+        actions: [{
+          label: 'Policy-Entwurf als Kassandra prüfen',
+          target: 'internal',
+          path: `/products/${ACCESS_RENEWAL_PRODUCT_ID}/security`,
+          demoUserId: 'kassandra.valdata',
+        }],
+        checkpoint: 'Die geprüfte Revision referenziert den Verlängerungsantrag und wartet auf Thomas’ Entscheid; die aktive Revision ist noch unverändert.',
+      },
+      {
+        title: 'Vier-Augen-Freigabe als Thomas durchführen',
+        description: 'Wechseln Sie zu Thomas, öffnen Sie die zugewiesene Governance-Aufgabe und prüfen Sie Alt-Neu-Vergleich, Antrag, Policy-Revision und Zielsysteme. Genehmigen Sie die Verlängerung als zweite Person.',
+        status: 'implemented',
+        actions: [{
+          label: 'Aufgaben als Thomas öffnen',
+          target: 'internal',
+          path: '/tasks',
+          demoUserId: 'thomas.kriegli',
+          queryParams: { product: ACCESS_RENEWAL_PRODUCT_ID },
+        }],
+        checkpoint: 'Thomas ist weder Antragsteller noch Data Owner; sein Entscheid startet die Projektion der neuen Revision.',
+        screenshots: [{
+          src: `${IMAGE_ROOT}/journey-07-four-eyes.webp`,
+          alt: 'DaCa Governance-Prüfung als Thomas Kriegli mit Verlängerungsantrag, Policy-Revision und Alt-Neu-Vergleich.',
+          caption: 'Die gespeicherte Kontrollperson bestätigt die neue Laufzeit unabhängig, bevor sie technisch wirksam werden kann.',
+        }],
+      },
+      {
+        title: 'Deployment und Laufzeitwirkung bestätigen',
+        description: 'Prüfen Sie nach der Freigabe den Deployment-Status. OPA und PostgreSQL müssen dieselbe neue Policy-Revision bestätigen. Rufen Sie danach den geschützten REST-Endpunkt innerhalb des Zeitfensters auf: Beat erhält 200, eine nicht berechtigte Identität 403.',
+        status: 'implemented',
+        actions: [
+          {
+            label: 'Technische Policy-Evidenz öffnen',
+            target: 'internal',
+            path: `/products/${ACCESS_RENEWAL_PRODUCT_ID}/security`,
+            demoUserId: 'kassandra.valdata',
+          },
+          {
+            label: 'REST-Quickstart als Beat öffnen',
+            target: 'internal',
+            path: `/products/${ACCESS_RENEWAL_PRODUCT_ID}/usage`,
+            demoUserId: 'beat.stalder',
+            fragment: 'endpoint-quickstart',
+          },
+        ],
+        checkpoint: 'Die Verlängerung gilt erst bei konvergierter Revision. 200 für Beat und 403 für eine fremde Identität belegen die laufende Durchsetzung, nicht nur einen UI-Status.',
+        warning: 'Weichen OPA- und PostgreSQL-Revision voneinander ab, ist die Publikation nicht abgeschlossen.',
+        screenshots: [{
+          src: `${IMAGE_ROOT}/journey-07-runtime.webp`,
+          alt: 'DaCa Policy-Evidenz mit identischer OPA- und PostgreSQL-Revision sowie erfolgreichem HTTP-200-Laufzeittest für Beat Stalder.',
+          caption: 'Die Aufnahme belegt die konvergierte Projektion und Beats echten HTTP-200-Aufruf; der anschliessende Kontrollaufruf mit fremder Identität muss 403 liefern.',
+        }],
+      },
+      {
+        title: 'Änderungsverlauf prüfen und Fixture zurücksetzen',
+        description: 'Öffnen Sie den Änderungsverlauf und prüfen Sie Antrag, Owner-Entscheid, Policy-Revision, Vier-Augen-Freigabe und Deployment als zusammenhängende Ereignisse. Kehren Sie danach zur Fixture-Verwaltung zurück und setzen Sie nur die Verlängerungs-Fixture zurück.',
+        status: 'implemented',
+        actions: [
+          {
+            label: 'Änderungsverlauf als Kassandra öffnen',
+            target: 'internal',
+            path: `/products/${ACCESS_RENEWAL_PRODUCT_ID}/history`,
+            demoUserId: 'kassandra.valdata',
+          },
+          {
+            label: 'Verlängerungs-Fixture zurücksetzen',
+            target: 'internal',
+            path: '/poc-simulation/access-renewal',
+            demoUserId: 'kassandra.valdata',
+          },
+        ],
+        checkpoint: 'Nach dem Reset zeigt Beats Ausgangsfreigabe wieder exakt 14 verbleibende Tage und es ist kein offener Verlängerungsantrag vorhanden.',
+        warning: 'Der Reset betrifft ausschliesslich die synthetische Verlängerungs-Fixture; der Reset-Nachweis bleibt nachvollziehbar.',
       },
     ],
   },

@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { FALLBACK_PRODUCTS } from '../../core/catalog.seed';
+import { OwnedAccessConsumer } from '../../core/catalog.models';
 import { MyDataProductsComponent } from './my-data-products.component';
 
 describe('MyDataProductsComponent quality medals', () => {
@@ -122,5 +123,51 @@ describe('MyDataProductsComponent quality medals', () => {
     await fixture.whenStable();
     expect(fixture.componentInstance.activeProductMenuId()).toBeNull();
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it('labels a policy-direct consumer grant without fabricating a request number', async () => {
+    const product = FALLBACK_PRODUCTS[0];
+    const consumers: OwnedAccessConsumer[] = [{
+      dataProductId: product.id,
+      consumerType: 'person',
+      identityId: 'direct.person',
+      displayName: 'Direkte Person',
+      organization: 'Bundesamt',
+      grants: [{
+        grantId: 'direct-policy-grant',
+        policyRevision: 9,
+        requestNumber: null,
+        protocol: 'http',
+        variant: 'original',
+        validFrom: '2026-01-01',
+        validUntil: '2026-12-31',
+        purpose: null,
+        expiresInDays: 133,
+        expiryState: 'active',
+      }],
+    }];
+    const api = {
+      identityUser: signal({ displayName: 'Kassandra Valdata', organization: 'ESTV', avatarUrl: null }),
+      identityUserId: () => 'kassandra.valdata',
+      loading: signal(false),
+      usingFallback: signal(false),
+      products: signal([product]),
+      ownedAccessConsumers: signal(consumers),
+    };
+    await TestBed.configureTestingModule({
+      imports: [MyDataProductsComponent],
+      providers: [
+        provideRouter([]),
+        { provide: CatalogApiService, useValue: api },
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) } } },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(MyDataProductsComponent);
+    fixture.componentInstance.consumerDrawerProduct.set(product);
+    fixture.detectChanges();
+
+    const drawer = fixture.nativeElement.querySelector('.access-consumer-drawer') as HTMLElement;
+    expect(drawer.textContent).toContain('Direkte Policy-Freigabe · Revision 9');
+    expect(drawer.textContent).not.toContain('null');
   });
 });

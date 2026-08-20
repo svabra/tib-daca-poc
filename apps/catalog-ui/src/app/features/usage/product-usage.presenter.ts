@@ -1,5 +1,6 @@
 import {
   EndpointDescriptor,
+  ProductEffectiveAccessGrant,
   ProductDictionaryField,
   ProductQualityMapping,
 } from '../../core/catalog.models';
@@ -23,7 +24,23 @@ export interface PostgreSQLQuickstart {
   query: string;
 }
 
+export interface ExpiringAccessGrant {
+  grant: ProductEffectiveAccessGrant;
+  daysRemaining: number;
+}
+
 const MEDIA_TYPE = /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+(?:\s*;\s*[A-Za-z0-9!#$&^_.+-]+=[A-Za-z0-9!#$&^_.+-]+)*$/;
+/** Returns the nearest server-classified expiry without recomputing its clock. */
+export function nextExpiringAccessGrant(
+  grants: readonly ProductEffectiveAccessGrant[],
+  warningDays = 30,
+): ExpiringAccessGrant | null {
+  const candidates = grants
+    .filter((grant) => grant.expiryState === 'expiringSoon')
+    .filter((grant) => Number.isInteger(grant.expiresInDays) && grant.expiresInDays >= 0 && grant.expiresInDays <= warningDays)
+    .map((grant) => ({ grant, daysRemaining: grant.expiresInDays }));
+  return candidates.sort((left, right) => left.daysRemaining - right.daysRemaining)[0] ?? null;
+}
 
 export function presentDictionaryFields(
   fields: readonly ProductDictionaryField[],

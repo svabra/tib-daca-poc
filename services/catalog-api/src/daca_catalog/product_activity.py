@@ -104,26 +104,18 @@ def product_activity(
     privileged = is_privileged_product_auditor(session, product, actor)
     submissions = list(
         session.scalars(
-            select(GovernanceSubmission).where(
-                GovernanceSubmission.data_product_id == product.id
-            )
+            select(GovernanceSubmission).where(GovernanceSubmission.data_product_id == product.id)
         )
     )
     access_requests = list(
-        session.scalars(
-            select(AccessRequest).where(AccessRequest.data_product_id == product.id)
-        )
+        session.scalars(select(AccessRequest).where(AccessRequest.data_product_id == product.id))
     )
     policies = list(
-        session.scalars(
-            select(PolicyRevision).where(PolicyRevision.data_product_id == product.id)
-        )
+        session.scalars(select(PolicyRevision).where(PolicyRevision.data_product_id == product.id))
     )
     service_levels = list(
         session.scalars(
-            select(ServiceLevelRevision).where(
-                ServiceLevelRevision.data_product_id == product.id
-            )
+            select(ServiceLevelRevision).where(ServiceLevelRevision.data_product_id == product.id)
         )
     )
     service_level_by_revision = {item.revision: item for item in service_levels}
@@ -149,7 +141,7 @@ def product_activity(
         for event in session.scalars(
             select(AuditEvent).where(
                 AuditEvent.resource_type == "access-request",
-                AuditEvent.action == "submitted",
+                AuditEvent.action.in_(("submitted", "renewal-submitted")),
             )
         )
         if event.details.get("dataProductId") == str(product.id)
@@ -270,9 +262,7 @@ def product_activity(
             actor_user=actors.get(event.actor),
             submission=related_submission,
             policy_revision_by_id=policy_revision_by_id,
-            submission_policy_revision=submission_policy_revisions.get(
-                correlated_submission_id
-            ),
+            submission_policy_revision=submission_policy_revisions.get(correlated_submission_id),
             access_request=access_request_by_id.get(event.resource_id),
         )
         items.append(item)
@@ -301,19 +291,20 @@ def _activity_item(
         submission_policy_revision=submission_policy_revision,
     )
     product_revision = (
-        event.revision if event.resource_type == "data-product" else _reviewed_product_revision(submission)
+        event.revision
+        if event.resource_type == "data-product"
+        else _reviewed_product_revision(submission)
     )
     facts = _facts(event, access_request=access_request)
-    key = "activity-" + hashlib.sha256(
-        f"{event.id}:{presentation.event_type}".encode()
-    ).hexdigest()[:16]
+    key = (
+        "activity-"
+        + hashlib.sha256(f"{event.id}:{presentation.event_type}".encode()).hexdigest()[:16]
+    )
     technical_evidence: list[ProductActivityFact] = []
     if privileged:
         target = _deployment_target(event.details.get("target"))
         if target:
-            technical_evidence.append(
-                ProductActivityFact(label="Deployment-Ziel", value=target)
-            )
+            technical_evidence.append(ProductActivityFact(label="Deployment-Ziel", value=target))
         technical_evidence.append(
             ProductActivityFact(label="Korrelations-ID", value="KOR-" + key[-12:].upper())
         )
@@ -502,6 +493,30 @@ def _presentation(event: AuditEvent) -> ActivityPresentation:
             "Zugriff beantragt",
             "Für dieses Datenprodukt wurde eine Zugriffsanfrage eingereicht.",
         )
+    if action == "renewal-submitted" and resource_type == "access-request":
+        return ActivityPresentation(
+            "access-renewal-submitted",
+            "access",
+            "pending",
+            "Verlängerung beantragt",
+            "Eine bestehende Freigabe soll mit unverändertem Umfang länger gültig bleiben.",
+        )
+    if action == "renewal-linked-to-policy-revision":
+        return ActivityPresentation(
+            "access-renewal-policy-prepared",
+            "access",
+            "pending",
+            "Verlängerung in Policy vorbereitet",
+            "Der geprüfte Antrag wurde an eine unveränderliche neue Policy-Revision gebunden.",
+        )
+    if action == "renewal-rejected-by-control-person":
+        return ActivityPresentation(
+            "access-renewal-rejected",
+            "access",
+            "warning",
+            "Verlängerung abgelehnt",
+            "Die unabhängige Kontrollperson hat die Verlängerung abgelehnt.",
+        )
     if action == "rejected" and resource_type == "access-request":
         return ActivityPresentation(
             "access-request-rejected",
@@ -526,6 +541,22 @@ def _presentation(event: AuditEvent) -> ActivityPresentation:
             "Zur Vier-Augen-Freigabe übermittelt",
             "Metadaten, Empfänger und Zugriffsbedingungen warten auf die unabhängige Prüfung.",
         )
+    if action == "access-renewal-submitted-for-four-eyes-approval":
+        return ActivityPresentation(
+            "access-renewal-governance-submitted",
+            "governance",
+            "pending",
+            "Verlängerung zur Vier-Augen-Prüfung übermittelt",
+            "Die Kontrollperson vergleicht die bestehende Freigabe mit dem verlängerten Enddatum.",
+        )
+    if action == "access-renewal-rejected":
+        return ActivityPresentation(
+            "access-renewal-governance-rejected",
+            "governance",
+            "warning",
+            "Verlängerung in Vier-Augen-Prüfung abgelehnt",
+            "Die bestehende Freigabe bleibt bis zu ihrem bisherigen Enddatum wirksam.",
+        )
     if action == "rejected" and resource_type == "governance-submission":
         return ActivityPresentation(
             "governance-rejected",
@@ -542,6 +573,14 @@ def _presentation(event: AuditEvent) -> ActivityPresentation:
             "Publikation genehmigt",
             "Die Vier-Augen-Prüfung ist abgeschlossen; die technische Aktivierung läuft.",
         )
+    if action == "access-renewal-approved-deployment-started":
+        return ActivityPresentation(
+            "access-renewal-approved-deploying",
+            "governance",
+            "pending",
+            "Verlängerung genehmigt",
+            "OPA und PostgreSQL gleichen die neue Policy-Revision ab; die bisherige Freigabe behält ihr Enddatum.",
+        )
     if action in {"approval-deployment-failed", "deployment-failed"}:
         return ActivityPresentation(
             "publication-deployment-failed",
@@ -550,6 +589,17 @@ def _presentation(event: AuditEvent) -> ActivityPresentation:
             "Technische Aktivierung fehlgeschlagen",
             "Mindestens ein Zielsystem hat die geprüfte Policy nicht bestätigt; der Zugriff bleibt gesperrt.",
         )
+    if action in {
+        "access-renewal-approval-deployment-failed",
+        "access-renewal-deployment-failed",
+    }:
+        return ActivityPresentation(
+            "access-renewal-deployment-failed",
+            "deployment",
+            "failure",
+            "Verlängerung technisch nicht aktiviert",
+            "Die Zielsysteme sind nicht konvergent; die bisherige Freigabe gilt nur bis zu ihrem bisherigen Enddatum.",
+        )
     if action == "deployment-confirmed-publication-activated":
         return ActivityPresentation(
             "publication-activated",
@@ -557,6 +607,30 @@ def _presentation(event: AuditEvent) -> ActivityPresentation:
             "success",
             "Datenprodukt und Zugriffe aktiviert",
             "OPA und PostgreSQL haben dieselbe Policy-Revision erfolgreich bestätigt.",
+        )
+    if action == "access-renewal-deployment-confirmed":
+        return ActivityPresentation(
+            "access-renewal-activated",
+            "deployment",
+            "success",
+            "Verlängerung aktiviert",
+            "OPA und PostgreSQL haben dieselbe verlängerte Policy-Revision bestätigt.",
+        )
+    if action == "access-renewal-fixture-prepared":
+        return ActivityPresentation(
+            "access-renewal-fixture-prepared",
+            "poc_system",
+            "success",
+            "Verlängerungsdemo vorbereitet",
+            "Eine isoliert rücksetzbare Freigabe mit nahem Ablauf wurde explizit vorbereitet.",
+        )
+    if action == "access-renewal-fixture-reset":
+        return ActivityPresentation(
+            "access-renewal-fixture-reset",
+            "poc_system",
+            "success",
+            "Verlängerungsdemo zurückgesetzt",
+            "Die Fixture-eigenen Anträge und Projektionen wurden für einen neuen Durchlauf zurückgesetzt.",
         )
     if action.startswith("poc-simulation-") and action.endswith("-triggered"):
         return ActivityPresentation(
@@ -615,15 +689,11 @@ def _facts(
                 if isinstance(item, str) and item in FIELD_LABELS
             ]
             if labels:
-                facts.append(
-                    ProductActivityFact(label="Geänderte Felder", value=", ".join(labels))
-                )
+                facts.append(ProductActivityFact(label="Geänderte Felder", value=", ".join(labels)))
     elif event.action == "quality-reviewed":
         score = _safe_int(details.get("score"), lower=0, upper=6)
         if score is not None:
-            facts.append(
-                ProductActivityFact(label="Qualitätskriterien", value=f"{score} von 6")
-            )
+            facts.append(ProductActivityFact(label="Qualitätskriterien", value=f"{score} von 6"))
         medal = details.get("medal")
         if isinstance(medal, str) and medal in {"bronze", "silver", "gold", "platinum"}:
             facts.append(ProductActivityFact(label="Qualitätsstufe", value=medal.title()))
@@ -634,9 +704,7 @@ def _facts(
     elif event.resource_type == "service-level":
         revision = _positive_int(details.get("serviceLevelRevision"))
         if revision is not None:
-            facts.append(
-                ProductActivityFact(label="Service-Level-Revision", value=str(revision))
-            )
+            facts.append(ProductActivityFact(label="Service-Level-Revision", value=str(revision)))
         status = details.get("serviceLevelStatus")
         status_labels = {
             "draft": "Entwurf",
@@ -651,7 +719,9 @@ def _facts(
         valid_until = details.get("effectiveValidUntil") or details.get("validUntil")
         if isinstance(valid_from, str):
             validity = valid_from
-            validity += f" bis {valid_until}" if isinstance(valid_until, str) else " bis auf Weiteres"
+            validity += (
+                f" bis {valid_until}" if isinstance(valid_until, str) else " bis auf Weiteres"
+            )
             facts.append(ProductActivityFact(label="Gültigkeit", value=validity))
     elif event.action == "access-governance-draft-created":
         count = _safe_int(details.get("grants"), lower=0, upper=100_000)
@@ -669,6 +739,13 @@ def _facts(
                     value="Person" if consumer_type == "person" else "Maschine",
                 )
             )
+    elif event.action == "renewal-submitted":
+        previous = details.get("previousValidUntil")
+        requested = details.get("requestedValidUntil")
+        if isinstance(previous, str):
+            facts.append(ProductActivityFact(label="Bisher gültig bis", value=previous))
+        if isinstance(requested, str):
+            facts.append(ProductActivityFact(label="Beantragt bis", value=requested))
     elif event.action in {"approved-policy-draft-created", "linked-to-policy-revision"}:
         variant = details.get("variant") or (
             access_request.granted_variant if access_request is not None else None
@@ -680,7 +757,12 @@ def _facts(
                     value="Original" if variant == "original" else "Angepasst",
                 )
             )
-    elif event.action in {"approved-deployment-started", "deployment-failed"}:
+    elif event.action in {
+        "approved-deployment-started",
+        "deployment-failed",
+        "access-renewal-approved-deployment-started",
+        "access-renewal-deployment-failed",
+    }:
         targets = details.get("targets")
         if isinstance(targets, list):
             labels = [label for item in targets if (label := _deployment_target(item))]
@@ -699,7 +781,9 @@ def _facts(
         suffix = "-triggered" if event.action.endswith("-triggered") else "-reset"
         kind = event.action.removeprefix("poc-simulation-").removesuffix(suffix)
         if kind in POC_EVENT_LABELS:
-            facts.append(ProductActivityFact(label="Demonstrationsfall", value=POC_EVENT_LABELS[kind]))
+            facts.append(
+                ProductActivityFact(label="Demonstrationsfall", value=POC_EVENT_LABELS[kind])
+            )
     return facts
 
 
@@ -769,6 +853,11 @@ def _actor(
 
 
 def _system_actor_name(event: AuditEvent, normalized_actor: str) -> str | None:
+    if normalized_actor == "daca-fixture" and event.action in {
+        "access-renewal-fixture-prepared",
+        "access-renewal-fixture-reset",
+    }:
+        return "DaCa PoC-Fixture"
     if event.action == "metadata-publication-received" and normalized_actor == "daaif":
         return "DAAIF"
     if event.action == "seeded" and normalized_actor == "daca-bootstrap":
@@ -776,7 +865,12 @@ def _system_actor_name(event: AuditEvent, normalized_actor: str) -> str | None:
     if (
         event.resource_type == "governance-submission"
         and event.action
-        in {"deployment-failed", "deployment-confirmed-publication-activated"}
+        in {
+            "deployment-failed",
+            "deployment-confirmed-publication-activated",
+            "access-renewal-deployment-failed",
+            "access-renewal-deployment-confirmed",
+        }
         and normalized_actor == "daca-deployment-observer"
     ):
         return "DaCa Deployment-Überwachung"
@@ -787,7 +881,11 @@ def _actor_role(resource_type: str, action: str) -> str:
     if action == "metadata-publication-received":
         return "Quellsystem"
     if resource_type == "access-request":
-        return "Datenkonsument/in" if action == "submitted" else "Data Owner"
+        if action in {"submitted", "renewal-submitted"}:
+            return "Datenkonsument/in"
+        if action == "renewal-rejected-by-control-person":
+            return "Kontrollperson"
+        return "Data Owner"
     if resource_type == "governance-submission":
         return "Publikationsfreigabe"
     if resource_type == "service-level":
@@ -817,9 +915,7 @@ def _positive_int(value: Any) -> int | None:
 def _protocol(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
-    return {"http": "REST", "postgresql": "PostgreSQL", "both": "REST und PostgreSQL"}.get(
-        value
-    )
+    return {"http": "REST", "postgresql": "PostgreSQL", "both": "REST und PostgreSQL"}.get(value)
 
 
 def _deployment_target(value: Any) -> str | None:

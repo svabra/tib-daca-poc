@@ -1,8 +1,9 @@
 import { normalizeEndpoint } from '../../core/catalog-api.service';
-import { EndpointDescriptor, ProductDictionaryField, ProductQualityMapping } from '../../core/catalog.models';
+import { EndpointDescriptor, ProductDictionaryField, ProductEffectiveAccessGrant, ProductQualityMapping } from '../../core/catalog.models';
 import {
   endpointIsInternal,
   filterDictionaryFields,
+  nextExpiringAccessGrant,
   postgreSQLQuickstart,
   presentDictionaryFields,
   restQuickstart,
@@ -22,6 +23,27 @@ const mappings: ProductQualityMapping[] = [{
 }];
 
 describe('product usage presenter', () => {
+  it('selects only the nearest active grant expiring within 30 calendar days', () => {
+    const grants = [
+      effectiveGrant({ grantId: 'thirty', expiresInDays: 30, validUntil: '2026-09-19' }),
+      effectiveGrant({ grantId: 'fourteen', expiresInDays: 14, validUntil: '2026-09-03' }),
+      effectiveGrant({ grantId: 'later', expiresInDays: 72, expiryState: 'active', validUntil: '2026-10-31' }),
+    ];
+
+    expect(nextExpiringAccessGrant(grants)).toEqual({
+      grant: grants[1],
+      daysRemaining: 14,
+    });
+  });
+
+  it('ignores inconsistent server expiry states and values outside the warning window', () => {
+    expect(nextExpiringAccessGrant([
+      effectiveGrant({ expiresInDays: -1 }),
+      effectiveGrant({ expiresInDays: 31 }),
+      effectiveGrant({ expiresInDays: 14, expiryState: 'active' }),
+    ])).toBeNull();
+  });
+
   it('derives transparent metadata gaps and searches all dictionary meanings', () => {
     const presented = presentDictionaryFields(fields, mappings);
 
@@ -113,3 +135,22 @@ describe('product usage presenter', () => {
     expect(endpointIsInternal({ id: 'three', protocol: 'http-rest', title: 'API', method: 'GET', url: 'https://data.example.admin.ch/api', mediaType: 'application/json' })).toBe(false);
   });
 });
+
+function effectiveGrant(overrides: Partial<ProductEffectiveAccessGrant> = {}): ProductEffectiveAccessGrant {
+  return {
+    grantId: 'grant',
+    subjectType: 'person' as const,
+    protocols: ['http'],
+    dataVariant: 'original' as const,
+    validFrom: '2026-01-01',
+    validUntil: '2026-09-03',
+    weeklyAvailability: null,
+    purpose: 'Kantonale Steueranalyse',
+    expiresInDays: 14,
+    expiryState: 'expiringSoon' as const,
+    sourceRequestId: 'request',
+    sourceRequestNumber: 'ZA-2026-0001',
+    renewalEligibility: { eligible: true, reason: 'eligible' as const, renewalRequestId: null },
+    ...overrides,
+  };
+}
