@@ -90,8 +90,10 @@ jobs:
             --env BERN_DB_PASSWORD=daca_bern_test \
             --volume "$PWD/infra/postgres/init:/docker-entrypoint-initdb.d:ro" \
             postgres:${{ matrix.postgres-version }}
-          for _ in $(seq 1 40); do
-            if docker exec daca-postgres-compat pg_isready -U daca_admin -d postgres; then
+          for _ in $(seq 1 60); do
+            if docker logs daca-postgres-compat 2>&1 \
+                | grep --quiet "PostgreSQL init process complete; ready for start up" \
+              && docker exec daca-postgres-compat pg_isready -U daca_admin -d postgres; then
               exit 0
             fi
             sleep 2
