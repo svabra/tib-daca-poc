@@ -1,6 +1,6 @@
 {
   "name": "@bit-daca/design-system",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "private": true,
   "type": "module",
   "sideEffects": [
@@ -13,6 +13,7 @@
   "peerDependencies": {
     "@angular/common": "^22.1.0",
     "@angular/core": "^22.1.0",
-    "@angular/router": "^22.1.0"
+    "@angular/router": "^22.1.0",
+    "@angular/service-worker": "^22.1.0"
   }
 }

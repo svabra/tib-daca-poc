@@ -1,6 +1,11 @@
 {
   "$schema": "./node_modules/@angular/service-worker/config/schema.json",
   "index": "/index.html",
+  "appData": {
+    "schemaVersion": 1,
+    "appId": "catalog-ui",
+    "releaseVersion": "0.1.12"
+  },
   "assetGroups": [
     {
       "name": "app-shell",
@@ -22,14 +27,27 @@
       "name": "decorative-media",
       "installMode": "lazy",
       "updateMode": "lazy",
-      "resources": { "files": ["/assets/swiss-*-*.avif", "/assets/swiss-*-*.webp"] }
+      "resources": {
+        "files": [
+          "/assets/swiss-*-*.avif",
+          "/assets/swiss-*-*.webp"
+        ]
+      }
     },
     {
       "name": "lazy-features",
       "installMode": "lazy",
       "updateMode": "prefetch",
-      "resources": { "files": ["/chunk-*.js"] }
+      "resources": {
+        "files": [
+          "/chunk-*.js"
+        ]
+      }
     }
   ],
-  "navigationUrls": ["/**", "!/**/*.*", "!/api/**"]
+  "navigationUrls": [
+    "/**",
+    "!/**/*.*",
+    "!/api/**"
+  ]
 }

@@ -44,6 +44,10 @@ jobs:
             echo "Git tag ${GITHUB_REF_NAME} does not match VERSION (${version}); expected v${version}." >&2
             exit 1
           fi
+      - name: Install Chromium for the production PWA update smoke
+        run: uv run --package daca-journey-runner playwright install --with-deps chromium
+      - name: Verify production PWA updates across two releases
+        run: uv run --package daca-journey-runner python scripts/test_pwa_update.py
       - name: Run complete test suite
         run: npm test
       - name: Build all artifacts

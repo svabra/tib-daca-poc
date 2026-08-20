@@ -117,7 +117,7 @@ wheels = [
 
 [[package]]
 name = "daca-catalog-api"
-version = "0.1.11"
+version = "0.1.12"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },

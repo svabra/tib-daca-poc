@@ -40,6 +40,10 @@ export const DACA_FEATURE_RELEASE = {
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
           {
+            title: 'Neue Versionen ohne F5 übernehmen',
+            description: 'DaCa erkennt bereitstehende Versionen, zeigt den Wechsel verständlich an und lädt die Anwendung kontrolliert neu.',
+          },
+          {
             title: 'PoC anhand geführter Journeys erleben',
             description: 'Der PoC Leitfaden erklärt sechs wiederholbare Abläufe mit Rollen, Voraussetzungen, echten Screenshots und klar ausgewiesenen Grenzen.',
           },
@@ -82,6 +86,10 @@ export const DACA_FEATURE_RELEASE = {
         introduction: 'DaCa brings product information, approvals and tasks together in one place.',
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
+          {
+            title: 'Apply new versions without F5',
+            description: 'DaCa detects available versions, explains the change and reloads the application in a controlled way.',
+          },
           {
             title: 'Explore the PoC through guided journeys',
             description: 'The PoC guide explains six repeatable workflows with roles, prerequisites, real screenshots and clearly stated limitations.',
@@ -128,6 +136,10 @@ export const DACA_FEATURE_RELEASE = {
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
           {
+            title: 'Neue Versionen ohne F5 übernehmen',
+            description: 'DaCa erkennt bereitstehende Versionen, zeigt den Wechsel verständlich an und lädt die Anwendung kontrolliert neu.',
+          },
+          {
             title: 'Kataloge registrieren',
             description: 'Erfassen Sie die beteiligten Kataloge und sehen Sie deren Verbindungs- und Betriebsstatus.',
           },
@@ -150,6 +162,10 @@ export const DACA_FEATURE_RELEASE = {
         introduction: 'The Control Plane helps operations teams manage collaboration between data catalogs safely.',
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
+          {
+            title: 'Apply new versions without F5',
+            description: 'DaCa detects available versions, explains the change and reloads the application in a controlled way.',
+          },
           {
             title: 'Register catalogs',
             description: 'Record participating catalogs and see their connection and operating status.',
