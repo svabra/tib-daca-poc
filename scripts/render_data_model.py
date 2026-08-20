@@ -66,6 +66,9 @@ CATALOG_TABLES = {
     "provenance_events": "Ordered, append-only history for a data product.",
     "seed_markers": "Idempotency markers for deterministic PoC seed operations.",
     "service_level_revisions": "Versioned, four-eyes-reviewed best-effort service-level definitions for a data product.",
+    "source_access_grants": "Immutable person or group-snapshot grants for metadata-only source catalog entries.",
+    "source_access_requests": "Auditable direct-owner requests for access to discoverable data sources.",
+    "source_catalog_entries": "Credential-free metadata for discoverable PoC data sources and their synthetic object inventory.",
     "workflow_tasks": "Owner and approver work items for quality, access governance, SLA review and request processing.",
 }
 
@@ -102,11 +105,13 @@ CONTEXTS = (
             "`metadata_publications.normalized_payload` and `poc_product_fixtures.payload` retain normalized PoC metadata, never secrets.",
             "`product_context_graphs.graph` stores deterministic nodes and edges; flexible provenance/audit `details` contain metadata only.",
             "`service_level_revisions.definition` stores typed best-effort usage, freshness, support-window, maintenance and review-date commitments. Draft and rejection text remains private; published definitions are immutable and supersession is recorded explicitly.",
+            "`source_catalog_entries` stores only searchable metadata, locations, synthetic object names and discoverability group IDs; it never stores hosts, credentials or connection strings. `source_access_requests.group_snapshot` and `source_access_grants.group_snapshot` freeze the trusted member IDs and group revision at submission time.",
         ),
         status_notes=(
             "Product lifecycle is `draft`, `active`, `deprecated` or `retired`; classification is `public`, `internal`, `confidential` or `restricted`.",
             "Access requests progress through `submitted`, `identity_review`, `legal_review`, `conditions_review`, `approved_policy_pending`, a granted state, `rejected` or `withdrawn`. Granted states distinguish `granted_original` and `granted_modified`.",
-            "Workflow task types include `metadata_quality`, `access_governance`, `publication_approval`, `service_level_approval`, `governance_correction`, `access_request_review`, simulation alerts and `group_membership_changed`; task states are `open`, `in_progress` and `completed`.",
+            "Workflow task types include `metadata_quality`, `access_governance`, `publication_approval`, `service_level_approval`, `governance_correction`, `access_request_review`, `source_access_review`, simulation alerts and `group_membership_changed`; task states are `open`, `in_progress` and `completed`.",
+            "Source access requests are `submitted`, `approved` or `rejected`. A grant is derived only from approval and is interpreted at runtime as `scheduled`, `active` or `expired`; an absent `valid_until` means unbounded validity.",
             "Governance submissions progress through `pending_approval`, `approved_deploying`, `approved`, `rejected` or `deployment_failed`. Discoverability and metadata publication become active only after both PostgreSQL and OPA confirm the reviewed revision.",
             "Service-level revisions progress through `draft`, `pending_approval`, `published`, `rejected` or `withdrawn`. At most one draft or pending review exists per product, and a later publication records the effective end of the superseded revision.",
             "Identity sources are `federal`, `cantonal`, `municipal` and `federal_related`. Federal organizations are ordered by department and office and displayed as, for example, `EFD - BIT`. System groups are globally visible; custom groups are owner-isolated. Group membership revisions increase monotonically; existing policy snapshots never expand automatically.",

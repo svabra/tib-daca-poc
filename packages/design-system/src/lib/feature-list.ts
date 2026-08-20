@@ -40,6 +40,10 @@ export const DACA_FEATURE_RELEASE = {
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
           {
+            title: 'Oracle-Datenquellen kontrolliert erschliessen',
+            description: 'Ein auffindbarer Quellenkatalog, vertrauenswürdige Gruppen, unveränderliche Gruppensnapshots und direkte Owner-Entscheide steuern den neuen DAAIF-Sourcing-PoC.',
+          },
+          {
             title: 'Neue Versionen ohne F5 übernehmen',
             description: 'DaCa erkennt bereitstehende Versionen, zeigt den Wechsel verständlich an und lädt die Anwendung kontrolliert neu.',
           },
@@ -86,6 +90,10 @@ export const DACA_FEATURE_RELEASE = {
         introduction: 'DaCa brings product information, approvals and tasks together in one place.',
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
+          {
+            title: 'Govern access to Oracle data sources',
+            description: 'A discoverable source catalog, trusted groups, immutable group snapshots and direct owner decisions govern the new DAAIF sourcing proof of concept.',
+          },
           {
             title: 'Apply new versions without F5',
             description: 'DaCa detects available versions, explains the change and reloads the application in a controlled way.',

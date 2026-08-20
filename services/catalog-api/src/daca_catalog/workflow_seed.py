@@ -18,6 +18,7 @@ from .models import (
     IdentityGroup,
     IdentityGroupMembership,
     PocProductFixture,
+    SourceCatalogEntry,
     WorkflowTask,
 )
 
@@ -179,6 +180,16 @@ DEMO_USERS = (
         "supervisor_user_id": "thomas.kriegli",
         "selectable": True,
     },
+    {
+        "id": "sandro.wenger",
+        "display_name": "Sandro Wenger",
+        "organization": "Bundesamt für Zoll und Grenzsicherheit BAZG",
+        "email": "sandro.wenger@bazg.admin.ch",
+        "phone": "+41 58 000 00 91",
+        "avatar_url": None,
+        "roles": ["data_owner", "data_consumer"],
+        "selectable": True,
+    },
     # Non-selectable identities preserve existing API contract tests and local scripts.
     {
         "id": "daca-test-editor",
@@ -228,6 +239,7 @@ DIRECTORY_ENTRIES = (
     ("ariane.keller", "Ariane Keller", "EFD - ESTV", "ariane.keller@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("daniel.aebischer", "Daniel Aebischer", "EFD - EFV", "daniel.aebischer@efv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("joel.ruod", "Joel Ruod", "EFD - ESTV", "joel.ruod@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
+    ("sandro.wenger", "Sandro Wenger", "EFD - BAZG", "sandro.wenger@bazg.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("thomas.kriegli", "Thomas Kriegli", "EFD - ESTV", "thomas.kriegli@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("noemie.rochat", "Noémie Rochat", "Kanton Neuchâtel", "noemie.rochat@ne.ch", "cantonal", "Kantonales Personalverzeichnis"),
     ("lucien.morel", "Lucien Morel", "Kanton Neuchâtel", "lucien.morel@ne.ch", "cantonal", "Kantonales Personalverzeichnis"),
@@ -250,6 +262,7 @@ DIRECTORY_ORGANIZATION_IDS = {
     "ariane.keller": "efd-estv",
     "daniel.aebischer": "efd-efv",
     "joel.ruod": "efd-estv",
+    "sandro.wenger": "efd-bazg",
     "thomas.kriegli": "efd-estv",
     "sophie.brunner": "edi-bfs",
     "marc.gisler": "efd-bit",
@@ -263,11 +276,90 @@ DIRECTORY_GROUPS = (
     ("estv-data-stewards", "ESTV Data Stewards", "Verantwortliche für Metadatenqualität und Governance der ESTV", "federal", ("kassandra.valdata", "ariane.keller")),
     ("bund-forschung", "Forschung Bund", "Bundesmitarbeitende mit Aufgaben in Analyse und Forschung", "federal", ("daniel.aebischer", "kassandra.valdata")),
     ("efd-efv-bundestresorerie", "EFD – EFV / Bundestresorerie", "Systemverwaltete Empfängergruppe der Eidgenössischen Finanzverwaltung", "federal", ("daniel.aebischer",)),
+    ("estv-business-intelligence", "ESTV Business Intelligence", "Vertrauenswürdige Analysegruppe der ESTV für föderierte Datenquellen", "federal", ("joel.ruod", "kassandra.valdata")),
+    ("estv-advanced-analytics", "ESTV Advanced Analytics", "Data-Science- und Advanced-Analytics-Fachgruppe der ESTV", "federal", ("joel.ruod", "ariane.keller")),
+    ("efd-data-community", "EFD Data Community", "Departementsweite Community für verantwortungsvolle Datennutzung", "federal", ("joel.ruod", "daniel.aebischer", "marc.gisler")),
 )
 
 DIRECTORY_GROUP_ORGANIZATION_IDS = {
     "efd-efv-bundestresorerie": "efd-efv",
+    "estv-business-intelligence": "efd-estv",
+    "estv-advanced-analytics": "efd-estv",
 }
+
+
+SOURCE_DISCOVERY_GROUPS = (
+    "estv-business-intelligence",
+    "estv-advanced-analytics",
+    "efd-data-community",
+)
+
+
+def oracle_source_specs() -> tuple[dict[str, object], ...]:
+    """Return 38 deterministic, metadata-only Oracle fixtures for the sourcing PoC."""
+
+    organizations = (
+        ("bazg", "BAZG", "Bundesamt für Zoll und Grenzsicherheit BAZG", 8),
+        ("estv", "ESTV", "Eidgenössische Steuerverwaltung ESTV", 8),
+        ("efv", "EFV", "Eidgenössische Finanzverwaltung EFV", 6),
+        ("bit", "BIT", "Bundesamt für Informatik und Telekommunikation BIT", 6),
+        ("bfs", "BFS", "Bundesamt für Statistik BFS", 5),
+        ("seco", "SECO", "Staatssekretariat für Wirtschaft SECO", 5),
+    )
+    specs: list[dict[str, object]] = []
+    sequence = 0
+    for slug, code, organization, count in organizations:
+        for index in range(1, count + 1):
+            sequence += 1
+            source_id = f"ora_{slug}_{index:02d}"
+            database_name = f"{code}ORA{index:02d}"
+            display_name = f"{code} Fachanwendung {index:02d}"
+            sites = ["PRIMUS"] if index % 3 == 1 else ["CAMPUS"] if index % 3 == 2 else ["PRIMUS", "CAMPUS"]
+            schema = code
+            objects = [
+                {"schema": schema, "name": "STAMMDATEN", "kind": "table"},
+                {"schema": schema, "name": "BEWEGUNGSDATEN", "kind": "table"},
+                {"schema": schema, "name": "AKTUELLE_UEBERSICHT_V", "kind": "view"},
+            ]
+            mock_profile: dict[str, object] = {"profile": "generic", "schema": schema}
+            if sequence == 1:
+                source_id = "ora_bazg_zoll"
+                database_name = "BZGZOLL1"
+                display_name = "BAZG Zentrale Zollabwicklung"
+                sites = ["PRIMUS", "CAMPUS"]
+                objects = [
+                    {"schema": "ZOLL", "name": "ANMELDUNGEN", "kind": "table"},
+                    {"schema": "ZOLL", "name": "WARENPOSITIONEN", "kind": "table"},
+                    {"schema": "ZOLL", "name": "ABGABEN_UEBERSICHT_V", "kind": "view"},
+                ]
+                mock_profile = {"profile": "bazg-zoll", "schema": "ZOLL"}
+            discoverability = (
+                [SOURCE_DISCOVERY_GROUPS[(sequence - 1) % len(SOURCE_DISCOVERY_GROUPS)]]
+                if sequence <= 30
+                else ["oracle-source-administrators"]
+            )
+            specs.append(
+                {
+                    "id": source_id,
+                    "source_type": "oracle",
+                    "database_name": database_name,
+                    "display_name": display_name,
+                    "description": (
+                        "Synthetische Oracle-Metadaten für die PoC-Erschliessung. "
+                        "Enthält keine produktiven Verbindungsdaten oder Credentials."
+                    ),
+                    "organization": organization,
+                    "owner_user_id": "sandro.wenger",
+                    "sites": sites,
+                    "search_objects": objects,
+                    "discoverability_group_ids": discoverability,
+                    "mock_profile": mock_profile,
+                }
+            )
+    return tuple(specs)
+
+
+ORACLE_SOURCE_SPECS = oracle_source_specs()
 
 
 TERM_DEFINITIONS = (
@@ -510,6 +602,46 @@ def seed_workflow_reference_data(session: Session) -> bool:
                     )
                 )
                 changed = True
+
+    for spec in ORACLE_SOURCE_SPECS:
+        source_id = str(spec["id"])
+        source = session.get(SourceCatalogEntry, source_id)
+        values = {
+            "source_type": str(spec["source_type"]),
+            "database_name": str(spec["database_name"]),
+            "display_name": str(spec["display_name"]),
+            "description": str(spec["description"]),
+            "organization": str(spec["organization"]),
+            "owner_user_id": str(spec["owner_user_id"]),
+            "sites": list(spec["sites"]),
+            "search_objects": list(spec["search_objects"]),
+            "discoverability_group_ids": list(spec["discoverability_group_ids"]),
+            "mock_profile": dict(spec["mock_profile"]),
+        }
+        if source is None:
+            session.add(
+                SourceCatalogEntry(
+                    id=source_id,
+                    **values,
+                    active=True,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            changed = True
+        else:
+            source_changed = False
+            for attribute, value in values.items():
+                if getattr(source, attribute) != value:
+                    setattr(source, attribute, value)
+                    source_changed = True
+                    changed = True
+            if not source.active:
+                source.active = True
+                source_changed = True
+                changed = True
+            if source_changed:
+                source.updated_at = now
 
     version = session.get(CanonicalOntologyVersion, ONTOLOGY_VERSION_ID)
     if version is None:

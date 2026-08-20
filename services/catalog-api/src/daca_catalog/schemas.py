@@ -914,6 +914,121 @@ class IdentityGroupCreate(ApiModel):
         return normalized
 
 
+class SourceCatalogObject(ApiModel):
+    schema_name: str = Field(validation_alias="schema", serialization_alias="schema")
+    name: str
+    kind: Literal["table", "view"]
+
+
+class SourceCatalogEntryResponse(ApiModel):
+    id: str
+    source_type: Literal["oracle"]
+    database_name: str
+    display_name: str
+    description: str
+    organization: str
+    owner_user_id: str
+    owner_name: str
+    sites: list[Literal["PRIMUS", "CAMPUS"]]
+    objects: list[SourceCatalogObject]
+    mock_profile: dict[str, Any]
+    access_status: Literal[
+        "none", "submitted", "approved", "rejected", "scheduled", "active", "expired"
+    ] = "none"
+
+
+class SourceCatalogSummary(ApiModel):
+    total: int = Field(ge=0)
+    discoverable: int = Field(ge=0)
+    hidden: int = Field(ge=0)
+    matched: int = Field(ge=0)
+
+
+class SourceCatalogPage(ApiModel):
+    summary: SourceCatalogSummary
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1)
+    items: list[SourceCatalogEntryResponse]
+
+
+class SourceAccessSubject(ApiModel):
+    type: Literal["person", "group"]
+    id: str
+    label: str
+    member_count: int | None = Field(default=None, ge=0)
+    membership_revision: int | None = Field(default=None, ge=1)
+    recommended: bool = False
+
+
+class SourceAccessSubjectRef(ApiModel):
+    """Untrusted request input; labels and membership evidence are resolved server-side."""
+
+    type: Literal["person", "group"]
+    id: str = Field(min_length=1, max_length=200)
+
+
+class SourceAccessContextResponse(ApiModel):
+    requester: DemoUserResponse
+    source: SourceCatalogEntryResponse
+    subjects: list[SourceAccessSubject]
+
+
+class SourceAccessRequestCreate(ApiModel):
+    client_request_id: str = Field(min_length=8, max_length=128)
+    source_id: str = Field(min_length=3, max_length=200)
+    request_title: str = Field(min_length=3, max_length=255)
+    subject: SourceAccessSubjectRef
+    purpose: str = Field(min_length=10, max_length=2000)
+    legal_basis: str = Field(min_length=5, max_length=2000)
+    valid_from: date
+    valid_until: date | None = None
+    conditions_accepted: bool
+
+
+class SourceAccessRequestResponse(ApiModel):
+    id: uuid.UUID
+    request_number: str
+    client_request_id: str
+    source: SourceCatalogEntryResponse
+    requester_id: str
+    requester_name: str
+    requester_organization: str
+    owner_user_id: str
+    owner_name: str
+    request_title: str
+    subject: SourceAccessSubject
+    group_snapshot: dict[str, Any] | None
+    purpose: str
+    legal_basis: str
+    valid_from: date
+    valid_until: date | None
+    conditions_accepted: bool
+    status: Literal["submitted", "approved", "rejected"]
+    decision_by: str | None
+    decision_comment: str | None
+    decided_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SourceAccessDecision(ApiModel):
+    decision: Literal["approve", "reject"]
+    comment: str | None = Field(default=None, max_length=1000)
+
+
+class SourceAccessGrantResponse(ApiModel):
+    id: uuid.UUID
+    source_access_request_id: uuid.UUID
+    source: SourceCatalogEntryResponse
+    subject: SourceAccessSubject
+    group_snapshot: dict[str, Any] | None
+    valid_from: date
+    valid_until: date | None
+    granted_by: str
+    state: Literal["scheduled", "active", "expired"]
+    created_at: datetime
+
+
 class AccessSettingUpsert(ApiModel):
     grant: PolicyGrant
     access_request_fulfillments: list[AccessRequestFulfillment] = Field(default_factory=list)
@@ -1102,14 +1217,16 @@ class WorkflowTaskResponse(ApiModel):
         "publication_approval",
         "governance_correction",
         "service_level_approval",
+        "source_access_review",
     ]
     status: Literal["open", "in_progress", "completed"]
     assignee_user_id: str
-    data_product_id: uuid.UUID
+    data_product_id: uuid.UUID | None
     access_request_id: uuid.UUID | None
     simulation_event_id: uuid.UUID | None = None
     governance_submission_id: uuid.UUID | None = None
     service_level_revision_id: uuid.UUID | None = None
+    source_access_request_id: uuid.UUID | None = None
     title: str
     detail: str
     created_at: datetime

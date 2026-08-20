@@ -28,6 +28,7 @@ def test_demo_users_and_fixture_seed_are_idempotent_and_persisted(client):
         "joel.ruod",
         "kassandra.valdata",
         "noemie.rochat",
+        "sandro.wenger",
         "thomas.kriegli",
     ]
     assert (

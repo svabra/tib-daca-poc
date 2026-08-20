@@ -15,16 +15,17 @@ DAAIF is an external source system and its internal data model is outside this r
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
-- Alembic head: `0012_access_renewals`
-- Schema fingerprint: `de024bd37d55f871`
-- Migration fingerprint: `8ab9a83fd7f8593c`
-- Tables: `28`
+- Alembic head: `0013_source_access_journey`
+- Schema fingerprint: `f57a18ec5a2f6ba0`
+- Migration fingerprint: `9c55d2fff95a0d2f`
+- Tables: `31`
 
 ## Domain status vocabulary
 
 - Product lifecycle is `draft`, `active`, `deprecated` or `retired`; classification is `public`, `internal`, `confidential` or `restricted`.
 - Access requests progress through `submitted`, `identity_review`, `legal_review`, `conditions_review`, `approved_policy_pending`, a granted state, `rejected` or `withdrawn`. Granted states distinguish `granted_original` and `granted_modified`.
-- Workflow task types include `metadata_quality`, `access_governance`, `publication_approval`, `service_level_approval`, `governance_correction`, `access_request_review`, simulation alerts and `group_membership_changed`; task states are `open`, `in_progress` and `completed`.
+- Workflow task types include `metadata_quality`, `access_governance`, `publication_approval`, `service_level_approval`, `governance_correction`, `access_request_review`, `source_access_review`, simulation alerts and `group_membership_changed`; task states are `open`, `in_progress` and `completed`.
+- Source access requests are `submitted`, `approved` or `rejected`. A grant is derived only from approval and is interpreted at runtime as `scheduled`, `active` or `expired`; an absent `valid_until` means unbounded validity.
 - Governance submissions progress through `pending_approval`, `approved_deploying`, `approved`, `rejected` or `deployment_failed`. Discoverability and metadata publication become active only after both PostgreSQL and OPA confirm the reviewed revision.
 - Service-level revisions progress through `draft`, `pending_approval`, `published`, `rejected` or `withdrawn`. At most one draft or pending review exists per product, and a later publication records the effective end of the superseded revision.
 - Identity sources are `federal`, `cantonal`, `municipal` and `federal_related`. Federal organizations are ordered by department and office and displayed as, for example, `EFD - BIT`. System groups are globally visible; custom groups are owner-isolated. Group membership revisions increase monotonically; existing policy snapshots never expand automatically.
@@ -43,6 +44,7 @@ DAAIF is an external source system and its internal data model is outside this r
 - `metadata_publications.normalized_payload` and `poc_product_fixtures.payload` retain normalized PoC metadata, never secrets.
 - `product_context_graphs.graph` stores deterministic nodes and edges; flexible provenance/audit `details` contain metadata only.
 - `service_level_revisions.definition` stores typed best-effort usage, freshness, support-window, maintenance and review-date commitments. Draft and rejection text remains private; published definitions are immutable and supersession is recorded explicitly.
+- `source_catalog_entries` stores only searchable metadata, locations, synthetic object names and discoverability group IDs; it never stores hosts, credentials or connection strings. `source_access_requests.group_snapshot` and `source_access_grants.group_snapshot` freeze the trusted member IDs and group revision at submission time.
 
 ## Entity relationships
 
@@ -374,6 +376,63 @@ erDiagram
         datetime created_at
         datetime updated_at
     }
+    source_access_grants {
+        uuid id PK
+        uuid source_access_request_id FK,UK
+        string source_id FK
+        string subject_type
+        string subject_id
+        string subject_label
+        integer group_revision
+        json group_snapshot
+        date valid_from
+        date valid_until
+        string granted_by FK
+        datetime created_at
+    }
+    source_access_requests {
+        uuid id PK
+        string request_number UK
+        string client_request_id
+        string source_id FK
+        string requester_id FK
+        string requester_name
+        string requester_organization
+        string owner_user_id FK
+        string request_title
+        string subject_type
+        string subject_id
+        string subject_label
+        integer group_revision
+        json group_snapshot
+        text purpose
+        text legal_basis
+        date valid_from
+        date valid_until
+        boolean conditions_accepted
+        string status
+        string decision_by
+        text decision_comment
+        datetime decided_at
+        datetime created_at
+        datetime updated_at
+    }
+    source_catalog_entries {
+        string id PK
+        string source_type
+        string database_name
+        string display_name
+        text description
+        string organization
+        string owner_user_id FK
+        json sites
+        json search_objects
+        json discoverability_group_ids
+        json mock_profile
+        boolean active
+        datetime created_at
+        datetime updated_at
+    }
     workflow_tasks {
         uuid id PK
         string task_type
@@ -384,6 +443,7 @@ erDiagram
         uuid simulation_event_id FK
         uuid governance_submission_id FK
         uuid service_level_revision_id FK
+        uuid source_access_request_id FK
         string title
         text detail
         datetime created_at
@@ -428,12 +488,20 @@ erDiagram
     demo_users o|--o{ service_level_revisions : "decided_by_user_id"
     service_level_revisions o|--o{ service_level_revisions : "supersedes_revision_id"
     service_level_revisions o|--o{ service_level_revisions : "superseded_by_revision_id"
+    source_access_requests ||--o| source_access_grants : "source_access_request_id"
+    source_catalog_entries ||--o{ source_access_grants : "source_id"
+    demo_users ||--o{ source_access_grants : "granted_by"
+    source_catalog_entries ||--o{ source_access_requests : "source_id"
+    demo_users ||--o{ source_access_requests : "requester_id"
+    demo_users ||--o{ source_access_requests : "owner_user_id"
+    demo_users ||--o{ source_catalog_entries : "owner_user_id"
     demo_users ||--o{ workflow_tasks : "assignee_user_id"
-    data_products ||--o{ workflow_tasks : "data_product_id"
+    data_products o|--o{ workflow_tasks : "data_product_id"
     access_requests o|--o{ workflow_tasks : "access_request_id"
     poc_simulation_events o|--o{ workflow_tasks : "simulation_event_id"
     governance_submissions o|--o{ workflow_tasks : "governance_submission_id"
     service_level_revisions o|--o{ workflow_tasks : "service_level_revision_id"
+    source_access_requests o|--o{ workflow_tasks : "source_access_request_id"
 ```
 
 Relationships in this diagram are physical foreign keys inside this database only.
@@ -1096,6 +1164,111 @@ Constraints and indexes:
 - Index `ix_service_level_product` on `data_product_id, revision`
 - Index `uq_service_level_single_open_workflow` on `data_product_id` unique
 
+### `source_access_grants`
+
+Immutable person or group-snapshot grants for metadata-only source catalog entries.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `source_access_request_id` | `CHAR(32)` | no | FK, UK | — |
+| `source_id` | `VARCHAR(200)` | no | FK | — |
+| `subject_type` | `VARCHAR(32)` | no | — | — |
+| `subject_id` | `VARCHAR(200)` | no | — | — |
+| `subject_label` | `VARCHAR(255)` | no | — | — |
+| `group_revision` | `INTEGER` | yes | — | — |
+| `group_snapshot` | `JSON` | yes | — | — |
+| `valid_from` | `DATE` | no | — | — |
+| `valid_until` | `DATE` | yes | — | — |
+| `granted_by` | `VARCHAR(200)` | no | FK | — |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Unique `unnamed`: `source_access_request_id`
+- Check `ck_source_grant_dates`: `valid_until IS NULL OR valid_until >= valid_from`
+- Check `ck_source_grant_subject`: `subject_type IN ('person', 'group')`
+- Foreign key `source_access_request_id` → `source_access_requests.id`; on delete `CASCADE`
+- Foreign key `source_id` → `source_catalog_entries.id`; on delete `CASCADE`
+- Foreign key `granted_by` → `demo_users.id`
+- Index `ix_source_grant_source` on `source_id`
+- Index `ix_source_grant_subject` on `subject_type, subject_id`
+
+### `source_access_requests`
+
+Auditable direct-owner requests for access to discoverable data sources.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `request_number` | `VARCHAR(32)` | no | UK | — |
+| `client_request_id` | `VARCHAR(128)` | no | — | — |
+| `source_id` | `VARCHAR(200)` | no | FK | — |
+| `requester_id` | `VARCHAR(200)` | no | FK | — |
+| `requester_name` | `VARCHAR(255)` | no | — | — |
+| `requester_organization` | `VARCHAR(255)` | no | — | — |
+| `owner_user_id` | `VARCHAR(200)` | no | FK | — |
+| `request_title` | `VARCHAR(255)` | no | — | — |
+| `subject_type` | `VARCHAR(32)` | no | — | — |
+| `subject_id` | `VARCHAR(200)` | no | — | — |
+| `subject_label` | `VARCHAR(255)` | no | — | — |
+| `group_revision` | `INTEGER` | yes | — | — |
+| `group_snapshot` | `JSON` | yes | — | — |
+| `purpose` | `TEXT` | no | — | — |
+| `legal_basis` | `TEXT` | no | — | — |
+| `valid_from` | `DATE` | no | — | — |
+| `valid_until` | `DATE` | yes | — | — |
+| `conditions_accepted` | `BOOLEAN` | no | — | — |
+| `status` | `VARCHAR(32)` | no | — | `submitted` |
+| `decision_by` | `VARCHAR(200)` | yes | — | — |
+| `decision_comment` | `TEXT` | yes | — | — |
+| `decided_at` | `DATETIME` | yes | — | — |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Unique `unnamed`: `request_number`
+- Check `ck_source_request_dates`: `valid_until IS NULL OR valid_until >= valid_from`
+- Check `ck_source_request_status`: `status IN ('submitted', 'approved', 'rejected')`
+- Check `ck_source_request_subject`: `subject_type IN ('person', 'group')`
+- Unique `uq_source_request_client`: `requester_id, client_request_id`
+- Foreign key `source_id` → `source_catalog_entries.id`; on delete `CASCADE`
+- Foreign key `requester_id` → `demo_users.id`
+- Foreign key `owner_user_id` → `demo_users.id`
+- Index `ix_source_request_owner` on `owner_user_id, status`
+- Index `ix_source_request_requester` on `requester_id, created_at`
+- Index `ix_source_request_source` on `source_id`
+- Index `uq_source_request_open_subject` on `source_id, subject_type, subject_id` unique
+
+### `source_catalog_entries`
+
+Credential-free metadata for discoverable PoC data sources and their synthetic object inventory.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `VARCHAR(200)` | no | PK | — |
+| `source_type` | `VARCHAR(32)` | no | — | — |
+| `database_name` | `VARCHAR(128)` | no | — | — |
+| `display_name` | `VARCHAR(255)` | no | — | — |
+| `description` | `TEXT` | no | — | — |
+| `organization` | `VARCHAR(255)` | no | — | — |
+| `owner_user_id` | `VARCHAR(200)` | no | FK | — |
+| `sites` | `JSON` | no | — | `list` |
+| `search_objects` | `JSON` | no | — | `list` |
+| `discoverability_group_ids` | `JSON` | no | — | `list` |
+| `mock_profile` | `JSON` | no | — | `dict` |
+| `active` | `BOOLEAN` | no | — | `True` |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Check `ck_source_catalog_type`: `source_type IN ('oracle')`
+- Foreign key `owner_user_id` → `demo_users.id`
+- Index `ix_source_catalog_owner` on `owner_user_id`
+- Index `ix_source_catalog_type_name` on `source_type, database_name`
+
 ### `workflow_tasks`
 
 Owner and approver work items for quality, access governance, SLA review and request processing.
@@ -1106,11 +1279,12 @@ Owner and approver work items for quality, access governance, SLA review and req
 | `task_type` | `VARCHAR(64)` | no | — | — |
 | `status` | `VARCHAR(32)` | no | — | `open` |
 | `assignee_user_id` | `VARCHAR(200)` | no | FK | — |
-| `data_product_id` | `CHAR(32)` | no | FK | — |
+| `data_product_id` | `CHAR(32)` | yes | FK | — |
 | `access_request_id` | `CHAR(32)` | yes | FK | — |
 | `simulation_event_id` | `CHAR(32)` | yes | FK | — |
 | `governance_submission_id` | `CHAR(32)` | yes | FK | — |
 | `service_level_revision_id` | `CHAR(32)` | yes | FK | — |
+| `source_access_request_id` | `CHAR(32)` | yes | FK | — |
 | `title` | `VARCHAR(255)` | no | — | — |
 | `detail` | `TEXT` | no | — | — |
 | `created_at` | `DATETIME` | no | — | `utc_now` |
@@ -1125,7 +1299,9 @@ Constraints and indexes:
 - Foreign key `simulation_event_id` → `poc_simulation_events.id`; on delete `SET NULL`
 - Foreign key `governance_submission_id` → `governance_submissions.id`; on delete `CASCADE`
 - Foreign key `service_level_revision_id` → `service_level_revisions.id`; on delete `CASCADE`
+- Foreign key `source_access_request_id` → `source_access_requests.id`; on delete `CASCADE`
 - Index `ix_workflow_task_assignee` on `assignee_user_id, status`
 - Index `ix_workflow_task_product` on `data_product_id`
+- Index `ix_workflow_task_source_access_request` on `source_access_request_id`
 
 <!-- END GENERATED: data-model. -->
