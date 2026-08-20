@@ -1,6 +1,6 @@
 {
   "name": "bit-daca",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "private": true,
   "description": "BIT Distributed Data Catalog proof of concept",
   "workspaces": [
@@ -13,7 +13,7 @@
   },
   "scripts": {
     "build": "npm run build:web && npm run build:python",
-    "build:web": "npm run build --workspaces --if-present",
+    "build:web": "npm run build --workspaces --if-present && npm run version:check-build",
     "build:python": "uv build --all-packages --out-dir dist/python",
     "test": "npm run test:web && npm run test:python && npm run test:opa && npm run docs:data-model:check && npm run docs:openapi:check",
     "test:web": "npm run test --workspaces --if-present",
@@ -24,6 +24,7 @@
     "docs:openapi": "uv run python scripts/render_metadata_publication_openapi.py",
     "docs:openapi:check": "uv run python scripts/render_metadata_publication_openapi.py --check",
     "version:check": "uv run python scripts/versioning.py check",
+    "version:check-build": "uv run python scripts/versioning.py check-build",
     "version:bump": "uv run python scripts/versioning.py bump",
     "lint": "npm run lint:web && npm run lint:python",
     "lint:web": "npm run lint --workspaces --if-present",

@@ -86,6 +86,26 @@ def _create_repository_fixture(repo: Path, release_version: str = "0.1.0") -> No
             'x-domain-api-version: "v1"\n',
         )
 
+    service_worker_configs = {
+        "apps/catalog-ui/ngsw-config.json": "catalog-ui",
+        "apps/control-plane-ui/ngsw-config.json": "control-plane-ui",
+    }
+    for relative_path, app_id in service_worker_configs.items():
+        _write_json(
+            repo,
+            relative_path,
+            {
+                "$schema": "./node_modules/@angular/service-worker/config/schema.json",
+                "index": "/index.html",
+                "appData": {
+                    "schemaVersion": 1,
+                    "appId": app_id,
+                    "releaseVersion": release_version,
+                },
+                "assetGroups": [],
+            },
+        )
+
     image_manifests = {
         "k8s/daca-catalog-ui.yaml": "tib-daca-catalog-ui",
         "k8s/daca-catalog-api.yaml": "tib-daca-catalog-api",
@@ -219,6 +239,14 @@ def test_bump_synchronizes_every_release_surface_without_domain_version_rewrites
     assert "apiVersion: apps/v1" in (tmp_path / "k8s/daca-catalog-ui.yaml").read_text(
         encoding="utf-8"
     )
+    for relative_path in (
+        "apps/catalog-ui/ngsw-config.json",
+        "apps/control-plane-ui/ngsw-config.json",
+    ):
+        service_worker_config = json.loads(
+            (tmp_path / relative_path).read_text(encoding="utf-8")
+        )
+        assert service_worker_config["appData"]["releaseVersion"] == "0.1.1"
 
     root_package = json.loads((tmp_path / "package.json").read_text(encoding="utf-8"))
     assert root_package["dependencies"]["external-fixture"] == "0.1.0"
@@ -250,6 +278,110 @@ def test_check_rejects_a_feature_list_detached_from_shared_version(tmp_path: Pat
     errors = versioning.check_repository(tmp_path)
 
     assert any("feature-list.ts" in error and "DACA_VERSION" in error for error in errors)
+
+
+def test_check_reports_drifted_service_worker_release_metadata(tmp_path: Path) -> None:
+    _create_repository_fixture(tmp_path)
+    config_path = tmp_path / "apps/catalog-ui/ngsw-config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["appData"]["releaseVersion"] = "9.9.9"
+    config_path.write_text(f"{json.dumps(config, indent=2)}\n", encoding="utf-8")
+
+    errors = versioning.check_repository(tmp_path)
+
+    assert any(
+        "apps/catalog-ui/ngsw-config.json" in error
+        and "appData.releaseVersion" in error
+        and "9.9.9" in error
+        for error in errors
+    )
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "expected_app_id"),
+    [
+        ("apps/catalog-ui/ngsw-config.json", "catalog-ui"),
+        ("apps/control-plane-ui/ngsw-config.json", "control-plane-ui"),
+    ],
+)
+def test_service_worker_metadata_contract_is_fixed(
+    tmp_path: Path,
+    relative_path: str,
+    expected_app_id: str,
+) -> None:
+    _create_repository_fixture(tmp_path)
+    config_path = tmp_path / relative_path
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    assert config["appData"]["appId"] == expected_app_id
+    config["appData"]["appId"] = "wrong-app"
+    config["appData"]["schemaVersion"] = 2
+    config_path.write_text(f"{json.dumps(config, indent=2)}\n", encoding="utf-8")
+
+    errors = versioning.check_repository(tmp_path)
+
+    assert any(relative_path in error and "appData.appId" in error for error in errors)
+    assert any(relative_path in error and "appData.schemaVersion" in error for error in errors)
+
+
+def test_generated_service_worker_metadata_matches_the_release_exactly(
+    tmp_path: Path,
+) -> None:
+    _create_repository_fixture(tmp_path)
+    build_manifests = {
+        "apps/catalog-ui/dist/catalog-ui/browser/ngsw.json": "catalog-ui",
+        "apps/control-plane-ui/dist/control-plane-ui/browser/ngsw.json": "control-plane-ui",
+    }
+    for relative_path, app_id in build_manifests.items():
+        _write_json(
+            tmp_path,
+            relative_path,
+            {
+                "configVersion": 1,
+                "appData": {
+                    "schemaVersion": 1,
+                    "appId": app_id,
+                    "releaseVersion": "0.1.0",
+                },
+            },
+        )
+
+    assert versioning.check_built_service_workers(tmp_path) == []
+
+    catalog_manifest = tmp_path / next(iter(build_manifests))
+    config = json.loads(catalog_manifest.read_text(encoding="utf-8"))
+    config["appData"]["releaseVersion"] = "9.9.9"
+    config["appData"]["unexpected"] = "not-part-of-the-contract"
+    catalog_manifest.write_text(f"{json.dumps(config, indent=2)}\n", encoding="utf-8")
+
+    errors = versioning.check_built_service_workers(tmp_path)
+
+    assert any(
+        "apps/catalog-ui/dist/catalog-ui/browser/ngsw.json" in error
+        and "expected exactly" in error
+        for error in errors
+    )
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    ["apps/catalog-ui/nginx.conf", "apps/control-plane-ui/nginx.conf"],
+)
+def test_ui_update_control_files_are_revalidated_before_immutable_assets(
+    relative_path: str,
+) -> None:
+    config = (ROOT / relative_path).read_text(encoding="utf-8")
+    immutable_rule_offset = config.index("location ~* \\.(?:js|css|svg|png|ico)$")
+
+    for artifact in (
+        "index.html",
+        "ngsw.json",
+        "ngsw-worker.js",
+        "safety-worker.js",
+        "worker-basic.min.js",
+    ):
+        exact_location = f"location = /{artifact} {{\n    expires -1;"
+        assert exact_location in config
+        assert config.index(exact_location) < immutable_rule_offset
 
 
 def test_bump_refuses_to_hide_existing_repository_drift(tmp_path: Path) -> None:

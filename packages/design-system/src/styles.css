@@ -230,7 +230,24 @@ a { color: var(--daca-blue); }
 
 .daca-version-overlay-label { font-weight: 600; }
 .daca-version-overlay-value { font-weight: 700; letter-spacing: 0.03em; }
+.daca-version-overlay-version { display: inline-flex; align-items: center; gap: 5px; }
 .daca-version-overlay-description { font-size: 0.65rem; font-weight: 600; line-height: 1.1; opacity: 0.74; white-space: nowrap; }
+.daca-version-update-trigger {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  margin: -6px -5px -6px 0;
+  border: 1px solid rgba(15, 76, 129, .32);
+  border-radius: 2px;
+  padding: 3px;
+  background: #fff;
+  color: var(--daca-blue);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.daca-version-update-trigger:hover { border-color: var(--daca-blue); background: var(--daca-blue-soft); }
+.daca-version-update-trigger svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 .daca-version-feature-trigger {
   width: fit-content;
   margin-top: 2px;
@@ -289,6 +306,63 @@ a { color: var(--daca-blue); }
 .daca-feature-list p { margin: 4px 0 0; color: var(--daca-muted); font-size: .84rem; line-height: 1.45; }
 .daca-feature-dialog-note { margin: 0; border-left: 3px solid var(--daca-blue); padding: 9px 11px; background: var(--daca-blue-soft); color: #173c5f; font-size: .78rem; line-height: 1.45; }
 .daca-feature-dialog-actions { display: flex; justify-content: flex-end; }
+
+.daca-update-confirmation {
+  width: min(520px, calc(100vw - 32px));
+  max-width: none;
+  margin: auto;
+  border: 0;
+  border-top: 5px solid var(--daca-red);
+  border-radius: 2px;
+  padding: 0;
+  background: var(--daca-surface);
+  box-shadow: 0 28px 80px rgba(10, 28, 44, .28);
+  color: var(--daca-ink);
+}
+.daca-update-confirmation::backdrop { background: rgba(24, 40, 54, .56); backdrop-filter: blur(2px); }
+.daca-update-confirmation-content { display: grid; gap: 15px; padding: clamp(22px, 4vw, 32px); }
+.daca-update-confirmation h2 { margin: 0; font-size: clamp(1.35rem, 3vw, 1.7rem); line-height: 1.2; }
+.daca-update-confirmation p { margin: 0; color: var(--daca-muted); line-height: 1.5; }
+.daca-update-confirmation-transition { border-left: 3px solid var(--daca-blue); padding: 9px 11px; background: var(--daca-blue-soft); color: var(--daca-blue) !important; font-size: .84rem; font-weight: 700; }
+.daca-update-confirmation .daca-feature-dialog-actions { gap: 10px; margin-top: 3px; }
+
+.daca-app-update-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: none;
+  place-items: center;
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  padding: 16px;
+  background: transparent;
+  color: var(--daca-ink);
+  outline: none;
+}
+.daca-app-update-screen[open] { display: grid; }
+.daca-app-update-screen::backdrop { background: rgba(24, 40, 54, .56); backdrop-filter: blur(3px); }
+.daca-app-update-card {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 17px;
+  width: min(470px, calc(100vw - 32px));
+  border: 1px solid var(--daca-border-strong);
+  border-top: 5px solid var(--daca-red);
+  border-radius: 2px;
+  padding: clamp(24px, 4vw, 32px);
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(10, 28, 44, .3);
+}
+.daca-app-update-card h2 { margin: 0; font-size: clamp(1.4rem, 4vw, 1.8rem); line-height: 1.15; }
+.daca-app-update-card p { margin: 9px 0 0; color: var(--daca-muted); line-height: 1.45; }
+.daca-app-update-spinner { width: 34px; height: 34px; fill: none; stroke: var(--daca-red); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; animation: daca-app-update-spin 1.1s linear infinite; }
+.daca-app-update-transition { color: var(--daca-blue) !important; font-size: .9rem; font-weight: 750; }
+.daca-app-update-wait { font-size: .78rem; font-weight: 700; }
+@keyframes daca-app-update-spin { to { transform: rotate(360deg); } }
 
 .daca-eyebrow { margin: 0 0 6px; color: var(--daca-red); font-size: 0.78rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; }
 .daca-page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
@@ -385,6 +459,10 @@ a { color: var(--daca-blue); }
   .daca-feature-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
   .daca-feature-dialog-content { gap: 15px; padding: 20px 16px; }
   .daca-feature-list li { gap: 9px; padding: 12px; }
+  .daca-update-confirmation { width: calc(100vw - 16px); }
+  .daca-update-confirmation-content { padding: 20px 16px; }
+  .daca-app-update-card { grid-template-columns: 30px minmax(0, 1fr); gap: 12px; padding: 22px 18px; }
+  .daca-app-update-spinner { width: 28px; height: 28px; }
 }
 
 @media (max-width: 359px) {
@@ -427,8 +505,9 @@ a { color: var(--daca-blue); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+  .daca-app-update-spinner { animation: none; }
 }
 
 @media print {
-  .daca-version-overlay, .daca-feature-dialog { display: none; }
+  .daca-version-overlay, .daca-feature-dialog, .daca-update-confirmation, .daca-app-update-screen { display: none; }
 }

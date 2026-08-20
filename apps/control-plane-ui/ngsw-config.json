@@ -1,25 +1,56 @@
 {
   "$schema": "./node_modules/@angular/service-worker/config/schema.json",
   "index": "/index.html",
+  "appData": {
+    "schemaVersion": 1,
+    "appId": "control-plane-ui",
+    "releaseVersion": "0.1.12"
+  },
   "assetGroups": [
     {
       "name": "app-shell",
       "installMode": "prefetch",
-      "resources": { "files": ["/favicon.ico", "/index.html", "/styles-*.css", "/main-*.js", "/manifest.webmanifest", "/assets/**"] }
+      "resources": {
+        "files": [
+          "/favicon.ico",
+          "/index.html",
+          "/styles-*.css",
+          "/main-*.js",
+          "/manifest.webmanifest",
+          "/assets/**"
+        ]
+      }
     },
     {
       "name": "lazy-features",
       "installMode": "lazy",
       "updateMode": "prefetch",
-      "resources": { "files": ["/chunk-*.js"] }
+      "resources": {
+        "files": [
+          "/chunk-*.js"
+        ]
+      }
     }
   ],
   "dataGroups": [
     {
       "name": "control-plane-read-model",
-      "urls": ["/api/v1/catalogs", "/api/v1/trust-grants", "/api/v1/sync-configurations"],
-      "cacheConfig": { "strategy": "freshness", "maxSize": 30, "maxAge": "3m", "timeout": "2s" }
+      "urls": [
+        "/api/v1/catalogs",
+        "/api/v1/trust-grants",
+        "/api/v1/sync-configurations"
+      ],
+      "cacheConfig": {
+        "strategy": "freshness",
+        "maxSize": 30,
+        "maxAge": "3m",
+        "timeout": "2s"
+      }
     }
   ],
-  "navigationUrls": ["/**", "!/**/*.*", "!/api/**"]
+  "navigationUrls": [
+    "/**",
+    "!/**/*.*",
+    "!/api/**"
+  ]
 }

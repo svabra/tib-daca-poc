@@ -3,6 +3,7 @@ import { provideHttpClient, withFetch } from '@angular/common/http';
 import { PreloadingStrategy, provideRouter, Route, withComponentInputBinding, withInMemoryScrolling, withPreloading } from '@angular/router';
 import { provideServiceWorker } from '@angular/service-worker';
 import { Observable, of } from 'rxjs';
+import { provideDacaAppUpdates } from '@bit-daca/design-system';
 import { routes } from './app.routes';
 
 export class SelectivePreloadingStrategy implements PreloadingStrategy {
@@ -23,7 +24,8 @@ export const appConfig: ApplicationConfig = {
     SelectivePreloadingStrategy,
     provideServiceWorker('ngsw-worker.js', {
       enabled: !isDevMode(),
-      registrationStrategy: 'registerWhenStable:30000',
+      registrationStrategy: 'registerImmediately',
     }),
+    provideDacaAppUpdates({ appId: 'catalog-ui' }),
   ],
 };

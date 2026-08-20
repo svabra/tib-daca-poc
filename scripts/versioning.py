@@ -15,6 +15,19 @@ VERSION_TOKEN_PATTERN = r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)"
 FEATURE_LIST_PATH = Path("packages/design-system/src/lib/feature-list.ts")
 FEATURE_LIST_VERSION_IMPORT = "import { DACA_VERSION } from './version';"
 FEATURE_LIST_VERSION_BINDING = "version: DACA_VERSION,"
+SERVICE_WORKER_APP_DATA_SCHEMA_VERSION = 1
+SERVICE_WORKER_CONFIG_EXPECTATIONS = {
+    Path("apps/catalog-ui/ngsw-config.json"): "catalog-ui",
+    Path("apps/control-plane-ui/ngsw-config.json"): "control-plane-ui",
+}
+SERVICE_WORKER_BUILD_PATHS = {
+    Path("apps/catalog-ui/ngsw-config.json"): Path(
+        "apps/catalog-ui/dist/catalog-ui/browser/ngsw.json"
+    ),
+    Path("apps/control-plane-ui/ngsw-config.json"): Path(
+        "apps/control-plane-ui/dist/control-plane-ui/browser/ngsw.json"
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -185,6 +198,33 @@ def _load_json(path: Path) -> dict[str, Any]:
     return value
 
 
+def _service_worker_config_update(
+    path: Path,
+    relative_path: Path,
+    expected_app_id: str,
+    version: str,
+) -> str:
+    data = _load_json(path)
+    app_data = data.get("appData")
+    if not isinstance(app_data, dict):
+        raise TypeError(f"{relative_path.as_posix()} is missing its appData object.")
+    schema_version = app_data.get("schemaVersion")
+    if (
+        type(schema_version) is not int
+        or schema_version != SERVICE_WORKER_APP_DATA_SCHEMA_VERSION
+    ):
+        raise ValueError(
+            f"{relative_path.as_posix()} appData.schemaVersion must be "
+            f"{SERVICE_WORKER_APP_DATA_SCHEMA_VERSION}."
+        )
+    if app_data.get("appId") != expected_app_id:
+        raise ValueError(
+            f"{relative_path.as_posix()} appData.appId must be {expected_app_id!r}."
+        )
+    app_data["releaseVersion"] = version
+    return _json_text(data)
+
+
 def _text_rule_update(content: str, rule: TextVersionRule, version: str) -> str:
     matches = list(rule.pattern.finditer(content))
     if len(matches) != 1:
@@ -289,6 +329,15 @@ def _planned_updates(version: str, repo_root: Path) -> dict[Path, str]:
     for rule in TEXT_VERSION_RULES:
         path = repo_root / rule.relative_path
         planned[path] = _text_rule_update(read_text(path), rule, version)
+
+    for relative_path, expected_app_id in SERVICE_WORKER_CONFIG_EXPECTATIONS.items():
+        path = repo_root / relative_path
+        planned[path] = _service_worker_config_update(
+            path,
+            relative_path,
+            expected_app_id,
+            version,
+        )
 
     first_party_names: set[str] = set()
     for relative_path in PACKAGE_JSON_PATHS:
@@ -395,6 +444,75 @@ def _check_feature_list_version_binding(repo_root: Path) -> list[str]:
     return errors
 
 
+def _check_service_worker_versions(version: str, repo_root: Path) -> list[str]:
+    errors: list[str] = []
+    for relative_path, expected_app_id in SERVICE_WORKER_CONFIG_EXPECTATIONS.items():
+        try:
+            data = _load_json(repo_root / relative_path)
+            app_data = data.get("appData")
+            if not isinstance(app_data, dict):
+                raise TypeError("missing appData object")
+            schema_version = app_data.get("schemaVersion")
+            if (
+                type(schema_version) is not int
+                or schema_version != SERVICE_WORKER_APP_DATA_SCHEMA_VERSION
+            ):
+                errors.append(
+                    f"{relative_path.as_posix()} has appData.schemaVersion "
+                    f"{schema_version!r}, expected {SERVICE_WORKER_APP_DATA_SCHEMA_VERSION}."
+                )
+            app_id = app_data.get("appId")
+            if app_id != expected_app_id:
+                errors.append(
+                    f"{relative_path.as_posix()} has appData.appId {app_id!r}, "
+                    f"expected {expected_app_id!r}."
+                )
+            release_version = app_data.get("releaseVersion")
+            if release_version != version:
+                errors.append(
+                    f"{relative_path.as_posix()} has appData.releaseVersion "
+                    f"{release_version!r}, expected {version}."
+                )
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            errors.append(f"{relative_path.as_posix()} cannot be validated: {exc}.")
+    return errors
+
+
+def check_built_service_workers(repo_root: Path = REPO_ROOT) -> list[str]:
+    try:
+        version = canonical_version(repo_root)
+        validate_semver(version)
+    except (OSError, ValueError) as exc:
+        return [str(exc)]
+
+    errors: list[str] = []
+    for config_path, expected_app_id in SERVICE_WORKER_CONFIG_EXPECTATIONS.items():
+        relative_path = SERVICE_WORKER_BUILD_PATHS[config_path]
+        expected_app_data = {
+            "schemaVersion": SERVICE_WORKER_APP_DATA_SCHEMA_VERSION,
+            "appId": expected_app_id,
+            "releaseVersion": version,
+        }
+        try:
+            data = _load_json(repo_root / relative_path)
+            app_data = data.get("appData")
+            schema_version = (
+                app_data.get("schemaVersion") if isinstance(app_data, dict) else None
+            )
+            if (
+                not isinstance(app_data, dict)
+                or type(schema_version) is not int
+                or app_data != expected_app_data
+            ):
+                errors.append(
+                    f"{relative_path.as_posix()} has appData {app_data!r}, "
+                    f"expected exactly {expected_app_data!r}."
+                )
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            errors.append(f"{relative_path.as_posix()} cannot be validated: {exc}.")
+    return errors
+
+
 def _check_node_versions(version: str, repo_root: Path) -> list[str]:
     errors: list[str] = []
     first_party_names: set[str] = set()
@@ -490,6 +608,7 @@ def check_repository(repo_root: Path = REPO_ROOT) -> list[str]:
     return [
         *_check_text_rules(version, repo_root),
         *_check_feature_list_version_binding(repo_root),
+        *_check_service_worker_versions(version, repo_root),
         *_check_node_versions(version, repo_root),
         *_check_python_versions(version, repo_root),
     ]
@@ -506,6 +625,17 @@ def run_check(repo_root: Path = REPO_ROOT) -> int:
         _print_errors(errors)
         return 1
     print(f"Version consistency check passed for {canonical_version(repo_root)}.")
+    return 0
+
+
+def run_build_check(repo_root: Path = REPO_ROOT) -> int:
+    errors = check_built_service_workers(repo_root)
+    if errors:
+        _print_errors(errors)
+        return 1
+    print(
+        f"Built service-worker metadata check passed for {canonical_version(repo_root)}."
+    )
     return 0
 
 
@@ -532,6 +662,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("check", help="Fail if a managed release surface differs from VERSION.")
+    subparsers.add_parser(
+        "check-build",
+        help="Fail if generated Angular service-worker metadata differs from VERSION.",
+    )
     bump_parser = subparsers.add_parser("bump", help="Set VERSION and every managed release surface.")
     bump_parser.add_argument("version", help="Semantic version in strict X.Y.Z form.")
     return parser.parse_args(argv)
@@ -541,6 +675,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv or sys.argv[1:])
     if args.command == "check":
         return run_check()
+    if args.command == "check-build":
+        return run_build_check()
     if args.command == "bump":
         return run_bump(args.version)
     raise ValueError(f"Unsupported command: {args.command}")
