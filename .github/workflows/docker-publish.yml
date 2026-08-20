@@ -147,7 +147,16 @@ jobs:
               psql -h 127.0.0.1 -U daca_shared_test -d postgres -Atc \
               "SELECT count(*) FROM information_schema.tables WHERE table_schema IN ('daca_catalog', 'daca_sample')"
           )"
-          test "$schema_rows" = "33"
+          test "$schema_rows" = "36"
+
+          source_access_tables="$(
+            docker exec \
+              --env PGPASSWORD='shared:p@ss' \
+              daca-postgres-compat \
+              psql -h 127.0.0.1 -U daca_shared_test -d postgres -Atc \
+              "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'daca_catalog' AND table_name IN ('source_catalog_entries', 'source_access_requests', 'source_access_grants')"
+          )"
+          test "$source_access_tables" = "3"
 
           service_level_table="$(
             docker exec \
