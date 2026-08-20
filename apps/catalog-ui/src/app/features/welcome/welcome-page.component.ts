@@ -349,7 +349,8 @@ export class WelcomePageComponent {
     return this.api.products().find((product) => product.id === request.dataProductId)?.title ?? 'Datenprodukt';
   }
 
-  taskRoute(task: { taskType: string; dataProductId: string; governanceSubmissionId?: string | null }): unknown[] {
+  taskRoute(task: { taskType: string; dataProductId: string | null; governanceSubmissionId?: string | null }): unknown[] {
+    if (!task.dataProductId) return ['/tasks'];
     if (task.taskType === 'publication_approval' && task.governanceSubmissionId) return ['/governance-submissions', task.governanceSubmissionId];
     if (task.taskType === 'service_level_approval') return ['/products', task.dataProductId, 'sla'];
     return ['/products', task.dataProductId, 'overview'];

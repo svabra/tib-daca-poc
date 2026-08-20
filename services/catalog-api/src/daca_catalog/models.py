@@ -786,19 +786,146 @@ class ProductSemanticMapping(Base):
     )
 
 
+class SourceCatalogEntry(Base):
+    """Discoverable connection metadata; never contains credentials or network endpoints."""
+
+    __tablename__ = "source_catalog_entries"
+    __table_args__ = (
+        CheckConstraint("source_type IN ('oracle')", name="ck_source_catalog_type"),
+        Index("ix_source_catalog_type_name", "source_type", "database_name"),
+        Index("ix_source_catalog_owner", "owner_user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(200), primary_key=True)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    database_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    organization: Mapped[str] = mapped_column(String(255), nullable=False)
+    owner_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    sites: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    search_objects: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    discoverability_group_ids: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    mock_profile: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class SourceAccessRequest(Base):
+    __tablename__ = "source_access_requests"
+    __table_args__ = (
+        CheckConstraint("subject_type IN ('person', 'group')", name="ck_source_request_subject"),
+        CheckConstraint(
+            "status IN ('submitted', 'approved', 'rejected')",
+            name="ck_source_request_status",
+        ),
+        CheckConstraint(
+            "valid_until IS NULL OR valid_until >= valid_from",
+            name="ck_source_request_dates",
+        ),
+        UniqueConstraint(
+            "requester_id", "client_request_id", name="uq_source_request_client"
+        ),
+        Index("ix_source_request_requester", "requester_id", "created_at"),
+        Index("ix_source_request_owner", "owner_user_id", "status"),
+        Index("ix_source_request_source", "source_id"),
+        Index(
+            "uq_source_request_open_subject",
+            "source_id",
+            "subject_type",
+            "subject_id",
+            unique=True,
+            sqlite_where=text("status = 'submitted'"),
+            postgresql_where=text("status = 'submitted'"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    request_number: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    client_request_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    source_id: Mapped[str] = mapped_column(
+        ForeignKey("source_catalog_entries.id", ondelete="CASCADE"), nullable=False
+    )
+    requester_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    requester_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    requester_organization: Mapped[str] = mapped_column(String(255), nullable=False)
+    owner_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    request_title: Mapped[str] = mapped_column(String(255), nullable=False)
+    subject_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    subject_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    subject_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    group_revision: Mapped[int | None] = mapped_column(Integer)
+    group_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    purpose: Mapped[str] = mapped_column(Text, nullable=False)
+    legal_basis: Mapped[str] = mapped_column(Text, nullable=False)
+    valid_from: Mapped[date] = mapped_column(Date, nullable=False)
+    valid_until: Mapped[date | None] = mapped_column(Date)
+    conditions_accepted: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="submitted")
+    decision_by: Mapped[str | None] = mapped_column(String(200))
+    decision_comment: Mapped[str | None] = mapped_column(Text)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class SourceAccessGrant(Base):
+    __tablename__ = "source_access_grants"
+    __table_args__ = (
+        CheckConstraint("subject_type IN ('person', 'group')", name="ck_source_grant_subject"),
+        CheckConstraint(
+            "valid_until IS NULL OR valid_until >= valid_from",
+            name="ck_source_grant_dates",
+        ),
+        Index("ix_source_grant_subject", "subject_type", "subject_id"),
+        Index("ix_source_grant_source", "source_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    source_access_request_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("source_access_requests.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    source_id: Mapped[str] = mapped_column(
+        ForeignKey("source_catalog_entries.id", ondelete="CASCADE"), nullable=False
+    )
+    subject_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    subject_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    subject_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    group_revision: Mapped[int | None] = mapped_column(Integer)
+    group_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    valid_from: Mapped[date] = mapped_column(Date, nullable=False)
+    valid_until: Mapped[date | None] = mapped_column(Date)
+    granted_by: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
 class WorkflowTask(Base):
     __tablename__ = "workflow_tasks"
     __table_args__ = (
         Index("ix_workflow_task_assignee", "assignee_user_id", "status"),
         Index("ix_workflow_task_product", "data_product_id"),
+        Index("ix_workflow_task_source_access_request", "source_access_request_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
     task_type: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")
     assignee_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
-    data_product_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("data_products.id", ondelete="CASCADE"), nullable=False
+    data_product_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("data_products.id", ondelete="CASCADE"), nullable=True
     )
     access_request_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("access_requests.id", ondelete="CASCADE")
@@ -811,6 +938,9 @@ class WorkflowTask(Base):
     )
     service_level_revision_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("service_level_revisions.id", ondelete="CASCADE")
+    )
+    source_access_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("source_access_requests.id", ondelete="CASCADE")
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     detail: Mapped[str] = mapped_column(Text, nullable=False)

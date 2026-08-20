@@ -153,6 +153,12 @@ from .schemas import (
     ServiceLevelRevisionResponse,
     ServiceLevelRevisionWrite,
     ServiceLevelSummaryResponse,
+    SourceAccessContextResponse,
+    SourceAccessDecision,
+    SourceAccessGrantResponse,
+    SourceAccessRequestCreate,
+    SourceAccessRequestResponse,
+    SourceCatalogPage,
     WorkflowTaskResponse,
     to_camel,
 )
@@ -202,6 +208,27 @@ from .service_levels import (
     withdraw_revision as withdraw_service_level_revision,
 )
 from .settings import Settings, get_settings
+from .source_access import (
+    access_context as source_access_context,
+)
+from .source_access import (
+    catalog_page as source_catalog_page,
+)
+from .source_access import (
+    create_request as create_source_access_request,
+)
+from .source_access import (
+    decide_request as decide_source_access_request,
+)
+from .source_access import (
+    grants_for_actor as source_grants_for_actor,
+)
+from .source_access import (
+    requests_for_actor as source_requests_for_actor,
+)
+from .source_access import (
+    requests_for_owner as source_requests_for_owner,
+)
 from .workflow_seed import ONTOLOGY_URI, stable_id, term_uri
 
 SessionDep = Annotated[Session, Depends(get_session)]
@@ -1276,6 +1303,101 @@ def create_router() -> APIRouter:
                 .order_by(DemoUser.display_name)
             )
         )
+
+    @router.get(
+        "/source-catalog",
+        response_model=SourceCatalogPage,
+        tags=["source access"],
+    )
+    def list_source_catalog(
+        session: SessionDep,
+        actor: ActorDep,
+        source_type: Annotated[str, Query(alias="sourceType")] = "oracle",
+        q: str | None = None,
+        site: Literal["PRIMUS", "CAMPUS", "both"] | None = None,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=50)] = 12,
+    ) -> SourceCatalogPage:
+        return source_catalog_page(
+            session,
+            actor,
+            source_type=source_type,
+            query=q,
+            site=site,
+            offset=offset,
+            limit=limit,
+        )
+
+    @router.get(
+        "/source-catalog/{source_id}/access-context",
+        response_model=SourceAccessContextResponse,
+        tags=["source access"],
+    )
+    def get_source_access_context(
+        source_id: str,
+        session: SessionDep,
+        actor: ActorDep,
+    ) -> SourceAccessContextResponse:
+        return source_access_context(session, actor, source_id)
+
+    @router.post(
+        "/source-access-requests",
+        response_model=SourceAccessRequestResponse,
+        status_code=201,
+        tags=["source access"],
+    )
+    def submit_source_access_request(
+        body: SourceAccessRequestCreate,
+        session: SessionDep,
+        actor: ActorDep,
+    ) -> SourceAccessRequestResponse:
+        return create_source_access_request(session, actor, body)
+
+    @router.get(
+        "/source-access-requests/mine",
+        response_model=list[SourceAccessRequestResponse],
+        tags=["source access"],
+    )
+    def list_my_source_access_requests(
+        session: SessionDep,
+        actor: ActorDep,
+    ) -> list[SourceAccessRequestResponse]:
+        return source_requests_for_actor(session, actor)
+
+    @router.get(
+        "/source-access-requests/inbox",
+        response_model=list[SourceAccessRequestResponse],
+        tags=["source access"],
+    )
+    def list_source_access_request_inbox(
+        session: SessionDep,
+        actor: ActorDep,
+    ) -> list[SourceAccessRequestResponse]:
+        return source_requests_for_owner(session, actor)
+
+    @router.post(
+        "/source-access-requests/{request_id}/decision",
+        response_model=SourceAccessRequestResponse,
+        tags=["source access"],
+    )
+    def decide_source_request(
+        request_id: uuid.UUID,
+        body: SourceAccessDecision,
+        session: SessionDep,
+        actor: ActorDep,
+    ) -> SourceAccessRequestResponse:
+        return decide_source_access_request(session, actor, request_id, body)
+
+    @router.get(
+        "/source-access-grants/mine",
+        response_model=list[SourceAccessGrantResponse],
+        tags=["source access"],
+    )
+    def list_my_source_access_grants(
+        session: SessionDep,
+        actor: ActorDep,
+    ) -> list[SourceAccessGrantResponse]:
+        return source_grants_for_actor(session, actor)
 
     @router.get(
         "/identity-directory/organizations",

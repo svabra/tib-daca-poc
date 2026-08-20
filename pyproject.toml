@@ -1,6 +1,6 @@
 [project]
 name = "bit-daca-monorepo"
-version = "0.1.12"
+version = "0.1.13"
 description = "BIT Distributed Data Catalog proof of concept"
 requires-python = ">=3.14"
 dependencies = []

@@ -411,3 +411,61 @@ export interface ProductActivityResponse {
   detailLevel: 'summary' | 'privileged';
   items: ProductActivityItem[];
 }
+
+export type SourceAccessStatus = 'none' | 'submitted' | 'approved' | 'rejected' | 'scheduled' | 'active' | 'expired';
+
+export interface SourceCatalogObject {
+  schema: string;
+  name: string;
+  kind: 'table' | 'view';
+}
+
+export interface SourceCatalogEntry {
+  id: string;
+  sourceType: 'oracle';
+  databaseName: string;
+  displayName: string;
+  description: string;
+  organization: string;
+  ownerUserId: string;
+  ownerName: string;
+  sites: ('PRIMUS' | 'CAMPUS')[];
+  objects: SourceCatalogObject[];
+  mockProfile: Record<string, unknown>;
+  accessStatus: SourceAccessStatus;
+}
+
+export interface SourceAccessSubject {
+  type: 'person' | 'group';
+  id: string;
+  label: string;
+  memberCount: number | null;
+  membershipRevision: number | null;
+  recommended: boolean;
+}
+
+export interface SourceAccessRequest {
+  id: string;
+  requestNumber: string;
+  clientRequestId: string;
+  source: SourceCatalogEntry;
+  requesterId: string;
+  requesterName: string;
+  requesterOrganization: string;
+  ownerUserId: string;
+  ownerName: string;
+  requestTitle: string;
+  subject: SourceAccessSubject;
+  groupSnapshot: { groupId: string; label: string; membershipRevision: number; memberIds: string[] } | null;
+  purpose: string;
+  legalBasis: string;
+  validFrom: string;
+  validUntil: string | null;
+  conditionsAccepted: boolean;
+  status: 'submitted' | 'approved' | 'rejected';
+  decisionBy: string | null;
+  decisionComment: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

@@ -21,6 +21,7 @@ import {
   ProductEffectiveAccessResponse,
   ProductQualityWorkspace,
   ProvenanceEvent,
+  SourceAccessRequest,
   StoredAccessRequest,
 } from './catalog.models';
 import { FALLBACK_EDGES, FALLBACK_NODES, FALLBACK_OWNED_ACCESS_CONSUMERS, FALLBACK_PRODUCT, FALLBACK_PRODUCTS, FALLBACK_PROVENANCE } from './catalog.seed';
@@ -132,14 +133,15 @@ export type PolicyWire = {
 
 export interface WorkflowTaskWire {
   id: string;
-  taskType: 'metadata_quality' | 'access_governance' | 'access_request_review' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed' | 'publication_approval' | 'governance_correction' | 'service_level_approval';
+  taskType: 'metadata_quality' | 'access_governance' | 'access_request_review' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed' | 'publication_approval' | 'governance_correction' | 'service_level_approval' | 'source_access_review';
   status: 'open' | 'in_progress' | 'completed';
   assigneeUserId: string;
-  dataProductId: string;
+  dataProductId: string | null;
   accessRequestId: string | null;
   simulationEventId?: string | null;
   governanceSubmissionId?: string | null;
   serviceLevelRevisionId?: string | null;
+  sourceAccessRequestId?: string | null;
   title: string;
   detail: string;
   createdAt: string;
@@ -157,9 +159,12 @@ export class CatalogApiService {
   private readonly ownerAccessRequestState = signal<readonly StoredAccessRequest[]>([]);
   private readonly ownedAccessConsumerState = signal<readonly OwnedAccessConsumer[]>(FALLBACK_OWNED_ACCESS_CONSUMERS);
   private readonly workflowTaskState = signal<readonly WorkflowTaskWire[]>([]);
+  private readonly sourceAccessRequestState = signal<readonly SourceAccessRequest[]>([]);
   private productsRefreshGeneration = 0;
   private ownerInboxRefreshGeneration = 0;
   private workflowTasksRefreshGeneration = 0;
+  private sourceAccessRefreshGeneration = 0;
+  private sourceAccessInboxActivated = false;
   private lastRefreshedIdentity = this.identity.userId();
   private selectedProductId: string | null = null;
 
@@ -170,10 +175,13 @@ export class CatalogApiService {
   readonly ownerAccessRequests = this.ownerAccessRequestState.asReadonly();
   readonly ownedAccessConsumers = this.ownedAccessConsumerState.asReadonly();
   readonly workflowTasks = this.workflowTaskState.asReadonly();
+  readonly sourceAccessRequests = this.sourceAccessRequestState.asReadonly();
   readonly ownerAccessRequestLoading = signal(true);
   readonly ownerAccessRequestError = signal<string | null>(null);
   readonly workflowTasksLoading = signal(true);
   readonly workflowTasksError = signal<string | null>(null);
+  readonly sourceAccessRequestsLoading = signal(false);
+  readonly sourceAccessRequestsError = signal<string | null>(null);
   readonly loading = signal(true);
   readonly usingFallback = signal(false);
   /** @deprecated Policy evidence no longer falls back; kept for callers during migration. */
@@ -192,11 +200,13 @@ export class CatalogApiService {
       this.ownerAccessRequestState.set([]);
       this.ownedAccessConsumerState.set([]);
       this.workflowTaskState.set([]);
+      this.sourceAccessRequestState.set([]);
       this.setCurrentProduct(IDENTITY_LOADING_PRODUCT);
       this.etag.set('"0"');
       this.refreshProducts();
       this.refreshOwnerAccessRequestInbox();
       this.refreshWorkflowTasks();
+      if (this.sourceAccessInboxActivated) this.refreshSourceAccessRequestInbox();
     });
     this.refreshProducts();
     this.refreshOwnerAccessRequestInbox();
@@ -444,6 +454,42 @@ export class CatalogApiService {
           this.workflowTasksError.set('Weitere Aufgaben konnten nicht geladen werden. Der Aufgabenstatus ist unbekannt.');
         },
       });
+  }
+
+  refreshSourceAccessRequestInbox(): void {
+    this.sourceAccessInboxActivated = true;
+    const refreshGeneration = ++this.sourceAccessRefreshGeneration;
+    this.sourceAccessRequestsLoading.set(true);
+    this.sourceAccessRequestsError.set(null);
+    this.http.get<SourceAccessRequest[]>('/api/v1/source-access-requests/inbox', {
+      headers: this.identity.headers(),
+    }).pipe(timeout(3000)).subscribe({
+      next: (requests) => {
+        if (refreshGeneration !== this.sourceAccessRefreshGeneration) return;
+        this.sourceAccessRequestState.set(requests);
+        this.sourceAccessRequestsLoading.set(false);
+      },
+      error: () => {
+        if (refreshGeneration !== this.sourceAccessRefreshGeneration) return;
+        this.sourceAccessRequestsLoading.set(false);
+        this.sourceAccessRequestsError.set('Datenquellen-Zugriffsanfragen konnten nicht geladen werden.');
+      },
+    });
+  }
+
+  decideSourceAccessRequest(
+    requestId: string,
+    decision: 'approve' | 'reject',
+    comment: string | null,
+  ): Observable<SourceAccessRequest> {
+    return this.http.post<SourceAccessRequest>(
+      `/api/v1/source-access-requests/${encodeURIComponent(requestId)}/decision`,
+      { decision, comment },
+      { headers: this.identity.headers() },
+    ).pipe(tap(() => {
+      this.refreshSourceAccessRequestInbox();
+      this.refreshWorkflowTasks();
+    }));
   }
 
   identityUserId(): string { return this.identity.userId(); }

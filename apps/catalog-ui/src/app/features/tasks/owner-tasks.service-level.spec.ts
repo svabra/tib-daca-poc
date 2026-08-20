@@ -23,9 +23,14 @@ function apiStub() {
     workflowTasks: signal([]),
     workflowTasksLoading: signal(false),
     workflowTasksError: signal<string | null>(null),
+    sourceAccessRequests: signal([]),
+    sourceAccessRequestsLoading: signal(false),
+    sourceAccessRequestsError: signal<string | null>(null),
     products: signal([]),
     refreshOwnerAccessRequestInbox: vi.fn(),
     refreshWorkflowTasks: vi.fn(),
+    refreshSourceAccessRequestInbox: vi.fn(),
+    decideSourceAccessRequest: vi.fn(),
   };
 }
 

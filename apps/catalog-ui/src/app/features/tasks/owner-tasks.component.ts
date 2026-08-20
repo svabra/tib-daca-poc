@@ -6,11 +6,12 @@ import { DacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-daca/desig
 import { finalize } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { AccessRenewalContext, StoredAccessRequest } from '../../core/catalog.models';
+import { SourceAccessRequestsComponent } from './source-access-requests.component';
 
 @Component({
   selector: 'daca-owner-tasks',
   standalone: true,
-  imports: [DatePipe, RouterLink, StatusBadgeComponent, DacaGlossaryTermComponent],
+  imports: [DatePipe, RouterLink, StatusBadgeComponent, DacaGlossaryTermComponent, SourceAccessRequestsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="daca-page-heading owner-tasks-heading">
@@ -29,6 +30,8 @@ import { AccessRenewalContext, StoredAccessRequest } from '../../core/catalog.mo
         </daca-status-badge>
       }
     </section>
+
+    <daca-source-access-requests />
 
     @if (api.workflowTasksLoading()) {
       <section class="owner-workflow-section" aria-labelledby="workflow-title">
@@ -168,15 +171,19 @@ export class OwnerTasksComponent {
     return this.api.ownerAccessRequests().filter((request) => !productId || request.dataProductId === productId);
   });
   readonly filteredProductTitle = computed(() => this.productTitle(this.filteredProductId() ?? ''));
-  readonly workflowTasks = computed(() => this.api.workflowTasks().filter((task) => task.taskType !== 'access_request_review'));
-  readonly openTaskCount = computed(() => this.requests().length + this.workflowTasks().length);
-  readonly taskStatusUnknown = computed(() => Boolean(this.api.ownerAccessRequestError() || this.api.workflowTasksError()));
-  readonly taskStatusLoading = computed(() => this.api.ownerAccessRequestLoading() || this.api.workflowTasksLoading());
+  readonly workflowTasks = computed(() => this.api.workflowTasks().filter((task) => task.taskType !== 'access_request_review' && task.taskType !== 'source_access_review'));
+  readonly openTaskCount = computed(() => this.requests().length + this.api.sourceAccessRequests().length + this.workflowTasks().length);
+  readonly taskStatusUnknown = computed(() => Boolean(this.api.ownerAccessRequestError() || this.api.workflowTasksError() || this.api.sourceAccessRequestsError()));
+  readonly taskStatusLoading = computed(() => this.api.ownerAccessRequestLoading() || this.api.workflowTasksLoading() || this.api.sourceAccessRequestsLoading());
   readonly decisionError = signal<string | null>(null);
   readonly decisionNotice = signal<string | null>(null);
   private readonly decisionsInFlight = signal<Record<string, 'approve' | 'reject'>>({});
   private readonly policyDrafts = signal<Record<string, { id: string; revision: number }>>({});
   private readonly renewalGovernance = signal<Record<string, { id: string }>>({});
+
+  constructor() {
+    this.api.refreshSourceAccessRequestInbox();
+  }
 
   productTitle(productId: string): string {
     return this.api.products().find((product) => product.id === productId)?.title ?? 'Unbekanntes Datenprodukt';
@@ -230,7 +237,8 @@ export class OwnerTasksComponent {
     } as Record<string, string>)[value] ?? 'Aufgabe';
   }
 
-  taskRoute(task: { taskType: string; dataProductId: string; governanceSubmissionId?: string | null }): unknown[] {
+  taskRoute(task: { taskType: string; dataProductId: string | null; governanceSubmissionId?: string | null }): unknown[] {
+    if (!task.dataProductId) return ['/tasks'];
     if (task.taskType === 'publication_approval' && task.governanceSubmissionId) return ['/governance-submissions', task.governanceSubmissionId];
     if (task.taskType === 'service_level_approval') return ['/products', task.dataProductId, 'sla'];
     if (task.taskType === 'metadata_quality' || task.taskType === 'simulation_quality_alert') return ['/products', task.dataProductId, 'quality'];
