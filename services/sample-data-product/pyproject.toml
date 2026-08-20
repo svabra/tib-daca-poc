@@ -1,6 +1,6 @@
 [project]
 name = "daca-sample-data-product"
-version = "0.1.10"
+version = "0.1.11"
 description = "Synthetic ESTV data product with OPA and PostgreSQL policy enforcement"
 requires-python = ">=3.14"
 dependencies = [
