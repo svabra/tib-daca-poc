@@ -46,6 +46,8 @@ describe('Catalog runtime version overlay', () => {
     expect(dialog?.textContent).toContain('Service Level gemeinsam festlegen');
     expect(dialog?.textContent).toContain('Änderungen nachvollziehen');
     expect(dialog?.textContent).toContain('PoC anhand geführter Journeys erleben');
+    expect(dialog?.textContent).toContain('sieben wiederholbare Abläufe');
+    expect(dialog?.textContent).toContain('Zugriff gezielt freigeben und verlängern');
     expect(dialog?.textContent).toContain('aktuellen PoC-Stand');
     expect(features.length).toBe(10);
     expect(trigger?.getAttribute('aria-expanded')).toBe('true');

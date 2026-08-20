@@ -6,8 +6,7 @@ import { DacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-daca/desig
 import { finalize } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService } from '../../core/demo-identity.service';
-import { FALLBACK_POLICY } from '../../core/catalog.seed';
-import { PolicyDefinition } from '../../core/catalog.models';
+import { PolicyDefinition, WeeklyAvailability } from '../../core/catalog.models';
 import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav.component';
 
 @Component({
@@ -29,29 +28,38 @@ import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav
         <h1>Technische Durchsetzung</h1>
         <p>Prüfen Sie <daca-glossary-term term="PBAC" />-Regeln sowie deren Durchsetzung über <daca-glossary-term term="OPA" />, REST und PostgreSQL.</p>
       </div>
-      <daca-status-badge [tone]="api.policyUsingFallback() ? 'orange' : deploymentsAligned() ? 'green' : 'red'">
-        {{ api.policyUsingFallback() ? 'Demo policy preview' : 'Policy revision ' + policy().revision + ' · ' + policy().state }}
-      </daca-status-badge>
+      @if (policyLoading()) {
+        <daca-status-badge tone="neutral">Policy-Evidenz wird geladen</daca-status-badge>
+      } @else if (policyError()) {
+        <daca-status-badge tone="red">Policy-Evidenz nicht verfügbar</daca-status-badge>
+      } @else if (policy(); as activePolicy) {
+        <daca-status-badge [tone]="deploymentsAligned() ? 'green' : 'red'">Policy revision {{ activePolicy.revision }} · {{ activePolicy.state }}</daca-status-badge>
+      }
     </section>
 
-    @if (api.policyUsingFallback()) {
-      <p class="daca-alert is-warning" role="status">The policy API is unavailable. The clearly labelled deterministic demo definition below is not deployment evidence.</p>
-    }
-
+    @if (policyLoading()) {
+      <section class="daca-card"><div class="daca-card-body" aria-live="polite">Policy- und Deployment-Evidenz wird geladen…</div></section>
+    } @else if (policyError(); as loadError) {
+      <section class="daca-card"><div class="daca-card-body">
+        <p class="daca-alert is-error" role="alert"><strong>Status unbekannt.</strong> {{ loadError }}</p>
+        <button class="daca-button is-secondary" data-testid="retry-policy" type="button" (click)="reloadPolicy()">Erneut laden</button>
+      </div></section>
+    } @else if (policy(); as activePolicy) {
     <div class="security-layout">
       <section class="daca-card policy-editor" aria-labelledby="policy-definition-title">
         <div class="daca-card-header"><div><p class="daca-eyebrow">Canonical definition</p><h2 id="policy-definition-title">Who may access this product?</h2></div><span class="policy-readonly">Structured policy</span></div>
         <div class="daca-card-body">
           <div class="policy-sentence" aria-label="Readable policy summary">
-            <span>{{ policy().grants?.length ? 'ALLOW' : 'DENY' }}</span>
+            <span>{{ activePolicy.grants?.length ? 'ALLOW' : 'DENY' }}</span>
             <p>{{ policySummary() }}</p>
           </div>
           <div class="policy-builder-grid">
-            <div><span>Effect</span><strong class="is-allow">{{ policy().grants?.length ? 'Allow matching grants' : 'Default deny' }}</strong></div>
+            <div><span>Effect</span><strong class="is-allow">{{ activePolicy.grants?.length ? 'Allow matching grants' : 'Default deny' }}</strong></div>
             <div><span>Identitäten</span><strong>{{ subjectSummary() }}</strong></div>
-            <div><span>Resource selectors</span><strong>owner = {{ policy().resources.owner }}<br>productId = {{ shortProductId() }}</strong></div>
+            <div><span>Resource selectors</span><strong>owner = {{ activePolicy.resources.owner }}<br>productId = {{ shortProductId() }}</strong></div>
             <div><span>Action</span><strong>data.read</strong></div>
-            <div><span>Protokolle</span><strong>{{ policy().protocols.join(' · ').toUpperCase() }}</strong></div>
+            <div><span>Protokolle</span><strong>{{ activePolicy.protocols.join(' · ').toUpperCase() }}</strong></div>
+            <div><span>Zeitfenster</span><strong>{{ availabilitySummary() }}</strong></div>
             <div><span>Default</span><strong class="is-deny">Deny all unmatched requests</strong></div>
           </div>
           <p class="daca-alert">Resource owner and classification are enriched from the trusted catalog PIP; callers cannot override them.</p>
@@ -87,11 +95,11 @@ import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav
     </div>
 
     <section class="daca-card policy-flow-card" aria-labelledby="policy-flow-title">
-      <div class="daca-card-header"><div><p class="daca-eyebrow">PBAC runtime</p><h2 id="policy-flow-title">Publication and enforcement flow</h2></div><daca-status-badge [tone]="api.policyUsingFallback() ? 'orange' : deploymentsAligned() ? 'green' : 'red'">{{ api.policyUsingFallback() ? 'Preview only' : deploymentsAligned() ? 'Targets aligned' : 'Deployment drift' }}</daca-status-badge></div>
+      <div class="daca-card-header"><div><p class="daca-eyebrow">PBAC runtime</p><h2 id="policy-flow-title">Publication and enforcement flow</h2></div><daca-status-badge [tone]="deploymentsAligned() ? 'green' : 'red'">{{ deploymentsAligned() ? 'Targets aligned' : 'Deployment drift' }}</daca-status-badge></div>
       <div class="daca-card-body policy-flow">
         <div><span>PAP</span><strong>Data owner</strong><small>structured intent</small></div><i>→</i>
         <div><span>PIP</span><strong>DaCa catalog</strong><small>owner · product · class</small></div><i>→</i>
-        <div><span>PDP</span><strong>OPA bundle</strong><small>revision {{ policy().opaRevision }}</small></div><i>→</i>
+        <div><span>PDP</span><strong>OPA bundle</strong><small>revision {{ activePolicy.opaRevision }}</small></div><i>→</i>
         <div class="policy-flow-split"><span>PEP</span><strong>REST guard</strong><small>per-request decision</small><b>or</b><strong>PostgreSQL RLS</strong><small>projected entitlement</small></div>
       </div>
     </section>
@@ -99,8 +107,8 @@ import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav
     <div class="security-bottom-grid">
       <section class="daca-card">
         <div class="daca-card-header"><h2>Generated Rego</h2><span>Read-only compiler output</span></div>
-        <pre class="policy-code"><code>{{ policy().generatedRego }}</code></pre>
-        @if (policy().state === 'draft') {
+        <pre class="policy-code"><code>{{ activePolicy.generatedRego }}</code></pre>
+        @if (activePolicy.state === 'draft') {
           <div class="daca-card-body">
             <p class="daca-alert is-warning">Der Entwurf gewährt noch keinen Zugriff. Erst die Publikation projiziert dieselbe Revision nach OPA und PostgreSQL.</p>
             <button class="daca-button" type="button" [disabled]="publishing()" (click)="publishDraft()">{{ publishing() ? 'Policy wird publiziert…' : 'Policy bewusst publizieren' }}</button>
@@ -109,14 +117,15 @@ import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav
         }
       </section>
       <section class="daca-card">
-        <div class="daca-card-header"><h2>Deployment status</h2><span>Desired revision {{ policy().revision }}</span></div>
+        <div class="daca-card-header"><h2>Deployment status</h2><span>Desired revision {{ activePolicy.revision }}</span></div>
         <div class="daca-card-body policy-targets">
-          <article><span class="policy-target-icon">OPA</span><div><strong>HTTP policy decision point</strong><small>{{ api.policyUsingFallback() ? 'No live deployment observation' : 'Bundle deployment observation' }}</small></div><daca-status-badge [tone]="deploymentTone(policy().opaRevision)">{{ deploymentLabel(policy().opaRevision) }}</daca-status-badge></article>
-          <article><span class="policy-target-icon">PG</span><div><strong>PostgreSQL enforcement</strong><small>{{ api.policyUsingFallback() ? 'No live deployment observation' : 'ACL + FORCE ROW LEVEL SECURITY' }}</small></div><daca-status-badge [tone]="deploymentTone(policy().postgresRevision)">{{ deploymentLabel(policy().postgresRevision) }}</daca-status-badge></article>
+          <article><span class="policy-target-icon">OPA</span><div><strong>HTTP policy decision point</strong><small>Bundle deployment observation</small></div><daca-status-badge [tone]="deploymentTone(activePolicy.opaRevision)">{{ deploymentLabel(activePolicy.opaRevision) }}</daca-status-badge></article>
+          <article><span class="policy-target-icon">PG</span><div><strong>PostgreSQL enforcement</strong><small>ACL + FORCE ROW LEVEL SECURITY</small></div><daca-status-badge [tone]="deploymentTone(activePolicy.postgresRevision)">{{ deploymentLabel(activePolicy.postgresRevision) }}</daca-status-badge></article>
           <p class="daca-alert is-warning">Publishing is complete only when both targets acknowledge the desired revision. Drift fails closed.</p>
         </div>
       </section>
     </div>
+    }
   `,
 })
 export class SecurityPolicyComponent {
@@ -124,22 +133,25 @@ export class SecurityPolicyComponent {
   readonly identity = inject(DemoIdentityService);
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
-  readonly policy = signal<PolicyDefinition>(FALLBACK_POLICY);
+  readonly policy = signal<PolicyDefinition | null>(null);
+  readonly policyLoading = signal(true);
+  readonly policyError = signal<string | null>(null);
   readonly selectedUser = signal(this.api.identityUserId());
   readonly expectedAllowed = computed(() => {
+    const policy = this.policy();
+    if (!policy) return false;
     const user = this.selectedUser();
     const today = new Date().toISOString().slice(0, 10);
-    const grants = this.policy().grants ?? [];
+    const grants = policy.grants ?? [];
     if (grants.length) return grants.some((grant) => grant.subject.type === 'person' && grant.subject.id === user && grant.validFrom <= today && grant.validUntil >= today && grant.protocols.includes('http'));
-    return this.policy().subjects.includes(user);
+    return policy.subjects.includes(user);
   });
   readonly runtimeAvailable = computed(() => ['11111111-1111-4111-8111-111111111111', '9c9a0112-d4ef-57d0-862c-0d27872c82c2'].includes(this.api.product().id));
-  readonly shortProductId = computed(() => `${this.policy().resources.productId.slice(0, 8)}…`);
-  readonly deploymentsAligned = computed(() =>
-    !this.api.policyUsingFallback()
-      && this.policy().opaRevision === this.policy().revision
-      && this.policy().postgresRevision === this.policy().revision,
-  );
+  readonly shortProductId = computed(() => this.policy() ? `${this.policy()!.resources.productId.slice(0, 8)}…` : '–');
+  readonly deploymentsAligned = computed(() => {
+    const policy = this.policy();
+    return Boolean(policy && policy.opaRevision === policy.revision && policy.postgresRevision === policy.revision);
+  });
   readonly testing = signal(false);
   readonly testState = signal<'idle' | 'allowed' | 'denied' | 'error'>('idle');
   readonly testMessage = signal('');
@@ -149,43 +161,80 @@ export class SecurityPolicyComponent {
 
   constructor() {
     this.api.selectProduct(this.route.snapshot.paramMap.get('id'));
-    this.api.loadPolicy().subscribe((policy) => this.policy.set(policy));
+    this.reloadPolicy();
+  }
+
+  reloadPolicy(): void {
+    this.policy.set(null);
+    this.policyLoading.set(true);
+    this.policyError.set(null);
+    this.api.loadPolicy().pipe(finalize(() => this.policyLoading.set(false))).subscribe({
+      next: (policy) => this.policy.set(policy),
+      error: (error: unknown) => this.policyError.set(this.policyLoadErrorMessage(error)),
+    });
   }
 
   deploymentTone(observedRevision: number): 'green' | 'orange' | 'red' {
-    if (this.api.policyUsingFallback()) return 'orange';
-    return observedRevision === this.policy().revision ? 'green' : 'red';
+    return observedRevision === this.policy()?.revision ? 'green' : 'red';
   }
 
   deploymentLabel(observedRevision: number): string {
-    return this.api.policyUsingFallback() ? 'preview' : observedRevision ? `rev ${observedRevision}` : 'pending';
+    return observedRevision ? `rev ${observedRevision}` : 'pending';
   }
 
   policySummary(): string {
-    const grants = this.policy().grants ?? [];
+    const grants = this.policy()?.grants ?? [];
     if (!grants.length) return `Keine konkrete Freigabe für ${this.api.product().title}. Default Deny bleibt aktiv.`;
-    return grants.map((grant) => `${grant.subject.type === 'person' ? 'eIAM' : 'Machine ID'} ${grant.subject.id} · ${grant.dataVariant} · ${grant.validFrom} bis ${grant.validUntil}`).join('; ');
+    return grants.map((grant) => `${grant.subject.type === 'person' ? 'eIAM' : grant.subject.type === 'machine' ? 'Machine ID' : 'Gruppe'} ${grant.subject.id} · ${grant.protocols.map((protocol) => protocol === 'http' ? 'REST' : 'PostgreSQL').join(' & ')} · ${grant.dataVariant} · ${grant.validFrom} bis ${grant.validUntil} · ${this.availabilityLabel(grant.weeklyAvailability)}`).join('; ');
   }
 
   subjectSummary(): string {
-    const grants = this.policy().grants ?? [];
+    const grants = this.policy()?.grants ?? [];
     return grants.length ? grants.map((grant) => `${grant.subject.type}: ${grant.subject.id}`).join(' · ') : 'Keine Grants';
   }
 
+  availabilitySummary(): string {
+    const grants = this.policy()?.grants ?? [];
+    return grants.length
+      ? grants.map((grant) => `${grant.subject.id}: ${this.availabilityLabel(grant.weeklyAvailability)}`).join(' · ')
+      : 'Keine Grants';
+  }
+
+  availabilityLabel(availability: WeeklyAvailability | null | undefined): string {
+    if (!availability) return 'Durchgehend · 24/7';
+    const dayLabels: Record<WeeklyAvailability['weekdays'][number], string> = {
+      monday: 'Mo', tuesday: 'Di', wednesday: 'Mi', thursday: 'Do', friday: 'Fr', saturday: 'Sa', sunday: 'So',
+    };
+    return `${availability.weekdays.map((day) => dayLabels[day]).join(', ')} · ${availability.startTime}–${availability.endTime} · ${availability.timeZone}`;
+  }
+
   publishDraft(): void {
+    const policy = this.policy();
+    if (!policy) return;
     this.publishing.set(true);
     this.publishFailed.set(false);
     this.publishMessage.set('');
-    this.api.publishPolicy(this.api.product().id, this.policy().id, this.policy().revision).pipe(finalize(() => this.publishing.set(false))).subscribe({
+    this.api.publishPolicy(this.api.product().id, policy.id, policy.revision).pipe(finalize(() => this.publishing.set(false))).subscribe({
       next: () => {
         this.publishMessage.set('Policy publiziert; OPA- und PostgreSQL-Projektion wurden angestossen.');
-        this.api.loadPolicy().subscribe((policy) => this.policy.set(policy));
+        this.reloadPolicy();
       },
       error: (error: HttpErrorResponse) => {
         this.publishFailed.set(true);
         this.publishMessage.set(error.error?.detail ?? 'Die Policy konnte nicht publiziert werden.');
       },
     });
+  }
+
+  private policyLoadErrorMessage(error: unknown): string {
+    if (error instanceof HttpErrorResponse && error.status === 403) {
+      return 'Sie sind nicht berechtigt, diese Policy- und Deployment-Evidenz einzusehen.';
+    }
+    if (error instanceof HttpErrorResponse && error.status === 404) {
+      return 'Für dieses Datenprodukt ist keine sichtbare Policy-Evidenz vorhanden.';
+    }
+    if (error instanceof Error && error.message.includes('keine Policy-Evidenz')) return error.message;
+    return 'Policy- und Deployment-Evidenz konnte nicht geladen werden. Der Status ist unbekannt.';
   }
 
   testEndpoint(): void {

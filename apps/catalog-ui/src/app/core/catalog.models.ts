@@ -59,21 +59,53 @@ export interface ProductQualityWorkspace {
   mappings: ProductQualityMapping[];
 }
 
+export type AccessSubjectType = 'person' | 'machine' | 'group';
+
+export interface WeeklyAvailability {
+  weekdays: ('monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday')[];
+  startTime: string;
+  endTime: string;
+  timeZone: string;
+}
+
 export interface ProductEffectiveAccessGrant {
+  grantId: string;
+  subjectType: AccessSubjectType;
   protocols: ('http' | 'postgresql')[];
+  dataVariant: 'original' | 'modified';
   validFrom: string;
   validUntil: string;
-  weeklyAvailability?: {
-    weekdays: ('monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday')[];
-    startTime: string;
-    endTime: string;
-    timeZone: string;
-  } | null;
+  weeklyAvailability: WeeklyAvailability | null;
+  purpose: string | null;
+  expiresInDays: number;
+  expiryState: 'active' | 'expiringSoon';
+  sourceRequestId: string | null;
+  sourceRequestNumber: string | null;
+  renewalEligibility: {
+    eligible: boolean;
+    reason: 'eligible' | 'outsideWindow' | 'pending' | 'sourceRequestUnavailable' | 'unsupportedSubject';
+    renewalRequestId: string | null;
+  };
 }
 
 export interface ProductEffectiveAccessResponse {
   granted: boolean;
+  asOfDate: string;
+  policyRevision: number | null;
   grants: ProductEffectiveAccessGrant[];
+}
+
+export interface AccessRenewalFixtureState {
+  fixtureId: 'access-renewal-expiring';
+  productId: string;
+  productTitle: string;
+  state: 'notPrepared' | 'ready' | 'renewalPending' | 'approvalPending' | 'deployed';
+  asOfDate: string;
+  validFrom: string | null;
+  validUntil: string | null;
+  daysUntilExpiry: number | null;
+  openRenewalCount: number;
+  activePolicyRevision: number | null;
 }
 
 export interface DataProduct {
@@ -167,7 +199,22 @@ export interface GovernanceSubmission {
   status: 'pending_approval' | 'approved_deploying' | 'approved' | 'rejected' | 'deployment_failed';
   revision: number;
   reviewSnapshot: {
-    dataProduct: { id: string; title: string; owner: string; classification: string };
+    snapshotVersion?: number;
+    workflowKind?: string;
+    preservedProductState?: {
+      activePolicyRevision: number | null;
+      discoverable: boolean;
+      lifecycle: string;
+    };
+    dataProduct: {
+      id: string;
+      title: string;
+      owner: string;
+      classification: string;
+      revision?: number;
+      urn?: string;
+      ownerUserId?: string;
+    };
     approver: { id: string; displayName: string; organization: string };
     discoverable: boolean;
     grants: NonNullable<PolicyDefinition['grants']>;
@@ -181,6 +228,13 @@ export interface GovernanceSubmission {
     }>;
     barArchive: Record<string, unknown>;
     policy: { id: string; revision: number; definition: Record<string, unknown> };
+    renewal?: {
+      requestId: string;
+      renewalOfRequestId: string;
+      originalGrant: AccessRenewalContext;
+      requestedPurpose: string;
+      requestedValidUntil: string;
+    };
     submittedAt: string;
   };
   archiveEvidence: Record<string, unknown>;
@@ -252,6 +306,29 @@ export interface AccessRequestSubmission {
   conditionsAccepted: true;
 }
 
+export interface AccessRenewalSubmission {
+  sourceGrantId: string;
+  purpose: string;
+  validUntil: string;
+  conditionsAccepted: true;
+}
+
+export interface AccessRenewalContext {
+  sourceGrantId: string;
+  policyRevision: number;
+  subject: { type: AccessSubjectType; id: string };
+  actions: string[];
+  protocols: ('http' | 'postgresql')[];
+  dataVariant: 'original' | 'modified';
+  validFrom: string;
+  validUntil: string;
+  weeklyAvailability: WeeklyAvailability | null;
+  metadataChannels: { kobyMcp: boolean; i14y: boolean };
+  groupSnapshot: { groupId: string; membershipRevision: number; memberIds: string[] } | null;
+  purpose: string;
+  legalBasis: string;
+}
+
 export interface StoredAccessRequest extends Omit<AccessRequestSubmission, 'conditionsAccepted'> {
   id: string;
   requestNumber: string;
@@ -260,6 +337,10 @@ export interface StoredAccessRequest extends Omit<AccessRequestSubmission, 'cond
   requesterName: string;
   requesterOrganization: string;
   status: AccessRequestStatus;
+  requestKind: 'initial' | 'renewal';
+  renewalOfRequestId: string | null;
+  renewalOfRequestNumber: string | null;
+  renewalContext: AccessRenewalContext | null;
   fulfillmentSubjectType?: 'person' | 'machine' | 'group' | null;
   fulfillmentSubjectId?: string | null;
   fulfillmentGroupRevision?: number | null;
@@ -270,11 +351,16 @@ export interface StoredAccessRequest extends Omit<AccessRequestSubmission, 'cond
 }
 
 export interface AccessConsumerGrant {
-  requestNumber: string;
+  grantId: string;
+  policyRevision: number;
+  requestNumber: string | null;
   protocol: 'http' | 'postgresql' | 'both';
   variant: 'original' | 'modified';
   validFrom: string;
   validUntil: string;
+  purpose: string | null;
+  expiresInDays: number;
+  expiryState: 'active' | 'expiringSoon';
 }
 
 export interface OwnedAccessConsumer {

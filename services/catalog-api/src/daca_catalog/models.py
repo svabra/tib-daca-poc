@@ -200,9 +200,35 @@ class AccessRequest(Base):
             "granted_variant IS NULL OR granted_variant IN ('original', 'modified')",
             name="ck_access_request_granted_variant",
         ),
+        CheckConstraint(
+            "request_kind IN ('initial', 'renewal')",
+            name="ck_access_request_kind",
+        ),
+        CheckConstraint(
+            "(request_kind = 'initial' AND renewal_of_request_id IS NULL AND renewal_context IS NULL) "
+            "OR (request_kind = 'renewal' AND renewal_of_request_id IS NOT NULL "
+            "AND renewal_context IS NOT NULL)",
+            name="ck_access_request_renewal_context",
+        ),
         Index("ix_access_request_product", "data_product_id"),
         Index("ix_access_request_requester", "requester_id"),
         Index("ix_access_request_decision_policy", "decision_policy_revision_id"),
+        Index("ix_access_request_renewal_of", "renewal_of_request_id"),
+        Index(
+            "uq_access_request_open_renewal",
+            "renewal_of_request_id",
+            unique=True,
+            postgresql_where=text(
+                "request_kind = 'renewal' AND status IN "
+                "('submitted', 'identity_review', 'legal_review', 'conditions_review', "
+                "'approved_policy_pending')"
+            ),
+            sqlite_where=text(
+                "request_kind = 'renewal' AND status IN "
+                "('submitted', 'identity_review', 'legal_review', 'conditions_review', "
+                "'approved_policy_pending')"
+            ),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
@@ -231,6 +257,11 @@ class AccessRequest(Base):
         ForeignKey("policy_revisions.id", ondelete="SET NULL")
     )
     granted_variant: Mapped[str | None] = mapped_column(String(32))
+    request_kind: Mapped[str] = mapped_column(String(32), nullable=False, default="initial")
+    renewal_of_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("access_requests.id", ondelete="CASCADE")
+    )
+    renewal_context: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
@@ -518,9 +549,7 @@ class ServiceLevelRevision(Base):
 
     __tablename__ = "service_level_revisions"
     __table_args__ = (
-        UniqueConstraint(
-            "data_product_id", "revision", name="uq_service_level_product_revision"
-        ),
+        UniqueConstraint("data_product_id", "revision", name="uq_service_level_product_revision"),
         CheckConstraint(
             "status IN ('draft', 'pending_approval', 'published', 'rejected', 'withdrawn')",
             name="ck_service_level_status",

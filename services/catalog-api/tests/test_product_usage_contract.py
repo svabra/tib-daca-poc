@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-import daca_catalog.main as catalog_main
+from daca_catalog import access_renewals
 from daca_catalog.models import DataProduct, PolicyRevision, ProductQualityAssessment
 from daca_catalog.seed import ESTV_PRODUCT_ID
 from sqlalchemy import func, select
@@ -47,7 +47,6 @@ def test_effective_access_is_actor_scoped_redacted_and_uses_zurich_date(
                     },
                 }
             ],
-            "privateNote": "must-not-leak-policy-detail",
         }
         policy.generated_rego = "must-not-leak-rego"
         policy.created_by = "must-not-leak-actor"
@@ -66,7 +65,6 @@ def test_effective_access_is_actor_scoped_redacted_and_uses_zurich_date(
                     "actions": ["data.read"],
                     "protocols": ["http"],
                     "grants": [],
-                    "privateNote": "must-not-leak-newer-draft",
                 },
                 generated_rego="must-not-leak-draft-rego",
                 created_by="must-not-leak-draft-author",
@@ -76,7 +74,7 @@ def test_effective_access_is_actor_scoped_redacted_and_uses_zurich_date(
 
     # 22:30 UTC is already the next calendar day in Europe/Zurich (CEST).
     monkeypatch.setattr(
-        catalog_main,
+        access_renewals,
         "utc_now",
         lambda: datetime(2026, 8, 12, 22, 30, tzinfo=UTC),
     )
@@ -84,31 +82,43 @@ def test_effective_access_is_actor_scoped_redacted_and_uses_zurich_date(
     granted = client.get(url, headers={"X-DaCa-User": "beat.stalder"})
 
     assert granted.status_code == 200
-    assert granted.json() == {
-        "granted": True,
-        "grants": [
-            {
-                "protocols": ["http"],
-                "validFrom": "2026-08-13",
-                "validUntil": "2026-08-13",
-                "weeklyAvailability": {
-                    "weekdays": ["monday", "tuesday", "wednesday", "thursday", "friday"],
-                    "startTime": "07:00",
-                    "endTime": "19:00",
-                    "timeZone": "Europe/Zurich",
-                },
-            }
-        ],
+    payload = granted.json()
+    assert payload["granted"] is True
+    assert payload["asOfDate"] == "2026-08-13"
+    assert payload["policyRevision"] == 1
+    assert len(payload["grants"]) == 1
+    assert payload["grants"][0] == {
+        "grantId": payload["grants"][0]["grantId"],
+        "subjectType": "group",
+        "protocols": ["http"],
+        "dataVariant": "original",
+        "validFrom": "2026-08-13",
+        "validUntil": "2026-08-13",
+        "weeklyAvailability": {
+            "weekdays": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+            "startTime": "07:00",
+            "endTime": "19:00",
+            "timeZone": "Europe/Zurich",
+        },
+        "purpose": None,
+        "expiresInDays": 0,
+        "expiryState": "expiringSoon",
+        "sourceRequestId": None,
+        "sourceRequestNumber": None,
+        "renewalEligibility": {
+            "eligible": False,
+            "reason": "unsupportedSubject",
+            "renewalRequestId": None,
+        },
     }
+    assert payload["grants"][0]["grantId"].startswith("grant_")
     serialized = granted.text
     for forbidden in (
         "beat.stalder",
         "private-group",
         "must-not-leak-member",
-        "must-not-leak-policy-detail",
         "must-not-leak-rego",
         "must-not-leak-actor",
-        "must-not-leak-newer-draft",
         "must-not-leak-draft-rego",
         "must-not-leak-draft-author",
         str(policy_id),
@@ -118,7 +128,12 @@ def test_effective_access_is_actor_scoped_redacted_and_uses_zurich_date(
 
     not_granted = client.get(url, headers={"X-DaCa-User": "kassandra.valdata"})
     assert not_granted.status_code == 200
-    assert not_granted.json() == {"granted": False, "grants": []}
+    assert not_granted.json() == {
+        "granted": False,
+        "asOfDate": "2026-08-13",
+        "policyRevision": 1,
+        "grants": [],
+    }
     assert client.get(url, headers={"X-DaCa-User": ""}).status_code == 401
 
     with session_factory() as session:
@@ -147,7 +162,12 @@ def test_effective_access_is_actor_scoped_redacted_and_uses_zurich_date(
         session.commit()
     no_active_policy = client.get(url, headers={"X-DaCa-User": "beat.stalder"})
     assert no_active_policy.status_code == 200
-    assert no_active_policy.json() == {"granted": False, "grants": []}
+    assert no_active_policy.json() == {
+        "granted": False,
+        "asOfDate": "2026-08-13",
+        "policyRevision": None,
+        "grants": [],
+    }
 
     with session_factory() as session:
         product = session.get(DataProduct, ESTV_PRODUCT_ID)
@@ -161,9 +181,7 @@ def test_effective_access_is_actor_scoped_redacted_and_uses_zurich_date(
     assert response_schema["$ref"].endswith("/ProductEffectiveAccessResponse")
 
 
-def test_quality_workspace_get_is_typed_and_does_not_persist_recalculation(
-    client, session_factory
-):
+def test_quality_workspace_get_is_typed_and_does_not_persist_recalculation(client, session_factory):
     with session_factory() as session:
         before_count = session.scalar(select(func.count()).select_from(ProductQualityAssessment))
         before = session.get(ProductQualityAssessment, ESTV_PRODUCT_ID)
@@ -178,8 +196,7 @@ def test_quality_workspace_get_is_typed_and_does_not_persist_recalculation(
     assert set(first.json()) == {"quality", "fields", "graph", "graphStatus", "mappings"}
     assert first.json()["quality"]["dataProductId"] == str(ESTV_PRODUCT_ID)
     assert all(
-        set(field)
-        == {"id", "name", "dataType", "nullable", "keyField", "businessDescription"}
+        set(field) == {"id", "name", "dataType", "nullable", "keyField", "businessDescription"}
         for field in first.json()["fields"]
     )
 

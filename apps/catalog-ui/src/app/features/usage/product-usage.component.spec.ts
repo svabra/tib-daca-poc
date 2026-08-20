@@ -46,8 +46,13 @@ const QUALITY: ProductQualityWorkspace = {
 
 const EFFECTIVE_ACCESS: ProductEffectiveAccessResponse = {
   granted: true,
+  asOfDate: '2026-08-20',
+  policyRevision: 3,
   grants: [{
+    grantId: 'grant-beat-rest',
+    subjectType: 'person',
     protocols: ['http'],
+    dataVariant: 'original',
     validFrom: '2026-08-13',
     validUntil: '2027-08-13',
     weeklyAvailability: {
@@ -56,6 +61,12 @@ const EFFECTIVE_ACCESS: ProductEffectiveAccessResponse = {
       endTime: '19:00',
       timeZone: 'Europe/Zurich',
     },
+    purpose: 'Kantonale Steueranalyse',
+    expiresInDays: 358,
+    expiryState: 'active',
+    sourceRequestId: 'request-beat-rest',
+    sourceRequestNumber: 'ZA-2026-BEAT',
+    renewalEligibility: { eligible: false, reason: 'outsideWindow', renewalRequestId: null },
   }],
 };
 
@@ -71,7 +82,12 @@ function apiStub(options: {
     loadProduct: vi.fn(() => options.product ?? of(PRODUCT)),
     loadProductQuality: vi.fn(() => options.quality ?? of(QUALITY)),
     loadMyAccessRequests: vi.fn(() => options.requests ?? of([])),
-    loadEffectiveAccess: vi.fn(() => options.effectiveAccess ?? of({ granted: false, grants: [] })),
+    loadEffectiveAccess: vi.fn(() => options.effectiveAccess ?? of({
+      granted: false,
+      asOfDate: '2026-08-20',
+      policyRevision: null,
+      grants: [],
+    })),
     product: signal(PRODUCT),
   };
 }
@@ -236,6 +252,40 @@ describe('ProductUsageComponent', () => {
     expect(root.querySelector('a[href$="/history"]')?.textContent).toContain('Änderungsverlauf');
   });
 
+  it('shows a compact expiry state and offers renewal only for a complete eligible direct grant', async () => {
+    const grant = {
+      ...EFFECTIVE_ACCESS.grants[0],
+      validUntil: '2026-09-03',
+      expiresInDays: 14,
+      expiryState: 'expiringSoon' as const,
+      renewalEligibility: { eligible: true, reason: 'eligible' as const, renewalRequestId: null },
+    };
+    const { fixture } = await render(apiStub({ effectiveAccess: of({ ...EFFECTIVE_ACCESS, grants: [grant] }) }));
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(root.querySelector('[data-testid="access-expiry-state"]')?.textContent).toContain('läuft in 14 Tagen ab');
+    expect(root.querySelector('[data-testid="access-expiry-state"]')?.textContent).toContain('03.09.2026');
+    expect(root.querySelector<HTMLAnchorElement>('[data-testid="request-access-renewal"]')?.getAttribute('href'))
+      .toBe(`/products/${PRODUCT_ID}/access-renewal/grant-beat-rest`);
+  });
+
+  it('shows the expiry but hides the renewal CTA when source evidence is incomplete', async () => {
+    const grant = {
+      ...EFFECTIVE_ACCESS.grants[0],
+      validUntil: '2026-09-03',
+      expiresInDays: 14,
+      expiryState: 'expiringSoon' as const,
+      sourceRequestId: null,
+      sourceRequestNumber: null,
+      renewalEligibility: { eligible: true, reason: 'eligible' as const, renewalRequestId: null },
+    };
+    const { fixture } = await render(apiStub({ effectiveAccess: of({ ...EFFECTIVE_ACCESS, grants: [grant] }) }));
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(root.textContent).toContain('läuft in 14 Tagen ab');
+    expect(root.querySelector('[data-testid="request-access-renewal"]')).toBeNull();
+  });
+
   it('fails closed when the published policy status cannot be loaded', async () => {
     const { fixture } = await render(apiStub({
       effectiveAccess: throwError(() => new Error('private-policy-error')),
@@ -248,7 +298,12 @@ describe('ProductUsageComponent', () => {
   });
 
   it('fails closed on an inconsistent effective-access response', async () => {
-    const { fixture } = await render(apiStub({ effectiveAccess: of({ granted: true, grants: [] }) }));
+    const { fixture } = await render(apiStub({ effectiveAccess: of({
+      granted: true,
+      asOfDate: '2026-08-20',
+      policyRevision: 3,
+      grants: [],
+    }) }));
     const root = fixture.nativeElement as HTMLElement;
 
     expect(root.textContent).toContain('Zugriffsstatus derzeit nicht verfügbar');

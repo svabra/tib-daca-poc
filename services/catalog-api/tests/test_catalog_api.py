@@ -25,7 +25,9 @@ def test_seeded_product_and_health_are_available(client):
     assert page.status_code == 200
     assert len(page.json()["items"]) == 7
     assert page.json()["items"][0]["title"] == "ESTV-Steuerstatistik nach Kanton"
-    assert page.json()["items"][0]["metadata"]["catalogUsage"]["responsibleUserIds"] == ["kassandra.valdata"]
+    assert page.json()["items"][0]["metadata"]["catalogUsage"]["responsibleUserIds"] == [
+        "kassandra.valdata"
+    ]
     for item in page.json()["items"]:
         assert 0 <= item["quality"]["score"] <= 6
         assert item["quality"]["medal"] == (
@@ -60,7 +62,9 @@ def test_seeded_estv_portfolio_covers_user_machine_and_owner_relationships(clien
     assert sum("kassandra.valdata" in usage["sharedByUserIds"] for usage in usages) == 2
     assert sum("kassandra.valdata" in usage["requestedByUserIds"] for usage in usages) == 2
     assert sum("kassandra.valdata" in usage["sharedWithUserIds"] for usage in usages) == 3
-    assert any("Schweizer Gemeinden" in product["metadata"]["connectedAuthorities"] for product in products)
+    assert any(
+        "Schweizer Gemeinden" in product["metadata"]["connectedAuthorities"] for product in products
+    )
 
     consumed = [
         product
@@ -70,7 +74,9 @@ def test_seeded_estv_portfolio_covers_user_machine_and_owner_relationships(clien
         or "kassandra.valdata" in product["metadata"]["catalogUsage"]["sharedWithUserIds"]
     ]
     assert len(consumed) == 6
-    assert all(product["metadata"]["dataOwner"]["avatarUrl"].endswith(".webp") for product in consumed)
+    assert all(
+        product["metadata"]["dataOwner"]["avatarUrl"].endswith(".webp") for product in consumed
+    )
     assert {product["metadata"]["dataOwner"]["name"] for product in consumed} == {
         "Ariane Keller",
         "Daniel Aebischer",
@@ -78,11 +84,19 @@ def test_seeded_estv_portfolio_covers_user_machine_and_owner_relationships(clien
         "Noémie Rochat",
     }
     noemie_products = [
-        product for product in consumed if product["metadata"]["dataOwner"]["name"] == "Noémie Rochat"
+        product
+        for product in consumed
+        if product["metadata"]["dataOwner"]["name"] == "Noémie Rochat"
     ]
     assert len(noemie_products) == 2
-    assert all(product["metadata"]["dataOwner"]["organization"] == "Kanton Neuchâtel" for product in noemie_products)
-    assert all(product["metadata"]["dataOwner"]["phone"] == "+41 58 000 00 42" for product in noemie_products)
+    assert all(
+        product["metadata"]["dataOwner"]["organization"] == "Kanton Neuchâtel"
+        for product in noemie_products
+    )
+    assert all(
+        product["metadata"]["dataOwner"]["phone"] == "+41 58 000 00 42"
+        for product in noemie_products
+    )
     assert {product["metadata"]["accessRequest"]["status"] for product in noemie_products} == {
         "granted_modified",
         "legal_review",
@@ -161,9 +175,7 @@ def test_product_activity_is_safe_and_raw_audit_is_privileged(client, session_fa
     assert summary.status_code == 200
     assert summary.json()["detailLevel"] == "summary"
     assert all(not item["technicalEvidence"] for item in summary.json()["items"])
-    assert "technical-catalog-event" in {
-        item["eventType"] for item in summary.json()["items"]
-    }
+    assert "technical-catalog-event" in {item["eventType"] for item in summary.json()["items"]}
     source_event = next(
         item
         for item in summary.json()["items"]
@@ -185,20 +197,29 @@ def test_product_activity_is_safe_and_raw_audit_is_privileged(client, session_fa
     assert "private-source-id" not in serialized_activity
     assert "private.actor@example.test" not in serialized_activity
     assert str(leaked_uuid) not in serialized_activity
-    assert re.search(
-        r"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
-        serialized_activity,
-        re.IGNORECASE,
-    ) is None
+    assert (
+        re.search(
+            r"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
+            serialized_activity,
+            re.IGNORECASE,
+        )
+        is None
+    )
 
-    assert client.get(
-        f"{product_url()}/audit-events",
-        headers={"X-DaCa-User": ""},
-    ).status_code == 403
-    assert client.get(
-        f"{product_url()}/audit-events",
-        headers={"X-DaCa-User": "beat.stalder"},
-    ).status_code == 403
+    assert (
+        client.get(
+            f"{product_url()}/audit-events",
+            headers={"X-DaCa-User": ""},
+        ).status_code
+        == 403
+    )
+    assert (
+        client.get(
+            f"{product_url()}/audit-events",
+            headers={"X-DaCa-User": "beat.stalder"},
+        ).status_code
+        == 403
+    )
     raw = client.get(
         f"{product_url()}/audit-events",
         headers={"X-DaCa-User": "kassandra.valdata"},
@@ -379,26 +400,23 @@ def test_owned_access_consumers_are_active_deduplicated_and_owner_scoped(client)
     consumers = response.json()
     estv_consumers = [item for item in consumers if item["dataProductId"] == str(ESTV_PRODUCT_ID)]
 
-    assert len(estv_consumers) == 5
-    assert sum(item["consumerType"] == "person" for item in estv_consumers) == 3
-    assert sum(item["consumerType"] == "machine" for item in estv_consumers) == 2
-    assert {item["identityId"] for item in estv_consumers} == {
-        "lea.meier",
-        "marco.galli",
-        "nadine.favre",
-        "svc-estv-cantonal-tax-dashboard",
-        "svc-zrh-tax-analysis",
-    }
-    lea = next(item for item in estv_consumers if item["identityId"] == "lea.meier")
-    assert len(lea["grants"]) == 2
-    assert {grant["protocol"] for grant in lea["grants"]} == {"http", "postgresql"}
+    # Entitlements come from the active published policy, not historical requests.
+    assert len(estv_consumers) == 1
+    seeded_consumer = estv_consumers[0]
+    assert seeded_consumer["consumerType"] == "person"
+    assert seeded_consumer["identityId"] == "kanton-st-gallen"
+    assert len(seeded_consumer["grants"]) == 1
+    assert seeded_consumer["grants"][0]["protocol"] == "both"
+    assert seeded_consumer["grants"][0]["requestNumber"] is None
     assert all("contactEmail" not in item for item in consumers)
 
     refund_consumers = [
-        item for item in consumers if item["dataProductId"] == "16666666-6666-4666-8666-666666666666"
+        item
+        for item in consumers
+        if item["dataProductId"] == "16666666-6666-4666-8666-666666666666"
     ]
-    assert len(refund_consumers) == 1
-    assert refund_consumers[0]["identityId"] == "svc-estv-refund-monitoring"
+    # Historical request evidence alone does not create a current entitlement.
+    assert refund_consumers == []
 
     outsider = client.get(
         "/api/v1/access-consumers/owned",
@@ -431,7 +449,11 @@ def test_endpoint_union_lineage_and_provenance(client):
         json={
             "name": "Secondary REST endpoint",
             "protocol": "http-rest",
-            "connection": {"baseUrl": "https://example.admin.ch", "path": "/v1/data", "method": "GET"},
+            "connection": {
+                "baseUrl": "https://example.admin.ch",
+                "path": "/v1/data",
+                "method": "GET",
+            },
         },
     )
     assert created.status_code == 201
@@ -482,9 +504,7 @@ def test_endpoint_reads_hide_secret_references_from_public_and_consumer_views(
     from sqlalchemy import select
 
     with session_factory() as session:
-        stored = session.scalar(
-            select(Endpoint).where(Endpoint.secret_ref.is_not(None))
-        )
+        stored = session.scalar(select(Endpoint).where(Endpoint.secret_ref.is_not(None)))
         assert stored is not None
         assert stored.secret_ref == "env://ESTV_POSTGRES_CREDENTIALS"
         stored.connection = {

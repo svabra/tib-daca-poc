@@ -484,11 +484,11 @@ import {
                   </header>
                   <code>{{ consumer.identityId }}</code>
                   <div class="access-consumer-grants">
-                    @for (grant of consumer.grants; track grant.requestNumber) {
+                    @for (grant of consumer.grants; track grant.grantId) {
                       <section>
                         <div><strong>{{ protocolLabel(grant.protocol) }}</strong><span>{{ variantLabel(grant.variant) }}</span></div>
                         <p>Gültig {{ grant.validFrom | date: 'dd.MM.yyyy' }}–{{ grant.validUntil | date: 'dd.MM.yyyy' }}</p>
-                        <small>{{ grant.requestNumber }}</small>
+                        <small>{{ grantEvidenceLabel(grant) }}</small>
                       </section>
                     }
                   </div>
@@ -767,6 +767,10 @@ export class MyDataProductsComponent implements OnDestroy {
 
   consumerTypeLabel(type: OwnedAccessConsumer['consumerType']): string {
     return type === 'person' ? 'Persönlicher Zugriff · eIAM' : 'Maschineller Zugriff · M2M';
+  }
+
+  grantEvidenceLabel(grant: OwnedAccessConsumer['grants'][number]): string {
+    return grant.requestNumber ?? `Direkte Policy-Freigabe · Revision ${grant.policyRevision}`;
   }
 
   protocolLabel(protocol: OwnedAccessConsumer['grants'][number]['protocol']): string {

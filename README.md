@@ -151,6 +151,12 @@ it to `granted_original` or `granted_modified`. The DAAIF reference fixture can 
 at `GET http://localhost:8080/sample-api/api/v1/daaif/estv.direct-tax-assessments.v1` with exactly one local
 demo identity header (`X-DaCa-User` or `X-DaCa-Machine`).
 
+Expiring grants expose their exact end date and a linked renewal action. A renewal preserves the
+existing subject, protocols, data variant and weekly window; the Data Owner reviews the old/new
+evidence and the stored control person approves the immutable policy revision. The previous grant
+continues unchanged until OPA and PostgreSQL confirm the replacement revision. Journey 07 uses an
+isolated, owner-controlled fixture to demonstrate this path and resets only its own artifacts.
+
 The full browser-driven customer journey across a transient DAAIF and DaCa stack lives in
 [`journeys/`](journeys/README.md). It records screenshots, video, Playwright trace, JUnit output,
 container logs and a SHA-qualified result summary, then removes every journey container and

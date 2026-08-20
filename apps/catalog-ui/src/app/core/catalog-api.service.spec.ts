@@ -105,6 +105,57 @@ describe('CatalogApiService identity refresh', () => {
     expect(api.loading()).toBe(false);
   });
 
+  it('keeps the last owner inbox and exposes an unknown status when refresh fails', () => {
+    const api = TestBed.inject(CatalogApiService);
+    const http = TestBed.inject(HttpTestingController);
+    flushRefresh(requestsFor(http, 'kassandra.valdata'), 'Owner product', 'Known owner request', 'Known task');
+    flushProductDetail(requestsFor(http, 'kassandra.valdata'), 'Owner product');
+
+    api.refreshOwnerAccessRequestInbox();
+    http.expectOne('/api/v1/access-requests/inbox').flush(
+      { detail: 'upstream unavailable' },
+      { status: 503, statusText: 'Service Unavailable' },
+    );
+
+    expect(api.ownerAccessRequests().map((request) => request.purpose)).toEqual(['Known owner request']);
+    expect(api.ownerAccessRequestLoading()).toBe(false);
+    expect(api.ownerAccessRequestError()).toContain('Aufgabenstatus ist unbekannt');
+  });
+
+  it('keeps the last approver tasks and exposes an unknown status when refresh fails', () => {
+    const api = TestBed.inject(CatalogApiService);
+    const http = TestBed.inject(HttpTestingController);
+    flushRefresh(requestsFor(http, 'kassandra.valdata'), 'Approver product', 'Known owner request', 'Known approver task');
+    flushProductDetail(requestsFor(http, 'kassandra.valdata'), 'Approver product');
+
+    api.refreshWorkflowTasks();
+    http.expectOne('/api/v1/tasks/mine').flush(
+      { detail: 'upstream unavailable' },
+      { status: 504, statusText: 'Gateway Timeout' },
+    );
+
+    expect(api.workflowTasks().map((task) => task.title)).toEqual(['Known approver task']);
+    expect(api.workflowTasksLoading()).toBe(false);
+    expect(api.workflowTasksError()).toContain('Aufgabenstatus ist unbekannt');
+  });
+
+  it('propagates forbidden policy evidence instead of returning the deterministic fallback policy', () => {
+    const api = TestBed.inject(CatalogApiService);
+    const http = TestBed.inject(HttpTestingController);
+    flushRefresh(requestsFor(http, 'kassandra.valdata'), 'Protected product', 'Known owner request', 'Known task');
+    flushProductDetail(requestsFor(http, 'kassandra.valdata'), 'Protected product');
+    let status: number | null = null;
+
+    api.loadPolicy().subscribe({ error: (error) => { status = error.status; } });
+    http.expectOne('/api/v1/data-products/11111111-1111-4111-8111-111111111111/policies').flush(
+      { detail: 'Forbidden' },
+      { status: 403, statusText: 'Forbidden' },
+    );
+
+    expect(status).toBe(403);
+    expect(api.policyUsingFallback()).toBe(false);
+  });
+
   it('discards a product detail response that belongs to the previous identity', () => {
     const api = TestBed.inject(CatalogApiService);
     const http = TestBed.inject(HttpTestingController);
@@ -149,6 +200,47 @@ describe('CatalogApiService identity refresh', () => {
     expect(api.product().id).toBe(selectedId);
     expect(api.product().title).toBe('Routed product');
     expect(api.product().createdAt).toBe('2026-08-13T08:00:00Z');
+  });
+
+  it('submits a renewal with only the opaque source grant and the two editable values', () => {
+    userId.set('beat.stalder');
+    const api = TestBed.inject(CatalogApiService);
+    const http = TestBed.inject(HttpTestingController);
+    const initialRequests = requestsFor(http, 'beat.stalder');
+    flushRefresh(initialRequests, 'Beat product', 'Beat inbox', 'Beat task');
+    flushProductDetail(requestsFor(http, 'beat.stalder'), 'Beat product');
+
+    let createdNumber: string | null = null;
+    api.createAccessRenewal('11111111-1111-4111-8111-111111111111', {
+      sourceGrantId: 'policy-7-person-beat-rest',
+      purpose: 'Kantonale Steuerstatistik für die Finanzplanung 2027 auswerten.',
+      validUntil: '2027-09-03',
+      conditionsAccepted: true,
+    }).subscribe((created) => { createdNumber = created.requestNumber; });
+
+    const request = http.expectOne('/api/v1/data-products/11111111-1111-4111-8111-111111111111/access-renewals');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.headers.get('X-DaCa-User')).toBe('beat.stalder');
+    expect(request.request.body).toEqual({
+      sourceGrantId: 'policy-7-person-beat-rest',
+      purpose: 'Kantonale Steuerstatistik für die Finanzplanung 2027 auswerten.',
+      validUntil: '2027-09-03',
+      conditionsAccepted: true,
+    });
+    expect(Object.keys(request.request.body).sort()).toEqual([
+      'conditionsAccepted', 'purpose', 'sourceGrantId', 'validUntil',
+    ]);
+    request.flush({
+      id: 'renewal-request',
+      requestNumber: 'ZA-2026-RENEW',
+      dataProductId: '11111111-1111-4111-8111-111111111111',
+      purpose: 'Kantonale Steuerstatistik für die Finanzplanung 2027 auswerten.',
+      status: 'submitted',
+      updatedAt: '2026-08-20T08:00:00Z',
+      createdAt: '2026-08-20T08:00:00Z',
+    });
+
+    expect(createdNumber).toBe('ZA-2026-RENEW');
   });
 });
 

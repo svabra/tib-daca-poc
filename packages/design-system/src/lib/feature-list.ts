@@ -45,7 +45,7 @@ export const DACA_FEATURE_RELEASE = {
           },
           {
             title: 'PoC anhand geführter Journeys erleben',
-            description: 'Der PoC Leitfaden erklärt sechs wiederholbare Abläufe mit Rollen, Voraussetzungen, echten Screenshots und klar ausgewiesenen Grenzen.',
+            description: 'Der PoC Leitfaden erklärt sieben wiederholbare Abläufe mit Rollen, Voraussetzungen, echten Screenshots und klar ausgewiesenen Grenzen.',
           },
           {
             title: 'Datenprodukte finden und verstehen',
@@ -68,8 +68,8 @@ export const DACA_FEATURE_RELEASE = {
             description: 'Ergänzen und prüfen Sie Metadaten, damit andere Personen die Daten richtig einordnen und verwenden können.',
           },
           {
-            title: 'Zugriff gezielt freigeben',
-            description: 'Legen Sie fest, welche Personen oder Gruppen ein Datenprodukt in welchem Zeitraum nutzen dürfen.',
+            title: 'Zugriff gezielt freigeben und verlängern',
+            description: 'Legen Sie fest, wer ein Datenprodukt wie lange nutzen darf. Auslaufende Freigaben werden erst nach erneutem Vier-Augen-Entscheid verlängert.',
           },
           {
             title: 'Prüfungen gemeinsam erledigen',
@@ -92,7 +92,7 @@ export const DACA_FEATURE_RELEASE = {
           },
           {
             title: 'Explore the PoC through guided journeys',
-            description: 'The PoC guide explains six repeatable workflows with roles, prerequisites, real screenshots and clearly stated limitations.',
+            description: 'The PoC guide explains seven repeatable workflows with roles, prerequisites, real screenshots and clearly stated limitations.',
           },
           {
             title: 'Find and understand data products',
@@ -115,8 +115,8 @@ export const DACA_FEATURE_RELEASE = {
             description: 'Complete and review metadata so other people can understand and use the data correctly.',
           },
           {
-            title: 'Grant access deliberately',
-            description: 'Choose which people or groups may use a data product and for how long.',
+            title: 'Grant and renew access deliberately',
+            description: 'Choose who may use a data product and for how long. Expiring access is renewed only after another four-eyes review.',
           },
           {
             title: 'Complete reviews together',

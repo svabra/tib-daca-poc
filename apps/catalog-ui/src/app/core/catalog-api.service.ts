@@ -3,6 +3,8 @@ import { computed, effect, inject, Injectable, signal } from '@angular/core';
 import { catchError, forkJoin, map, Observable, of, switchMap, tap, throwError, timeout } from 'rxjs';
 import {
   AccessRequestSubmission,
+  AccessRenewalFixtureState,
+  AccessRenewalSubmission,
   AdministrativeOrganization,
   DataProduct,
   GovernanceSubmission,
@@ -21,7 +23,7 @@ import {
   ProvenanceEvent,
   StoredAccessRequest,
 } from './catalog.models';
-import { FALLBACK_EDGES, FALLBACK_NODES, FALLBACK_OWNED_ACCESS_CONSUMERS, FALLBACK_POLICY, FALLBACK_PRODUCT, FALLBACK_PRODUCTS, FALLBACK_PROVENANCE } from './catalog.seed';
+import { FALLBACK_EDGES, FALLBACK_NODES, FALLBACK_OWNED_ACCESS_CONSUMERS, FALLBACK_PRODUCT, FALLBACK_PRODUCTS, FALLBACK_PROVENANCE } from './catalog.seed';
 import { DemoIdentityService } from './demo-identity.service';
 
 type Collection<T> = T[] | { items: T[] };
@@ -169,9 +171,13 @@ export class CatalogApiService {
   readonly ownedAccessConsumers = this.ownedAccessConsumerState.asReadonly();
   readonly workflowTasks = this.workflowTaskState.asReadonly();
   readonly ownerAccessRequestLoading = signal(true);
+  readonly ownerAccessRequestError = signal<string | null>(null);
+  readonly workflowTasksLoading = signal(true);
+  readonly workflowTasksError = signal<string | null>(null);
   readonly loading = signal(true);
   readonly usingFallback = signal(false);
-  readonly policyUsingFallback = signal(true);
+  /** @deprecated Policy evidence no longer falls back; kept for callers during migration. */
+  readonly policyUsingFallback = signal(false);
   readonly connectionLabel = computed(() =>
     this.usingFallback() ? 'Preview data · API unavailable' : this.loading() ? 'Connecting to catalog…' : 'Live catalog API',
   );
@@ -362,6 +368,22 @@ export class CatalogApiService {
       );
   }
 
+  createAccessRenewal(productId: string, renewal: AccessRenewalSubmission): Observable<StoredAccessRequest> {
+    return this.http.post<StoredAccessRequest>(
+      `/api/v1/data-products/${encodeURIComponent(productId)}/access-renewals`,
+      renewal,
+      { headers: this.identity.headers() },
+    ).pipe(
+      tap((created) => {
+        const products = this.withAccessRequests(this.productsState(), [created]);
+        this.productsState.set(products);
+        const selected = products.find((product) => product.id === this.productState().id);
+        if (selected) this.setCurrentProduct(selected);
+      }),
+      catchError((error: unknown) => throwError(() => this.describeAccessRenewalError(error))),
+    );
+  }
+
   loadMyAccessRequests(productId: string, strict = false): Observable<readonly StoredAccessRequest[]> {
     const headers = this.identity.headers();
     const request = this.http
@@ -377,29 +399,50 @@ export class CatalogApiService {
     const headers = this.identity.headers();
     return this.http
       .get<StoredAccessRequest[]>('/api/v1/access-requests/inbox', { headers })
-      .pipe(
-        timeout(3000),
-        catchError(() => of([])),
-      );
+      .pipe(timeout(3000));
+  }
+
+  loadOwnedAccessConsumers(): Observable<readonly OwnedAccessConsumer[]> {
+    return this.http.get<OwnedAccessConsumer[]>('/api/v1/access-consumers/owned', {
+      headers: this.identity.headers(),
+    }).pipe(timeout(3000));
   }
 
   refreshOwnerAccessRequestInbox(): void {
     const refreshGeneration = ++this.ownerInboxRefreshGeneration;
     this.ownerAccessRequestLoading.set(true);
-    this.loadOwnerAccessRequestInbox().subscribe((requests) => {
-      if (refreshGeneration !== this.ownerInboxRefreshGeneration) return;
-      this.ownerAccessRequestState.set(requests);
-      this.ownerAccessRequestLoading.set(false);
+    this.ownerAccessRequestError.set(null);
+    this.loadOwnerAccessRequestInbox().subscribe({
+      next: (requests) => {
+        if (refreshGeneration !== this.ownerInboxRefreshGeneration) return;
+        this.ownerAccessRequestState.set(requests);
+        this.ownerAccessRequestLoading.set(false);
+      },
+      error: () => {
+        if (refreshGeneration !== this.ownerInboxRefreshGeneration) return;
+        this.ownerAccessRequestLoading.set(false);
+        this.ownerAccessRequestError.set('Zugriffsanfragen konnten nicht geladen werden. Der Aufgabenstatus ist unbekannt.');
+      },
     });
   }
 
   refreshWorkflowTasks(): void {
     const refreshGeneration = ++this.workflowTasksRefreshGeneration;
+    this.workflowTasksLoading.set(true);
+    this.workflowTasksError.set(null);
     this.http.get<WorkflowTaskWire[]>('/api/v1/tasks/mine', { headers: this.identity.headers() })
-      .pipe(timeout(3000), catchError(() => of([])))
-      .subscribe((tasks) => {
-        if (refreshGeneration !== this.workflowTasksRefreshGeneration) return;
-        this.workflowTaskState.set(tasks);
+      .pipe(timeout(3000))
+      .subscribe({
+        next: (tasks) => {
+          if (refreshGeneration !== this.workflowTasksRefreshGeneration) return;
+          this.workflowTaskState.set(tasks);
+          this.workflowTasksLoading.set(false);
+        },
+        error: () => {
+          if (refreshGeneration !== this.workflowTasksRefreshGeneration) return;
+          this.workflowTasksLoading.set(false);
+          this.workflowTasksError.set('Weitere Aufgaben konnten nicht geladen werden. Der Aufgabenstatus ist unbekannt.');
+        },
       });
   }
 
@@ -479,8 +522,7 @@ export class CatalogApiService {
       map((response) => response.items[0]),
       map((policy) => {
         if (!policy) {
-          this.policyUsingFallback.set(true);
-          return FALLBACK_POLICY;
+          throw new Error('Für dieses Datenprodukt ist keine Policy-Evidenz verfügbar.');
         }
         this.policyUsingFallback.set(false);
         const opa = policy.deployments.find((deployment) => deployment.target === 'opa');
@@ -499,10 +541,6 @@ export class CatalogApiService {
           opaRevision: opa?.observedRevision ?? 0,
           postgresRevision: postgres?.observedRevision ?? 0,
         } satisfies PolicyDefinition;
-      }),
-      catchError(() => {
-        this.policyUsingFallback.set(true);
-        return of(FALLBACK_POLICY);
       }),
     );
   }
@@ -650,6 +688,24 @@ export class CatalogApiService {
     ).pipe(timeout(3000));
   }
 
+  loadAccessRenewalFixture(): Observable<AccessRenewalFixtureState> {
+    return this.http.get<AccessRenewalFixtureState>('/api/v1/poc/access-renewal-fixture', {
+      headers: this.identity.headers(),
+    }).pipe(timeout(3000));
+  }
+
+  prepareAccessRenewalFixture(): Observable<AccessRenewalFixtureState> {
+    return this.http.post<AccessRenewalFixtureState>('/api/v1/poc/access-renewal-fixture/prepare', {}, {
+      headers: this.identity.headers(),
+    });
+  }
+
+  resetAccessRenewalFixture(confirmationName: string): Observable<AccessRenewalFixtureState> {
+    return this.http.post<AccessRenewalFixtureState>('/api/v1/poc/access-renewal-fixture/reset', {
+      confirmationName,
+    }, { headers: this.identity.headers() });
+  }
+
   publishPolicy(productId: string, policyId: string, revision: number): Observable<PolicyWire> {
     const headers = this.identity.headers().set('If-Match', `"${revision}"`);
     return this.http.post<PolicyWire>(`/api/v1/data-products/${encodeURIComponent(productId)}/policies/${encodeURIComponent(policyId)}/publish`, {}, { headers }).pipe(
@@ -657,8 +713,8 @@ export class CatalogApiService {
     );
   }
 
-  decideAccessRequest(requestId: string, decision: 'approve' | 'reject', grantedVariant?: 'original' | 'modified'): Observable<{ request: StoredAccessRequest; policy: PolicyWire | null }> {
-    return this.http.post<{ request: StoredAccessRequest; policy: PolicyWire | null }>(`/api/v1/access-requests/${encodeURIComponent(requestId)}/decision`, { decision, grantedVariant: grantedVariant ?? null }, { headers: this.identity.headers() }).pipe(
+  decideAccessRequest(requestId: string, decision: 'approve' | 'reject', grantedVariant?: 'original' | 'modified'): Observable<{ request: StoredAccessRequest; policy: PolicyWire | null; governanceSubmission?: GovernanceSubmission | null }> {
+    return this.http.post<{ request: StoredAccessRequest; policy: PolicyWire | null; governanceSubmission?: GovernanceSubmission | null }>(`/api/v1/access-requests/${encodeURIComponent(requestId)}/decision`, { decision, grantedVariant: grantedVariant ?? null }, { headers: this.identity.headers() }).pipe(
       tap(() => { this.refreshOwnerAccessRequestInbox(); this.refreshWorkflowTasks(); }),
     );
   }
@@ -774,6 +830,18 @@ export class CatalogApiService {
       return new Error(error.error?.detail ?? `Der Antrag konnte nicht gespeichert werden (${error.status}).`);
     }
     return error instanceof Error ? error : new Error('Der Antrag konnte nicht gespeichert werden.');
+  }
+
+  private describeAccessRenewalError(error: unknown): Error {
+    if (error instanceof HttpErrorResponse) {
+      if (error.status === 409) return new Error(error.error?.detail ?? 'Für diese Freigabe ist derzeit keine Verlängerung möglich.');
+      if (error.status === 403) return new Error('Diese Freigabe kann mit der aktuellen Identität nicht verlängert werden.');
+      if (error.status === 404) return new Error('Die bestehende Freigabe wurde nicht gefunden. Laden Sie den Zugriffsstatus neu.');
+      if (error.status === 422) return new Error('Bitte prüfen Sie Zweck und neues Enddatum. Der Freigabeumfang bleibt unverändert.');
+      if (error.status === 0) return new Error('Die Katalog-API ist nicht erreichbar. Der Verlängerungsantrag wurde nicht gespeichert.');
+      return new Error(error.error?.detail ?? `Der Verlängerungsantrag konnte nicht gespeichert werden (${error.status}).`);
+    }
+    return error instanceof Error ? error : new Error('Der Verlängerungsantrag konnte nicht gespeichert werden.');
   }
 }
 

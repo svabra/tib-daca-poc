@@ -15,9 +15,9 @@ DAAIF is an external source system and its internal data model is outside this r
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
-- Alembic head: `0011_service_level_revisions`
-- Schema fingerprint: `a25fde5fb5c193e4`
-- Migration fingerprint: `b5e664ef68580c2d`
+- Alembic head: `0012_access_renewals`
+- Schema fingerprint: `de024bd37d55f871`
+- Migration fingerprint: `8ab9a83fd7f8593c`
 - Tables: `28`
 
 ## Domain status vocabulary
@@ -71,6 +71,9 @@ erDiagram
         integer fulfillment_group_revision
         uuid decision_policy_revision_id FK
         string granted_variant
+        string request_kind
+        uuid renewal_of_request_id FK
+        json renewal_context
         datetime created_at
         datetime updated_at
     }
@@ -389,6 +392,7 @@ erDiagram
     }
     data_products ||--o{ access_requests : "data_product_id"
     policy_revisions o|--o{ access_requests : "decision_policy_revision_id"
+    access_requests o|--o{ access_requests : "renewal_of_request_id"
     canonical_ontology_versions ||--o{ canonical_ontology_terms : "ontology_version_id"
     data_products ||--o{ data_product_fields : "data_product_id"
     demo_users o|--o{ data_products : "owner_user_id"
@@ -438,7 +442,7 @@ Relationships in this diagram are physical foreign keys inside this database onl
 
 ### `access_requests`
 
-Requests by people or machines for time-bounded access to a data product.
+Requests by people or machines for time-bounded access, including renewals linked to immutable source-grant evidence.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -464,6 +468,9 @@ Requests by people or machines for time-bounded access to a data product.
 | `fulfillment_group_revision` | `INTEGER` | yes | — | — |
 | `decision_policy_revision_id` | `CHAR(32)` | yes | FK | — |
 | `granted_variant` | `VARCHAR(32)` | yes | — | — |
+| `request_kind` | `VARCHAR(32)` | no | — | `initial` |
+| `renewal_of_request_id` | `CHAR(32)` | yes | FK | — |
+| `renewal_context` | `JSON` | yes | — | — |
 | `created_at` | `DATETIME` | no | — | `utc_now` |
 | `updated_at` | `DATETIME` | no | — | `utc_now` |
 
@@ -474,14 +481,19 @@ Constraints and indexes:
 - Check `ck_access_request_dates`: `valid_until >= valid_from`
 - Check `ck_access_request_fulfillment_subject_type`: `fulfillment_subject_type IS NULL OR fulfillment_subject_type IN ('person', 'machine', 'group')`
 - Check `ck_access_request_granted_variant`: `granted_variant IS NULL OR granted_variant IN ('original', 'modified')`
+- Check `ck_access_request_kind`: `request_kind IN ('initial', 'renewal')`
 - Check `ck_access_request_protocol`: `requested_protocol IN ('http', 'postgresql', 'both')`
+- Check `ck_access_request_renewal_context`: `(request_kind = 'initial' AND renewal_of_request_id IS NULL AND renewal_context IS NULL) OR (request_kind = 'renewal' AND renewal_of_request_id IS NOT NULL AND renewal_context IS NOT NULL)`
 - Check `ck_access_request_status`: `status IN ('submitted', 'identity_review', 'legal_review', 'conditions_review', 'approved_policy_pending', 'granted_modified', 'granted_original', 'rejected', 'withdrawn')`
 - Check `ck_access_request_variant`: `requested_variant IN ('original', 'modified', 'either')`
 - Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
 - Foreign key `decision_policy_revision_id` → `policy_revisions.id`; on delete `SET NULL`
+- Foreign key `renewal_of_request_id` → `access_requests.id`; on delete `CASCADE`
 - Index `ix_access_request_decision_policy` on `decision_policy_revision_id`
 - Index `ix_access_request_product` on `data_product_id`
+- Index `ix_access_request_renewal_of` on `renewal_of_request_id`
 - Index `ix_access_request_requester` on `requester_id`
+- Index `uq_access_request_open_renewal` on `renewal_of_request_id` unique
 
 ### `administrative_organizations`
 

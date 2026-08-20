@@ -32,6 +32,7 @@ import {
   presentDictionaryFields,
   RestQuickstart,
   restQuickstart,
+  nextExpiringAccessGrant,
 } from './product-usage.presenter';
 
 @Component({
@@ -201,6 +202,15 @@ import {
           <div><p class="daca-eyebrow">Ihre Rolle · Data Consumer</p>
             @if (effectiveGrants().length > 0) {
               <h2 id="product-usage-access-title">Freigabe dokumentiert</h2>
+              @if (expiringGrant(); as expiry) {
+                <div class="product-usage-expiry" role="status" data-testid="access-expiry-state">
+                  <span aria-hidden="true">!</span>
+                  <div>
+                    <strong>{{ expiryLabel(expiry.daysRemaining) }}</strong>
+                    <small>Aktuell gültig bis {{ expiry.grant.validUntil | date: 'dd.MM.yyyy' }} · {{ grantProtocolLabel(expiry.grant) }} · Variante {{ variantLabel(expiry.grant.dataVariant) }}</small>
+                  </div>
+                </div>
+              }
               @for (grant of effectiveGrants(); track $index) {
                 <p>Für Ihre Demo-Identität ist eine veröffentlichte Freigabe für <strong>{{ grantProtocolLabel(grant) }}</strong> dokumentiert. Sie gilt vom {{ grant.validFrom | date: 'dd.MM.yyyy' }} bis {{ grant.validUntil | date: 'dd.MM.yyyy' }}. Das Zielsystem prüft zusätzlich die vereinbarten Laufzeitregeln{{ grantAvailabilityLabel(grant) }}.</p>
               }
@@ -217,6 +227,11 @@ import {
           </div>
           <div>
             @if (effectiveGrants().length > 0) {
+              @if (renewableGrant(); as grant) {
+                <a class="daca-button" data-testid="request-access-renewal" [routerLink]="['/products', productId, 'access-renewal', grant.grantId]">Verlängerung beantragen</a>
+              } @else if (renewalPending()) {
+                <a class="daca-button is-secondary" routerLink="/products" [queryParams]="{ relationship: 'requestedByMe' }">Verlängerungsantrag anzeigen</a>
+              }
               <a class="daca-button is-secondary" [routerLink]="['/products', productId, 'history']">Änderungsverlauf öffnen</a>
             } @else if (!accessStatusError()) {
               @if (canRequestAgain()) { <a class="daca-button" [routerLink]="['/products', productId, 'access-request']">Zugriff anfragen</a> }
@@ -258,8 +273,18 @@ export class ProductUsageComponent implements OnDestroy {
   readonly latestRequest = computed(() => [...this.requests()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] ?? null);
   readonly effectiveGrants = computed<readonly ProductEffectiveAccessGrant[]>(() => {
     const status = this.effectiveAccess();
-    return status?.granted ? status.grants : [];
+    return status?.granted && this.effectiveAccessIsConsistent(status) ? status.grants : [];
   });
+  readonly expiringGrant = computed(() => nextExpiringAccessGrant(this.effectiveGrants()));
+  readonly renewableGrant = computed(() => {
+    const expiry = this.expiringGrant();
+    return expiry && this.isCompleteRenewalContext(expiry.grant) ? expiry.grant : null;
+  });
+  readonly renewalPending = computed(() => this.effectiveGrants().some((grant) =>
+    grant.expiryState === 'expiringSoon'
+    && grant.renewalEligibility?.reason === 'pending'
+    && Boolean(grant.renewalEligibility.renewalRequestId),
+  ));
   readonly accessStatusError = computed(() => this.requestStatusError() || this.policyStatusError());
 
   constructor() {
@@ -314,6 +339,7 @@ export class ProductUsageComponent implements OnDestroy {
         this.requestStatusError.set(requests.failed);
         this.policyStatusError.set(
           effectiveAccess.failed
+          || Boolean(effectiveAccess.status && !this.effectiveAccessIsConsistent(effectiveAccess.status))
           || Boolean(effectiveAccess.status?.granted && effectiveAccess.status.grants.length === 0)
           || Boolean(effectiveAccess.status && !effectiveAccess.status.granted && effectiveAccess.status.grants.length > 0),
         );
@@ -385,6 +411,16 @@ export class ProductUsageComponent implements OnDestroy {
     return ` (${weekdays}, ${availability.startTime}–${availability.endTime} ${availability.timeZone})`;
   }
 
+  expiryLabel(daysRemaining: number): string {
+    if (daysRemaining === 0) return 'Freigabe läuft heute ab';
+    if (daysRemaining === 1) return 'Freigabe läuft morgen ab';
+    return `Freigabe läuft in ${daysRemaining} Tagen ab`;
+  }
+
+  variantLabel(variant: ProductEffectiveAccessGrant['dataVariant']): string {
+    return variant === 'original' ? 'Original' : 'modifiziert';
+  }
+
   requestStatusLabel(status: StoredAccessRequest['status']): string {
     return {
       submitted: 'Anfrage eingegangen',
@@ -410,5 +446,32 @@ export class ProductUsageComponent implements OnDestroy {
       }
       this.scrollTimer = null;
     }, 0);
+  }
+
+  private isCompleteRenewalContext(grant: ProductEffectiveAccessGrant): boolean {
+    return grant.subjectType === 'person'
+      && grant.renewalEligibility?.eligible === true
+      && grant.renewalEligibility.reason === 'eligible'
+      && grant.renewalEligibility.renewalRequestId === null
+      && Boolean(grant.grantId.trim())
+      && Boolean(grant.sourceRequestId?.trim())
+      && Boolean(grant.sourceRequestNumber?.trim())
+      && grant.expiryState === 'expiringSoon'
+      && Number.isInteger(grant.expiresInDays)
+      && grant.expiresInDays >= 0
+      && grant.expiresInDays <= 30;
+  }
+
+  private effectiveAccessIsConsistent(status: ProductEffectiveAccessResponse): boolean {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(status.asOfDate)) return false;
+    if (status.granted && (!Number.isInteger(status.policyRevision) || (status.policyRevision ?? 0) < 1)) return false;
+    return status.grants.every((grant) =>
+      Boolean(grant.grantId?.trim())
+      && grant.protocols.length > 0
+      && /^\d{4}-\d{2}-\d{2}$/.test(grant.validFrom)
+      && /^\d{4}-\d{2}-\d{2}$/.test(grant.validUntil)
+      && Number.isInteger(grant.expiresInDays)
+      && Boolean(grant.renewalEligibility),
+    );
   }
 }

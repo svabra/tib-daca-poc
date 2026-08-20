@@ -55,6 +55,8 @@ Key routes:
 - `POST /api/v1/data-products/{id}/service-level/revisions/{revisionId}/decision` — approve or reject as the assigned control person
 - `PUT /api/v1/data-products/{id}/control-person` — assign an active publication approver distinct from the owner
 - `POST /api/v1/data-products/{id}/access-requests` — submit an access request
+- `GET /api/v1/data-products/{id}/effective-access` — actor-safe projection of currently effective grants, expiry and renewal eligibility
+- `POST /api/v1/data-products/{id}/access-renewals` — extend an eligible actor-owned grant without widening its technical scope
 - `GET /api/v1/data-products/{id}/access-requests/mine` — current actor's requests for one product
 - `GET /api/v1/access-requests/mine` — current actor's requests across the catalog
 - `GET|POST /api/v1/data-products/{id}/policies`
@@ -66,6 +68,8 @@ Key routes:
 - `GET /health/live` and `GET /health/ready`
 
 Metadata, endpoint, and policy writes require `If-Match`. Read the resource’s `ETag` first. Missing preconditions return `428`; stale revisions return `412`.
+Full policy definitions, generated Rego and deployment evidence are restricted to the Data Owner
+and assigned approver. Consumers use the actor-safe `effective-access` projection instead.
 
 Service-level writes use the same optimistic concurrency rules. Creation compares `If-Match`
 with the latest SLA revision (`"0"` before the first draft); mutations compare it with the row's
@@ -73,6 +77,13 @@ lock version. Exactly one draft or pending review may exist per product. Publish
 immutable, dates are inclusive in `Europe/Zurich`, and a newer publication explicitly supersedes
 the prior published revision. SLA publication records catalog evidence only: it does not mutate
 access requests, policy deployments, OPA/PostgreSQL grants, I14Y delivery or BAR evidence.
+
+Access renewals are linked to the exact active policy grant and its original approved request.
+Only purpose and end date can be reconfirmed; subject, actions, protocols, data variant and weekly
+availability remain immutable. The old policy stays active through owner review, four-eyes review
+and deployment. DaCa switches the active revision only after OPA and PostgreSQL confirm the same
+new revision. The deterministic `/api/v1/poc/access-renewal-fixture` prepare/reset routes are
+owner-only PoC helpers and never delete unrelated requests, policies or governance evidence.
 
 ```bash
 curl -i http://localhost:8001/api/v1/data-products/11111111-1111-4111-8111-111111111111

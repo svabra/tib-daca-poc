@@ -7,22 +7,41 @@ import secrets
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, timedelta
 from typing import Annotated, Any, Literal
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import TypeAdapter, ValidationError
+from pydantic import TypeAdapter
 from sqlalchemy import delete, exists, or_, select, text, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
 from . import get_runtime_version
+from .access_renewals import (
+    ACCESS_RENEWAL_PRODUCT_ID,
+    access_request_response,
+    create_renewal_request,
+    effective_access_response,
+    owned_access_consumers,
+    renewal_policy_definition,
+    zurich_today,
+)
+from .access_renewals import (
+    fixture_response as access_renewal_fixture_response,
+)
+from .access_renewals import (
+    prepare_fixture as prepare_access_renewal_fixture,
+)
+from .access_renewals import (
+    reset_fixture as reset_access_renewal_fixture,
+)
 from .control_people import assign_default_control_person, is_active_publication_approver
 from .database import default_session_factory, get_session
 from .governance import (
     bind_access_request_fulfillments,
     can_view_private_product,
+    create_renewal_submission,
     create_submission,
     decide_submission,
     finalize_submission_deployment,
@@ -72,8 +91,10 @@ from .product_activity import is_privileged_product_auditor
 from .product_activity import product_activity as build_product_activity
 from .schemas import (
     AccessGovernanceCreate,
+    AccessRenewalCreate,
     AccessRequestCreate,
     AccessRequestDecision,
+    AccessRequestDecisionResponse,
     AccessRequestFulfillment,
     AccessRequestResponse,
     AccessSettingUpsert,
@@ -88,7 +109,6 @@ from .schemas import (
     DataProductSummary,
     DemoUserResponse,
     DeploymentAcknowledgement,
-    EffectiveAccessGrantResponse,
     EndpointCreate,
     EndpointReadResponse,
     EndpointResponse,
@@ -108,6 +128,7 @@ from .schemas import (
     OntologyTermResponse,
     OntologyVersionResponse,
     OwnedAccessConsumerResponse,
+    PocAccessRenewalFixtureResponse,
     PocGuideConfigResponse,
     PocProductFixtureResponse,
     PocProductResetRequest,
@@ -115,7 +136,6 @@ from .schemas import (
     PocSimulationResetResponse,
     PocSimulationTriggerResponse,
     PolicyCreate,
-    PolicyDefinition,
     PolicyDeploymentResponse,
     PolicyRevisionPage,
     PolicyRevisionResponse,
@@ -299,17 +319,29 @@ def latest_policy(session: Session, product_id: uuid.UUID) -> PolicyRevision | N
 
 def active_bundle_state(session: Session) -> tuple[list[ActivePolicy], str]:
     """Return the active policy set and the exact revision advertised in the OPA manifest."""
-    rows = session.execute(
-        select(PolicyRevision, DataProduct)
-        .join(
-            DataProduct,
-            (PolicyRevision.data_product_id == DataProduct.id)
-            & (PolicyRevision.revision == DataProduct.active_policy_revision),
-        )
-        .where(PolicyRevision.status == "published")
-        .order_by(DataProduct.id)
-    ).all()
-    active = [ActivePolicy(policy=policy, product=product) for policy, product in rows]
+    pending_renewals: dict[uuid.UUID, PolicyRevision] = {}
+    for submission in session.scalars(
+        select(GovernanceSubmission).where(GovernanceSubmission.status == "approved_deploying")
+    ):
+        if submission.review_snapshot.get("workflowKind") != "access_renewal":
+            continue
+        pending = session.get(PolicyRevision, submission.policy_revision_id)
+        if pending is not None and pending.status == "published":
+            pending_renewals[submission.data_product_id] = pending
+
+    active: list[ActivePolicy] = []
+    for product in session.scalars(select(DataProduct).order_by(DataProduct.id)):
+        policy = pending_renewals.get(product.id)
+        if policy is None and product.active_policy_revision is not None:
+            policy = session.scalar(
+                select(PolicyRevision).where(
+                    PolicyRevision.data_product_id == product.id,
+                    PolicyRevision.revision == product.active_policy_revision,
+                    PolicyRevision.status == "published",
+                )
+            )
+        if policy is not None:
+            active.append(ActivePolicy(policy=policy, product=product))
     fingerprint_source = {
         "compiler": "daca-pbac-compiler/2",
         "regoSha256": hashlib.sha256(generate_rego().encode()).hexdigest(),
@@ -566,14 +598,40 @@ def enqueue_active_i14y_delivery(session: Session, product: DataProduct) -> None
         enqueue_i14y_delivery(session, product, policy.revision, policy.definition)
 
 
+def lock_policy_deployment_workflow(
+    session: Session,
+    policy_revision_id: uuid.UUID,
+    target: str,
+) -> tuple[GovernanceSubmission | None, PolicyDeployment | None]:
+    """Serialize a governance deployment transition in a stable lock order."""
+    submission = session.scalar(
+        select(GovernanceSubmission)
+        .where(GovernanceSubmission.policy_revision_id == policy_revision_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    deployment = session.scalar(
+        select(PolicyDeployment)
+        .where(
+            PolicyDeployment.policy_revision_id == policy_revision_id,
+            PolicyDeployment.target == target,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return submission, deployment
+
+
 def finalize_policy_activation(
-    session: Session, product: DataProduct, policy: PolicyRevision
+    session: Session,
+    product: DataProduct,
+    policy: PolicyRevision,
+    settings: Settings,
 ) -> bool:
     """Apply post-deployment effects only after both enforcement targets agree."""
+    finalize_submission_deployment(session, product, policy, settings)
     if not policy_is_fully_deployed(session, policy):
-        finalize_submission_deployment(session, product, policy)
         return False
-    finalize_submission_deployment(session, product, policy)
     complete_tasks(session, product.id, "access_governance")
     pending_requests = session.scalars(
         select(AccessRequest).where(
@@ -766,12 +824,36 @@ def reject_legacy_governance_path(session: Session, product: DataProduct) -> Non
             409,
             "This product requires a governance submission and four-eyes publication approval",
         )
+    active_submission = session.scalar(
+        select(GovernanceSubmission.id).where(
+            GovernanceSubmission.data_product_id == product.id,
+            GovernanceSubmission.status.in_(
+                ("pending_approval", "approved_deploying", "deployment_failed")
+            ),
+        )
+    )
+    if active_submission is not None:
+        raise HTTPException(
+            409,
+            "An active governance submission must be completed before changing policies",
+        )
 
 
 def require_product_view(session: Session, product: DataProduct, actor: str | None) -> None:
     """Hide non-public catalog resources from identities outside the review."""
     if not can_view_private_product(session, product, actor):
         raise HTTPException(404, "Data product not found")
+
+
+def require_policy_evidence_view(session: Session, product: DataProduct, actor: str | None) -> None:
+    """Restrict raw subjects, generated Rego and deployment errors to governance roles."""
+    if actor == product.control_person_user_id:
+        return
+    if not is_privileged_product_auditor(session, product, actor):
+        raise HTTPException(
+            403,
+            "Policy evidence is restricted to the data owner and assigned approvers",
+        )
 
 
 def policy_is_fully_deployed(session: Session, policy: PolicyRevision | None) -> bool:
@@ -896,8 +978,7 @@ def quality_responses(
         product_classes = [
             mapping
             for mapping in confirmed
-            if mapping.mapping_type == "product_class"
-            and mapping.data_product_field_id is None
+            if mapping.mapping_type == "product_class" and mapping.data_product_field_id is None
         ]
         key_fields = [field for field in fields if field.key_field]
         mapped_field_ids = {
@@ -1394,6 +1475,79 @@ def create_router() -> APIRouter:
                 )
             )
         ]
+
+    @router.get(
+        "/poc/access-renewal-fixture",
+        response_model=PocAccessRenewalFixtureResponse,
+        tags=["POC simulation"],
+    )
+    def get_access_renewal_fixture(
+        session: SessionDep,
+        actor: ActorDep,
+    ) -> PocAccessRenewalFixtureResponse:
+        product = find_product(session, ACCESS_RENEWAL_PRODUCT_ID)
+        require_product_owner(product, actor)
+        return access_renewal_fixture_response(session)
+
+    @router.post(
+        "/poc/access-renewal-fixture/prepare",
+        response_model=PocAccessRenewalFixtureResponse,
+        tags=["POC simulation"],
+    )
+    def prepare_access_renewal_fixture_route(
+        request: Request,
+        session: SessionDep,
+        actor: ActorDep,
+    ) -> PocAccessRenewalFixtureResponse:
+        product = find_product(session, ACCESS_RENEWAL_PRODUCT_ID)
+        require_product_owner(product, actor)
+        prepare_access_renewal_fixture(
+            session,
+            product,
+            request.app.state.settings,
+            on_date=zurich_today(),
+        )
+        session.commit()
+        return access_renewal_fixture_response(session)
+
+    @router.post(
+        "/poc/access-renewal-fixture/reset",
+        response_model=PocAccessRenewalFixtureResponse,
+        tags=["POC simulation"],
+    )
+    def reset_access_renewal_fixture_route(
+        body: PocProductResetRequest,
+        request: Request,
+        session: SessionDep,
+        actor: ActorDep,
+    ) -> PocAccessRenewalFixtureResponse:
+        product = find_product(session, ACCESS_RENEWAL_PRODUCT_ID)
+        require_product_owner(product, actor)
+        if body.confirmation_name != product.title:
+            raise HTTPException(
+                422, "confirmationName must exactly match the fixture product title"
+            )
+        today = zurich_today()
+        reset_access_renewal_fixture(
+            session,
+            product,
+            request.app.state.settings,
+            on_date=today,
+        )
+        audit(
+            session,
+            "policy",
+            str(product.id),
+            "access-renewal-fixture-reset",
+            actor,
+            product.active_policy_revision,
+            {
+                "fixtureId": "access-renewal-expiring",
+                "validUntil": (today + timedelta(days=14)).isoformat(),
+            },
+        )
+        session.commit()
+        return access_renewal_fixture_response(session, on_date=today)
 
     @router.post(
         "/metadata-publications",
@@ -2080,9 +2234,7 @@ def create_router() -> APIRouter:
         )
         session.execute(delete(WorkflowTask).where(WorkflowTask.data_product_id == product.id))
         session.execute(
-            delete(GovernanceSubmission).where(
-                GovernanceSubmission.data_product_id == product.id
-            )
+            delete(GovernanceSubmission).where(GovernanceSubmission.data_product_id == product.id)
         )
         if policy_ids:
             session.execute(
@@ -2149,9 +2301,7 @@ def create_router() -> APIRouter:
         items = rows[:limit]
         quality_by_product = quality_responses(session, items)
         return DataProductPage(
-            items=[
-                data_product_summary(item, quality_by_product[item.id]) for item in items
-            ],
+            items=[data_product_summary(item, quality_by_product[item.id]) for item in items],
             next_cursor=encode_cursor(items[-1].id) if has_more and items else None,
         )
 
@@ -2309,36 +2459,38 @@ def create_router() -> APIRouter:
             else {}
         )
         quality = quality_responses(session, [product], persist=False)[product.id]
-        return ProductQualityWorkspaceResponse.model_validate({
-            "quality": quality.model_dump(mode="json", by_alias=True),
-            "fields": [
-                {
-                    "id": str(field.id),
-                    "name": field.name,
-                    "dataType": field.data_type,
-                    "nullable": field.nullable,
-                    "keyField": field.key_field,
-                    "businessDescription": field.business_description,
-                }
-                for field in fields
-            ],
-            "graph": graph.graph if graph else None,
-            "graphStatus": graph.status if graph else "missing",
-            "mappings": [
-                {
-                    "id": str(mapping.id),
-                    "fieldId": str(mapping.data_product_field_id)
-                    if mapping.data_product_field_id
-                    else None,
-                    "mappingType": mapping.mapping_type,
-                    "status": mapping.status,
-                    "termUri": terms[mapping.ontology_term_id].uri,
-                    "termLabel": terms[mapping.ontology_term_id].label,
-                }
-                for mapping in mappings
-                if mapping.ontology_term_id in terms
-            ],
-        })
+        return ProductQualityWorkspaceResponse.model_validate(
+            {
+                "quality": quality.model_dump(mode="json", by_alias=True),
+                "fields": [
+                    {
+                        "id": str(field.id),
+                        "name": field.name,
+                        "dataType": field.data_type,
+                        "nullable": field.nullable,
+                        "keyField": field.key_field,
+                        "businessDescription": field.business_description,
+                    }
+                    for field in fields
+                ],
+                "graph": graph.graph if graph else None,
+                "graphStatus": graph.status if graph else "missing",
+                "mappings": [
+                    {
+                        "id": str(mapping.id),
+                        "fieldId": str(mapping.data_product_field_id)
+                        if mapping.data_product_field_id
+                        else None,
+                        "mappingType": mapping.mapping_type,
+                        "status": mapping.status,
+                        "termUri": terms[mapping.ontology_term_id].uri,
+                        "termLabel": terms[mapping.ontology_term_id].label,
+                    }
+                    for mapping in mappings
+                    if mapping.ontology_term_id in terms
+                ],
+            }
+        )
 
     @router.put(
         "/data-products/{product_id}/quality",
@@ -2812,7 +2964,12 @@ def create_router() -> APIRouter:
         actor: ActorDep,
         if_match: Annotated[str | None, Header(alias="If-Match")] = None,
     ) -> GovernanceSubmissionResponse:
-        submission = session.get(GovernanceSubmission, submission_id)
+        submission = session.scalar(
+            select(GovernanceSubmission)
+            .where(GovernanceSubmission.id == submission_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         if submission is None:
             raise HTTPException(404, "Governance submission not found")
         if actor != submission.approver_user_id or actor == submission.owner_user_id:
@@ -2845,14 +3002,15 @@ def create_router() -> APIRouter:
     def list_all_my_access_requests(
         session: SessionDep,
         actor: ActorDep,
-    ) -> list[AccessRequest]:
-        return list(
-            session.scalars(
+    ) -> list[AccessRequestResponse]:
+        return [
+            access_request_response(session, item)
+            for item in session.scalars(
                 select(AccessRequest)
                 .where(AccessRequest.requester_id == actor)
                 .order_by(AccessRequest.created_at.desc())
             )
-        )
+        ]
 
     @router.get(
         "/access-requests/inbox",
@@ -2862,7 +3020,7 @@ def create_router() -> APIRouter:
     def list_owner_access_request_inbox(
         session: SessionDep,
         actor: ActorDep,
-    ) -> list[AccessRequest]:
+    ) -> list[AccessRequestResponse]:
         open_requests = session.scalars(
             select(AccessRequest)
             .where(
@@ -2879,17 +3037,17 @@ def create_router() -> APIRouter:
             .options(selectinload(AccessRequest.data_product))
             .order_by(AccessRequest.created_at.desc())
         )
-        result: list[AccessRequest] = []
+        result: list[AccessRequestResponse] = []
         for access_request in open_requests:
             if access_request.data_product.owner_user_id == actor:
-                result.append(access_request)
+                result.append(access_request_response(session, access_request))
                 continue
             usage = access_request.data_product.extra_metadata.get("catalogUsage", {})
             responsible_user_ids = (
                 usage.get("responsibleUserIds", []) if isinstance(usage, dict) else []
             )
             if actor in responsible_user_ids:
-                result.append(access_request)
+                result.append(access_request_response(session, access_request))
         return result
 
     @router.get(
@@ -2901,77 +3059,7 @@ def create_router() -> APIRouter:
         session: SessionDep,
         actor: ActorDep,
     ) -> list[OwnedAccessConsumerResponse]:
-        """Return active, deduplicated consumers for products owned by the demo actor."""
-        today = utc_now().date()
-        active_requests = session.scalars(
-            select(AccessRequest)
-            .where(
-                AccessRequest.status.in_(("granted_modified", "granted_original")),
-                AccessRequest.valid_from <= today,
-                AccessRequest.valid_until >= today,
-            )
-            .options(selectinload(AccessRequest.data_product))
-            .order_by(
-                AccessRequest.data_product_id,
-                AccessRequest.requester_name,
-                AccessRequest.created_at,
-            )
-        )
-        grouped: dict[tuple[uuid.UUID, str, str], dict[str, Any]] = {}
-        for access_request in active_requests:
-            usage = access_request.data_product.extra_metadata.get("catalogUsage", {})
-            responsible_user_ids = (
-                usage.get("responsibleUserIds", []) if isinstance(usage, dict) else []
-            )
-            if actor not in responsible_user_ids:
-                continue
-
-            identity_id = (
-                access_request.machine_id
-                if access_request.consumer_type == "machine"
-                else access_request.requester_id
-            )
-            if not identity_id:
-                continue
-            key = (access_request.data_product_id, access_request.consumer_type, identity_id)
-            consumer = grouped.setdefault(
-                key,
-                {
-                    "data_product_id": access_request.data_product_id,
-                    "consumer_type": access_request.consumer_type,
-                    "identity_id": identity_id,
-                    "display_name": (
-                        identity_id
-                        if access_request.consumer_type == "machine"
-                        else access_request.requester_name
-                    ),
-                    "organization": access_request.requester_organization,
-                    "grants": [],
-                },
-            )
-            consumer["grants"].append(
-                {
-                    "request_number": access_request.request_number,
-                    "protocol": access_request.requested_protocol,
-                    "variant": (
-                        "original" if access_request.status == "granted_original" else "modified"
-                    ),
-                    "valid_from": access_request.valid_from,
-                    "valid_until": access_request.valid_until,
-                }
-            )
-
-        return [
-            OwnedAccessConsumerResponse.model_validate(consumer)
-            for consumer in sorted(
-                grouped.values(),
-                key=lambda item: (
-                    str(item["data_product_id"]),
-                    item["consumer_type"],
-                    item["display_name"].casefold(),
-                ),
-            )
-        ]
+        return owned_access_consumers(session, actor)
 
     @router.get(
         "/data-products/{product_id}/access-requests/mine",
@@ -2982,12 +3070,13 @@ def create_router() -> APIRouter:
         product_id: uuid.UUID,
         session: SessionDep,
         actor: ActorDep,
-    ) -> list[AccessRequest]:
+    ) -> list[AccessRequestResponse]:
         # A requester must retain access to their own workflow evidence while a
         # four-eyes submission temporarily hides the catalog entry from search.
         find_product(session, product_id)
-        return list(
-            session.scalars(
+        return [
+            access_request_response(session, item)
+            for item in session.scalars(
                 select(AccessRequest)
                 .where(
                     AccessRequest.data_product_id == product_id,
@@ -2995,7 +3084,7 @@ def create_router() -> APIRouter:
                 )
                 .order_by(AccessRequest.created_at.desc())
             )
-        )
+        ]
 
     @router.post(
         "/data-products/{product_id}/access-requests",
@@ -3008,7 +3097,7 @@ def create_router() -> APIRouter:
         body: AccessRequestCreate,
         session: SessionDep,
         actor: ActorDep,
-    ) -> AccessRequest:
+    ) -> AccessRequestResponse:
         product = find_product(session, product_id)
         require_product_view(session, product, actor)
         usage = product.extra_metadata.get("catalogUsage", {})
@@ -3070,16 +3159,54 @@ def create_router() -> APIRouter:
         )
         session.commit()
         session.refresh(access_request)
-        return access_request
+        return access_request_response(session, access_request)
 
-    @router.post("/access-requests/{access_request_id}/decision", tags=["access requests"])
+    @router.post(
+        "/data-products/{product_id}/access-renewals",
+        response_model=AccessRequestResponse,
+        status_code=201,
+        tags=["access requests"],
+    )
+    def create_access_renewal(
+        product_id: uuid.UUID,
+        body: AccessRenewalCreate,
+        session: SessionDep,
+        actor: ActorDep,
+    ) -> AccessRequestResponse:
+        product = find_product(session, product_id)
+        require_product_view(session, product, actor)
+        renewal = create_renewal_request(session, product, actor, body)
+        try:
+            session.flush()
+            session.commit()
+        except IntegrityError as exc:
+            session.rollback()
+            message = str(exc.orig)
+            if (
+                "uq_access_request_open_renewal" in message
+                or "access_requests.renewal_of_request_id" in message
+            ):
+                raise HTTPException(
+                    409, "A renewal for this grant is already in progress"
+                ) from None
+            raise
+        session.refresh(renewal)
+        return access_request_response(session, renewal)
+
+    @router.post(
+        "/access-requests/{access_request_id}/decision",
+        response_model=AccessRequestDecisionResponse,
+        tags=["access requests"],
+    )
     def decide_access_request(
         access_request_id: uuid.UUID,
         body: AccessRequestDecision,
         session: SessionDep,
         actor: ActorDep,
-    ) -> dict[str, Any]:
-        access_request = session.get(AccessRequest, access_request_id)
+    ) -> AccessRequestDecisionResponse:
+        access_request = session.scalar(
+            select(AccessRequest).where(AccessRequest.id == access_request_id).with_for_update()
+        )
         if access_request is None:
             raise HTTPException(404, "Access request not found")
         product = find_product(session, access_request.data_product_id)
@@ -3117,12 +3244,51 @@ def create_router() -> APIRouter:
                 {"comment": body.comment},
             )
             session.commit()
-            return {
-                "request": AccessRequestResponse.model_validate(access_request).model_dump(
-                    mode="json", by_alias=True
+            return AccessRequestDecisionResponse(
+                request=access_request_response(session, access_request)
+            )
+
+        if access_request.request_kind == "renewal":
+            if access_request.renewal_context is None:
+                raise HTTPException(409, "The renewal has lost its immutable grant context")
+            expected_variant = access_request.renewal_context.get("dataVariant")
+            if body.granted_variant != expected_variant:
+                raise HTTPException(422, "A renewal cannot change the granted data variant")
+            definition, fulfillment_subject = renewal_policy_definition(
+                session, product, access_request
+            )
+            try:
+                submission = create_renewal_submission(
+                    session,
+                    product,
+                    access_request,
+                    definition,
+                    fulfillment_subject,
+                    actor,
+                )
+                session.commit()
+            except IntegrityError as exc:
+                session.rollback()
+                message = str(exc.orig)
+                if (
+                    "uq_policy_product_revision" in message
+                    or "policy_revisions.data_product_id, policy_revisions.revision" in message
+                ):
+                    raise HTTPException(
+                        409, "The access request was already decided concurrently"
+                    ) from None
+                raise
+            policy = session.get(PolicyRevision, submission.policy_revision_id)
+            if policy is None:
+                raise HTTPException(409, "The renewal policy evidence is unavailable")
+            policy.deployments = []
+            return AccessRequestDecisionResponse(
+                request=access_request_response(session, access_request),
+                policy=policy_response(policy),
+                governance_submission=GovernanceSubmissionResponse.model_validate(
+                    governance_response_payload(session, submission)
                 ),
-                "policy": None,
-            }
+            )
 
         current = latest_policy(session, product.id)
         normalized = definition_as_camel(current.definition) if current else {"grants": []}
@@ -3219,12 +3385,10 @@ def create_router() -> APIRouter:
         )
         session.commit()
         policy.deployments = []
-        return {
-            "request": AccessRequestResponse.model_validate(access_request).model_dump(
-                mode="json", by_alias=True
-            ),
-            "policy": policy_response(policy).model_dump(mode="json", by_alias=True),
-        }
+        return AccessRequestDecisionResponse(
+            request=access_request_response(session, access_request),
+            policy=policy_response(policy),
+        )
 
     @router.get(
         "/data-products/{product_id}/endpoints",
@@ -3381,9 +3545,7 @@ def create_router() -> APIRouter:
                     session,
                     product,
                     row,
-                    privileged=is_service_level_revision_privileged(
-                        product, row, actor
-                    ),
+                    privileged=is_service_level_revision_privileged(product, row, actor),
                     rows_by_id=rows_by_id,
                 )
                 for row in rows
@@ -3440,9 +3602,7 @@ def create_router() -> APIRouter:
         product = lock_service_level_product(session, product_id)
         row = create_service_level_revision(session, product, body, actor, if_match)
         session.flush()
-        payload = service_level_revision_response(
-            session, product, row, privileged=True
-        )
+        payload = service_level_revision_response(session, product, row, privileged=True)
         session.commit()
         response.headers["ETag"] = service_level_etag(row.lock_version)
         return payload
@@ -3465,9 +3625,7 @@ def create_router() -> APIRouter:
         row = lock_service_level_revision(session, product_id, revision_id)
         update_service_level_revision(session, product, row, body, actor, if_match)
         session.flush()
-        payload = service_level_revision_response(
-            session, product, row, privileged=True
-        )
+        payload = service_level_revision_response(session, product, row, privileged=True)
         session.commit()
         response.headers["ETag"] = service_level_etag(row.lock_version)
         return payload
@@ -3489,9 +3647,7 @@ def create_router() -> APIRouter:
         row = lock_service_level_revision(session, product_id, revision_id)
         submit_service_level_revision(session, product, row, actor, if_match)
         session.flush()
-        payload = service_level_revision_response(
-            session, product, row, privileged=True
-        )
+        payload = service_level_revision_response(session, product, row, privileged=True)
         session.commit()
         response.headers["ETag"] = service_level_etag(row.lock_version)
         return payload
@@ -3513,9 +3669,7 @@ def create_router() -> APIRouter:
         row = lock_service_level_revision(session, product_id, revision_id)
         withdraw_service_level_revision(session, product, row, actor, if_match)
         session.flush()
-        payload = service_level_revision_response(
-            session, product, row, privileged=True
-        )
+        payload = service_level_revision_response(session, product, row, privileged=True)
         session.commit()
         response.headers["ETag"] = service_level_etag(row.lock_version)
         return payload
@@ -3538,9 +3692,7 @@ def create_router() -> APIRouter:
         row = lock_service_level_revision(session, product_id, revision_id)
         decide_service_level_revision(session, product, row, body, actor, if_match)
         session.flush()
-        payload = service_level_revision_response(
-            session, product, row, privileged=True
-        )
+        payload = service_level_revision_response(session, product, row, privileged=True)
         session.commit()
         response.headers["ETag"] = service_level_etag(row.lock_version)
         return payload
@@ -3666,6 +3818,7 @@ def create_router() -> APIRouter:
     ) -> PolicyRevisionPage:
         product = find_product(session, product_id)
         require_product_view(session, product, actor)
+        require_policy_evidence_view(session, product, actor)
         policies = list(
             session.scalars(
                 select(PolicyRevision)
@@ -3689,45 +3842,7 @@ def create_router() -> APIRouter:
         """Return only the current actor's safe, active grant summary."""
         product = find_product(session, product_id)
         require_product_view(session, product, actor)
-        policy = active_published_policy(session, product)
-        if policy is None:
-            if product.active_policy_revision is not None:
-                raise HTTPException(503, "Effective access status is unavailable")
-            return ProductEffectiveAccessResponse(granted=False)
-
-        try:
-            definition = PolicyDefinition.model_validate(definition_as_camel(policy.definition))
-        except ValidationError:
-            raise HTTPException(503, "Effective access status is unavailable") from None
-        if definition.effect != "allow":
-            return ProductEffectiveAccessResponse(granted=False)
-
-        today = utc_now().astimezone(ZoneInfo("Europe/Zurich")).date()
-        grants: list[EffectiveAccessGrantResponse] = []
-        for grant in definition.grants:
-            subject = grant.subject
-            applies_to_actor = (
-                subject.type == "person" and subject.id == actor
-            ) or (
-                subject.type == "group"
-                and grant.group_snapshot is not None
-                and actor in grant.group_snapshot.member_ids
-            )
-            if not applies_to_actor:
-                continue
-            if "data.read" not in grant.actions:
-                continue
-            if not grant.valid_from <= today <= grant.valid_until:
-                continue
-            grants.append(
-                EffectiveAccessGrantResponse(
-                    protocols=list(dict.fromkeys(grant.protocols)),
-                    valid_from=grant.valid_from,
-                    valid_until=grant.valid_until,
-                    weekly_availability=grant.weekly_availability,
-                )
-            )
-        return ProductEffectiveAccessResponse(granted=bool(grants), grants=grants)
+        return effective_access_response(session, product, actor)
 
     @router.get(
         "/data-products/{product_id}/policies/latest",
@@ -3742,6 +3857,7 @@ def create_router() -> APIRouter:
     ) -> PolicyRevisionResponse:
         product = find_product(session, product_id)
         require_product_view(session, product, actor)
+        require_policy_evidence_view(session, product, actor)
         policy = latest_policy(session, product_id)
         if policy is None:
             raise HTTPException(404, "No policy exists for this product")
@@ -3763,6 +3879,7 @@ def create_router() -> APIRouter:
         if_match: Annotated[str | None, Header(alias="If-Match")] = None,
     ) -> PolicyRevisionResponse:
         product = find_product(session, product_id)
+        require_product_owner(product, actor)
         reject_legacy_governance_path(session, product)
         current = latest_policy(session, product_id)
         current_revision = current.revision if current else 0
@@ -3925,6 +4042,7 @@ def create_router() -> APIRouter:
         if_match: Annotated[str | None, Header(alias="If-Match")] = None,
     ) -> PolicyRevisionResponse:
         product = find_product(session, product_id)
+        require_product_owner(product, actor)
         reject_legacy_governance_path(session, product)
         source = session.get(PolicyRevision, policy_id)
         current = latest_policy(session, product_id)
@@ -4029,8 +4147,8 @@ def create_router() -> APIRouter:
         if_match: Annotated[str | None, Header(alias="If-Match")] = None,
     ) -> PolicyRevisionResponse:
         product = find_product(session, product_id)
-        if requires_four_eyes(session, product):
-            require_product_owner(product, actor)
+        require_product_owner(product, actor)
+        reject_legacy_governance_path(session, product)
         target = session.get(PolicyRevision, policy_id)
         current = latest_policy(session, product_id)
         if target is None or target.data_product_id != product_id:
@@ -4100,6 +4218,7 @@ def create_router() -> APIRouter:
     ) -> list[PolicyDeployment]:
         product = find_product(session, product_id)
         require_product_view(session, product, actor)
+        require_policy_evidence_view(session, product, actor)
         return list(
             session.scalars(
                 select(PolicyDeployment)
@@ -4206,16 +4325,23 @@ def create_app(
         expected = f"Bearer {resolved_settings.internal_token}"
         if authorization is None or not secrets.compare_digest(authorization, expected):
             raise HTTPException(401, "A valid internal deployment token is required")
-        deployment = session.scalar(
-            select(PolicyDeployment).where(
-                PolicyDeployment.policy_revision_id == acknowledgement.policy_revision_id,
-                PolicyDeployment.target == acknowledgement.target,
-            )
+        submission, deployment = lock_policy_deployment_workflow(
+            session,
+            acknowledgement.policy_revision_id,
+            acknowledgement.target,
         )
         if deployment is None:
             raise HTTPException(404, "Policy deployment not found")
         if acknowledgement.observed_revision != deployment.desired_revision:
             raise HTTPException(409, "Observed revision does not match the desired revision")
+        if submission is not None and submission.status != "approved_deploying":
+            return deployment
+        if (
+            deployment.observed_revision == acknowledgement.observed_revision
+            and deployment.state == acknowledgement.state
+            and deployment.error == acknowledgement.error
+        ):
+            return deployment
         deployment.observed_revision = acknowledgement.observed_revision
         deployment.state = acknowledgement.state
         deployment.error = acknowledgement.error
@@ -4224,7 +4350,7 @@ def create_app(
         policy = session.get(PolicyRevision, deployment.policy_revision_id)
         product = session.get(DataProduct, policy.data_product_id) if policy is not None else None
         if product is not None and policy is not None:
-            finalize_policy_activation(session, product, policy)
+            finalize_policy_activation(session, product, policy, resolved_settings)
         session.commit()
         return deployment
 
@@ -4250,19 +4376,29 @@ def create_app(
         _active, expected_bundle_revision = active_bundle_state(session)
         bundle_failure = opa_bundle_failure(bundle_status)
         if observed_bundle_revision != expected_bundle_revision and bundle_failure:
-            pending = list(
+            pending_policy_ids = list(
                 session.scalars(
-                    select(PolicyDeployment)
-                    .options(selectinload(PolicyDeployment.policy_revision))
-                    .where(
+                    select(PolicyDeployment.policy_revision_id).where(
                         PolicyDeployment.target == "opa",
                         PolicyDeployment.state == "pending",
                     )
                 )
             )
             failed = 0
-            for deployment in pending:
-                current = latest_policy(session, deployment.policy_revision.data_product_id)
+            for policy_revision_id in pending_policy_ids:
+                submission, deployment = lock_policy_deployment_workflow(
+                    session,
+                    policy_revision_id,
+                    "opa",
+                )
+                if deployment is None or deployment.state != "pending":
+                    continue
+                if submission is not None and submission.status != "approved_deploying":
+                    continue
+                policy = session.get(PolicyRevision, deployment.policy_revision_id)
+                if policy is None:
+                    continue
+                current = latest_policy(session, policy.data_product_id)
                 if current is None or current.id != deployment.policy_revision_id:
                     continue
                 deployment.state = "failed"
@@ -4270,9 +4406,14 @@ def create_app(
                 deployment.updated_at = utc_now()
                 failed += 1
                 session.flush()
-                product = session.get(DataProduct, deployment.policy_revision.data_product_id)
+                product = session.get(DataProduct, policy.data_product_id)
                 if product is not None:
-                    finalize_submission_deployment(session, product, deployment.policy_revision)
+                    finalize_submission_deployment(
+                        session,
+                        product,
+                        policy,
+                        resolved_settings,
+                    )
             session.commit()
             return {
                 "status": "bundle-activation-failed",
@@ -4288,31 +4429,53 @@ def create_app(
                 "observedBundleRevision": observed_bundle_revision,
             }
 
-        pending = list(
+        pending_policy_ids = list(
             session.scalars(
-                select(PolicyDeployment)
-                .options(selectinload(PolicyDeployment.policy_revision))
-                .where(PolicyDeployment.target == "opa", PolicyDeployment.state == "pending")
+                select(PolicyDeployment.policy_revision_id).where(
+                    PolicyDeployment.target == "opa", PolicyDeployment.state == "pending"
+                )
             )
         )
         deployed = 0
-        for deployment in pending:
-            current = latest_policy(session, deployment.policy_revision.data_product_id)
+        for policy_revision_id in pending_policy_ids:
+            submission, deployment = lock_policy_deployment_workflow(
+                session,
+                policy_revision_id,
+                "opa",
+            )
+            if deployment is None or deployment.state != "pending":
+                continue
+            if submission is not None and submission.status != "approved_deploying":
+                continue
+            policy = session.get(PolicyRevision, deployment.policy_revision_id)
+            if policy is None:
+                continue
+            current = latest_policy(session, policy.data_product_id)
             if current is not None and current.id == deployment.policy_revision_id:
                 deployment.state = "deployed"
                 deployment.observed_revision = deployment.desired_revision
                 deployment.error = None
                 deployed += 1
                 session.flush()
-                product = session.get(DataProduct, deployment.policy_revision.data_product_id)
+                product = session.get(DataProduct, policy.data_product_id)
                 if product is not None:
-                    finalize_policy_activation(session, product, deployment.policy_revision)
+                    finalize_policy_activation(
+                        session,
+                        product,
+                        policy,
+                        resolved_settings,
+                    )
             else:
                 deployment.state = "failed"
                 deployment.error = "Superseded before this global OPA bundle was observed"
-                product = session.get(DataProduct, deployment.policy_revision.data_product_id)
+                product = session.get(DataProduct, policy.data_product_id)
                 if product is not None:
-                    finalize_submission_deployment(session, product, deployment.policy_revision)
+                    finalize_submission_deployment(
+                        session,
+                        product,
+                        policy,
+                        resolved_settings,
+                    )
             deployment.updated_at = utc_now()
         session.commit()
         return {

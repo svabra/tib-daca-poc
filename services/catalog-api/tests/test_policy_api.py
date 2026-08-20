@@ -7,6 +7,8 @@ import tarfile
 from daca_catalog.policy import GENERATED_REGO, ProjectionResult
 from daca_catalog.seed import ESTV_PRODUCT_ID, ESTV_PRODUCT_URN
 
+OWNER = {"X-DaCa-User": "kassandra.valdata"}
+
 
 def product_url() -> str:
     return f"/api/v1/data-products/{ESTV_PRODUCT_ID}"
@@ -23,7 +25,7 @@ def policy_definition() -> dict:
 
 
 def test_seed_policy_is_structured_and_rego_is_generated(client):
-    latest = client.get(f"{product_url()}/policies/latest")
+    latest = client.get(f"{product_url()}/policies/latest", headers=OWNER)
     assert latest.status_code == 200
     assert latest.headers["etag"] == '"1"'
     assert latest.json()["definition"]["subjects"]["userIds"] == ["kanton-st-gallen"]
@@ -34,13 +36,14 @@ def test_seed_policy_is_structured_and_rego_is_generated(client):
 def test_policy_edit_requires_etag_and_publish_creates_immutable_revision(client, monkeypatch):
     no_precondition = client.post(
         f"{product_url()}/policies",
+        headers=OWNER,
         json={"definition": policy_definition()},
     )
     assert no_precondition.status_code == 428
 
     draft = client.post(
         f"{product_url()}/policies",
-        headers={"If-Match": '"1"', "X-DaCa-User": "estv-owner"},
+        headers={**OWNER, "If-Match": '"1"'},
         json={"definition": policy_definition()},
     )
     assert draft.status_code == 201
@@ -50,7 +53,7 @@ def test_policy_edit_requires_etag_and_publish_creates_immutable_revision(client
 
     stale = client.post(
         f"{product_url()}/policies",
-        headers={"If-Match": '"1"'},
+        headers={**OWNER, "If-Match": '"1"'},
         json={"definition": policy_definition()},
     )
     assert stale.status_code == 412
@@ -64,7 +67,7 @@ def test_policy_edit_requires_etag_and_publish_creates_immutable_revision(client
 
     published = client.post(
         f"{product_url()}/policies/{draft_id}/publish",
-        headers={"If-Match": '"2"', "X-DaCa-User": "estv-owner"},
+        headers={**OWNER, "If-Match": '"2"'},
     )
     assert published.status_code == 201
     assert published.headers["etag"] == '"3"'
@@ -75,7 +78,7 @@ def test_policy_edit_requires_etag_and_publish_creates_immutable_revision(client
     assert deployments["postgresql"]["state"] == "deployed"
     assert deployments["postgresql"]["observedRevision"] == 3
 
-    revisions = client.get(f"{product_url()}/policies").json()["items"]
+    revisions = client.get(f"{product_url()}/policies", headers=OWNER).json()["items"]
     assert [revision["revision"] for revision in revisions] == [3, 2, 1]
     assert [revision["status"] for revision in revisions] == ["published", "draft", "published"]
 
@@ -83,17 +86,17 @@ def test_policy_edit_requires_etag_and_publish_creates_immutable_revision(client
 def test_policy_publish_retains_active_revision_until_postgresql_deploys(client):
     draft = client.post(
         f"{product_url()}/policies",
-        headers={"If-Match": '"1"'},
+        headers={**OWNER, "If-Match": '"1"'},
         json={"definition": policy_definition()},
     )
     response = client.post(
         f"{product_url()}/policies/{draft.json()['id']}/publish",
-        headers={"If-Match": '"2"'},
+        headers={**OWNER, "If-Match": '"2"'},
     )
     assert response.status_code == 503
     product = client.get(product_url()).json()
     assert product["activePolicyRevision"] == 1
-    revisions = client.get(f"{product_url()}/policies").json()["items"]
+    revisions = client.get(f"{product_url()}/policies", headers=OWNER).json()["items"]
     assert [revision["status"] for revision in revisions] == ["draft", "published"]
 
 
@@ -102,7 +105,7 @@ def test_policy_must_select_the_product_and_owner(client):
     invalid["resources"]["owners"] = ["NOT-ESTV"]
     response = client.post(
         f"{product_url()}/policies",
-        headers={"If-Match": '"1"'},
+        headers={**OWNER, "If-Match": '"1"'},
         json={"definition": invalid},
     )
     assert response.status_code == 422
@@ -161,14 +164,14 @@ def test_opa_status_acknowledges_the_active_bundle(client):
     )
     assert observed.status_code == 200
     assert observed.json()["deploymentsAcknowledged"] == 1
-    deployments = client.get(f"{product_url()}/policy-deployments").json()
+    deployments = client.get(f"{product_url()}/policy-deployments", headers=OWNER).json()
     opa = next(item for item in deployments if item["target"] == "opa")
     assert opa["state"] == "deployed"
     assert opa["observedRevision"] == 1
 
 
 def test_internal_deployment_acknowledgement_is_authenticated(client):
-    policy = client.get(f"{product_url()}/policies/latest").json()
+    policy = client.get(f"{product_url()}/policies/latest", headers=OWNER).json()
     deployment_id = policy["deployments"][0]["id"]
     body = {
         "policyRevisionId": policy["id"],

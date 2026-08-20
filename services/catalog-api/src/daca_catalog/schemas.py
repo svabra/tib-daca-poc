@@ -235,16 +235,25 @@ class AccessRequestResponse(ApiModel):
     fulfillment_group_revision: int | None = None
     decision_policy_revision_id: uuid.UUID | None = None
     granted_variant: Literal["original", "modified"] | None = None
+    request_kind: Literal["initial", "renewal"] = "initial"
+    renewal_of_request_id: uuid.UUID | None = None
+    renewal_of_request_number: str | None = None
+    renewal_context: RenewalContext | None = None
     created_at: datetime
     updated_at: datetime
 
 
 class AccessConsumerGrant(ApiModel):
-    request_number: str
+    request_number: str | None = None
     protocol: Literal["http", "postgresql", "both"]
     variant: Literal["original", "modified"]
     valid_from: date
     valid_until: date
+    grant_id: str
+    policy_revision: int
+    purpose: str | None = None
+    expires_in_days: int = Field(ge=0)
+    expiry_state: Literal["active", "expiringSoon"]
 
 
 class OwnedAccessConsumerResponse(ApiModel):
@@ -489,9 +498,7 @@ class WeeklyAvailability(ApiModel):
         return self
 
 
-ServiceLevelStatus = Literal[
-    "draft", "pending_approval", "published", "rejected", "withdrawn"
-]
+ServiceLevelStatus = Literal["draft", "pending_approval", "published", "rejected", "withdrawn"]
 ServiceLevelText = Annotated[str, Field(min_length=1, max_length=500)]
 FIXED_BEST_EFFORT_LIMITATION = "Keine Uptime-, RTO-/RPO- oder Lösungszeitgarantie."
 
@@ -543,9 +550,7 @@ class ServiceLevelDefinition(ApiModel):
 
     @field_validator("usage_conditions", "known_limitations")
     @classmethod
-    def normalized_unique_texts(
-        cls, value: list[str], info: ValidationInfo
-    ) -> list[str]:
+    def normalized_unique_texts(cls, value: list[str], info: ValidationInfo) -> list[str]:
         normalized = [reject_unsafe_service_level_text(item) for item in value]
         if any(not item for item in normalized):
             raise ValueError("entries must not be empty")
@@ -578,10 +583,7 @@ class ServiceLevelRevisionWrite(ApiModel):
             raise ValueError("validUntil must be on or after validFrom")
         if self.definition.next_review_on < self.valid_from:
             raise ValueError("nextReviewOn must be within the SLA validity period")
-        if (
-            self.valid_until is not None
-            and self.definition.next_review_on > self.valid_until
-        ):
+        if self.valid_until is not None and self.definition.next_review_on > self.valid_until:
             raise ValueError("nextReviewOn must be within the SLA validity period")
         return self
 
@@ -694,15 +696,74 @@ class ControlPersonUpdateResponse(ApiModel):
     control_person: ServiceLevelPersonResponse
 
 
-class EffectiveAccessGrantResponse(ApiModel):
+RenewalEligibilityReason = Literal[
+    "eligible",
+    "outsideWindow",
+    "pending",
+    "sourceRequestUnavailable",
+    "unsupportedSubject",
+]
+
+
+class RenewalEligibility(ApiModel):
+    eligible: bool
+    reason: RenewalEligibilityReason
+    renewal_request_id: uuid.UUID | None = None
+
+
+class RenewalContext(ApiModel):
+    """Immutable, requester-visible evidence captured from one active policy grant."""
+
+    source_grant_id: str = Field(min_length=1, max_length=100)
+    policy_revision: int = Field(ge=1)
+    subject: PolicySubject
+    actions: list[Literal["data.read"]] = Field(min_length=1)
     protocols: list[Literal["http", "postgresql"]] = Field(min_length=1)
+    data_variant: Literal["original", "modified"]
     valid_from: date
     valid_until: date
     weekly_availability: WeeklyAvailability | None = None
+    metadata_channels: MetadataChannels = Field(default_factory=MetadataChannels)
+    group_snapshot: GroupSnapshot | None = None
+    purpose: str = Field(min_length=20, max_length=3000)
+    legal_basis: str = Field(min_length=5, max_length=1000)
+
+
+class AccessRenewalCreate(ApiModel):
+    source_grant_id: str = Field(min_length=1, max_length=100)
+    purpose: str = Field(min_length=20, max_length=3000)
+    valid_until: date
+    conditions_accepted: Literal[True]
+
+    @field_validator("purpose")
+    @classmethod
+    def normalized_purpose(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 20:
+            raise ValueError("purpose must contain at least 20 non-whitespace characters")
+        return normalized
+
+
+class EffectiveAccessGrantResponse(ApiModel):
+    grant_id: str
+    subject_type: Literal["person", "machine", "group"]
+    protocols: list[Literal["http", "postgresql"]] = Field(min_length=1)
+    data_variant: Literal["original", "modified"]
+    valid_from: date
+    valid_until: date
+    weekly_availability: WeeklyAvailability | None = None
+    purpose: str | None = None
+    expires_in_days: int = Field(ge=0)
+    expiry_state: Literal["active", "expiringSoon"]
+    source_request_id: uuid.UUID | None = None
+    source_request_number: str | None = None
+    renewal_eligibility: RenewalEligibility
 
 
 class ProductEffectiveAccessResponse(ApiModel):
     granted: bool
+    as_of_date: date
+    policy_revision: int | None = None
     grants: list[EffectiveAccessGrantResponse] = Field(default_factory=list)
 
 
@@ -1015,6 +1076,19 @@ class PocGuideConfigResponse(ApiModel):
     environment: str
 
 
+class PocAccessRenewalFixtureResponse(ApiModel):
+    fixture_id: Literal["access-renewal-expiring"]
+    product_id: uuid.UUID
+    product_title: str
+    state: Literal["notPrepared", "ready", "renewalPending", "approvalPending", "deployed"]
+    as_of_date: date
+    valid_from: date | None = None
+    valid_until: date | None = None
+    days_until_expiry: int | None = None
+    open_renewal_count: int = Field(ge=0)
+    active_policy_revision: int | None = None
+
+
 class WorkflowTaskResponse(ApiModel):
     id: uuid.UUID
     task_type: Literal[
@@ -1264,6 +1338,12 @@ class AccessRequestDecision(ApiModel):
         return self
 
 
+class AccessRequestDecisionResponse(ApiModel):
+    request: AccessRequestResponse
+    policy: PolicyRevisionResponse | None = None
+    governance_submission: GovernanceSubmissionResponse | None = None
+
+
 class Problem(ApiModel):
     type: str
     title: str
@@ -1272,3 +1352,6 @@ class Problem(ApiModel):
     instance: str
     request_id: str | None = None
     errors: list[dict[str, Any]] | None = None
+
+
+AccessRequestResponse.model_rebuild()

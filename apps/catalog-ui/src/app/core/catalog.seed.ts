@@ -1,4 +1,4 @@
-import { DataProduct, LineageEdge, LineageNode, OwnedAccessConsumer, PolicyDefinition, ProvenanceEvent } from './catalog.models';
+import { AccessConsumerGrant, DataProduct, LineageEdge, LineageNode, OwnedAccessConsumer, PolicyDefinition, ProvenanceEvent } from './catalog.models';
 
 export const ESTV_PRODUCT_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -10,8 +10,8 @@ export const FALLBACK_OWNED_ACCESS_CONSUMERS: readonly OwnedAccessConsumer[] = [
     displayName: 'Lea Meier',
     organization: 'Kanton Bern',
     grants: [
-      { requestNumber: 'ZA-2026-CONS-0001', protocol: 'http', variant: 'original', validFrom: '2026-01-01', validUntil: '2027-12-31' },
-      { requestNumber: 'ZA-2026-CONS-0002', protocol: 'postgresql', variant: 'modified', validFrom: '2026-01-01', validUntil: '2027-12-31' },
+      fallbackConsumerGrant('0001', 'http', 'original'),
+      fallbackConsumerGrant('0002', 'postgresql', 'modified'),
     ],
   },
   {
@@ -20,7 +20,7 @@ export const FALLBACK_OWNED_ACCESS_CONSUMERS: readonly OwnedAccessConsumer[] = [
     identityId: 'marco.galli',
     displayName: 'Marco Galli',
     organization: 'Kanton Tessin',
-    grants: [{ requestNumber: 'ZA-2026-CONS-0003', protocol: 'http', variant: 'modified', validFrom: '2026-01-01', validUntil: '2027-12-31' }],
+    grants: [fallbackConsumerGrant('0003', 'http', 'modified')],
   },
   {
     dataProductId: ESTV_PRODUCT_ID,
@@ -28,7 +28,7 @@ export const FALLBACK_OWNED_ACCESS_CONSUMERS: readonly OwnedAccessConsumer[] = [
     identityId: 'nadine.favre',
     displayName: 'Nadine Favre',
     organization: 'Kanton Waadt',
-    grants: [{ requestNumber: 'ZA-2026-CONS-0004', protocol: 'both', variant: 'original', validFrom: '2026-01-01', validUntil: '2027-12-31' }],
+    grants: [fallbackConsumerGrant('0004', 'both', 'original')],
   },
   {
     dataProductId: ESTV_PRODUCT_ID,
@@ -36,7 +36,7 @@ export const FALLBACK_OWNED_ACCESS_CONSUMERS: readonly OwnedAccessConsumer[] = [
     identityId: 'svc-estv-cantonal-tax-dashboard',
     displayName: 'svc-estv-cantonal-tax-dashboard',
     organization: 'Kanton St. Gallen',
-    grants: [{ requestNumber: 'ZA-2026-CONS-0005', protocol: 'http', variant: 'modified', validFrom: '2026-01-01', validUntil: '2027-12-31' }],
+    grants: [fallbackConsumerGrant('0005', 'http', 'modified')],
   },
   {
     dataProductId: ESTV_PRODUCT_ID,
@@ -44,7 +44,7 @@ export const FALLBACK_OWNED_ACCESS_CONSUMERS: readonly OwnedAccessConsumer[] = [
     identityId: 'svc-zrh-tax-analysis',
     displayName: 'svc-zrh-tax-analysis',
     organization: 'Kanton Zürich',
-    grants: [{ requestNumber: 'ZA-2026-CONS-0006', protocol: 'postgresql', variant: 'original', validFrom: '2026-01-01', validUntil: '2027-12-31' }],
+    grants: [fallbackConsumerGrant('0006', 'postgresql', 'original')],
   },
   {
     dataProductId: '16666666-6666-4666-8666-666666666666',
@@ -52,9 +52,28 @@ export const FALLBACK_OWNED_ACCESS_CONSUMERS: readonly OwnedAccessConsumer[] = [
     identityId: 'svc-estv-refund-monitoring',
     displayName: 'svc-estv-refund-monitoring',
     organization: 'ESTV',
-    grants: [{ requestNumber: 'ZA-2026-CONS-0007', protocol: 'http', variant: 'modified', validFrom: '2026-01-01', validUntil: '2027-12-31' }],
+    grants: [fallbackConsumerGrant('0007', 'http', 'modified')],
   },
 ];
+
+function fallbackConsumerGrant(
+  suffix: string,
+  protocol: AccessConsumerGrant['protocol'],
+  variant: AccessConsumerGrant['variant'],
+): AccessConsumerGrant {
+  return {
+    grantId: `preview-grant-${suffix}`,
+    policyRevision: 1,
+    requestNumber: `ZA-2026-CONS-${suffix}`,
+    protocol,
+    variant,
+    validFrom: '2026-01-01',
+    validUntil: '2027-12-31',
+    purpose: null,
+    expiresInDays: 498,
+    expiryState: 'active',
+  };
+}
 
 export const FALLBACK_PRODUCT: DataProduct = {
   id: ESTV_PRODUCT_ID,

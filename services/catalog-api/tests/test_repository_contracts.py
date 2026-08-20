@@ -144,7 +144,7 @@ def test_docker_publish_uses_separate_version_tagged_docker_hub_repositories() -
     ) in workflow
 
 
-def test_poc_guide_ships_twenty_one_optimized_webp_screenshots() -> None:
+def test_poc_guide_ships_twenty_six_optimized_webp_screenshots() -> None:
     image_dir = ROOT / "apps/catalog-ui/public/assets/poc-guide"
     images = sorted(image_dir.glob("*.webp"))
     expected_consumer_journey_images = {
@@ -153,9 +153,17 @@ def test_poc_guide_ships_twenty_one_optimized_webp_screenshots() -> None:
         "journey-01-service-level.webp",
         "journey-01-endpoint-quickstart.webp",
     }
+    expected_renewal_journey_images = {
+        "journey-07-expiry.webp",
+        "journey-07-request.webp",
+        "journey-07-owner-review.webp",
+        "journey-07-four-eyes.webp",
+        "journey-07-runtime.webp",
+    }
 
     assert expected_consumer_journey_images <= {path.name for path in images}
-    assert len(images) == 21
+    assert expected_renewal_journey_images <= {path.name for path in images}
+    assert len(images) == 26
     assert sum(path.stat().st_size for path in images) < 2_000_000
     for path in images:
         header = path.read_bytes()[:12]
