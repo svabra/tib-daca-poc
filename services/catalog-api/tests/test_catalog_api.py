@@ -314,7 +314,7 @@ def test_access_request_is_persisted_for_the_authenticated_demo_user(client, ses
     assert body["requestNumber"].startswith("ZA-2026-")
     assert body["requesterId"] == "kassandra.valdata"
     assert body["requesterName"] == "Kassandra Valdata"
-    assert body["requesterOrganization"] == "Eidgenössische Steuerverwaltung ESTV"
+    assert body["requesterOrganization"] == "ESTV"
     assert body["status"] == "submitted"
     assert body["machineId"] == "svc-estv-tax-analysis"
     assert "conditionsAccepted" not in body

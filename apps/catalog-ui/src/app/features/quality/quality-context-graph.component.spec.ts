@@ -10,7 +10,7 @@ describe('QualityContextGraphComponent', () => {
     const fixture = TestBed.createComponent(QualityContextGraphComponent);
     fixture.componentRef.setInput('sourceLabel', 'DAAIF');
     fixture.componentRef.setInput('productTitle', 'Kantonale Gewerbesteuer 2022–2026');
-    fixture.componentRef.setInput('ownerLabel', 'Eidgenössische Steuerverwaltung ESTV');
+    fixture.componentRef.setInput('ownerLabel', 'ESTV');
     fixture.componentRef.setInput('domainLabel', 'Unternehmens-/Gewerbesteuer');
     fixture.componentRef.setInput('serviceLabel', 'REST Data Service');
     fixture.componentRef.setInput('serviceDetail', 'kantonale-gewerbesteuer-api');

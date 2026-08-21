@@ -6,7 +6,7 @@ import { DemoIdentityService } from '../../core/demo-identity.service';
 import { ProductServiceLevelApiService } from '../service-level/product-service-level-api.service';
 import { ServiceLevelSummaryResponse } from '../service-level/product-service-level.models';
 import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav.component';
-import { accessConsumerSummary, dataOwner, DataOwnerProfile, deliveryProtocols } from './my-data-products';
+import { accessConsumerSummary, DataOwnerProfile, deliveryProtocols, resolvedDataOwner } from './my-data-products';
 
 @Component({
   selector: 'daca-product-overview',
@@ -45,7 +45,7 @@ import { accessConsumerSummary, dataOwner, DataOwnerProfile, deliveryProtocols }
         <div class="daca-card-body">
           <dl class="product-overview-facts">
             <div><dt>Fachgebiet</dt><dd>{{ product().domain }}</dd></div>
-            <div><dt>Eigentümerin</dt><dd>{{ owner().name }} · {{ owner().organization }}</dd></div>
+            <div><dt>Eigentümerin</dt><dd>@if (owner(); as owner) { {{ owner.name }} · {{ owner.organization }} } @else { {{ product().owner }} }</dd></div>
             <div><dt>Aktualisierung</dt><dd>{{ product().updateFrequency }}</dd></div>
             <div><dt>Schnittstellen</dt><dd>{{ protocols().join(' · ') }}</dd></div>
             <div><dt>Datenkonsumenten</dt><dd>{{ consumerSummary().total }}</dd></div>
@@ -79,16 +79,17 @@ import { accessConsumerSummary, dataOwner, DataOwnerProfile, deliveryProtocols }
         </div>
       </section>
 
-      <aside class="daca-card product-overview-owner" aria-labelledby="product-owner-title">
-        <div class="daca-card-header"><h2 id="product-owner-title">Data Owner</h2></div>
-        <div class="daca-card-body">
-          <img [src]="owner().avatarUrl" alt="">
-          <strong>{{ owner().name }}</strong>
-          <span>{{ owner().organization }}</span>
-          @if (owner().phone; as phone) { <a [href]="'tel:' + phone.replaceAll(' ', '')">{{ phone }}</a> }
-          @if (owner().teamsUrl; as teamsUrl) { <a [href]="teamsUrl" target="_blank" rel="noreferrer">Über Teams kontaktieren</a> }
-        </div>
-      </aside>
+      @if (owner(); as owner) {
+        <aside class="daca-card product-overview-owner" aria-labelledby="product-owner-title">
+          <div class="daca-card-header"><h2 id="product-owner-title">Data Owner</h2></div>
+          <div class="daca-card-body">
+            <img [src]="owner.avatarUrl" alt="">
+            <strong>{{ owner.name }} · {{ owner.organization }}</strong>
+            @if (owner.phone; as phone) { <a [href]="'tel:' + phone.replaceAll(' ', '')">{{ phone }}</a> }
+            @if (owner.teamsUrl; as teamsUrl) { <a [href]="teamsUrl" target="_blank" rel="noreferrer">Über Teams kontaktieren</a> }
+          </div>
+        </aside>
+      }
     </div>
 
     <section class="daca-card product-overview-endpoints" aria-labelledby="product-endpoints-title">
@@ -121,11 +122,10 @@ export class ProductOverviewComponent {
   readonly activePublicationApprovers = computed(() => this.identity.users().filter((user) =>
     user.roles.includes('publication_approver') && user.id !== this.product().ownerUserId,
   ));
-  readonly owner = computed<DataOwnerProfile>(() => dataOwner(this.product()) ?? ({
-    name: `${this.product().owner} Data Owner`,
-    organization: this.product().owner,
-    avatarUrl: '/assets/kassandra-valdata.webp',
-  }));
+  readonly owner = computed<DataOwnerProfile | null>(() => resolvedDataOwner(
+    this.product(),
+    this.identity.users(),
+  ));
   readonly protocols = computed(() => deliveryProtocols(this.product()));
   readonly consumerSummary = computed(() => accessConsumerSummary(this.product().id, this.api.ownedAccessConsumers()));
   readonly simulationAlerts = computed(() => {

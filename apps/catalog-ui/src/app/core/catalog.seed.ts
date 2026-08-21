@@ -79,6 +79,7 @@ export const FALLBACK_PRODUCT: DataProduct = {
   id: ESTV_PRODUCT_ID,
   globalId: 'urn:daca:ch:estv:tax-statistics-by-canton',
   originCatalog: 'estv.catalog.admin.ch',
+  controlPersonUserId: 'thomas.kriegli',
   revision: 7,
   title: 'ESTV-Steuerstatistik nach Kanton',
   description:
@@ -100,7 +101,7 @@ export const FALLBACK_PRODUCT: DataProduct = {
     language: ['de', 'fr', 'it', 'en'],
     connectedAuthorities: ['26 Kantone'],
     deliveryProtocols: ['REST', 'PostgreSQL'],
-    dataOwner: { name: 'Kassandra Valdata', organization: 'Eidgenössische Steuerverwaltung ESTV', avatarUrl: '/assets/kassandra-valdata.webp' },
+    dataOwner: { name: 'Kassandra Valdata', organization: 'ESTV', avatarUrl: '/assets/kassandra-valdata.webp' },
     catalogUsage: {
       consumerUserIds: [],
       consumerMachineIds: [{ id: 'svc-estv-cantonal-tax-dashboard', label: 'Kantonales Steuerdashboard' }],
@@ -151,7 +152,7 @@ export const FALLBACK_PRODUCTS: readonly DataProduct[] = [
     additionalMetadata: {
       connectedAuthorities: ['26 Kantone', 'Schweizer Gemeinden'],
       deliveryProtocols: ['REST'],
-      dataOwner: { name: 'Kassandra Valdata', organization: 'Eidgenössische Steuerverwaltung ESTV', avatarUrl: '/assets/kassandra-valdata.webp' },
+      dataOwner: { name: 'Kassandra Valdata', organization: 'ESTV', avatarUrl: '/assets/kassandra-valdata.webp' },
       catalogUsage: {
         consumerUserIds: [], consumerMachineIds: [], responsibleUserIds: ['kassandra.valdata'],
         sharedByUserIds: [], requestedByUserIds: [], sharedWithUserIds: [],
@@ -175,7 +176,7 @@ export const FALLBACK_PRODUCTS: readonly DataProduct[] = [
     additionalMetadata: {
       connectedAuthorities: ['BFS', 'Kantonale Wirtschaftsämter'],
       deliveryProtocols: ['REST', 'PostgreSQL'],
-      dataOwner: { name: 'Ariane Keller', organization: 'Eidgenössische Steuerverwaltung ESTV', avatarUrl: '/assets/data-owners/ariane-keller.webp' },
+      dataOwner: { name: 'Ariane Keller', organization: 'ESTV', avatarUrl: '/assets/data-owners/ariane-keller.webp' },
       catalogUsage: {
         consumerUserIds: ['kassandra.valdata'], consumerMachineIds: [], responsibleUserIds: [],
         sharedByUserIds: [], requestedByUserIds: [], sharedWithUserIds: ['kassandra.valdata'],
@@ -275,7 +276,7 @@ export const FALLBACK_PRODUCTS: readonly DataProduct[] = [
     additionalMetadata: {
       connectedAuthorities: ['EFV', 'ESTV', '26 Kantone'],
       deliveryProtocols: ['PostgreSQL'],
-      dataOwner: { name: 'Daniel Aebischer', organization: 'Eidgenössische Finanzverwaltung EFV', avatarUrl: '/assets/data-owners/daniel-aebischer.webp' },
+      dataOwner: { name: 'Daniel Aebischer', organization: 'EFV', avatarUrl: '/assets/data-owners/daniel-aebischer.webp' },
       catalogUsage: {
         consumerUserIds: ['kassandra.valdata'],
         consumerMachineIds: [{ id: 'svc-estv-federal-tax-forecast', label: 'Bundessteuer-Prognoseservice' }],
@@ -303,7 +304,7 @@ export const FALLBACK_PRODUCTS: readonly DataProduct[] = [
     additionalMetadata: {
       connectedAuthorities: ['ESTV', 'Kantonale Steuerverwaltungen'],
       deliveryProtocols: ['REST'],
-      dataOwner: { name: 'Kassandra Valdata', organization: 'Eidgenössische Steuerverwaltung ESTV', avatarUrl: '/assets/kassandra-valdata.webp' },
+      dataOwner: { name: 'Kassandra Valdata', organization: 'ESTV', avatarUrl: '/assets/kassandra-valdata.webp' },
       catalogUsage: {
         consumerUserIds: [],
         consumerMachineIds: [{ id: 'svc-estv-refund-monitoring', label: 'Rückerstattungsmonitor' }],

@@ -59,6 +59,7 @@ class DataProductResponse(ApiModel):
     revision: int
     active_policy_revision: int | None
     owner_user_id: str | None = None
+    control_person_user_id: str | None = None
     discoverable: bool = True
     title: str
     description: str
@@ -89,6 +90,7 @@ class DataProductSummary(ApiModel):
     origin_catalog: str
     revision: int
     owner_user_id: str | None = None
+    control_person_user_id: str | None = None
     discoverable: bool = True
     title: str
     description: str

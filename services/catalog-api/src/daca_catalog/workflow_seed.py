@@ -131,7 +131,7 @@ DEMO_USERS = (
     {
         "id": "kassandra.valdata",
         "display_name": "Kassandra Valdata",
-        "organization": "Eidgenössische Steuerverwaltung ESTV",
+        "organization": "ESTV",
         "email": "kassandra.valdata@estv.admin.ch",
         "phone": "+41 58 000 00 11",
         "avatar_url": "/assets/kassandra-valdata.webp",
@@ -154,17 +154,17 @@ DEMO_USERS = (
         "organization": "Kanton St. Gallen",
         "email": "beat.stalder@sg.ch",
         "phone": "+41 58 000 00 71",
-        "avatar_url": None,
+        "avatar_url": "/assets/data-owners/beat-stalder.webp",
         "roles": ["data_owner", "data_consumer"],
         "selectable": True,
     },
     {
         "id": "thomas.kriegli",
         "display_name": "Thomas Kriegli",
-        "organization": "Eidgenössische Steuerverwaltung ESTV",
+        "organization": "ESTV",
         "email": "thomas.kriegli@estv.admin.ch",
         "phone": "+41 58 000 00 83",
-        "avatar_url": None,
+        "avatar_url": "/assets/data-owners/thomas-kriegli.webp",
         "roles": ["publication_approver", "data_consumer"],
         "supervisor_user_id": None,
         "selectable": True,
@@ -172,10 +172,10 @@ DEMO_USERS = (
     {
         "id": "joel.ruod",
         "display_name": "Joel Ruod",
-        "organization": "Eidgenössische Steuerverwaltung ESTV",
+        "organization": "ESTV",
         "email": "joel.ruod@estv.admin.ch",
         "phone": "+41 58 000 00 82",
-        "avatar_url": None,
+        "avatar_url": "/assets/data-owners/joel-ruod.webp",
         "roles": ["data_analyst", "data_owner"],
         "supervisor_user_id": "thomas.kriegli",
         "selectable": True,
@@ -183,10 +183,10 @@ DEMO_USERS = (
     {
         "id": "sandro.wenger",
         "display_name": "Sandro Wenger",
-        "organization": "Bundesamt für Zoll und Grenzsicherheit BAZG",
+        "organization": "BAZG",
         "email": "sandro.wenger@bazg.admin.ch",
         "phone": "+41 58 000 00 91",
-        "avatar_url": None,
+        "avatar_url": "/assets/data-owners/sandro-wenger.webp",
         "roles": ["data_owner", "data_consumer"],
         "selectable": True,
     },
@@ -235,12 +235,12 @@ DEMO_USERS = (
 
 
 DIRECTORY_ENTRIES = (
-    ("kassandra.valdata", "Kassandra Valdata", "EFD - ESTV", "kassandra.valdata@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
-    ("ariane.keller", "Ariane Keller", "EFD - ESTV", "ariane.keller@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
-    ("daniel.aebischer", "Daniel Aebischer", "EFD - EFV", "daniel.aebischer@efv.admin.ch", "federal", "Bundespersonalverzeichnis"),
-    ("joel.ruod", "Joel Ruod", "EFD - ESTV", "joel.ruod@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
-    ("sandro.wenger", "Sandro Wenger", "EFD - BAZG", "sandro.wenger@bazg.admin.ch", "federal", "Bundespersonalverzeichnis"),
-    ("thomas.kriegli", "Thomas Kriegli", "EFD - ESTV", "thomas.kriegli@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
+    ("kassandra.valdata", "Kassandra Valdata", "ESTV", "kassandra.valdata@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
+    ("ariane.keller", "Ariane Keller", "ESTV", "ariane.keller@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
+    ("daniel.aebischer", "Daniel Aebischer", "EFV", "daniel.aebischer@efv.admin.ch", "federal", "Bundespersonalverzeichnis"),
+    ("joel.ruod", "Joel Ruod", "ESTV", "joel.ruod@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
+    ("sandro.wenger", "Sandro Wenger", "BAZG", "sandro.wenger@bazg.admin.ch", "federal", "Bundespersonalverzeichnis"),
+    ("thomas.kriegli", "Thomas Kriegli", "ESTV", "thomas.kriegli@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("noemie.rochat", "Noémie Rochat", "Kanton Neuchâtel", "noemie.rochat@ne.ch", "cantonal", "Kantonales Personalverzeichnis"),
     ("lucien.morel", "Lucien Morel", "Kanton Neuchâtel", "lucien.morel@ne.ch", "cantonal", "Kantonales Personalverzeichnis"),
     ("beat.stalder", "Beat Stalder", "Kanton St. Gallen", "beat.stalder@sg.ch", "cantonal", "Kantonales Personalverzeichnis"),
@@ -252,8 +252,8 @@ DIRECTORY_ENTRIES = (
     ("jonas.perrin", "Jonas Perrin", "Ville de Neuchâtel", "jonas.perrin@neuchatelville.ch", "municipal", "Gemeindepersonalverzeichnis"),
     ("claudia.frei", "Claudia Frei", "SBB AG", "claudia.frei@sbb.ch", "federal_related", "Verzeichnis bundesnaher Betriebe"),
     ("martin.baumann", "Martin Baumann", "Die Schweizerische Post AG", "martin.baumann@post.ch", "federal_related", "Verzeichnis bundesnaher Betriebe"),
-    ("sophie.brunner", "Sophie Brunner", "EDI - BFS", "sophie.brunner@bfs.admin.ch", "federal", "Bundespersonalverzeichnis"),
-    ("marc.gisler", "Marc Gisler", "EFD - BIT", "marc.gisler@bit.admin.ch", "federal", "Bundespersonalverzeichnis"),
+    ("sophie.brunner", "Sophie Brunner", "BFS", "sophie.brunner@bfs.admin.ch", "federal", "Bundespersonalverzeichnis"),
+    ("marc.gisler", "Marc Gisler", "BIT", "marc.gisler@bit.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("nina.fankhauser", "Nina Fankhauser", "BK", "nina.fankhauser@bk.admin.ch", "federal", "Bundespersonalverzeichnis"),
 )
 
@@ -506,9 +506,21 @@ def seed_workflow_reference_data(session: Session) -> bool:
         if existing_user is None:
             session.add(DemoUser(**definition, active=True, created_at=now))
             changed = True
-        elif existing_user.supervisor_user_id != definition.get("supervisor_user_id"):
-            existing_user.supervisor_user_id = definition.get("supervisor_user_id")
-            changed = True
+        else:
+            canonical_values = {
+                "display_name": definition["display_name"],
+                "organization": definition["organization"],
+                "email": definition["email"],
+                "phone": definition["phone"],
+                "avatar_url": definition["avatar_url"],
+                "roles": definition["roles"],
+                "supervisor_user_id": definition.get("supervisor_user_id"),
+                "selectable": definition["selectable"],
+            }
+            for field_name, value in canonical_values.items():
+                if getattr(existing_user, field_name) != value:
+                    setattr(existing_user, field_name, value)
+                    changed = True
     session.flush()
 
     for org_id, department_code, office_code, display_name, org_type, department_order, office_order in FEDERAL_ORGANIZATIONS:

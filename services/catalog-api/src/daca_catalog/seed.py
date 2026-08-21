@@ -35,17 +35,17 @@ KASSANDRA_USER_ID = "kassandra.valdata"
 DATA_OWNER_PROFILES = {
     uuid.UUID("11111111-1111-4111-8111-111111111111"): {
         "name": "Kassandra Valdata",
-        "organization": "Eidgenössische Steuerverwaltung ESTV",
+        "organization": "ESTV",
         "avatarUrl": "/assets/kassandra-valdata.webp",
     },
     uuid.UUID("12222222-2222-4222-8222-222222222222"): {
         "name": "Kassandra Valdata",
-        "organization": "Eidgenössische Steuerverwaltung ESTV",
+        "organization": "ESTV",
         "avatarUrl": "/assets/kassandra-valdata.webp",
     },
     uuid.UUID("13333333-3333-4333-8333-333333333333"): {
         "name": "Ariane Keller",
-        "organization": "Eidgenössische Steuerverwaltung ESTV",
+        "organization": "ESTV",
         "avatarUrl": "/assets/data-owners/ariane-keller.webp",
     },
     uuid.UUID("14444444-4444-4444-8444-444444444444"): {
@@ -57,12 +57,12 @@ DATA_OWNER_PROFILES = {
     },
     uuid.UUID("15555555-5555-4555-8555-555555555555"): {
         "name": "Daniel Aebischer",
-        "organization": "Eidgenössische Finanzverwaltung EFV",
+        "organization": "EFV",
         "avatarUrl": "/assets/data-owners/daniel-aebischer.webp",
     },
     uuid.UUID("16666666-6666-4666-8666-666666666666"): {
         "name": "Kassandra Valdata",
-        "organization": "Eidgenössische Steuerverwaltung ESTV",
+        "organization": "ESTV",
         "avatarUrl": "/assets/kassandra-valdata.webp",
     },
     NEUCHATEL_CORPORATE_PRODUCT_ID: {
@@ -231,7 +231,7 @@ def seed_catalog(session: Session) -> bool:
             "deliveryProtocols": ["REST", "PostgreSQL"],
             "dataOwner": {
                 "name": "Kassandra Valdata",
-                "organization": "Eidgenössische Steuerverwaltung ESTV",
+                "organization": "ESTV",
                 "avatarUrl": "/assets/kassandra-valdata.webp",
             },
             "catalogUsage": {
@@ -277,7 +277,7 @@ def seed_catalog(session: Session) -> bool:
                     "deliveryProtocols": ["REST"],
                     "dataOwner": {
                         "name": "Kassandra Valdata",
-                        "organization": "Eidgenössische Steuerverwaltung ESTV",
+                        "organization": "ESTV",
                         "avatarUrl": "/assets/kassandra-valdata.webp",
                     },
                     "catalogUsage": {
@@ -318,7 +318,7 @@ def seed_catalog(session: Session) -> bool:
                     "deliveryProtocols": ["REST", "PostgreSQL"],
                     "dataOwner": {
                         "name": "Ariane Keller",
-                        "organization": "Eidgenössische Steuerverwaltung ESTV",
+                        "organization": "ESTV",
                         "avatarUrl": "/assets/data-owners/ariane-keller.webp",
                     },
                     "catalogUsage": {
@@ -418,7 +418,7 @@ def seed_catalog(session: Session) -> bool:
                     "deliveryProtocols": ["PostgreSQL"],
                     "dataOwner": {
                         "name": "Daniel Aebischer",
-                        "organization": "Eidgenössische Finanzverwaltung EFV",
+                        "organization": "EFV",
                         "avatarUrl": "/assets/data-owners/daniel-aebischer.webp",
                     },
                     "catalogUsage": {
@@ -461,7 +461,7 @@ def seed_catalog(session: Session) -> bool:
                     "deliveryProtocols": ["REST"],
                     "dataOwner": {
                         "name": "Kassandra Valdata",
-                        "organization": "Eidgenössische Steuerverwaltung ESTV",
+                        "organization": "ESTV",
                         "avatarUrl": "/assets/kassandra-valdata.webp",
                     },
                     "catalogUsage": {

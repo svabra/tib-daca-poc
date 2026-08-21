@@ -494,6 +494,7 @@ export class CatalogApiService {
 
   identityUserId(): string { return this.identity.userId(); }
   identityUser() { return this.identity.user(); }
+  identityUsers() { return this.identity.users(); }
   identityHeaders(): HttpHeaders { return this.identity.headers(); }
 
   loadLineage(): Observable<{ nodes: readonly LineageNode[]; edges: readonly LineageEdge[]; provenance: readonly ProvenanceEvent[] }> {
