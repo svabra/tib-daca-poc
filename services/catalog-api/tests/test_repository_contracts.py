@@ -121,7 +121,7 @@ def test_openshift_apis_reference_shared_daaif_postgres_keys() -> None:
     assert 'DACA_SHARED_POSTGRES: "true"' in config
 
 
-def test_docker_publish_uses_separate_version_tagged_docker_hub_repositories() -> None:
+def test_docker_publish_uses_artifact_free_version_tagged_repositories() -> None:
     workflow = (ROOT / ".github/workflows/docker-publish.yml").read_text(encoding="utf-8")
     repositories = (
         "tib-daca-catalog-ui",
@@ -132,11 +132,15 @@ def test_docker_publish_uses_separate_version_tagged_docker_hub_repositories() -
     )
 
     for repository in repositories:
-        assert workflow.count(f"repository: docker.io/svabra/{repository}") == 1
+        assert workflow.count(f"repository: docker.io/svabra/{repository}") == 2
     assert "password: ${{ secrets.DOCKERHUB_TOKEN }}" in workflow
     assert "username: ${{ vars.DOCKERHUB_USERNAME || 'svabra' }}" in workflow
     assert "needs:\n      - test\n      - postgres-compatibility" in workflow
     assert "docker.io/svabra/tib-daca-poc" not in workflow
+    assert "actions/upload-artifact@" not in workflow
+    assert "actions/download-artifact@" not in workflow
+    assert "outputs: type=cacheonly" in workflow
+    assert "push: true" in workflow
     assert "type=sha,prefix=sha-" in workflow
     assert (
         "type=raw,value=${{ steps.version.outputs.value }},"
