@@ -14,6 +14,9 @@ on:
 permissions:
   contents: read
 
+env:
+  DOCKER_BUILD_RECORD_UPLOAD: "false"
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -207,27 +210,22 @@ jobs:
             repository: docker.io/svabra/tib-daca-catalog-ui
             context: .
             dockerfile: apps/catalog-ui/Dockerfile
-            archive: /tmp/tib-daca-catalog-ui.tar
           - name: tib-daca-catalog-api
             repository: docker.io/svabra/tib-daca-catalog-api
             context: services/catalog-api
             dockerfile: services/catalog-api/Dockerfile
-            archive: /tmp/tib-daca-catalog-api.tar
           - name: tib-daca-control-plane-ui
             repository: docker.io/svabra/tib-daca-control-plane-ui
             context: .
             dockerfile: apps/control-plane-ui/Dockerfile
-            archive: /tmp/tib-daca-control-plane-ui.tar
           - name: tib-daca-control-plane-api
             repository: docker.io/svabra/tib-daca-control-plane-api
             context: services/control-plane-api
             dockerfile: services/control-plane-api/Dockerfile
-            archive: /tmp/tib-daca-control-plane-api.tar
           - name: tib-daca-sample-data-product
             repository: docker.io/svabra/tib-daca-sample-data-product
             context: services/sample-data-product
             dockerfile: services/sample-data-product/Dockerfile
-            archive: /tmp/tib-daca-sample-data-product.tar
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -267,7 +265,7 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
-      - name: Build image archive
+      - name: Build image
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.image.context }}
@@ -279,21 +277,9 @@ jobs:
             org.opencontainers.image.version=${{ steps.version.outputs.value }}
           build-args: |
             IMAGE_VERSION=${{ steps.version.outputs.value }}
-          outputs: type=docker,dest=${{ matrix.image.archive }}
+          outputs: type=cacheonly
           cache-from: type=gha,scope=${{ matrix.image.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
-      - name: Store image tags
-        shell: bash
-        run: printf '%s\n' '${{ steps.metadata.outputs.tags }}' > /tmp/docker-tags.txt
-      - name: Upload image artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.image.name }}-image
-          path: |
-            ${{ matrix.image.archive }}
-            /tmp/docker-tags.txt
-          if-no-files-found: error
-          retention-days: 1
 
   push:
     if: github.event_name != 'pull_request'
@@ -305,33 +291,80 @@ jobs:
       matrix:
         image:
           - name: tib-daca-catalog-ui
-            archive: tib-daca-catalog-ui.tar
+            repository: docker.io/svabra/tib-daca-catalog-ui
+            context: .
+            dockerfile: apps/catalog-ui/Dockerfile
           - name: tib-daca-catalog-api
-            archive: tib-daca-catalog-api.tar
+            repository: docker.io/svabra/tib-daca-catalog-api
+            context: services/catalog-api
+            dockerfile: services/catalog-api/Dockerfile
           - name: tib-daca-control-plane-ui
-            archive: tib-daca-control-plane-ui.tar
+            repository: docker.io/svabra/tib-daca-control-plane-ui
+            context: .
+            dockerfile: apps/control-plane-ui/Dockerfile
           - name: tib-daca-control-plane-api
-            archive: tib-daca-control-plane-api.tar
+            repository: docker.io/svabra/tib-daca-control-plane-api
+            context: services/control-plane-api
+            dockerfile: services/control-plane-api/Dockerfile
           - name: tib-daca-sample-data-product
-            archive: tib-daca-sample-data-product.tar
+            repository: docker.io/svabra/tib-daca-sample-data-product
+            context: services/sample-data-product
+            dockerfile: services/sample-data-product/Dockerfile
     steps:
-      - name: Download image artifact
-        uses: actions/download-artifact@v8
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
-          name: ${{ matrix.image.name }}-image
-          path: /tmp/docker-image
-      - name: Load image
-        run: docker load --input /tmp/docker-image/${{ matrix.image.archive }}
+          fetch-depth: 0
+      - name: Read release version
+        id: version
+        shell: bash
+        run: echo "value=$(tr -d '\r\n' < VERSION)" >> "$GITHUB_OUTPUT"
+      - name: Determine release tag publishing
+        id: release
+        shell: bash
+        run: |
+          publish=false
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            if [[ "${GITHUB_REF_NAME}" != "v${{ steps.version.outputs.value }}" ]]; then
+              echo "Git tag ${GITHUB_REF_NAME} does not match VERSION; expected v${{ steps.version.outputs.value }}." >&2
+              exit 1
+            fi
+            publish=true
+          elif [[ "${{ github.event_name }}" == "push" && "${GITHUB_REF_TYPE}" == "branch" && -n "${{ github.event.before }}" && "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+            if ! git diff --quiet "${{ github.event.before }}" "${{ github.sha }}" -- VERSION; then
+              publish=true
+            fi
+          fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+      - name: Extract image metadata
+        id: metadata
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ matrix.image.repository }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=${{ steps.version.outputs.value }},enable=${{ steps.release.outputs.publish }}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.image.name }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
         with:
           username: ${{ vars.DOCKERHUB_USERNAME || 'svabra' }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Push every generated tag
-        shell: bash
-        run: |
-          while IFS= read -r tag; do
-            if [[ -n "$tag" ]]; then
-              docker push "$tag"
-            fi
-          done < /tmp/docker-image/docker-tags.txt
+      - name: Build and push image
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.dockerfile }}
+          platforms: linux/amd64
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: |
+            ${{ steps.metadata.outputs.labels }}
+            org.opencontainers.image.version=${{ steps.version.outputs.value }}
+          build-args: |
+            IMAGE_VERSION=${{ steps.version.outputs.value }}
+          push: true
+          cache-from: type=gha,scope=${{ matrix.image.name }}
