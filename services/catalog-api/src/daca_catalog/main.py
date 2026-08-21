@@ -279,7 +279,7 @@ def actor_profile(session: Session, actor: str) -> DemoUser:
 
 
 DEMO_ACTOR_PROFILES: dict[str, tuple[str, str]] = {
-    "kassandra.valdata": ("Kassandra Valdata", "Eidgenössische Steuerverwaltung ESTV"),
+    "kassandra.valdata": ("Kassandra Valdata", "ESTV"),
 }
 
 
@@ -1115,6 +1115,7 @@ def data_product_summary(
         origin_catalog=product.origin_catalog,
         revision=product.revision,
         owner_user_id=product.owner_user_id,
+        control_person_user_id=product.control_person_user_id,
         discoverable=product.discoverable,
         title=product.title,
         description=product.description,

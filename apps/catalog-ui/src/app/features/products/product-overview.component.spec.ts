@@ -61,7 +61,7 @@ function serviceLevelSummary(canEdit = true): ServiceLevelSummaryResponse {
 }
 
 const USERS: DemoUser[] = [
-  { id: 'joel.ruod', displayName: 'Joel Ruod', organization: 'ESTV', email: '', phone: null, avatarUrl: null, roles: ['data_owner', 'publication_approver'] },
+  { id: 'joel.ruod', displayName: 'Joel Ruod', organization: 'ESTV', email: '', phone: null, avatarUrl: '/assets/data-owners/joel-ruod.webp', roles: ['data_owner', 'publication_approver'] },
   { id: 'thomas.bag', displayName: 'Thomas Kriegli', organization: 'BAG', email: '', phone: null, avatarUrl: null, roles: ['publication_approver'] },
   { id: 'thomas.estv', displayName: 'Thomas Kriegli', organization: 'ESTV', email: '', phone: null, avatarUrl: null, roles: ['publication_approver'] },
   { id: 'inactive.user', displayName: 'Inaktiv', organization: 'ESTV', email: '', phone: null, avatarUrl: null, roles: ['data_consumer'] },
@@ -112,6 +112,8 @@ describe('ProductOverviewComponent SLA control person', () => {
 
     expect(root.textContent).toContain('Thomas Kriegli');
     expect(root.textContent).toContain('ESTV · Kontrollperson / Publication Approver');
+    expect(root.textContent).toContain('Joel Ruod · ESTV');
+    expect(root.querySelector<HTMLImageElement>('.product-overview-owner img')?.src).toContain('/assets/data-owners/joel-ruod.webp');
     expect(component.selectedControlPersonId()).toBe('thomas.estv');
     expect(component.activePublicationApprovers().map((user) => user.id)).toEqual(['thomas.bag', 'thomas.estv']);
     expect(root.textContent).not.toContain('Inaktiv');

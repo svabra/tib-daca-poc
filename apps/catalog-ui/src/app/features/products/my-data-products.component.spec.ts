@@ -6,6 +6,36 @@ import { FALLBACK_PRODUCTS } from '../../core/catalog.seed';
 import { OwnedAccessConsumer } from '../../core/catalog.models';
 import { MyDataProductsComponent } from './my-data-products.component';
 
+const IDENTITY_USERS = [
+  {
+    id: 'kassandra.valdata',
+    displayName: 'Kassandra Valdata',
+    organization: 'ESTV',
+    email: 'kassandra.valdata@estv.admin.ch',
+    phone: null,
+    avatarUrl: '/assets/kassandra-valdata.webp',
+    roles: ['data_owner'],
+  },
+  {
+    id: 'noemie.rochat',
+    displayName: 'Noémie Rochat',
+    organization: 'Kanton Neuchâtel',
+    email: 'noemie.rochat@ne.ch',
+    phone: null,
+    avatarUrl: '/assets/data-owners/noemie-rochat.webp',
+    roles: ['data_owner'],
+  },
+  {
+    id: 'thomas.kriegli',
+    displayName: 'Thomas Kriegli',
+    organization: 'ESTV',
+    email: 'thomas.kriegli@estv.admin.ch',
+    phone: null,
+    avatarUrl: '/assets/data-owners/thomas-kriegli.webp',
+    roles: ['publication_approver'],
+  },
+];
+
 describe('MyDataProductsComponent quality medals', () => {
   it('shows exactly one quality medal for every product in table and records views', async () => {
     const products = FALLBACK_PRODUCTS.slice(0, 2).map((product, index) => ({
@@ -16,10 +46,11 @@ describe('MyDataProductsComponent quality medals', () => {
     const api = {
       identityUser: signal({
         displayName: 'Kassandra Valdata',
-        organization: 'Eidgenössische Steuerverwaltung ESTV',
+        organization: 'ESTV',
         avatarUrl: null,
       }),
       identityUserId: () => 'kassandra.valdata',
+      identityUsers: () => IDENTITY_USERS,
       loading: signal(false),
       usingFallback: signal(false),
       products: signal(products),
@@ -70,10 +101,11 @@ describe('MyDataProductsComponent quality medals', () => {
     const api = {
       identityUser: signal({
         displayName: 'Kassandra Valdata',
-        organization: 'Eidgenössische Steuerverwaltung ESTV',
+        organization: 'ESTV',
         avatarUrl: null,
       }),
       identityUserId: () => 'kassandra.valdata',
+      identityUsers: () => IDENTITY_USERS,
       loading: signal(false),
       usingFallback: signal(false),
       products: signal(products),
@@ -149,6 +181,7 @@ describe('MyDataProductsComponent quality medals', () => {
     const api = {
       identityUser: signal({ displayName: 'Kassandra Valdata', organization: 'ESTV', avatarUrl: null }),
       identityUserId: () => 'kassandra.valdata',
+      identityUsers: () => IDENTITY_USERS,
       loading: signal(false),
       usingFallback: signal(false),
       products: signal([product]),
@@ -169,5 +202,42 @@ describe('MyDataProductsComponent quality medals', () => {
     const drawer = fixture.nativeElement.querySelector('.access-consumer-drawer') as HTMLElement;
     expect(drawer.textContent).toContain('Direkte Policy-Freigabe · Revision 9');
     expect(drawer.textContent).not.toContain('null');
+  });
+
+  it('shows foreign owner portraits and the product reviewer in table and records views', async () => {
+    const product = FALLBACK_PRODUCTS[0];
+    const api = {
+      identityUser: signal(IDENTITY_USERS[1]),
+      identityUserId: () => 'noemie.rochat',
+      identityUsers: () => IDENTITY_USERS,
+      loading: signal(false),
+      usingFallback: signal(false),
+      products: signal([product]),
+      ownedAccessConsumers: signal([]),
+    };
+    await TestBed.configureTestingModule({
+      imports: [MyDataProductsComponent],
+      providers: [
+        provideRouter([]),
+        { provide: CatalogApiService, useValue: api },
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) } } },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(MyDataProductsComponent);
+    fixture.componentInstance.filter.set('all');
+    fixture.detectChanges();
+
+    const tableOwner = fixture.nativeElement.querySelector('.product-table-owner') as HTMLElement;
+    expect(tableOwner.textContent).toContain('Kassandra Valdata · ESTV');
+    expect(tableOwner.querySelector('img')?.getAttribute('src')).toBe('/assets/kassandra-valdata.webp');
+    expect(tableOwner.getAttribute('tabindex')).toBe('0');
+    expect(tableOwner.querySelector('[role="tooltip"]')?.textContent).toContain('Reviewer/Stv.');
+    expect(tableOwner.querySelector('[role="tooltip"]')?.textContent).toContain('Thomas Kriegli · ESTV');
+
+    fixture.componentInstance.viewMode.set('records');
+    fixture.detectChanges();
+    const recordOwner = fixture.nativeElement.querySelector('.product-data-owner') as HTMLElement;
+    expect(recordOwner.textContent).toContain('Kassandra Valdata · ESTV');
+    expect(recordOwner.querySelector('[role="tooltip"]')?.textContent).toContain('Thomas Kriegli · ESTV');
   });
 });

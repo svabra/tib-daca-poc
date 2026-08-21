@@ -8,7 +8,7 @@ export const FALLBACK_CATALOGS: readonly CatalogInstance[] = [
   {
     id: ESTV_CATALOG_ID,
     name: 'ESTV Data Catalog',
-    organization: 'Eidgenössische Steuerverwaltung ESTV',
+    organization: 'ESTV',
     environment: 'production',
     endpoint: 'https://catalog.estv.admin.ch',
     version: '0.1.0-poc',

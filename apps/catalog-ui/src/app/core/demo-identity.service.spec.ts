@@ -6,10 +6,10 @@ import { DemoIdentityService, DemoUser } from './demo-identity.service';
 const BEAT: DemoUser = {
   id: 'beat.stalder',
   displayName: 'Beat Stalder',
-  organization: 'Bundesamt für Statistik BFS',
-  email: 'beat.stalder@bfs.admin.ch',
+  organization: 'Kanton St. Gallen',
+  email: 'beat.stalder@sg.ch',
   phone: null,
-  avatarUrl: null,
+  avatarUrl: '/assets/data-owners/beat-stalder.webp',
   roles: ['data_consumer'],
 };
 
@@ -72,5 +72,25 @@ describe('DemoIdentityService', () => {
     expect(window.location.pathname).toBe('/products/product-1/usage');
     expect(window.location.search).toBe('?demoUser=beat.stalder');
     expect(window.location.hash).toBe('#data-dictionary');
+  });
+
+  it('accepts Sandro Wenger from a deep link before the user directory resolves', () => {
+    window.history.replaceState({}, '', '/products?demoUser=sandro.wenger');
+    const service = TestBed.inject(DemoIdentityService);
+    const sandro: DemoUser = {
+      id: 'sandro.wenger',
+      displayName: 'Sandro Wenger',
+      organization: 'BAZG',
+      email: 'sandro.wenger@bazg.admin.ch',
+      phone: null,
+      avatarUrl: '/assets/data-owners/sandro-wenger.webp',
+      roles: ['data_owner'],
+    };
+
+    expect(service.userId()).toBe('sandro.wenger');
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/demo-users').flush([service.users()[0], sandro]);
+
+    expect(service.user()).toEqual(sandro);
+    expect(window.location.search).toBe('');
   });
 });

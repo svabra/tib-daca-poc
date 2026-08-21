@@ -10,15 +10,15 @@ import {
   accessRequest,
   AccessRequest,
   canTransferOwnership,
-  dataOwner,
   DataOwnerProfile,
   dataConsumerCountLabel,
   DEFAULT_PRODUCT_RELATIONSHIP_FILTER,
   deliveryProtocols,
   initialProductRelationshipFilter,
-  isConsumedProduct,
   matchesProduct,
+  productReviewer,
   ProductRelationshipFilter,
+  resolvedDataOwner,
   consumersForProduct,
   relationshipBadges,
 } from './my-data-products';
@@ -190,10 +190,14 @@ import {
                 }
 
                 @if (visibleOwner(product); as owner) {
-                  <div class="product-data-owner">
+                  <div
+                    class="product-data-owner product-owner-with-reviewer"
+                    [attr.tabindex]="reviewer(product) ? 0 : null"
+                    [attr.aria-describedby]="reviewer(product) ? reviewerTooltipId(product) : null"
+                  >
                     <img [src]="owner.avatarUrl" alt="">
                     <span>
-                      <small>Data Owner</small><strong>{{ owner.name }}</strong><small>{{ owner.organization }}</small>
+                      <small>Data Owner</small><strong>{{ owner.name }} · {{ owner.organization }}</strong>
                       @if (owner.phone || owner.teamsUrl) {
                         <span class="product-owner-contact">
                           @if (owner.phone) { <a [href]="'tel:' + owner.phone.replaceAll(' ', '')">{{ owner.phone }}</a> }
@@ -206,6 +210,12 @@ import {
                         </span>
                       }
                     </span>
+                    @if (reviewer(product); as reviewer) {
+                      <span class="product-owner-reviewer-tooltip" [id]="reviewerTooltipId(product)" role="tooltip">
+                        @if (reviewer.avatarUrl) { <img [src]="reviewer.avatarUrl" alt=""> }
+                        <span><small>Reviewer/Stv.</small><strong>{{ reviewer.displayName }} · {{ reviewer.organization }}</strong></span>
+                      </span>
+                    }
                   </div>
                 }
 
@@ -306,9 +316,19 @@ import {
                   </td>
                   <td>
                     @if (visibleOwner(product); as owner) {
-                      <span class="product-table-owner">
+                      <span
+                        class="product-table-owner product-owner-with-reviewer"
+                        [attr.tabindex]="reviewer(product) ? 0 : null"
+                        [attr.aria-describedby]="reviewer(product) ? reviewerTooltipId(product) : null"
+                      >
                         <img [src]="owner.avatarUrl" alt="">
-                        <span><strong>{{ owner.name }}</strong><small>{{ owner.organization }}</small></span>
+                        <span><strong>{{ owner.name }} · {{ owner.organization }}</strong></span>
+                        @if (reviewer(product); as reviewer) {
+                          <span class="product-owner-reviewer-tooltip" [id]="reviewerTooltipId(product)" role="tooltip">
+                            @if (reviewer.avatarUrl) { <img [src]="reviewer.avatarUrl" alt=""> }
+                            <span><small>Reviewer/Stv.</small><strong>{{ reviewer.displayName }} · {{ reviewer.organization }}</strong></span>
+                          </span>
+                        }
                       </span>
                     } @else {
                       <span class="product-table-owner-text">{{ product.owner }}</span>
@@ -648,9 +668,15 @@ export class MyDataProductsComponent implements OnDestroy {
   }
 
   visibleOwner(product: DataProduct): DataOwnerProfile | null {
-    const isRelevantOwner = isConsumedProduct(product, this.api.identityUserId())
-      || canTransferOwnership(product, this.api.identityUserId());
-    return isRelevantOwner ? dataOwner(product) : null;
+    return resolvedDataOwner(product, this.api.identityUsers());
+  }
+
+  reviewer(product: DataProduct) {
+    return productReviewer(product, this.api.identityUsers());
+  }
+
+  reviewerTooltipId(product: DataProduct): string {
+    return `product-reviewer-${product.id}`;
   }
 
   request(product: DataProduct): AccessRequest | null {

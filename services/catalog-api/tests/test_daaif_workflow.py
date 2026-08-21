@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from daca_catalog.main import daaif_ontology_suggestion
-from daca_catalog.workflow_seed import term_uri
+from daca_catalog.models import DemoUser
+from daca_catalog.workflow_seed import seed_workflow_reference_data, term_uri
 
 
 def fixture(client, fixture_id: str) -> dict:
@@ -35,9 +36,39 @@ def test_demo_users_and_fixture_seed_are_idempotent_and_persisted(client):
         next(user for user in users if user["id"] == "joel.ruod")["supervisorUserId"]
         == "thomas.kriegli"
     )
+    assert {
+        user["id"]: (user["organization"], user["avatarUrl"])
+        for user in users
+    } == {
+        "beat.stalder": ("Kanton St. Gallen", "/assets/data-owners/beat-stalder.webp"),
+        "joel.ruod": ("ESTV", "/assets/data-owners/joel-ruod.webp"),
+        "kassandra.valdata": ("ESTV", "/assets/kassandra-valdata.webp"),
+        "noemie.rochat": ("Kanton Neuchâtel", "/assets/data-owners/noemie-rochat.webp"),
+        "sandro.wenger": ("BAZG", "/assets/data-owners/sandro-wenger.webp"),
+        "thomas.kriegli": ("ESTV", "/assets/data-owners/thomas-kriegli.webp"),
+    }
+    products = client.get("/api/v1/data-products").json()["items"]
+    assert products
+    assert all(product["controlPersonUserId"] == "thomas.kriegli" for product in products)
     fixtures = client.get("/api/v1/poc/product-fixtures").json()
     assert len(fixtures) == 9
     assert {item["maturityLevel"] for item in fixtures} == {"bronze", "silver", "gold"}
+
+
+def test_workflow_seed_reconciles_existing_demo_user_labels_and_portraits(session_factory):
+    with session_factory() as session:
+        joel = session.get(DemoUser, "joel.ruod")
+        assert joel is not None
+        joel.organization = "Eidgenössische Steuerverwaltung ESTV"
+        joel.avatar_url = None
+        session.commit()
+
+    with session_factory() as session:
+        assert seed_workflow_reference_data(session) is True
+        joel = session.get(DemoUser, "joel.ruod")
+        assert joel is not None
+        assert joel.organization == "ESTV"
+        assert joel.avatar_url == "/assets/data-owners/joel-ruod.webp"
 
 
 def test_open_publication_is_idempotent_defaults_to_discoverable_and_creates_tasks(client):

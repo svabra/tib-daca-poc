@@ -1,4 +1,5 @@
 import { DataProduct, OwnedAccessConsumer } from '../../core/catalog.models';
+import type { DemoUser } from '../../core/demo-identity.service';
 
 export const KASSANDRA_USER_ID = 'kassandra.valdata';
 
@@ -52,6 +53,24 @@ export interface DataOwnerProfile {
   avatarUrl: string;
   phone?: string;
   teamsUrl?: string;
+}
+
+const PERSON_ORGANIZATION_ABBREVIATIONS: Readonly<Record<string, string>> = {
+  'Eidgenössische Steuerverwaltung ESTV': 'ESTV',
+  'Eidg. Steuerverwaltung': 'ESTV',
+  'Eidgenössische Finanzverwaltung EFV': 'EFV',
+  'Eidg. Finanzverwaltung': 'EFV',
+  'Bundesamt für Zoll und Grenzsicherheit BAZG': 'BAZG',
+  'Bundesamt für Zoll BAZG': 'BAZG',
+  'EFD - ESTV': 'ESTV',
+  'EFD - EFV': 'EFV',
+  'EFD - BAZG': 'BAZG',
+  'EDI - BFS': 'BFS',
+  'EFD - BIT': 'BIT',
+};
+
+export function personOrganizationLabel(organization: string): string {
+  return PERSON_ORGANIZATION_ABBREVIATIONS[organization] ?? organization;
 }
 
 export type AccessRequestStatus =
@@ -175,11 +194,37 @@ export function dataOwner(product: DataProduct): DataOwnerProfile | null {
     && typeof owner['avatarUrl'] === 'string')) return null;
   return {
     name: owner['name'],
-    organization: owner['organization'],
+    organization: personOrganizationLabel(owner['organization']),
     avatarUrl: owner['avatarUrl'],
     ...(typeof owner['phone'] === 'string' ? { phone: owner['phone'] } : {}),
     ...(typeof owner['teamsUrl'] === 'string' ? { teamsUrl: owner['teamsUrl'] } : {}),
   };
+}
+
+export function resolvedDataOwner(
+  product: DataProduct,
+  users: readonly DemoUser[],
+): DataOwnerProfile | null {
+  const metadataOwner = dataOwner(product);
+  const canonicalUser = users.find((user) => user.id === product.ownerUserId)
+    ?? (metadataOwner
+      ? users.find((user) => user.displayName === metadataOwner.name)
+      : undefined);
+  if (!canonicalUser?.avatarUrl) return metadataOwner;
+  return {
+    ...(metadataOwner ?? {}),
+    name: canonicalUser.displayName,
+    organization: canonicalUser.organization,
+    avatarUrl: canonicalUser.avatarUrl,
+  };
+}
+
+export function productReviewer(
+  product: DataProduct,
+  users: readonly DemoUser[],
+): DemoUser | null {
+  if (!product.controlPersonUserId) return null;
+  return users.find((user) => user.id === product.controlPersonUserId) ?? null;
 }
 
 export function accessRequest(product: DataProduct): AccessRequest | null {

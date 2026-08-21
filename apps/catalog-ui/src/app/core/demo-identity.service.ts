@@ -16,7 +16,7 @@ export interface DemoUser {
 const KASSANDRA: DemoUser = {
   id: 'kassandra.valdata',
   displayName: 'Kassandra Valdata',
-  organization: 'Eidgenössische Steuerverwaltung ESTV',
+  organization: 'ESTV',
   email: 'kassandra.valdata@estv.admin.ch',
   phone: '+41 58 000 00 11',
   avatarUrl: '/assets/kassandra-valdata.webp',
@@ -28,6 +28,7 @@ const POC_USER_IDS = new Set([
   'beat.stalder',
   'joel.ruod',
   'thomas.kriegli',
+  'sandro.wenger',
 ]);
 
 @Injectable({ providedIn: 'root' })

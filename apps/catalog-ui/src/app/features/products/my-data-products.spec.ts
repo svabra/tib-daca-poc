@@ -10,7 +10,10 @@ import {
   initialProductRelationshipFilter,
   isConsumedProduct,
   matchesProduct,
+  personOrganizationLabel,
+  productReviewer,
   relationshipBadges,
+  resolvedDataOwner,
 } from './my-data-products';
 
 describe('My data products filtering', () => {
@@ -91,6 +94,53 @@ describe('My data products filtering', () => {
     const consumed = FALLBACK_PRODUCTS.filter((product) => isConsumedProduct(product));
     expect(consumed).toHaveLength(6);
     expect(consumed.every((product) => dataOwner(product)?.avatarUrl.endsWith('.webp'))).toBe(true);
+  });
+
+  it('uses the canonical short organization and portrait for a persisted owner profile', () => {
+    const staleProduct = {
+      ...FALLBACK_PRODUCTS[0],
+      ownerUserId: 'joel.ruod',
+      additionalMetadata: {
+        ...FALLBACK_PRODUCTS[0].additionalMetadata,
+        dataOwner: { name: 'Joel Ruod', organization: 'Eidgenössische Steuerverwaltung ESTV', avatarUrl: null },
+      },
+    };
+    const users = [{
+      id: 'joel.ruod',
+      displayName: 'Joel Ruod',
+      organization: 'ESTV',
+      email: 'joel.ruod@estv.admin.ch',
+      phone: null,
+      avatarUrl: '/assets/data-owners/joel-ruod.webp',
+      roles: ['data_owner'],
+    }];
+
+    expect(resolvedDataOwner(staleProduct, users)).toEqual({
+      name: 'Joel Ruod',
+      organization: 'ESTV',
+      avatarUrl: '/assets/data-owners/joel-ruod.webp',
+    });
+  });
+
+  it('shortens legacy federal organization labels without changing cantons', () => {
+    expect(personOrganizationLabel('Eidgenössische Steuerverwaltung ESTV')).toBe('ESTV');
+    expect(personOrganizationLabel('Eidgenössische Finanzverwaltung EFV')).toBe('EFV');
+    expect(personOrganizationLabel('Bundesamt für Zoll und Grenzsicherheit BAZG')).toBe('BAZG');
+    expect(personOrganizationLabel('Kanton Neuchâtel')).toBe('Kanton Neuchâtel');
+  });
+
+  it('resolves the reviewer from the product-specific control person assignment', () => {
+    const users = [{
+      id: 'thomas.kriegli',
+      displayName: 'Thomas Kriegli',
+      organization: 'ESTV',
+      email: 'thomas.kriegli@estv.admin.ch',
+      phone: null,
+      avatarUrl: '/assets/data-owners/thomas-kriegli.webp',
+      roles: ['publication_approver'],
+    }];
+
+    expect(productReviewer(FALLBACK_PRODUCTS[0], users)?.displayName).toBe('Thomas Kriegli');
   });
 
   it('offers ownership transfer only for products Kassandra owns', () => {

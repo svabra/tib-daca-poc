@@ -33,7 +33,7 @@ def test_federal_organizations_are_ordered_and_bfs_is_searchable(client):
     )
     assert bfs.status_code == 200
     assert [item["id"] for item in bfs.json()] == ["sophie.brunner"]
-    assert bfs.json()[0]["organization"] == "EDI - BFS"
+    assert bfs.json()[0]["organization"] == "BFS"
 
 
 def test_directory_search_covers_all_sources_and_excludes_inactive(client, session_factory):

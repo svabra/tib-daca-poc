@@ -113,6 +113,7 @@ export interface DataProduct {
   globalId: string;
   originCatalog: string;
   ownerUserId?: string | null;
+  controlPersonUserId?: string | null;
   discoverable?: boolean;
   revision: number;
   title: string;
