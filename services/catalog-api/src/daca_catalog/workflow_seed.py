@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .control_people import assign_default_control_person, is_active_publication_approver
+from .deputy_owners import assign_default_deputy_owner, is_active_deputy
 from .models import (
     AccessRequest,
     AdministrativeOrganization,
@@ -139,6 +140,16 @@ DEMO_USERS = (
         "selectable": True,
     },
     {
+        "id": "ariane.keller",
+        "display_name": "Ariane Keller",
+        "organization": "ESTV",
+        "email": "ariane.keller@estv.admin.ch",
+        "phone": "+41 58 000 00 12",
+        "avatar_url": "/assets/data-owners/ariane-keller.webp",
+        "roles": ["data_owner", "data_consumer"],
+        "selectable": True,
+    },
+    {
         "id": "noemie.rochat",
         "display_name": "Noémie Rochat",
         "organization": "Kanton Neuchâtel",
@@ -155,6 +166,16 @@ DEMO_USERS = (
         "email": "beat.stalder@sg.ch",
         "phone": "+41 58 000 00 71",
         "avatar_url": "/assets/data-owners/beat-stalder.webp",
+        "roles": ["data_owner", "data_consumer"],
+        "selectable": True,
+    },
+    {
+        "id": "sarah.brunner",
+        "display_name": "Sarah Brunner",
+        "organization": "Kanton St. Gallen",
+        "email": "sarah.brunner@sg.ch",
+        "phone": "+41 58 000 00 72",
+        "avatar_url": "/assets/data-owners/sarah-brunner.webp",
         "roles": ["data_owner", "data_consumer"],
         "selectable": True,
     },
@@ -187,6 +208,46 @@ DEMO_USERS = (
         "email": "sandro.wenger@bazg.admin.ch",
         "phone": "+41 58 000 00 91",
         "avatar_url": "/assets/data-owners/sandro-wenger.webp",
+        "roles": ["data_owner", "data_consumer"],
+        "selectable": True,
+    },
+    {
+        "id": "lucien.morel",
+        "display_name": "Lucien Morel",
+        "organization": "Kanton Neuchâtel",
+        "email": "lucien.morel@ne.ch",
+        "phone": "+41 58 000 00 43",
+        "avatar_url": "/assets/data-owners/lucien-morel.webp",
+        "roles": ["data_owner", "data_consumer"],
+        "selectable": True,
+    },
+    {
+        "id": "daniel.aebischer",
+        "display_name": "Daniel Aebischer",
+        "organization": "EFV",
+        "email": "daniel.aebischer@efv.admin.ch",
+        "phone": "+41 58 000 00 51",
+        "avatar_url": "/assets/data-owners/daniel-aebischer.webp",
+        "roles": ["data_owner", "data_consumer"],
+        "selectable": True,
+    },
+    {
+        "id": "simone.wyss",
+        "display_name": "Simone Wyss",
+        "organization": "EFV",
+        "email": "simone.wyss@efv.admin.ch",
+        "phone": "+41 58 000 00 52",
+        "avatar_url": "/assets/data-owners/simone-wyss.webp",
+        "roles": ["data_owner", "data_consumer"],
+        "selectable": True,
+    },
+    {
+        "id": "lea.hofmann",
+        "display_name": "Lea Hofmann",
+        "organization": "BAZG",
+        "email": "lea.hofmann@bazg.admin.ch",
+        "phone": "+41 58 000 00 92",
+        "avatar_url": "/assets/data-owners/lea-hofmann.webp",
         "roles": ["data_owner", "data_consumer"],
         "selectable": True,
     },
@@ -238,8 +299,10 @@ DIRECTORY_ENTRIES = (
     ("kassandra.valdata", "Kassandra Valdata", "ESTV", "kassandra.valdata@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("ariane.keller", "Ariane Keller", "ESTV", "ariane.keller@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("daniel.aebischer", "Daniel Aebischer", "EFV", "daniel.aebischer@efv.admin.ch", "federal", "Bundespersonalverzeichnis"),
+    ("simone.wyss", "Simone Wyss", "EFV", "simone.wyss@efv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("joel.ruod", "Joel Ruod", "ESTV", "joel.ruod@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("sandro.wenger", "Sandro Wenger", "BAZG", "sandro.wenger@bazg.admin.ch", "federal", "Bundespersonalverzeichnis"),
+    ("lea.hofmann", "Lea Hofmann", "BAZG", "lea.hofmann@bazg.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("thomas.kriegli", "Thomas Kriegli", "ESTV", "thomas.kriegli@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("noemie.rochat", "Noémie Rochat", "Kanton Neuchâtel", "noemie.rochat@ne.ch", "cantonal", "Kantonales Personalverzeichnis"),
     ("lucien.morel", "Lucien Morel", "Kanton Neuchâtel", "lucien.morel@ne.ch", "cantonal", "Kantonales Personalverzeichnis"),
@@ -261,8 +324,10 @@ DIRECTORY_ORGANIZATION_IDS = {
     "kassandra.valdata": "efd-estv",
     "ariane.keller": "efd-estv",
     "daniel.aebischer": "efd-efv",
+    "simone.wyss": "efd-efv",
     "joel.ruod": "efd-estv",
     "sandro.wenger": "efd-bazg",
+    "lea.hofmann": "efd-bazg",
     "thomas.kriegli": "efd-estv",
     "sophie.brunner": "edi-bfs",
     "marc.gisler": "efd-bit",
@@ -707,8 +772,10 @@ def seed_workflow_reference_data(session: Session) -> bool:
     owner_mapping = {
         "11111111-1111-4111-8111-111111111111": "kassandra.valdata",
         "12222222-2222-4222-8222-222222222222": "kassandra.valdata",
-        "16666666-6666-4666-8666-666666666666": "kassandra.valdata",
+        "13333333-3333-4333-8333-333333333333": "ariane.keller",
         "14444444-4444-4444-8444-444444444444": "noemie.rochat",
+        "15555555-5555-4555-8555-555555555555": "daniel.aebischer",
+        "16666666-6666-4666-8666-666666666666": "kassandra.valdata",
         "17777777-7777-4777-8777-777777777777": "noemie.rochat",
     }
     for product_id, owner_id in owner_mapping.items():
@@ -717,6 +784,36 @@ def seed_workflow_reference_data(session: Session) -> bool:
             product.owner_user_id = owner_id
             product.discoverable = True
             changed = True
+
+    deputy_mapping = {
+        "11111111-1111-4111-8111-111111111111": "joel.ruod",
+        "12222222-2222-4222-8222-222222222222": "joel.ruod",
+        "13333333-3333-4333-8333-333333333333": "kassandra.valdata",
+        "14444444-4444-4444-8444-444444444444": "lucien.morel",
+        "15555555-5555-4555-8555-555555555555": "simone.wyss",
+        "16666666-6666-4666-8666-666666666666": "joel.ruod",
+        "17777777-7777-4777-8777-777777777777": "lucien.morel",
+    }
+    for product_id, deputy_id in deputy_mapping.items():
+        product = session.get(DataProduct, uuid.UUID(product_id))
+        if product is not None and product.deputy_owner_user_id != deputy_id:
+            product.deputy_owner_user_id = deputy_id
+            changed = True
+
+    # Repair missing or no-longer-eligible deputy assignments for imported
+    # products without granting the deputy any reviewer permissions.
+    for product in session.scalars(select(DataProduct).order_by(DataProduct.id)):
+        owner = session.get(DemoUser, product.owner_user_id) if product.owner_user_id else None
+        current_deputy = (
+            session.get(DemoUser, product.deputy_owner_user_id)
+            if product.deputy_owner_user_id
+            else None
+        )
+        if not is_active_deputy(owner, current_deputy):
+            previous = product.deputy_owner_user_id
+            assign_default_deputy_owner(session, product)
+            if product.deputy_owner_user_id != previous:
+                changed = True
 
     # Every product has an explicit, eligible four-eyes control person. Preserve
     # an existing valid assignment; repair legacy/missing assignments

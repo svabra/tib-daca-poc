@@ -14,6 +14,7 @@ import {
   productReviewer,
   relationshipBadges,
   resolvedDataOwner,
+  resolvedDeputyDataOwner,
 } from './my-data-products';
 
 describe('My data products filtering', () => {
@@ -110,7 +111,7 @@ describe('My data products filtering', () => {
       displayName: 'Joel Ruod',
       organization: 'ESTV',
       email: 'joel.ruod@estv.admin.ch',
-      phone: null,
+      phone: '+41 58 000 00 82',
       avatarUrl: '/assets/data-owners/joel-ruod.webp',
       roles: ['data_owner'],
     }];
@@ -119,6 +120,8 @@ describe('My data products filtering', () => {
       name: 'Joel Ruod',
       organization: 'ESTV',
       avatarUrl: '/assets/data-owners/joel-ruod.webp',
+      phone: '+41 58 000 00 82',
+      teamsUrl: 'https://teams.microsoft.com/l/chat/0/0?users=joel.ruod%40estv.admin.ch',
     });
   });
 
@@ -140,6 +143,38 @@ describe('My data products filtering', () => {
       roles: ['publication_approver'],
     }];
 
+    expect(productReviewer(FALLBACK_PRODUCTS[0], users)?.displayName).toBe('Thomas Kriegli');
+  });
+
+  it('resolves the deputy independently from the control person assignment', () => {
+    const users = [
+      {
+        id: 'joel.ruod',
+        displayName: 'Joel Ruod',
+        organization: 'Eidgenössische Steuerverwaltung ESTV',
+        email: 'joel.ruod@estv.admin.ch',
+        phone: '+41 58 000 00 82',
+        avatarUrl: '/assets/data-owners/joel-ruod.webp',
+        roles: ['data_owner'],
+      },
+      {
+        id: 'thomas.kriegli',
+        displayName: 'Thomas Kriegli',
+        organization: 'ESTV',
+        email: 'thomas.kriegli@estv.admin.ch',
+        phone: null,
+        avatarUrl: '/assets/data-owners/thomas-kriegli.webp',
+        roles: ['publication_approver'],
+      },
+    ];
+
+    expect(resolvedDeputyDataOwner(FALLBACK_PRODUCTS[0], users)).toEqual({
+      name: 'Joel Ruod',
+      organization: 'ESTV',
+      avatarUrl: '/assets/data-owners/joel-ruod.webp',
+      phone: '+41 58 000 00 82',
+      teamsUrl: 'https://teams.microsoft.com/l/chat/0/0?users=joel.ruod%40estv.admin.ch',
+    });
     expect(productReviewer(FALLBACK_PRODUCTS[0], users)?.displayName).toBe('Thomas Kriegli');
   });
 

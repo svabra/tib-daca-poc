@@ -16,12 +16,20 @@ import {
   deliveryProtocols,
   initialProductRelationshipFilter,
   matchesProduct,
-  productReviewer,
   ProductRelationshipFilter,
   resolvedDataOwner,
+  resolvedDeputyDataOwner,
   consumersForProduct,
   relationshipBadges,
 } from './my-data-products';
+
+interface DeputyTooltipState {
+  productId: string;
+  deputy: DataOwnerProfile;
+  anchor: HTMLElement;
+  left: number;
+  top: number;
+}
 
 @Component({
   selector: 'daca-my-data-products',
@@ -95,11 +103,11 @@ import {
             @else { Für {{ api.identityUser().displayName }} · {{ api.identityUser().organization }} }
           </p>
           <div class="product-view-switch" role="group" aria-label="Darstellung der Datenprodukte">
-            <button type="button" [class.is-active]="viewMode() === 'records'" [attr.aria-pressed]="viewMode() === 'records'" (click)="viewMode.set('records')">
+            <button type="button" [class.is-active]="viewMode() === 'records'" [attr.aria-pressed]="viewMode() === 'records'" (click)="setViewMode('records')">
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="6"/><rect x="3.5" y="14" width="17" height="6"/></svg>
               <span>Records</span>
             </button>
-            <button type="button" [class.is-active]="viewMode() === 'table'" [attr.aria-pressed]="viewMode() === 'table'" (click)="viewMode.set('table')">
+            <button type="button" [class.is-active]="viewMode() === 'table'" [attr.aria-pressed]="viewMode() === 'table'" (click)="setViewMode('table')">
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16"/><path d="M3.5 9h17M9 4v16M15 4v16"/></svg>
               <span>Tabelle</span>
             </button>
@@ -190,31 +198,42 @@ import {
                 }
 
                 @if (visibleOwner(product); as owner) {
-                  <div
-                    class="product-data-owner product-owner-with-reviewer"
-                    [attr.tabindex]="reviewer(product) ? 0 : null"
-                    [attr.aria-describedby]="reviewer(product) ? reviewerTooltipId(product) : null"
-                  >
-                    <img [src]="owner.avatarUrl" alt="">
-                    <span>
-                      <small>Data Owner</small><strong>{{ owner.name }} · {{ owner.organization }}</strong>
-                      @if (owner.phone || owner.teamsUrl) {
-                        <span class="product-owner-contact">
-                          @if (owner.phone) { <a [href]="'tel:' + owner.phone.replaceAll(' ', '')">{{ owner.phone }}</a> }
-                          @if (owner.teamsUrl) {
-                            <a class="product-owner-teams" [href]="owner.teamsUrl" target="_blank" rel="noreferrer" [attr.aria-label]="owner.name + ' über Microsoft Teams kontaktieren'" title="In Microsoft Teams kontaktieren">
-                              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.2h5.3v2.1H12.7v6.1h-2.2V8.3H9V6.2Z"/><path d="M16 8.7h2.6c.8 0 1.4.6 1.4 1.4v4.8c0 .8-.6 1.4-1.4 1.4H16V8.7Zm-9.8.6h5.2v6.5H6.2c-.7 0-1.2-.5-1.2-1.2v-4.1c0-.7.5-1.2 1.2-1.2Z"/></svg>
-                              <span>Teams</span>
-                            </a>
+                  <div class="product-owner-pair" [attr.aria-label]="deputy(product) ? 'Data Owner und Stellvertretung' : 'Data Owner'">
+                    <div class="product-data-owner">
+                      <img [src]="owner.avatarUrl" alt="">
+                      <span>
+                        <small>Data Owner</small><strong>{{ owner.name }} · {{ owner.organization }}</strong>
+                        @if (owner.phone || owner.teamsUrl) {
+                          <span class="product-owner-contact">
+                            @if (owner.phone) { <a [href]="'tel:' + owner.phone.replaceAll(' ', '')">{{ owner.phone }}</a> }
+                            @if (owner.teamsUrl) {
+                              <a class="product-owner-teams" [href]="owner.teamsUrl" target="_blank" rel="noreferrer" [attr.aria-label]="owner.name + ' über Microsoft Teams kontaktieren'" title="In Microsoft Teams kontaktieren">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.2h5.3v2.1H12.7v6.1h-2.2V8.3H9V6.2Z"/><path d="M16 8.7h2.6c.8 0 1.4.6 1.4 1.4v4.8c0 .8-.6 1.4-1.4 1.4H16V8.7Zm-9.8.6h5.2v6.5H6.2c-.7 0-1.2-.5-1.2-1.2v-4.1c0-.7.5-1.2 1.2-1.2Z"/></svg>
+                                <span>Teams</span>
+                              </a>
+                            }
+                          </span>
+                        }
+                      </span>
+                    </div>
+                    @if (deputy(product); as deputy) {
+                      <div class="product-data-owner is-deputy">
+                        <img [src]="deputy.avatarUrl" alt="">
+                        <span>
+                          <small>Stv. Data Owner</small><strong>{{ deputy.name }} · {{ deputy.organization }}</strong>
+                          @if (deputy.phone || deputy.teamsUrl) {
+                            <span class="product-owner-contact">
+                              @if (deputy.phone) { <a [href]="'tel:' + deputy.phone.replaceAll(' ', '')">{{ deputy.phone }}</a> }
+                              @if (deputy.teamsUrl) {
+                                <a class="product-owner-teams" [href]="deputy.teamsUrl" target="_blank" rel="noreferrer" [attr.aria-label]="deputy.name + ' über Microsoft Teams kontaktieren'" title="In Microsoft Teams kontaktieren">
+                                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.2h5.3v2.1H12.7v6.1h-2.2V8.3H9V6.2Z"/><path d="M16 8.7h2.6c.8 0 1.4.6 1.4 1.4v4.8c0 .8-.6 1.4-1.4 1.4H16V8.7Zm-9.8.6h5.2v6.5H6.2c-.7 0-1.2-.5-1.2-1.2v-4.1c0-.7.5-1.2 1.2-1.2Z"/></svg>
+                                  <span>Teams</span>
+                                </a>
+                              }
+                            </span>
                           }
                         </span>
-                      }
-                    </span>
-                    @if (reviewer(product); as reviewer) {
-                      <span class="product-owner-reviewer-tooltip" [id]="reviewerTooltipId(product)" role="tooltip">
-                        @if (reviewer.avatarUrl) { <img [src]="reviewer.avatarUrl" alt=""> }
-                        <span><small>Reviewer/Stv.</small><strong>{{ reviewer.displayName }} · {{ reviewer.organization }}</strong></span>
-                      </span>
+                      </div>
                     }
                   </div>
                 }
@@ -288,7 +307,7 @@ import {
           }
         </div>
       } @else {
-        <div class="daca-card product-table-shell">
+        <div class="daca-card product-table-shell" (scroll)="repositionActiveDeputyTooltip()">
           <table class="product-table">
             <thead>
               <tr>
@@ -317,18 +336,16 @@ import {
                   <td>
                     @if (visibleOwner(product); as owner) {
                       <span
-                        class="product-table-owner product-owner-with-reviewer"
-                        [attr.tabindex]="reviewer(product) ? 0 : null"
-                        [attr.aria-describedby]="reviewer(product) ? reviewerTooltipId(product) : null"
+                        class="product-table-owner product-owner-with-deputy"
+                        [attr.tabindex]="deputy(product) ? 0 : null"
+                        [attr.aria-describedby]="activeDeputyTooltip()?.productId === product.id ? deputyTooltipId(product) : null"
+                        (mouseenter)="showDeputyTooltip(product, $event)"
+                        (mouseleave)="hideDeputyTooltip(product.id, $event)"
+                        (focus)="showDeputyTooltip(product, $event)"
+                        (blur)="hideDeputyTooltip(product.id, $event)"
                       >
                         <img [src]="owner.avatarUrl" alt="">
                         <span><strong>{{ owner.name }} · {{ owner.organization }}</strong></span>
-                        @if (reviewer(product); as reviewer) {
-                          <span class="product-owner-reviewer-tooltip" [id]="reviewerTooltipId(product)" role="tooltip">
-                            @if (reviewer.avatarUrl) { <img [src]="reviewer.avatarUrl" alt=""> }
-                            <span><small>Reviewer/Stv.</small><strong>{{ reviewer.displayName }} · {{ reviewer.organization }}</strong></span>
-                          </span>
-                        }
                       </span>
                     } @else {
                       <span class="product-table-owner-text">{{ product.owner }}</span>
@@ -440,6 +457,18 @@ import {
             </tbody>
           </table>
         </div>
+        @if (activeDeputyTooltip(); as tooltip) {
+          <span
+            class="product-owner-deputy-tooltip"
+            [id]="'product-deputy-' + tooltip.productId"
+            role="tooltip"
+            [style.left.px]="tooltip.left"
+            [style.top.px]="tooltip.top"
+          >
+            <img [src]="tooltip.deputy.avatarUrl" alt="">
+            <span><small>Stv. Data Owner</small><strong>{{ tooltip.deputy.name }} · {{ tooltip.deputy.organization }}</strong></span>
+          </span>
+        }
       }
     </section>
 
@@ -567,6 +596,7 @@ export class MyDataProductsComponent implements OnDestroy {
   readonly filter = signal<ProductRelationshipFilter>(DEFAULT_PRODUCT_RELATIONSHIP_FILTER);
   readonly viewMode = signal<'records' | 'table'>('table');
   readonly activeProductMenuId = signal<string | null>(null);
+  readonly activeDeputyTooltip = signal<DeputyTooltipState | null>(null);
   readonly transferProduct = signal<DataProduct | null>(null);
   readonly transferTarget = signal('');
   readonly transferNotice = signal<string | null>(null);
@@ -622,6 +652,11 @@ export class MyDataProductsComponent implements OnDestroy {
     this.query.set((event.target as HTMLInputElement).value);
   }
 
+  setViewMode(mode: 'records' | 'table'): void {
+    this.hideActiveDeputyTooltip();
+    this.viewMode.set(mode);
+  }
+
   filterCount(filter: ProductRelationshipFilter): number {
     return this.api.products().filter((product) => matchesProduct(
       product,
@@ -671,12 +706,71 @@ export class MyDataProductsComponent implements OnDestroy {
     return resolvedDataOwner(product, this.api.identityUsers());
   }
 
-  reviewer(product: DataProduct) {
-    return productReviewer(product, this.api.identityUsers());
+  deputy(product: DataProduct): DataOwnerProfile | null {
+    return resolvedDeputyDataOwner(product, this.api.identityUsers());
   }
 
-  reviewerTooltipId(product: DataProduct): string {
-    return `product-reviewer-${product.id}`;
+  deputyTooltipId(product: DataProduct): string {
+    return `product-deputy-${product.id}`;
+  }
+
+  showDeputyTooltip(product: DataProduct, event: Event): void {
+    const deputy = this.deputy(product);
+    const target = event.currentTarget;
+    if (!deputy || !(target instanceof HTMLElement)) return;
+
+    this.activeDeputyTooltip.set({
+      productId: product.id,
+      deputy,
+      anchor: target,
+      ...this.deputyTooltipPosition(target),
+    });
+  }
+
+  hideDeputyTooltip(productId: string, event?: Event): void {
+    const target = event?.currentTarget;
+    if (target instanceof HTMLElement) {
+      if (event?.type === 'mouseleave' && target.matches(':focus')) return;
+      if (event?.type === 'blur' && target.matches(':hover')) return;
+    }
+    if (this.activeDeputyTooltip()?.productId === productId) {
+      this.activeDeputyTooltip.set(null);
+    }
+  }
+
+  hideActiveDeputyTooltip(): void {
+    this.activeDeputyTooltip.set(null);
+  }
+
+  repositionActiveDeputyTooltip(): void {
+    const tooltip = this.activeDeputyTooltip();
+    if (!tooltip) return;
+    if (!tooltip.anchor.isConnected) {
+      this.hideActiveDeputyTooltip();
+      return;
+    }
+    this.activeDeputyTooltip.set({
+      ...tooltip,
+      ...this.deputyTooltipPosition(tooltip.anchor),
+    });
+  }
+
+  private deputyTooltipPosition(anchor: HTMLElement): Pick<DeputyTooltipState, 'left' | 'top'> {
+    const targetRect = anchor.getBoundingClientRect();
+    const viewportPadding = 12;
+    const anchorGap = 6;
+    const tooltipWidth = Math.max(0, Math.min(260, window.innerWidth - viewportPadding * 2));
+    const tooltipHeight = 58;
+    const maxLeft = Math.max(viewportPadding, window.innerWidth - tooltipWidth - viewportPadding);
+    const left = Math.min(Math.max(targetRect.left, viewportPadding), maxLeft);
+    const preferredTop = targetRect.bottom + anchorGap;
+    const fallbackTop = targetRect.top - tooltipHeight - anchorGap;
+    const maxTop = Math.max(viewportPadding, window.innerHeight - tooltipHeight - viewportPadding);
+    const top = Math.min(
+      Math.max(preferredTop <= maxTop ? preferredTop : fallbackTop, viewportPadding),
+      maxTop,
+    );
+    return { left, top };
   }
 
   request(product: DataProduct): AccessRequest | null {
@@ -900,9 +994,20 @@ export class MyDataProductsComponent implements OnDestroy {
 
   @HostListener('document:keydown.escape')
   closeTransientUi(): void {
+    this.hideActiveDeputyTooltip();
     if (this.consumerDrawerProduct()) this.closeConsumerDrawer();
     else if (this.transferProduct()) this.closeOwnershipTransfer();
     else if (this.activeProductMenuId()) this.closeProductMenu(true);
+  }
+
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    this.repositionActiveDeputyTooltip();
+  }
+
+  @HostListener('window:scroll')
+  onWindowScroll(): void {
+    this.repositionActiveDeputyTooltip();
   }
 
   classificationLabel(value: DataProduct['classification']): string {

@@ -25,11 +25,17 @@ def test_journey_ontology_suggestions_do_not_confuse_distinct_with_ist():
 def test_demo_users_and_fixture_seed_are_idempotent_and_persisted(client):
     users = client.get("/api/v1/demo-users").json()
     assert [user["id"] for user in users] == [
+        "ariane.keller",
         "beat.stalder",
+        "daniel.aebischer",
         "joel.ruod",
         "kassandra.valdata",
+        "lea.hofmann",
+        "lucien.morel",
         "noemie.rochat",
         "sandro.wenger",
+        "sarah.brunner",
+        "simone.wyss",
         "thomas.kriegli",
     ]
     assert (
@@ -40,16 +46,39 @@ def test_demo_users_and_fixture_seed_are_idempotent_and_persisted(client):
         user["id"]: (user["organization"], user["avatarUrl"])
         for user in users
     } == {
+        "ariane.keller": ("ESTV", "/assets/data-owners/ariane-keller.webp"),
         "beat.stalder": ("Kanton St. Gallen", "/assets/data-owners/beat-stalder.webp"),
+        "daniel.aebischer": ("EFV", "/assets/data-owners/daniel-aebischer.webp"),
         "joel.ruod": ("ESTV", "/assets/data-owners/joel-ruod.webp"),
         "kassandra.valdata": ("ESTV", "/assets/kassandra-valdata.webp"),
+        "lea.hofmann": ("BAZG", "/assets/data-owners/lea-hofmann.webp"),
+        "lucien.morel": (
+            "Kanton Neuchâtel",
+            "/assets/data-owners/lucien-morel.webp",
+        ),
         "noemie.rochat": ("Kanton Neuchâtel", "/assets/data-owners/noemie-rochat.webp"),
         "sandro.wenger": ("BAZG", "/assets/data-owners/sandro-wenger.webp"),
+        "sarah.brunner": (
+            "Kanton St. Gallen",
+            "/assets/data-owners/sarah-brunner.webp",
+        ),
+        "simone.wyss": ("EFV", "/assets/data-owners/simone-wyss.webp"),
         "thomas.kriegli": ("ESTV", "/assets/data-owners/thomas-kriegli.webp"),
     }
     products = client.get("/api/v1/data-products").json()["items"]
     assert products
     assert all(product["controlPersonUserId"] == "thomas.kriegli" for product in products)
+    assert {
+        product["id"]: product["deputyOwnerUserId"] for product in products
+    } == {
+        "11111111-1111-4111-8111-111111111111": "joel.ruod",
+        "12222222-2222-4222-8222-222222222222": "joel.ruod",
+        "13333333-3333-4333-8333-333333333333": "kassandra.valdata",
+        "14444444-4444-4444-8444-444444444444": "lucien.morel",
+        "15555555-5555-4555-8555-555555555555": "simone.wyss",
+        "16666666-6666-4666-8666-666666666666": "joel.ruod",
+        "17777777-7777-4777-8777-777777777777": "lucien.morel",
+    }
     fixtures = client.get("/api/v1/poc/product-fixtures").json()
     assert len(fixtures) == 9
     assert {item["maturityLevel"] for item in fixtures} == {"bronze", "silver", "gold"}
@@ -88,6 +117,10 @@ def test_open_publication_is_idempotent_defaults_to_discoverable_and_creates_tas
     owner_products = client.get(
         "/api/v1/data-products", headers={"X-DaCa-User": "kassandra.valdata"}
     ).json()["items"]
+    published_product = next(product for product in owner_products if product["id"] == product_id)
+    assert published_product["ownerUserId"] == "kassandra.valdata"
+    assert published_product["deputyOwnerUserId"] == "joel.ruod"
+    assert published_product["controlPersonUserId"] == "thomas.kriegli"
     beat_products = client.get(
         "/api/v1/data-products", headers={"X-DaCa-User": "beat.stalder"}
     ).json()["items"]

@@ -1,6 +1,7 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { vi } from 'vitest';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { FALLBACK_PRODUCTS } from '../../core/catalog.seed';
 import { OwnedAccessConsumer } from '../../core/catalog.models';
@@ -12,8 +13,17 @@ const IDENTITY_USERS = [
     displayName: 'Kassandra Valdata',
     organization: 'ESTV',
     email: 'kassandra.valdata@estv.admin.ch',
-    phone: null,
+    phone: '+41 58 000 00 11',
     avatarUrl: '/assets/kassandra-valdata.webp',
+    roles: ['data_owner'],
+  },
+  {
+    id: 'joel.ruod',
+    displayName: 'Joel Ruod',
+    organization: 'ESTV',
+    email: 'joel.ruod@estv.admin.ch',
+    phone: '+41 58 000 00 82',
+    avatarUrl: '/assets/data-owners/joel-ruod.webp',
     roles: ['data_owner'],
   },
   {
@@ -204,10 +214,10 @@ describe('MyDataProductsComponent quality medals', () => {
     expect(drawer.textContent).not.toContain('null');
   });
 
-  it('shows foreign owner portraits and the product reviewer in table and records views', async () => {
+  it('shows the deputy only as a table tooltip and as a fixed compact record card', async () => {
     const product = FALLBACK_PRODUCTS[0];
     const api = {
-      identityUser: signal(IDENTITY_USERS[1]),
+      identityUser: signal(IDENTITY_USERS.find((user) => user.id === 'noemie.rochat')!),
       identityUserId: () => 'noemie.rochat',
       identityUsers: () => IDENTITY_USERS,
       loading: signal(false),
@@ -231,13 +241,81 @@ describe('MyDataProductsComponent quality medals', () => {
     expect(tableOwner.textContent).toContain('Kassandra Valdata · ESTV');
     expect(tableOwner.querySelector('img')?.getAttribute('src')).toBe('/assets/kassandra-valdata.webp');
     expect(tableOwner.getAttribute('tabindex')).toBe('0');
-    expect(tableOwner.querySelector('[role="tooltip"]')?.textContent).toContain('Reviewer/Stv.');
-    expect(tableOwner.querySelector('[role="tooltip"]')?.textContent).toContain('Thomas Kriegli · ESTV');
+    expect(tableOwner.getAttribute('aria-describedby')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="tooltip"]')).toBeNull();
 
-    fixture.componentInstance.viewMode.set('records');
+    vi.spyOn(tableOwner, 'getBoundingClientRect').mockReturnValue({
+      x: 120,
+      y: 180,
+      left: 120,
+      top: 180,
+      right: 320,
+      bottom: 212,
+      width: 200,
+      height: 32,
+      toJSON: () => ({}),
+    } as DOMRect);
+    tableOwner.dispatchEvent(new MouseEvent('mouseenter'));
     fixture.detectChanges();
-    const recordOwner = fixture.nativeElement.querySelector('.product-data-owner') as HTMLElement;
-    expect(recordOwner.textContent).toContain('Kassandra Valdata · ESTV');
-    expect(recordOwner.querySelector('[role="tooltip"]')?.textContent).toContain('Thomas Kriegli · ESTV');
+    const tooltip = fixture.nativeElement.querySelector('[role="tooltip"]') as HTMLElement;
+    expect(tableOwner.getAttribute('aria-describedby')).toBe(`product-deputy-${product.id}`);
+    expect(tooltip.textContent).toContain('Stv. Data Owner');
+    expect(tooltip.textContent).toContain('Joel Ruod · ESTV');
+    expect(tooltip.textContent).not.toContain('Thomas Kriegli');
+    expect(tooltip.style.left).toBe('120px');
+    expect(tooltip.style.top).toBe('218px');
+
+    tableOwner.dispatchEvent(new MouseEvent('mouseleave'));
+    fixture.detectChanges();
+    expect(tableOwner.getAttribute('aria-describedby')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="tooltip"]')).toBeNull();
+
+    tableOwner.dispatchEvent(new MouseEvent('mouseenter'));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[role="tooltip"]')).not.toBeNull();
+
+    fixture.componentInstance.setViewMode('records');
+    fixture.detectChanges();
+    const recordOwners = fixture.nativeElement.querySelectorAll('.product-owner-pair .product-data-owner');
+    expect(recordOwners).toHaveLength(2);
+    expect(recordOwners[0].textContent).toContain('Kassandra Valdata · ESTV');
+    expect(recordOwners[0].textContent).toContain('+41 58 000 00 11');
+    expect(recordOwners[0].querySelector('a[href^="tel:"]')?.getAttribute('href')).toBe('tel:+41580000011');
+    expect(recordOwners[0].querySelector('.product-owner-teams')?.getAttribute('href')).toBe('https://teams.microsoft.com/l/chat/0/0?users=kassandra.valdata%40estv.admin.ch');
+    expect(recordOwners[1].textContent).toContain('Stv. Data Owner');
+    expect(recordOwners[1].textContent).toContain('Joel Ruod · ESTV');
+    expect(recordOwners[1].textContent).toContain('+41 58 000 00 82');
+    expect(recordOwners[1].querySelector('a[href^="tel:"]')?.getAttribute('href')).toBe('tel:+41580000082');
+    expect(recordOwners[1].querySelector('.product-owner-teams')?.getAttribute('href')).toBe('https://teams.microsoft.com/l/chat/0/0?users=joel.ruod%40estv.admin.ch');
+    expect(fixture.nativeElement.querySelector('.product-owner-pair [role="tooltip"]')).toBeNull();
+  });
+
+  it('does not add a tooltip or tab stop when no deputy is assigned', async () => {
+    const product = { ...FALLBACK_PRODUCTS[0], deputyOwnerUserId: null };
+    const api = {
+      identityUser: signal(IDENTITY_USERS.find((user) => user.id === 'noemie.rochat')!),
+      identityUserId: () => 'noemie.rochat',
+      identityUsers: () => IDENTITY_USERS,
+      loading: signal(false),
+      usingFallback: signal(false),
+      products: signal([product]),
+      ownedAccessConsumers: signal([]),
+    };
+    await TestBed.configureTestingModule({
+      imports: [MyDataProductsComponent],
+      providers: [
+        provideRouter([]),
+        { provide: CatalogApiService, useValue: api },
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) } } },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(MyDataProductsComponent);
+    fixture.componentInstance.filter.set('all');
+    fixture.detectChanges();
+
+    const tableOwner = fixture.nativeElement.querySelector('.product-table-owner') as HTMLElement;
+    expect(tableOwner.getAttribute('tabindex')).toBeNull();
+    expect(tableOwner.getAttribute('aria-describedby')).toBeNull();
+    expect(tableOwner.querySelector('[role="tooltip"]')).toBeNull();
   });
 });

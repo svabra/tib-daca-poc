@@ -13,6 +13,15 @@ const BEAT: DemoUser = {
   roles: ['data_consumer'],
 };
 
+const ADDITIONAL_POC_USER_IDS = [
+  'ariane.keller',
+  'daniel.aebischer',
+  'lucien.morel',
+  'sarah.brunner',
+  'simone.wyss',
+  'lea.hofmann',
+] as const;
+
 describe('DemoIdentityService', () => {
   const originalUrl = window.location.href;
 
@@ -92,5 +101,44 @@ describe('DemoIdentityService', () => {
 
     expect(service.user()).toEqual(sandro);
     expect(window.location.search).toBe('');
+  });
+
+  it.each(ADDITIONAL_POC_USER_IDS)('accepts %s from a deep link before the user directory resolves', (userId) => {
+    window.history.replaceState({}, '', `/products?demoUser=${userId}`);
+    const service = TestBed.inject(DemoIdentityService);
+    const user: DemoUser = {
+      id: userId,
+      displayName: userId,
+      organization: 'POC',
+      email: `${userId}@example.admin.ch`,
+      phone: null,
+      avatarUrl: `/assets/data-owners/${userId.replace('.', '-')}.webp`,
+      roles: ['data_owner'],
+    };
+
+    expect(service.userId()).toBe(userId);
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/demo-users').flush([service.users()[0], user]);
+
+    expect(service.user()).toEqual(user);
+    expect(window.location.search).toBe('');
+  });
+
+  it('keeps every owner and deputy portrait available when the user directory is unavailable', () => {
+    const service = TestBed.inject(DemoIdentityService);
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/demo-users').flush('unavailable', {
+      status: 503,
+      statusText: 'Service Unavailable',
+    });
+
+    const users = service.users();
+    expect(users).toHaveLength(12);
+    expect(users.every((user) => Boolean(user.avatarUrl))).toBe(true);
+    expect(users.map((user) => user.id)).toEqual(expect.arrayContaining([
+      'joel.ruod',
+      'lucien.morel',
+      'simone.wyss',
+      'sarah.brunner',
+      'lea.hofmann',
+    ]));
   });
 });

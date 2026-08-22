@@ -45,12 +45,13 @@ describe('Catalog runtime version overlay', () => {
     expect(dialog?.textContent).toContain('Schnell oder gezielt suchen');
     expect(dialog?.textContent).toContain('Service Level gemeinsam festlegen');
     expect(dialog?.textContent).toContain('Änderungen nachvollziehen');
+    expect(dialog?.textContent).toContain('Verantwortung und Stellvertretung sichtbar machen');
     expect(dialog?.textContent).toContain('PoC anhand geführter Journeys erleben');
     expect(dialog?.textContent).toContain('sieben wiederholbare Abläufe');
     expect(dialog?.textContent).toContain('Zugriff gezielt freigeben und verlängern');
     expect(dialog?.textContent).toContain('Oracle-Datenquellen kontrolliert erschliessen');
     expect(dialog?.textContent).toContain('aktuellen PoC-Stand');
-    expect(features.length).toBe(11);
+    expect(features.length).toBe(12);
     expect(trigger?.getAttribute('aria-expanded')).toBe('true');
 
     const close = fixture.nativeElement.querySelector('.daca-feature-dialog-close') as HTMLButtonElement | null;

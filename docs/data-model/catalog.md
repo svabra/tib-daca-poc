@@ -12,12 +12,19 @@ database and its `public` schema.
 
 DAAIF is an external source system and its internal data model is outside this repository. DaCa persists only the submitted publication envelope, normalized metadata, product fields and the resulting workflow evidence documented below. No DAAIF credentials or source records are stored.
 
+## Product responsibility semantics
+
+- `owner_user_id` is the primary product responsibility and the authorization anchor for owner-only actions.
+- `deputy_owner_user_id` is the visible, product-specific deputy. The relation grants no owner or reviewer permissions by itself.
+- `control_person_user_id` is the independent four-eyes reviewer and remains separate from deputy ownership.
+- `supervisor_user_id` belongs to the demo identity directory and is only a supervisor/default-assignment hint; it is not a product deputy relation.
+
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
-- Alembic head: `0013_source_access_journey`
-- Schema fingerprint: `f57a18ec5a2f6ba0`
-- Migration fingerprint: `9c55d2fff95a0d2f`
+- Alembic head: `0014_deputy_data_owner`
+- Schema fingerprint: `c18c059bd5fa0575`
+- Migration fingerprint: `309c11d6bbcc087f`
 - Tables: `31`
 
 ## Domain status vocabulary
@@ -134,6 +141,7 @@ erDiagram
         integer revision
         integer active_policy_revision
         string owner_user_id FK
+        string deputy_owner_user_id FK
         string control_person_user_id FK
         boolean discoverable
         string title
@@ -456,6 +464,7 @@ erDiagram
     canonical_ontology_versions ||--o{ canonical_ontology_terms : "ontology_version_id"
     data_products ||--o{ data_product_fields : "data_product_id"
     demo_users o|--o{ data_products : "owner_user_id"
+    demo_users o|--o{ data_products : "deputy_owner_user_id"
     demo_users o|--o{ data_products : "control_person_user_id"
     demo_users o|--o{ demo_users : "supervisor_user_id"
     data_products ||--o{ endpoints : "data_product_id"
@@ -674,6 +683,7 @@ Catalog aggregate root for metadata, ownership, lifecycle and discoverability.
 | `revision` | `INTEGER` | no | — | `1` |
 | `active_policy_revision` | `INTEGER` | yes | — | — |
 | `owner_user_id` | `VARCHAR(200)` | yes | FK | — |
+| `deputy_owner_user_id` | `VARCHAR(200)` | yes | FK | — |
 | `control_person_user_id` | `VARCHAR(200)` | yes | FK | — |
 | `discoverable` | `BOOLEAN` | no | — | `True` |
 | `title` | `VARCHAR(255)` | no | — | — |
@@ -695,8 +705,10 @@ Constraints and indexes:
 
 - Unique `unnamed`: `urn`
 - Check `ck_product_classification`: `classification IN ('public', 'internal', 'confidential', 'restricted')`
+- Check `ck_product_deputy_not_owner`: `deputy_owner_user_id IS NULL OR owner_user_id IS NULL OR deputy_owner_user_id <> owner_user_id`
 - Check `ck_product_lifecycle`: `lifecycle IN ('draft', 'active', 'deprecated', 'retired')`
 - Foreign key `owner_user_id` → `demo_users.id`
+- Foreign key `deputy_owner_user_id` → `demo_users.id`; on delete `SET NULL`
 - Foreign key `control_person_user_id` → `demo_users.id`; on delete `SET NULL`
 
 ### `demo_users`

@@ -40,6 +40,11 @@ class DataProduct(Base):
             "classification IN ('public', 'internal', 'confidential', 'restricted')",
             name="ck_product_classification",
         ),
+        CheckConstraint(
+            "deputy_owner_user_id IS NULL OR owner_user_id IS NULL "
+            "OR deputy_owner_user_id <> owner_user_id",
+            name="ck_product_deputy_not_owner",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
@@ -48,6 +53,9 @@ class DataProduct(Base):
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     active_policy_revision: Mapped[int | None] = mapped_column(Integer)
     owner_user_id: Mapped[str | None] = mapped_column(ForeignKey("demo_users.id"))
+    deputy_owner_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("demo_users.id", ondelete="SET NULL")
+    )
     control_person_user_id: Mapped[str | None] = mapped_column(
         ForeignKey("demo_users.id", ondelete="SET NULL")
     )

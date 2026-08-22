@@ -6,7 +6,7 @@ import { DemoIdentityService } from '../../core/demo-identity.service';
 import { ProductServiceLevelApiService } from '../service-level/product-service-level-api.service';
 import { ServiceLevelSummaryResponse } from '../service-level/product-service-level.models';
 import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav.component';
-import { accessConsumerSummary, DataOwnerProfile, deliveryProtocols, resolvedDataOwner } from './my-data-products';
+import { accessConsumerSummary, DataOwnerProfile, deliveryProtocols, resolvedDataOwner, resolvedDeputyDataOwner } from './my-data-products';
 
 @Component({
   selector: 'daca-product-overview',
@@ -83,10 +83,21 @@ import { accessConsumerSummary, DataOwnerProfile, deliveryProtocols, resolvedDat
         <aside class="daca-card product-overview-owner" aria-labelledby="product-owner-title">
           <div class="daca-card-header"><h2 id="product-owner-title">Data Owner</h2></div>
           <div class="daca-card-body">
-            <img [src]="owner.avatarUrl" alt="">
-            <strong>{{ owner.name }} · {{ owner.organization }}</strong>
-            @if (owner.phone; as phone) { <a [href]="'tel:' + phone.replaceAll(' ', '')">{{ phone }}</a> }
-            @if (owner.teamsUrl; as teamsUrl) { <a [href]="teamsUrl" target="_blank" rel="noreferrer">Über Teams kontaktieren</a> }
+            <section class="product-overview-owner-person">
+              <img [src]="owner.avatarUrl" alt="">
+              <span>Data Owner</span>
+              <strong>{{ owner.name }} · {{ owner.organization }}</strong>
+              @if (owner.phone; as phone) { <a [href]="'tel:' + phone.replaceAll(' ', '')">{{ phone }}</a> }
+              @if (owner.teamsUrl; as teamsUrl) { <a [href]="teamsUrl" target="_blank" rel="noreferrer">Über Teams kontaktieren</a> }
+            </section>
+            @if (deputy(); as deputy) {
+              <section class="product-overview-owner-person is-deputy">
+                <img [src]="deputy.avatarUrl" alt="">
+                <span>Stv. Data Owner</span>
+                <strong>{{ deputy.name }} · {{ deputy.organization }}</strong>
+                @if (deputy.phone; as phone) { <a [href]="'tel:' + phone.replaceAll(' ', '')">{{ phone }}</a> }
+              </section>
+            }
           </div>
         </aside>
       }
@@ -123,6 +134,10 @@ export class ProductOverviewComponent {
     user.roles.includes('publication_approver') && user.id !== this.product().ownerUserId,
   ));
   readonly owner = computed<DataOwnerProfile | null>(() => resolvedDataOwner(
+    this.product(),
+    this.identity.users(),
+  ));
+  readonly deputy = computed<DataOwnerProfile | null>(() => resolvedDeputyDataOwner(
     this.product(),
     this.identity.users(),
   ));

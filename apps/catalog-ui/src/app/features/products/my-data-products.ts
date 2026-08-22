@@ -55,6 +55,10 @@ export interface DataOwnerProfile {
   teamsUrl?: string;
 }
 
+function teamsChatUrl(email: string): string {
+  return `https://teams.microsoft.com/l/chat/0/0?users=${encodeURIComponent(email)}`;
+}
+
 const PERSON_ORGANIZATION_ABBREVIATIONS: Readonly<Record<string, string>> = {
   'Eidgenössische Steuerverwaltung ESTV': 'ESTV',
   'Eidg. Steuerverwaltung': 'ESTV',
@@ -214,8 +218,26 @@ export function resolvedDataOwner(
   return {
     ...(metadataOwner ?? {}),
     name: canonicalUser.displayName,
-    organization: canonicalUser.organization,
+    organization: personOrganizationLabel(canonicalUser.organization),
     avatarUrl: canonicalUser.avatarUrl,
+    ...(canonicalUser.phone ? { phone: canonicalUser.phone } : {}),
+    teamsUrl: metadataOwner?.teamsUrl ?? teamsChatUrl(canonicalUser.email),
+  };
+}
+
+export function resolvedDeputyDataOwner(
+  product: DataProduct,
+  users: readonly DemoUser[],
+): DataOwnerProfile | null {
+  if (!product.deputyOwnerUserId) return null;
+  const deputy = users.find((user) => user.id === product.deputyOwnerUserId);
+  if (!deputy?.avatarUrl) return null;
+  return {
+    name: deputy.displayName,
+    organization: personOrganizationLabel(deputy.organization),
+    avatarUrl: deputy.avatarUrl,
+    ...(deputy.phone ? { phone: deputy.phone } : {}),
+    teamsUrl: teamsChatUrl(deputy.email),
   };
 }
 

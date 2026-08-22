@@ -18,7 +18,7 @@ Update generated sections with `npm run docs:data-model`. Validate them with
 
 | Persistence context | Storage | Tables | Alembic head | Migration fingerprint |
 |---|---|---:|---|---|
-| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 31 | `0013_source_access_journey` | `9c55d2fff95a0d2f` |
+| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 31 | `0014_deputy_data_owner` | `309c11d6bbcc087f` |
 | [Control-plane data model](control-plane.md) | PostgreSQL (`daca_control_plane`) | 6 | `20260803_0001` | `ff3a5ea9ca863788` |
 | [Sample data-product model](sample-data-product.md) | PostgreSQL (`daca_sample`) | 3 | `0003_weekly_availability` | `938d480b00000576` |
 
