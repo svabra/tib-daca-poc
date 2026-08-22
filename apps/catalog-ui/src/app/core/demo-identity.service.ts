@@ -22,14 +22,21 @@ const KASSANDRA: DemoUser = {
   avatarUrl: '/assets/kassandra-valdata.webp',
   roles: ['data_owner', 'data_consumer'],
 };
-const POC_USER_IDS = new Set([
-  'kassandra.valdata',
-  'noemie.rochat',
-  'beat.stalder',
-  'joel.ruod',
-  'thomas.kriegli',
-  'sandro.wenger',
-]);
+const POC_USERS: readonly DemoUser[] = [
+  KASSANDRA,
+  { id: 'ariane.keller', displayName: 'Ariane Keller', organization: 'ESTV', email: 'ariane.keller@estv.admin.ch', phone: '+41 58 000 00 12', avatarUrl: '/assets/data-owners/ariane-keller.webp', roles: ['data_owner', 'data_consumer'] },
+  { id: 'beat.stalder', displayName: 'Beat Stalder', organization: 'Kanton St. Gallen', email: 'beat.stalder@sg.ch', phone: '+41 58 000 00 71', avatarUrl: '/assets/data-owners/beat-stalder.webp', roles: ['data_owner', 'data_consumer'] },
+  { id: 'daniel.aebischer', displayName: 'Daniel Aebischer', organization: 'EFV', email: 'daniel.aebischer@efv.admin.ch', phone: '+41 58 000 00 51', avatarUrl: '/assets/data-owners/daniel-aebischer.webp', roles: ['data_owner', 'data_consumer'] },
+  { id: 'joel.ruod', displayName: 'Joel Ruod', organization: 'ESTV', email: 'joel.ruod@estv.admin.ch', phone: '+41 58 000 00 82', avatarUrl: '/assets/data-owners/joel-ruod.webp', roles: ['data_analyst', 'data_owner'], supervisorUserId: 'thomas.kriegli' },
+  { id: 'lea.hofmann', displayName: 'Lea Hofmann', organization: 'BAZG', email: 'lea.hofmann@bazg.admin.ch', phone: '+41 58 000 00 92', avatarUrl: '/assets/data-owners/lea-hofmann.webp', roles: ['data_owner', 'data_consumer'] },
+  { id: 'lucien.morel', displayName: 'Lucien Morel', organization: 'Kanton Neuchâtel', email: 'lucien.morel@ne.ch', phone: '+41 58 000 00 43', avatarUrl: '/assets/data-owners/lucien-morel.webp', roles: ['data_owner', 'data_consumer'] },
+  { id: 'noemie.rochat', displayName: 'Noémie Rochat', organization: 'Kanton Neuchâtel', email: 'noemie.rochat@ne.ch', phone: '+41 58 000 00 42', avatarUrl: '/assets/data-owners/noemie-rochat.webp', roles: ['data_owner', 'data_consumer'] },
+  { id: 'sandro.wenger', displayName: 'Sandro Wenger', organization: 'BAZG', email: 'sandro.wenger@bazg.admin.ch', phone: '+41 58 000 00 91', avatarUrl: '/assets/data-owners/sandro-wenger.webp', roles: ['data_owner', 'data_consumer'] },
+  { id: 'sarah.brunner', displayName: 'Sarah Brunner', organization: 'Kanton St. Gallen', email: 'sarah.brunner@sg.ch', phone: '+41 58 000 00 72', avatarUrl: '/assets/data-owners/sarah-brunner.webp', roles: ['data_owner', 'data_consumer'] },
+  { id: 'simone.wyss', displayName: 'Simone Wyss', organization: 'EFV', email: 'simone.wyss@efv.admin.ch', phone: '+41 58 000 00 52', avatarUrl: '/assets/data-owners/simone-wyss.webp', roles: ['data_owner', 'data_consumer'] },
+  { id: 'thomas.kriegli', displayName: 'Thomas Kriegli', organization: 'ESTV', email: 'thomas.kriegli@estv.admin.ch', phone: '+41 58 000 00 83', avatarUrl: '/assets/data-owners/thomas-kriegli.webp', roles: ['publication_approver', 'data_consumer'], supervisorUserId: null },
+];
+const POC_USER_IDS = new Set(POC_USERS.map((user) => user.id));
 
 @Injectable({ providedIn: 'root' })
 export class DemoIdentityService {
@@ -47,8 +54,8 @@ export class DemoIdentityService {
   constructor() {
     const initialUrl = window.location.href;
     const requestedUserId = this.requestedDemoUserId();
-    this.http.get<DemoUser[]>('/api/v1/demo-users').pipe(catchError(() => of([KASSANDRA]))).subscribe((users) => {
-      const available = users.length ? users : [KASSANDRA];
+    this.http.get<DemoUser[]>('/api/v1/demo-users').pipe(catchError(() => of(POC_USERS))).subscribe((users) => {
+      const available = users.length ? users : POC_USERS;
       this.usersState.set(available);
       this.directoryResolved = true;
       const preferredUserId = this.pendingUserId ?? requestedUserId;

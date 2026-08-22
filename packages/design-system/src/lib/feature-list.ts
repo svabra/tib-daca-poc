@@ -72,6 +72,10 @@ export const DACA_FEATURE_RELEASE = {
             description: 'Ergänzen und prüfen Sie Metadaten, damit andere Personen die Daten richtig einordnen und verwenden können.',
           },
           {
+            title: 'Verantwortung und Stellvertretung sichtbar machen',
+            description: 'Data Owner und ihre Organisation sind mit Foto und Kontaktwegen erkennbar. Eine ausdrücklich zugewiesene Stellvertretung sichert die Handlungsfähigkeit, ohne automatisch zusätzliche Berechtigungen zu erhalten.',
+          },
+          {
             title: 'Zugriff gezielt freigeben und verlängern',
             description: 'Legen Sie fest, wer ein Datenprodukt wie lange nutzen darf. Auslaufende Freigaben werden erst nach erneutem Vier-Augen-Entscheid verlängert.',
           },
@@ -121,6 +125,10 @@ export const DACA_FEATURE_RELEASE = {
           {
             title: 'Manage your data products',
             description: 'Complete and review metadata so other people can understand and use the data correctly.',
+          },
+          {
+            title: 'Make ownership and deputies visible',
+            description: 'Data owners and their organizations are identifiable through portraits and contact options. An explicitly assigned deputy preserves continuity without automatically receiving additional permissions.',
           },
           {
             title: 'Grant and renew access deliberately',

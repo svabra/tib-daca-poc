@@ -38,6 +38,7 @@ from .access_renewals import (
 )
 from .control_people import assign_default_control_person, is_active_publication_approver
 from .database import default_session_factory, get_session
+from .deputy_owners import assign_default_deputy_owner
 from .governance import (
     bind_access_request_fulfillments,
     can_view_private_product,
@@ -1115,6 +1116,7 @@ def data_product_summary(
         origin_catalog=product.origin_catalog,
         revision=product.revision,
         owner_user_id=product.owner_user_id,
+        deputy_owner_user_id=product.deputy_owner_user_id,
         control_person_user_id=product.control_person_user_id,
         discoverable=product.discoverable,
         title=product.title,
@@ -1802,6 +1804,7 @@ def create_router() -> APIRouter:
         )
         session.add(product)
         session.flush()
+        assign_default_deputy_owner(session, product)
         assign_default_control_person(session, product)
         endpoint = body.technical_metadata.endpoint
         session.add(

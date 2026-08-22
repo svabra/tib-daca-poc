@@ -62,13 +62,14 @@ function serviceLevelSummary(canEdit = true): ServiceLevelSummaryResponse {
 
 const USERS: DemoUser[] = [
   { id: 'joel.ruod', displayName: 'Joel Ruod', organization: 'ESTV', email: '', phone: null, avatarUrl: '/assets/data-owners/joel-ruod.webp', roles: ['data_owner', 'publication_approver'] },
+  { id: 'kassandra.valdata', displayName: 'Kassandra Valdata', organization: 'ESTV', email: '', phone: null, avatarUrl: '/assets/kassandra-valdata.webp', roles: ['data_owner'] },
   { id: 'thomas.bag', displayName: 'Thomas Kriegli', organization: 'BAG', email: '', phone: null, avatarUrl: null, roles: ['publication_approver'] },
   { id: 'thomas.estv', displayName: 'Thomas Kriegli', organization: 'ESTV', email: '', phone: null, avatarUrl: null, roles: ['publication_approver'] },
   { id: 'inactive.user', displayName: 'Inaktiv', organization: 'ESTV', email: '', phone: null, avatarUrl: null, roles: ['data_consumer'] },
 ];
 
 async function render(canEdit = true, summaryFails = false) {
-  const product = signal({ ...FALLBACK_PRODUCT, id: PRODUCT_ID, ownerUserId: 'joel.ruod', revision: 8 });
+  const product = signal({ ...FALLBACK_PRODUCT, id: PRODUCT_ID, ownerUserId: 'joel.ruod', deputyOwnerUserId: 'kassandra.valdata', revision: 8 });
   const catalog = {
     product,
     products: signal([product()]),
@@ -114,6 +115,11 @@ describe('ProductOverviewComponent SLA control person', () => {
     expect(root.textContent).toContain('ESTV · Kontrollperson / Publication Approver');
     expect(root.textContent).toContain('Joel Ruod · ESTV');
     expect(root.querySelector<HTMLImageElement>('.product-overview-owner img')?.src).toContain('/assets/data-owners/joel-ruod.webp');
+    const ownerPeople = root.querySelectorAll<HTMLElement>('.product-overview-owner-person');
+    expect(ownerPeople).toHaveLength(2);
+    expect(ownerPeople[1].textContent).toContain('Stv. Data Owner');
+    expect(ownerPeople[1].textContent).toContain('Kassandra Valdata · ESTV');
+    expect(ownerPeople[1].querySelector<HTMLImageElement>('img')?.src).toContain('/assets/kassandra-valdata.webp');
     expect(component.selectedControlPersonId()).toBe('thomas.estv');
     expect(component.activePublicationApprovers().map((user) => user.id)).toEqual(['thomas.bag', 'thomas.estv']);
     expect(root.textContent).not.toContain('Inaktiv');
