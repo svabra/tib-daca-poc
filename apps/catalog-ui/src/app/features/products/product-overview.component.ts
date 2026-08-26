@@ -45,7 +45,7 @@ import { accessConsumerSummary, DataOwnerProfile, deliveryProtocols, resolvedDat
         <div class="daca-card-body">
           <dl class="product-overview-facts">
             <div><dt>Fachdomains</dt><dd>@for (domain of product().domains; track domain.id) { <a [routerLink]="['/domains', domain.id]">{{ domain.preferredLabel }}</a>@if (!$last) { · } } @empty { {{ product().domain || 'Noch nicht zugeordnet' }} }</dd></div>
-            <div><dt>Glossarterme</dt><dd>@for (term of product().glossaryTerms; track term.id) { <span>{{ term.preferredLabel }}</span>@if (!$last) { · } } @empty { Noch keine akzeptierten Terme }</dd></div>
+            <div><dt>Glossarterme</dt><dd>@for (term of product().glossaryTerms; track term.id) { <span>{{ term.preferredLabel }}</span>@if (!$last) { · } } @empty { Noch keine akzeptierten Terme }<small><a class="product-overview-term-link" routerLink="/glossary/proposals/new" [queryParams]="{sourceProductId:product().id,domainIds:productDomainIds()||null}">Term fehlt?</a></small></dd></div>
             <div><dt>Eigentümerin</dt><dd>@if (owner(); as owner) { {{ owner.name }} · {{ owner.organization }} } @else { {{ product().owner }} }</dd></div>
             <div><dt>Aktualisierung</dt><dd>{{ product().updateFrequency }}</dd></div>
             <div><dt>Schnittstellen</dt><dd>{{ protocols().join(' · ') }}</dd></div>
@@ -143,6 +143,7 @@ export class ProductOverviewComponent {
     this.identity.users(),
   ));
   readonly protocols = computed(() => deliveryProtocols(this.product()));
+  readonly productDomainIds = computed(() => this.product().domains.map((domain) => domain.id).join(','));
   readonly consumerSummary = computed(() => accessConsumerSummary(this.product().id, this.api.ownedAccessConsumers()));
   readonly simulationAlerts = computed(() => {
     const value = this.product().additionalMetadata['simulationAlerts'];

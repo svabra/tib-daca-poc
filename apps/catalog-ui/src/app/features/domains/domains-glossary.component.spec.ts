@@ -121,46 +121,54 @@ async function render() {
 describe('DomainsGlossaryComponent term lifecycle proposals', () => {
   afterEach(() => TestBed.resetTestingModule());
 
-  it('prefills an accepted term and submits an update proposal without losing other labels or relations', async () => {
-    const { fixture, api } = await render();
+  it('shows a tab-aware create action and routes accepted-term updates through the central form', async () => {
+    const { fixture } = await render();
     const component = fixture.componentInstance;
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(root.querySelector('.daca-page-heading button')?.textContent).toContain('Domain beantragen');
     component.tab.set('terms');
     fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
-    const updateButton = [...root.querySelectorAll<HTMLButtonElement>('.term-actions button')]
-      .find((button) => button.textContent?.includes('Änderung vorschlagen'));
 
-    expect(updateButton).toBeTruthy();
-    updateButton!.click();
+    const createLink = root.querySelector<HTMLAnchorElement>('.daca-page-heading a');
+    const updateLink = root.querySelector<HTMLAnchorElement>('.term-actions a');
+    expect(createLink?.textContent).toContain('Neuen Term vorschlagen');
+    expect(createLink?.getAttribute('href')).toBe('/glossary/proposals/new');
+    expect(updateLink?.textContent).toContain('Änderung vorschlagen');
+    expect(updateLink?.getAttribute('href')).toBe(`/glossary/proposals/new?termId=${TERM.id}`);
+
+    component.tab.set('governance');
     fixture.detectChanges();
-    expect(component.termRequestForm.controls.labelDe.value).toBe('Gepanzertes Fahrzeug');
-    expect(component.termRequestForm.controls.labelEn.value).toBe('Armored Vehicle');
-    expect(component.selectedTermDomainIds()).toEqual([DEFENCE.id, MOBILITY.id]);
+    expect(root.querySelector('.daca-page-heading button')).toBeNull();
+    expect(root.querySelector('.daca-page-heading a')).toBeNull();
+  });
 
-    component.termRequestForm.patchValue({ labelDe: 'Geschütztes Fahrzeug', alternativeLabelsDe: 'Panzerfahrzeug, Schutzfahrzeug' });
-    component.toggleTermDomain(MOBILITY.id, false);
-    component.submitTermUpdate();
+  it('exposes the sections as addressable navigation links with the current page announced', async () => {
+    const { fixture } = await render();
+    const component = fixture.componentInstance;
+    const root = fixture.nativeElement as HTMLElement;
+    const navigation = root.querySelector<HTMLElement>('.semantic-tabs');
+    const links = [...root.querySelectorAll<HTMLAnchorElement>('.semantic-tabs > a')];
 
-    expect(api.createGlossaryTermProposal).toHaveBeenCalledWith({
-      operation: 'update',
-      targetTermId: TERM.id,
-      autoAttach: false,
-      domainIds: [DEFENCE.id],
-      labels: [
-        { language: 'de', preferredLabel: 'Geschütztes Fahrzeug', alternativeLabels: ['Panzerfahrzeug', 'Schutzfahrzeug'], definition: TERM.labels[0].definition },
-        { language: 'en', preferredLabel: 'Armored Vehicle', alternativeLabels: ['Armoured Vehicle'], definition: TERM.labels[1].definition },
-        TERM.labels[2],
-      ],
-      relations: [{ relation: 'exactMatch', targetUri: 'https://example.test/armored-vehicle' }],
-    });
-    expect(component.termRequestOpen()).toBe(false);
-    expect(component.tab()).toBe('governance');
-    expect(component.notice()).toContain('Änderungsantrag');
+    expect(navigation?.getAttribute('role')).toBeNull();
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/domains',
+      '/domains?tab=terms',
+      '/domains?tab=governance',
+    ]);
+    expect(links[0].getAttribute('aria-current')).toBe('page');
+    expect(links[1].getAttribute('aria-current')).toBeNull();
+
+    component.tab.set('terms');
+    fixture.detectChanges();
+    expect(links[0].getAttribute('aria-current')).toBeNull();
+    expect(links[1].getAttribute('aria-current')).toBe('page');
   });
 
   it('submits a confirmed retirement proposal with the existing governed payload', async () => {
     const { fixture, api } = await render();
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const selectTab = vi.spyOn(fixture.componentInstance, 'selectTab');
 
     fixture.componentInstance.requestTermRetirement(TERM);
 
@@ -172,8 +180,28 @@ describe('DomainsGlossaryComponent term lifecycle proposals', () => {
       labels: TERM.labels,
       relations: [{ relation: 'exactMatch', targetUri: 'https://example.test/armored-vehicle' }],
     }));
+    expect(selectTab).toHaveBeenCalledWith('governance');
     expect(fixture.componentInstance.tab()).toBe('governance');
     expect(fixture.componentInstance.notice()).toContain('Stilllegungsantrag');
     confirm.mockRestore();
+  });
+
+  it('finds every editable term by an alternative label and shows the abbreviation', async () => {
+    const { fixture } = await render();
+    const component = fixture.componentInstance;
+    component.tab.set('terms');
+    component.termQuery.set('Panzerfahrzeug');
+    fixture.detectChanges();
+
+    expect(component.filteredTerms()).toEqual([TERM]);
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('.semantic-card')?.textContent).toContain('Panzerfahrzeug');
+    expect(root.querySelector<HTMLAnchorElement>('.term-actions a')?.getAttribute('href')).toBe(
+      `/glossary/proposals/new?termId=${TERM.id}`,
+    );
+
+    component.termQuery.set('nicht vorhanden');
+    fixture.detectChanges();
+    expect(root.textContent).toContain('Keine passenden Glossarterme gefunden.');
   });
 });

@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
+import { DomainSummary } from '../../core/catalog.models';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 import type { DemoUser } from '../../core/demo-identity.service';
 import { FALLBACK_PRODUCT } from '../../core/catalog.seed';
@@ -32,6 +33,25 @@ const DEFINITION: ServiceLevelDefinition = {
 };
 const OWNER = { displayName: 'Joel Ruod', organization: 'ESTV', role: 'data_owner' as const };
 const CONTROLLER = { displayName: 'Thomas Kriegli', organization: 'ESTV', role: 'control_person' as const };
+const PRODUCT_DOMAIN: DomainSummary = {
+  id: '22222222-2222-4222-8222-222222222222',
+  urn: 'urn:daca:domain:direct-federal-tax',
+  originCatalogId: 'catalog',
+  revision: 1,
+  status: 'active',
+  preferredLabel: 'Direkte Bundessteuer',
+  definition: 'Fachdomain der direkten Bundessteuer.',
+  labels: [],
+  ownerUserId: 'joel.ruod',
+  ownerName: 'Joel Ruod',
+  ownerOrganization: 'ESTV',
+  deputyOwnerUserId: 'kassandra.valdata',
+  deputyOwnerName: 'Kassandra Valdata',
+  deputyOwnerOrganization: 'ESTV',
+  productCount: 1,
+  termCount: 0,
+  updatedAt: '2026-08-26T10:00:00Z',
+};
 
 function serviceLevelSummary(canEdit = true): ServiceLevelSummaryResponse {
   return {
@@ -69,7 +89,7 @@ const USERS: DemoUser[] = [
 ];
 
 async function render(canEdit = true, summaryFails = false) {
-  const product = signal({ ...FALLBACK_PRODUCT, id: PRODUCT_ID, ownerUserId: 'joel.ruod', deputyOwnerUserId: 'kassandra.valdata', revision: 8 });
+  const product = signal({ ...FALLBACK_PRODUCT, id: PRODUCT_ID, ownerUserId: 'joel.ruod', deputyOwnerUserId: 'kassandra.valdata', revision: 8, domains: [PRODUCT_DOMAIN] });
   const catalog = {
     product,
     products: signal([product()]),
@@ -167,5 +187,15 @@ describe('ProductOverviewComponent SLA control person', () => {
     expect(root.textContent).not.toContain('Noch nicht zugewiesen');
     expect(root.textContent).not.toContain('must-not-leak');
     expect(root.querySelector('.product-overview-control-person')).toBeNull();
+  });
+
+  it('offers a quiet term proposal link with product and domain context', async () => {
+    const { fixture, product } = await render();
+    const root = fixture.nativeElement as HTMLElement;
+    const link = root.querySelector<HTMLAnchorElement>('.product-overview-term-link');
+    const domainIds = product().domains.map((domain) => domain.id).join(',');
+
+    expect(link?.textContent?.trim()).toBe('Term fehlt?');
+    expect(link?.getAttribute('href')).toBe(`/glossary/proposals/new?sourceProductId=${PRODUCT_ID}&domainIds=${encodeURIComponent(domainIds)}`);
   });
 });

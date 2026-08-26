@@ -100,6 +100,7 @@ import {
         <div class="daca-card expert-search-empty">
           <strong>Keine passenden Datenprodukte gefunden</strong>
           <p>Ändern Sie den Suchbegriff oder setzen Sie die Filter zurück.</p>
+          <a class="expert-search-term-link" routerLink="/glossary/proposals/new" [queryParams]="{q:query().trim()}">Fachbegriff fehlt? Vorschlagen</a>
         </div>
       } @else {
         <div class="expert-search-list">
@@ -134,6 +135,7 @@ import {
       }
     </section>
   `,
+  styles: [`.expert-search-term-link{display:inline-block;margin-top:.7rem;color:#006699;font-size:.78rem;font-weight:700;text-decoration:underline;text-underline-offset:.16rem}`],
 })
 export class CatalogExpertSearchComponent {
   readonly api = inject(CatalogApiService);

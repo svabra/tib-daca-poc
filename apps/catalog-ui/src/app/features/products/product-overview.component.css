@@ -1,4 +1,5 @@
 .product-overview-facts dd small { display: block; margin-top: 3px; color: var(--daca-muted); font-size: .67rem; font-weight: 500; line-height: 1.35; }
+.product-overview-term-link { color: #006699; text-decoration: underline; text-underline-offset: .15rem; }
 .product-overview-control-person { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(280px, 1.3fr); gap: 18px; margin-top: 20px; border-top: 1px solid var(--daca-border); padding-top: 18px; }
 .product-overview-control-person h3 { margin: 0 0 5px; font-size: .88rem; }
 .product-overview-control-person p { margin: 0; color: var(--daca-muted); font-size: .7rem; line-height: 1.45; }

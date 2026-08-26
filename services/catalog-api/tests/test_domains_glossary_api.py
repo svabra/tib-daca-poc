@@ -368,6 +368,7 @@ def test_default_semantic_suggestions_cover_journey_08_domains(client):
     assert response.status_code == 200
     suggestions = response.json()
     domain_suggestions = {item["id"]: item for item in suggestions if item["kind"] == "domain"}
+    assert not any(item["label"] in {"Bergepanzer", "Bergepanzer 01"} for item in suggestions)
     assert {str(DEFENCE_DOMAIN_ID), str(MOBILITY_DOMAIN_ID)} <= domain_suggestions.keys()
     assert all(
         item["score"] >= 70

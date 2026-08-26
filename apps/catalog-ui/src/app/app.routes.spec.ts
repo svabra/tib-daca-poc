@@ -25,6 +25,7 @@ describe('catalog routes', () => {
   it('exposes lazy domain, glossary review and knowledge-governance routes', () => {
     expect(DOMAIN_ROUTES.find((route) => route.path === 'domains')?.loadComponent).toBeTypeOf('function');
     expect(DOMAIN_ROUTES.find((route) => route.path === 'domains/:id')?.loadComponent).toBeTypeOf('function');
+    expect(DOMAIN_ROUTES.find((route) => route.path === 'glossary/proposals/new')?.loadComponent).toBeTypeOf('function');
     expect(DOMAIN_ROUTES.find((route) => route.path === 'glossary/proposals/:id/review')?.loadComponent).toBeTypeOf('function');
   });
 });
