@@ -148,6 +148,31 @@ def test_docker_publish_uses_artifact_free_version_tagged_repositories() -> None
     ) in workflow
 
 
+def test_postgres_compatibility_checks_domain_glossary_tables_by_name() -> None:
+    workflow = (ROOT / ".github/workflows/docker-publish.yml").read_text(encoding="utf-8")
+    expected_tables = (
+        "domains",
+        "domain_localizations",
+        "data_product_domains",
+        "domain_change_requests",
+        "glossary_terms",
+        "glossary_term_localizations",
+        "glossary_term_domains",
+        "glossary_term_relations",
+        "data_product_glossary_terms",
+        "glossary_term_proposals",
+        "glossary_term_proposal_reviews",
+    )
+
+    assert "- name: Verify the RHOS shared PostgreSQL schema profile" in workflow
+    assert "missing_domain_glossary_tables" in workflow
+    assert "to_regclass('daca_catalog.' || table_name) IS NULL" in workflow
+    assert 'if [ -n "$missing_domain_glossary_tables" ]; then' in workflow
+    assert 'test "$schema_rows"' not in workflow
+    for table in expected_tables:
+        assert f"('{table}')" in workflow
+
+
 def test_poc_guide_ships_twenty_nine_optimized_webp_screenshots() -> None:
     image_dir = ROOT / "apps/catalog-ui/public/assets/poc-guide"
     images = sorted(image_dir.glob("*.webp"))
