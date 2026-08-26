@@ -3,6 +3,7 @@ import { WelcomePageComponent } from './features/welcome/welcome-page.component'
 import { PRODUCT_ACTIVITY_ROUTE } from './features/activity/product-activity.route';
 import { PRODUCT_SERVICE_LEVEL_ROUTE } from './features/service-level/product-service-level.route';
 import { PRODUCT_USAGE_ROUTE } from './features/usage/product-usage.route';
+import { DOMAIN_ROUTES } from './features/domains/domain.routes';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', component: WelcomePageComponent, title: 'Willkommen | DaCa' },
@@ -25,6 +26,7 @@ export const routes: Routes = [
     data: { preload: true },
     title: 'Aufgaben | DaCa',
   },
+  ...DOMAIN_ROUTES,
   {
     path: 'governance-submissions/:id',
     loadComponent: () => import('./features/tasks/governance-review.component').then((m) => m.GovernanceReviewComponent),
@@ -58,6 +60,11 @@ export const routes: Routes = [
     path: 'poc-simulation/access-renewal',
     loadComponent: () => import('./features/poc-simulation/access-renewal-fixture.component').then((m) => m.AccessRenewalFixtureComponent),
     title: 'Auslaufende Freigabe | PoC Simulation',
+  },
+  {
+    path: 'poc-simulation/domain-glossary',
+    loadComponent: () => import('./features/poc-simulation/domain-glossary-fixture.component').then((m) => m.DomainGlossaryFixtureComponent),
+    title: 'Domains & Glossar | PoC Simulation',
   },
   {
     path: 'poc-simulation/quality-below-threshold',

@@ -121,6 +121,9 @@ export interface DataProduct {
   description: string;
   owner: string;
   domain: string;
+  domains: DomainSummary[];
+  glossaryTerms: GlossaryTermSummary[];
+  pendingTermProposals?: string[];
   lifecycle: 'draft' | 'active' | 'deprecated' | 'retired';
   classification: 'public' | 'internal' | 'confidential' | 'restricted';
   keywords: string[];
@@ -134,6 +137,133 @@ export interface DataProduct {
   endpoints: EndpointDescriptor[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface LocalizedConceptLabel {
+  language: string;
+  preferredLabel: string;
+  alternativeLabels: string[];
+  definition: string;
+}
+
+export interface DomainSummary {
+  id: string;
+  urn: string;
+  originCatalogId: string;
+  revision: number;
+  status: 'active' | 'retired';
+  preferredLabel: string;
+  definition: string;
+  labels: LocalizedConceptLabel[];
+  ownerUserId: string;
+  ownerName: string;
+  ownerOrganization: string;
+  deputyOwnerUserId: string;
+  deputyOwnerName: string;
+  deputyOwnerOrganization: string;
+  productCount: number;
+  termCount: number;
+  updatedAt: string;
+}
+
+export type SkosRelationType = 'exactMatch' | 'closeMatch' | 'broader' | 'narrower' | 'related';
+
+export interface GlossaryTermRelation {
+  id: string;
+  relationType: SkosRelationType;
+  targetTermId: string | null;
+  targetUri: string;
+  targetLabel: string;
+}
+
+export interface GlossaryTermSummary {
+  id: string;
+  urn: string;
+  originCatalogId: string;
+  revision: number;
+  status: 'active' | 'retired';
+  preferredLabel: string;
+  definition: string;
+  labels: LocalizedConceptLabel[];
+  domains: DomainSummary[];
+  relations: GlossaryTermRelation[];
+  updatedAt: string;
+}
+
+export interface DomainChangeRequest {
+  id: string;
+  operation: 'create' | 'update' | 'retire';
+  targetDomainId: string | null;
+  revision: number;
+  status: 'submitted' | 'approved' | 'rejected' | 'stale';
+  requesterUserId: string;
+  requesterName: string;
+  requestedPayload: Record<string, unknown>;
+  reviewPayload: Record<string, unknown>;
+  decisionComment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DomainAuditEvent {
+  id: string;
+  resourceType: string;
+  resourceId: string;
+  action: string;
+  actor: string;
+  revision: number | null;
+  details: Record<string, unknown>;
+  occurredAt: string;
+}
+
+export interface GlossaryTermProposalReview {
+  id: string;
+  domainId: string;
+  domainLabel: string;
+  ownerUserId: string;
+  ownerName: string;
+  status: 'pending' | 'approved' | 'rejected';
+  decisionComment: string | null;
+  decidedAt: string | null;
+}
+
+export interface GlossaryTermProposal {
+  id: string;
+  operation: 'create' | 'update' | 'retire';
+  targetTermId: string | null;
+  sourceProductId: string | null;
+  autoAttach: boolean;
+  revision: number;
+  status: 'submitted' | 'in_review' | 'accepted' | 'rejected' | 'stale';
+  requesterUserId: string;
+  requesterName: string;
+  requestedPayload: Record<string, unknown>;
+  reviewPayload: Record<string, unknown>;
+  reviews: GlossaryTermProposalReview[];
+  decisionComment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SemanticSuggestion {
+  kind: 'domain' | 'glossaryTerm';
+  id: string;
+  label: string;
+  score: number;
+  matchedFields: string[];
+  reason: string;
+  source: 'deterministic-fuzzy';
+}
+
+export interface DomainGlossaryFixtureState {
+  fixtureId: 'domain-glossary-governance';
+  state: 'notPrepared' | 'ready' | 'domainPending' | 'domainApproved' | 'termPending' | 'completed';
+  productId: string | null;
+  productTitle: string | null;
+  domainIds: string[];
+  termId: string | null;
+  openDomainRequestCount: number;
+  openTermProposalCount: number;
 }
 
 export interface LineageNode {

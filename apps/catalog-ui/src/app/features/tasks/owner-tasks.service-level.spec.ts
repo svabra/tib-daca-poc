@@ -66,6 +66,22 @@ describe('OwnerTasksComponent service-level workflow task', () => {
     expect(component.taskQueryParams(task)).toEqual({ review: 'revision-2' });
   });
 
+  it('links semantic decision information back to its review context', async () => {
+    const { fixture } = await render();
+    const component = fixture.componentInstance;
+
+    expect(component.taskRoute({
+      taskType: 'glossary_term_decision',
+      dataProductId: 'product-1',
+      glossaryTermProposalId: 'proposal-1',
+    })).toEqual(['/glossary/proposals', 'proposal-1', 'review']);
+    expect(component.taskRoute({
+      taskType: 'domain_change_decision',
+      dataProductId: null,
+      domainChangeRequestId: 'request-1',
+    })).toEqual(['/domains']);
+  });
+
   it('shows an unknown owner-inbox status with retry instead of claiming that the inbox is empty', async () => {
     const api = apiStub();
     api.ownerAccessRequestError.set('Zugriffsanfragen konnten nicht geladen werden. Der Aufgabenstatus ist unbekannt.');

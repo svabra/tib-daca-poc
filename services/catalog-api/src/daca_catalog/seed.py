@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime
 from sqlalchemy.orm import Session
 
 from .database import default_session_factory
+from .domain_glossary_seed import seed_domain_glossary_reference_data
 from .models import (
     AccessRequest,
     AuditEvent,
@@ -195,6 +196,7 @@ def seed_catalog(session: Session) -> bool:
         owner_inbox_added = seed_owner_inbox_access_request(session)
         access_consumers_added = seed_active_access_consumers(session)
         workflow_added = seed_workflow_reference_data(session)
+        domain_glossary_added = seed_domain_glossary_reference_data(session)
         return (
             owner_profiles_added
             or relationships_added
@@ -202,6 +204,7 @@ def seed_catalog(session: Session) -> bool:
             or owner_inbox_added
             or access_consumers_added
             or workflow_added
+            or domain_glossary_added
         )
 
     created = datetime(2026, 8, 1, 8, 0, tzinfo=UTC)
@@ -621,6 +624,7 @@ def seed_catalog(session: Session) -> bool:
     )
     session.commit()
     seed_workflow_reference_data(session)
+    seed_domain_glossary_reference_data(session)
     return True
 
 

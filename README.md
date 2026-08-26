@@ -132,6 +132,16 @@ business metadata, confirmed KOBY Graphify context, and confirmed mappings for t
 and every key field. The semantic profile is available as DCAT-oriented JSON-LD at
 `GET /api/v1/data-products/{id}/semantic-profile`; no SPARQL endpoint is exposed.
 
+The catalog also maintains governed subject domains and a multilingual business glossary. Products
+can belong to several domains and can reference only accepted terms governed by at least one of
+those domains. Domain-register requests, unanimous multi-domain term review, requester
+notifications, deterministic PoC suggestions, and the JSON-LD knowledge graph are described in
+[`docs/domains-and-glossary.md`](docs/domains-and-glossary.md). Free-form product keywords remain
+separate and unchanged. The deterministic suggestion provider uses a minimum score of `70` by
+default; set `DACA_SEMANTIC_SUGGESTION_THRESHOLD` to a value from `0` through `100` to tune it.
+Journeys 08 and 09 can be prepared or reset from `/poc-simulation/domain-glossary` when demo auth
+is enabled.
+
 The catalog list shows this canonical score as a compact Bronze, Silver, Gold, or Platinum medal.
 The read-only `Daten & Nutzung` product tab turns the same stored schema and semantic mappings into
 a searchable data dictionary and safe REST/PostgreSQL quickstarts. It never renders credentials or

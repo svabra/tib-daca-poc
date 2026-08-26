@@ -37,6 +37,7 @@ describe('CatalogApiService identity refresh', () => {
   const userId = signal('kassandra.valdata');
   const identity = {
     userId,
+    users: computed(() => []),
     headers: computed(() => new HttpHeaders({ 'X-DaCa-User': userId() })),
     user: computed(() => ({
       id: userId(),
@@ -242,6 +243,60 @@ describe('CatalogApiService identity refresh', () => {
 
     expect(createdNumber).toBe('ZA-2026-RENEW');
   });
+
+  it('maps the domain wire contract and nests domain and glossary proposal payloads', () => {
+    const api = TestBed.inject(CatalogApiService);
+    const http = TestBed.inject(HttpTestingController);
+    flushRefresh(requestsFor(http, 'kassandra.valdata'), 'Product', 'Inbox', 'Task');
+    flushProductDetail(requestsFor(http, 'kassandra.valdata'), 'Product');
+
+    let domainLabel = '';
+    api.loadDomains().subscribe((items) => { domainLabel = items[0]?.preferredLabel ?? ''; });
+    http.expectOne('/api/v1/domains').flush([domainWire()]);
+    expect(domainLabel).toBe('Verteidigung');
+    expect(api.domains()[0]).toEqual(expect.objectContaining({ status: 'active', definition: 'Fachliche Verteidigungsdaten', ownerName: 'kassandra.valdata' }));
+
+    api.createDomainChangeRequest({ operation: 'create', requestedPayload: { ownerUserId: 'sibilla.micheli', deputyOwnerUserId: 'sandro.wenger', localizations: [{ language: 'de', preferredLabel: 'Verteidigung', definition: 'Definition' }] } }).subscribe();
+    const domainRequest = http.expectOne('/api/v1/domain-change-requests');
+    expect(domainRequest.request.body).toEqual({ operation: 'create', targetDomainId: undefined, payload: { ownerUserId: 'sibilla.micheli', deputyOwnerUserId: 'sandro.wenger', localizations: [{ language: 'de', preferredLabel: 'Verteidigung', definition: 'Definition' }] } });
+    domainRequest.flush({ id: 'request', operation: 'create', targetDomainId: null, requesterUserId: 'kassandra.valdata', status: 'submitted', requestedPayload: {}, reviewPayload: {}, revision: 1, decisionComment: null, createdAt: '', updatedAt: '' });
+
+    api.createGlossaryTermProposal({ operation: 'create', sourceProductId: 'product', autoAttach: true, domainIds: ['domain'], labels: [{ language: 'de', preferredLabel: 'Fahrzeug', alternativeLabels: [], definition: 'Definition' }] }).subscribe();
+    const termRequest = http.expectOne('/api/v1/glossary/term-proposals');
+    expect(termRequest.request.body).toEqual({ operation: 'create', sourceProductId: 'product', autoAttach: true, payload: { domainIds: ['domain'], localizations: [{ language: 'de', preferredLabel: 'Fahrzeug', alternativeLabels: [], definition: 'Definition' }], relations: [] } });
+    termRequest.flush({ id: 'proposal', operation: 'create', targetTermId: null, requesterUserId: 'kassandra.valdata', sourceProductId: 'product', autoAttach: true, status: 'in_review', requestedPayload: {}, reviewPayload: {}, revision: 1, decisionComment: null, reviews: [], createdAt: '', updatedAt: '' });
+    http.expectOne('/api/v1/tasks/mine').flush([]);
+
+    api.createGlossaryTermProposal({ operation: 'update', targetTermId: 'term', autoAttach: false, domainIds: ['domain'], labels: [{ language: 'de', preferredLabel: 'Geschütztes Fahrzeug', alternativeLabels: ['Panzerfahrzeug'], definition: 'Überarbeitete Definition' }], relations: [{ relation: 'exactMatch', targetUri: 'https://example.test/armored-vehicle' }] }).subscribe();
+    const termUpdateRequest = http.expectOne('/api/v1/glossary/term-proposals');
+    expect(termUpdateRequest.request.body).toEqual({ operation: 'update', targetTermId: 'term', sourceProductId: undefined, autoAttach: false, payload: { domainIds: ['domain'], localizations: [{ language: 'de', preferredLabel: 'Geschütztes Fahrzeug', alternativeLabels: ['Panzerfahrzeug'], definition: 'Überarbeitete Definition' }], relations: [{ relation: 'exactMatch', targetUri: 'https://example.test/armored-vehicle' }] } });
+    termUpdateRequest.flush({ id: 'update-proposal', operation: 'update', targetTermId: 'term', requesterUserId: 'kassandra.valdata', sourceProductId: null, autoAttach: false, status: 'in_review', requestedPayload: {}, reviewPayload: {}, revision: 1, decisionComment: null, reviews: [], createdAt: '', updatedAt: '' });
+    http.expectOne('/api/v1/tasks/mine').flush([]);
+  });
+
+  it('uses the domain-scoped review decision endpoint and maps taskKind', () => {
+    const api = TestBed.inject(CatalogApiService);
+    const http = TestBed.inject(HttpTestingController);
+    const requests = requestsFor(http, 'kassandra.valdata');
+    findRequest(requests, '/api/v1/data-products?limit=25').flush({ items: [], nextCursor: null });
+    findRequest(requests, '/api/v1/access-requests/mine').flush([]);
+    findRequest(requests, '/api/v1/access-consumers/owned').flush([]);
+    findRequest(requests, '/api/v1/access-requests/inbox').flush([]);
+    findRequest(requests, '/api/v1/tasks/mine').flush([{ id: 'info', taskType: 'glossary_term_decision', taskKind: 'information', status: 'open', assigneeUserId: 'kassandra.valdata', dataProductId: null, accessRequestId: null, title: 'Entscheid', detail: '', createdAt: '', updatedAt: '', completedAt: null }]);
+    expect(api.workflowTasks()[0].kind).toBe('information');
+
+    const proposal = { id: 'proposal', revision: 3 } as never;
+    api.decideGlossaryTermProposal(proposal, 'domain', 'approve', 'Geprüft').subscribe();
+    const decision = http.expectOne('/api/v1/glossary/term-proposals/proposal/reviews/domain/decision');
+    expect(decision.request.headers.get('If-Match')).toBe('"3"');
+    decision.flush({ id: 'proposal', operation: 'create', targetTermId: null, requesterUserId: 'kassandra.valdata', sourceProductId: null, autoAttach: false, status: 'accepted', requestedPayload: {}, reviewPayload: {}, revision: 3, decisionComment: null, reviews: [], createdAt: '', updatedAt: '' });
+    http.expectOne('/api/v1/tasks/mine').flush([]);
+    const refresh = http.match((request) => request.urlWithParams === '/api/v1/data-products?limit=25');
+    expect(refresh.length).toBe(1);
+    refresh[0].flush({ items: [], nextCursor: null });
+    http.expectOne('/api/v1/access-requests/mine').flush([]);
+    http.expectOne('/api/v1/access-consumers/owned').flush([]);
+  });
 });
 
 function requestsFor(http: HttpTestingController, identity: string): TestRequest[] {
@@ -311,4 +366,8 @@ function wireProduct(
     createdAt: '2026-08-13T08:00:00Z',
     updatedAt: '2026-08-19T08:00:00Z',
   };
+}
+
+function domainWire(): Record<string, unknown> {
+  return { id: 'domain', urn: 'urn:daca:domain:defence', originCatalogId: 'catalog', revision: 1, lifecycle: 'active', ownerUserId: 'kassandra.valdata', deputyOwnerUserId: 'sandro.wenger', preferredLabel: 'Verteidigung', localizations: [{ language: 'de', preferredLabel: 'Verteidigung', definition: 'Fachliche Verteidigungsdaten', normalizedLabel: 'verteidigung' }], productCount: 1, termCount: 0, updatedAt: '2026-08-25T00:00:00Z' };
 }

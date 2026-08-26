@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from daca_catalog.domain_glossary_seed import VEHICLE_PRODUCT_ID
 from daca_catalog.main import daaif_ontology_suggestion
 from daca_catalog.models import DemoUser
 from daca_catalog.workflow_seed import seed_workflow_reference_data, term_uri
@@ -35,6 +36,7 @@ def test_demo_users_and_fixture_seed_are_idempotent_and_persisted(client):
         "noemie.rochat",
         "sandro.wenger",
         "sarah.brunner",
+        "sibilla.micheli",
         "simone.wyss",
         "thomas.kriegli",
     ]
@@ -62,6 +64,7 @@ def test_demo_users_and_fixture_seed_are_idempotent_and_persisted(client):
             "Kanton St. Gallen",
             "/assets/data-owners/sarah-brunner.webp",
         ),
+        "sibilla.micheli": ("VBS", None),
         "simone.wyss": ("EFV", "/assets/data-owners/simone-wyss.webp"),
         "thomas.kriegli": ("ESTV", "/assets/data-owners/thomas-kriegli.webp"),
     }
@@ -78,6 +81,7 @@ def test_demo_users_and_fixture_seed_are_idempotent_and_persisted(client):
         "15555555-5555-4555-8555-555555555555": "simone.wyss",
         "16666666-6666-4666-8666-666666666666": "joel.ruod",
         "17777777-7777-4777-8777-777777777777": "lucien.morel",
+        str(VEHICLE_PRODUCT_ID): "lea.hofmann",
     }
     fixtures = client.get("/api/v1/poc/product-fixtures").json()
     assert len(fixtures) == 9

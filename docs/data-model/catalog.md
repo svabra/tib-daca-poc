@@ -22,16 +22,18 @@ DAAIF is an external source system and its internal data model is outside this r
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
-- Alembic head: `0014_deputy_data_owner`
-- Schema fingerprint: `c18c059bd5fa0575`
-- Migration fingerprint: `309c11d6bbcc087f`
-- Tables: `31`
+- Alembic head: `0015_domains_glossary`
+- Schema fingerprint: `27aa5f029b3c834f`
+- Migration fingerprint: `9312bc86e0e38c11`
+- Tables: `42`
 
 ## Domain status vocabulary
 
 - Product lifecycle is `draft`, `active`, `deprecated` or `retired`; classification is `public`, `internal`, `confidential` or `restricted`.
+- Domain and glossary-term lifecycle is `active` or `retired`; retirement is a tombstone and does not remove historical product assignments. Domain requests are `submitted`, `approved`, `rejected` or `stale`.
+- Glossary proposals are `submitted`, `in_review`, `accepted`, `rejected` or `stale`; per-domain reviews are `pending`, `approved` or `rejected`, and every primary Domain Owner must approve the same proposal revision.
 - Access requests progress through `submitted`, `identity_review`, `legal_review`, `conditions_review`, `approved_policy_pending`, a granted state, `rejected` or `withdrawn`. Granted states distinguish `granted_original` and `granted_modified`.
-- Workflow task types include `metadata_quality`, `access_governance`, `publication_approval`, `service_level_approval`, `governance_correction`, `access_request_review`, `source_access_review`, simulation alerts and `group_membership_changed`; task states are `open`, `in_progress` and `completed`.
+- Workflow task types include `metadata_quality`, `access_governance`, `publication_approval`, `service_level_approval`, `governance_correction`, `access_request_review`, `source_access_review`, domain/glossary review and decision notifications, simulation alerts and `group_membership_changed`; tasks are actions or information and use `open`, `in_progress` and `completed` states.
 - Source access requests are `submitted`, `approved` or `rejected`. A grant is derived only from approval and is interpreted at runtime as `scheduled`, `active` or `expired`; an absent `valid_until` means unbounded validity.
 - Governance submissions progress through `pending_approval`, `approved_deploying`, `approved`, `rejected` or `deployment_failed`. Discoverability and metadata publication become active only after both PostgreSQL and OPA confirm the reviewed revision.
 - Service-level revisions progress through `draft`, `pending_approval`, `published`, `rejected` or `withdrawn`. At most one draft or pending review exists per product, and a later publication records the effective end of the superseded revision.
@@ -44,6 +46,8 @@ DAAIF is an external source system and its internal data model is outside this r
 ## Persisted structured values
 
 - `data_products.keywords` is a string array; `contact`, `quality` and physical `metadata` hold DCAT-friendly extension objects.
+- `domain_change_requests.requested_payload` preserves the submitted domain draft while `review_payload` holds its revision-controlled working copy. Domains themselves remain relational and are not inferred from organizations.
+- `glossary_term_localizations.alternative_labels` is a language-scoped list. Glossary proposal payloads preserve submitted and reviewed multilingual labels, definitions, domain IDs and SKOS relations; audit rows contain only identifiers and decision metadata.
 - `endpoints.connection` describes only HTTP/REST or PostgreSQL connectivity and never contains credentials.
 - `policy_revisions.definition` is the constrained PBAC document. Each grant targets one person, machine or group, carries its validity period, optional IANA-zone weekly availability and independent KOBY/MCP and I14Y flags; group grants contain a server-generated membership snapshot. Generated Rego is stored separately and is not editable.
 - `governance_submissions.review_snapshot` preserves the exact product, grants, group memberships, office hours and policy revision reviewed by the assigned approver. `archive_evidence` records the BAR 20-year PoC choice without creating an archive job or network call.
@@ -123,6 +127,13 @@ erDiagram
         boolean active
         datetime created_at
     }
+    data_product_domains {
+        uuid data_product_id PK,FK
+        uuid domain_id PK,FK
+        integer position
+        string assigned_by_user_id FK
+        datetime assigned_at
+    }
     data_product_fields {
         uuid id PK
         uuid data_product_id FK
@@ -133,6 +144,12 @@ erDiagram
         text business_description
         datetime created_at
         datetime updated_at
+    }
+    data_product_glossary_terms {
+        uuid data_product_id PK,FK
+        uuid glossary_term_id PK,FK
+        string assigned_by_user_id FK
+        datetime assigned_at
     }
     data_products {
         uuid id PK
@@ -172,6 +189,43 @@ erDiagram
         boolean active
         datetime created_at
     }
+    domain_change_requests {
+        uuid id PK
+        string request_number UK
+        string operation
+        uuid target_domain_id FK
+        integer base_revision
+        string requester_user_id FK
+        string status
+        json requested_payload
+        json review_payload
+        integer revision
+        string reviewer_user_id FK
+        text decision_comment
+        datetime decided_at
+        datetime created_at
+        datetime updated_at
+    }
+    domain_localizations {
+        uuid domain_id PK,FK
+        string language PK
+        string preferred_label
+        text definition
+        string normalized_label
+    }
+    domains {
+        uuid id PK
+        string urn UK
+        string origin_catalog_id
+        integer revision
+        string content_hash
+        string lifecycle
+        string owner_user_id FK
+        string deputy_owner_user_id FK
+        datetime created_at
+        datetime updated_at
+        datetime retired_at
+    }
     endpoints {
         uuid id PK
         uuid data_product_id FK
@@ -181,6 +235,65 @@ erDiagram
         json connection
         string secret_ref
         datetime created_at
+    }
+    glossary_term_domains {
+        uuid term_id PK,FK
+        uuid domain_id PK,FK
+    }
+    glossary_term_localizations {
+        uuid term_id PK,FK
+        string language PK
+        string preferred_label
+        json alternative_labels
+        text definition
+        string normalized_label
+    }
+    glossary_term_proposal_reviews {
+        uuid proposal_id PK,FK
+        uuid domain_id PK,FK
+        integer proposal_revision
+        string owner_user_id FK
+        string status
+        text decision_comment
+        datetime decided_at
+        datetime updated_at
+    }
+    glossary_term_proposals {
+        uuid id PK
+        string request_number UK
+        string operation
+        uuid target_term_id FK
+        string requester_user_id FK
+        uuid source_product_id FK
+        integer source_product_revision
+        boolean auto_attach
+        string status
+        json requested_payload
+        json review_payload
+        integer revision
+        text decision_comment
+        datetime decided_at
+        datetime created_at
+        datetime updated_at
+    }
+    glossary_term_relations {
+        uuid id PK
+        uuid source_term_id FK
+        uuid target_term_id FK
+        string target_uri
+        string relation
+        datetime created_at
+    }
+    glossary_terms {
+        uuid id PK
+        string urn UK
+        string origin_catalog_id
+        integer revision
+        string content_hash
+        string lifecycle
+        datetime created_at
+        datetime updated_at
+        datetime retired_at
     }
     governance_submissions {
         uuid id PK
@@ -444,6 +557,7 @@ erDiagram
     workflow_tasks {
         uuid id PK
         string task_type
+        string task_kind
         string status
         string assignee_user_id FK
         uuid data_product_id FK
@@ -452,22 +566,48 @@ erDiagram
         uuid governance_submission_id FK
         uuid service_level_revision_id FK
         uuid source_access_request_id FK
+        uuid domain_change_request_id FK
+        uuid glossary_term_proposal_id FK
         string title
         text detail
         datetime created_at
         datetime updated_at
         datetime completed_at
+        datetime acknowledged_at
     }
     data_products ||--o{ access_requests : "data_product_id"
     policy_revisions o|--o{ access_requests : "decision_policy_revision_id"
     access_requests o|--o{ access_requests : "renewal_of_request_id"
     canonical_ontology_versions ||--o{ canonical_ontology_terms : "ontology_version_id"
+    data_products ||--o| data_product_domains : "data_product_id"
+    domains ||--o| data_product_domains : "domain_id"
+    demo_users ||--o{ data_product_domains : "assigned_by_user_id"
     data_products ||--o{ data_product_fields : "data_product_id"
+    data_products ||--o| data_product_glossary_terms : "data_product_id"
+    glossary_terms ||--o| data_product_glossary_terms : "glossary_term_id"
+    demo_users ||--o{ data_product_glossary_terms : "assigned_by_user_id"
     demo_users o|--o{ data_products : "owner_user_id"
     demo_users o|--o{ data_products : "deputy_owner_user_id"
     demo_users o|--o{ data_products : "control_person_user_id"
     demo_users o|--o{ demo_users : "supervisor_user_id"
+    domains o|--o{ domain_change_requests : "target_domain_id"
+    demo_users ||--o{ domain_change_requests : "requester_user_id"
+    demo_users o|--o{ domain_change_requests : "reviewer_user_id"
+    domains ||--o| domain_localizations : "domain_id"
+    demo_users ||--o{ domains : "owner_user_id"
+    demo_users ||--o{ domains : "deputy_owner_user_id"
     data_products ||--o{ endpoints : "data_product_id"
+    glossary_terms ||--o| glossary_term_domains : "term_id"
+    domains ||--o| glossary_term_domains : "domain_id"
+    glossary_terms ||--o| glossary_term_localizations : "term_id"
+    glossary_term_proposals ||--o| glossary_term_proposal_reviews : "proposal_id"
+    domains ||--o| glossary_term_proposal_reviews : "domain_id"
+    demo_users ||--o{ glossary_term_proposal_reviews : "owner_user_id"
+    glossary_terms o|--o{ glossary_term_proposals : "target_term_id"
+    demo_users ||--o{ glossary_term_proposals : "requester_user_id"
+    data_products o|--o{ glossary_term_proposals : "source_product_id"
+    glossary_terms ||--o{ glossary_term_relations : "source_term_id"
+    glossary_terms o|--o{ glossary_term_relations : "target_term_id"
     data_products ||--o{ governance_submissions : "data_product_id"
     policy_revisions ||--o{ governance_submissions : "policy_revision_id"
     demo_users ||--o{ governance_submissions : "owner_user_id"
@@ -511,6 +651,8 @@ erDiagram
     governance_submissions o|--o{ workflow_tasks : "governance_submission_id"
     service_level_revisions o|--o{ workflow_tasks : "service_level_revision_id"
     source_access_requests o|--o{ workflow_tasks : "source_access_request_id"
+    domain_change_requests o|--o{ workflow_tasks : "domain_change_request_id"
+    glossary_term_proposals o|--o{ workflow_tasks : "glossary_term_proposal_id"
 ```
 
 Relationships in this diagram are physical foreign keys inside this database only.
@@ -649,6 +791,26 @@ Constraints and indexes:
 
 - Unique `unnamed`: `uri`
 
+### `data_product_domains`
+
+Ordered many-to-many assignments from products to governed subject domains.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `data_product_id` | `CHAR(32)` | no | PK, FK | — |
+| `domain_id` | `CHAR(32)` | no | PK, FK | — |
+| `position` | `INTEGER` | no | — | `0` |
+| `assigned_by_user_id` | `VARCHAR(200)` | no | FK | — |
+| `assigned_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Check `ck_data_product_domain_position`: `position >= 0`
+- Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
+- Foreign key `domain_id` → `domains.id`; on delete `RESTRICT`
+- Foreign key `assigned_by_user_id` → `demo_users.id`
+- Index `ix_data_product_domain_domain` on `domain_id`
+
 ### `data_product_fields`
 
 Technical schema fields and their business descriptions.
@@ -670,6 +832,24 @@ Constraints and indexes:
 - Unique `uq_data_product_field_name`: `data_product_id, name`
 - Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
 - Index `ix_data_product_field_product` on `data_product_id`
+
+### `data_product_glossary_terms`
+
+Accepted business-glossary concepts attached to data products.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `data_product_id` | `CHAR(32)` | no | PK, FK | — |
+| `glossary_term_id` | `CHAR(32)` | no | PK, FK | — |
+| `assigned_by_user_id` | `VARCHAR(200)` | no | FK | — |
+| `assigned_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
+- Foreign key `glossary_term_id` → `glossary_terms.id`; on delete `RESTRICT`
+- Foreign key `assigned_by_user_id` → `demo_users.id`
+- Index `ix_data_product_glossary_term_term` on `glossary_term_id`
 
 ### `data_products`
 
@@ -733,6 +913,88 @@ Constraints and indexes:
 
 - Foreign key `supervisor_user_id` → `demo_users.id`; on delete `SET NULL`
 
+### `domain_change_requests`
+
+Versioned requests to create, update or retire a governed domain.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `request_number` | `VARCHAR(32)` | no | UK | — |
+| `operation` | `VARCHAR(32)` | no | — | — |
+| `target_domain_id` | `CHAR(32)` | yes | FK | — |
+| `base_revision` | `INTEGER` | yes | — | — |
+| `requester_user_id` | `VARCHAR(200)` | no | FK | — |
+| `status` | `VARCHAR(32)` | no | — | `submitted` |
+| `requested_payload` | `JSON` | no | — | `dict` |
+| `review_payload` | `JSON` | no | — | `dict` |
+| `revision` | `INTEGER` | no | — | `1` |
+| `reviewer_user_id` | `VARCHAR(200)` | yes | FK | — |
+| `decision_comment` | `TEXT` | yes | — | — |
+| `decided_at` | `DATETIME` | yes | — | — |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Unique `unnamed`: `request_number`
+- Check `ck_domain_request_operation`: `operation IN ('create', 'update', 'retire')`
+- Check `ck_domain_request_revision`: `revision >= 1`
+- Check `ck_domain_request_status`: `status IN ('submitted', 'approved', 'rejected', 'stale')`
+- Check `ck_domain_request_target`: `(operation = 'create' AND base_revision IS NULL) OR (operation IN ('update', 'retire') AND target_domain_id IS NOT NULL AND base_revision IS NOT NULL)`
+- Foreign key `target_domain_id` → `domains.id`; on delete `RESTRICT`
+- Foreign key `requester_user_id` → `demo_users.id`
+- Foreign key `reviewer_user_id` → `demo_users.id`
+- Index `ix_domain_request_requester` on `requester_user_id, status`
+- Index `ix_domain_request_target` on `target_domain_id, status`
+
+### `domain_localizations`
+
+BCP-47-labelled preferred names and definitions for subject domains.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `domain_id` | `CHAR(32)` | no | PK, FK | — |
+| `language` | `VARCHAR(35)` | no | PK | — |
+| `preferred_label` | `VARCHAR(255)` | no | — | — |
+| `definition` | `TEXT` | no | — | — |
+| `normalized_label` | `VARCHAR(255)` | no | — | — |
+
+Constraints and indexes:
+
+- Foreign key `domain_id` → `domains.id`; on delete `CASCADE`
+- Index `ix_domain_localization_label` on `language, normalized_label`
+
+### `domains`
+
+Versioned, federation-ready subject domains with a primary Data Owner and deputy.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `urn` | `VARCHAR(255)` | no | UK | — |
+| `origin_catalog_id` | `VARCHAR(255)` | no | — | — |
+| `revision` | `INTEGER` | no | — | `1` |
+| `content_hash` | `VARCHAR(64)` | no | — | — |
+| `lifecycle` | `VARCHAR(32)` | no | — | `active` |
+| `owner_user_id` | `VARCHAR(200)` | no | FK | — |
+| `deputy_owner_user_id` | `VARCHAR(200)` | no | FK | — |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+| `retired_at` | `DATETIME` | yes | — | — |
+
+Constraints and indexes:
+
+- Unique `unnamed`: `urn`
+- Check `ck_domain_content_hash`: `length(content_hash) = 64`
+- Check `ck_domain_deputy_not_owner`: `owner_user_id <> deputy_owner_user_id`
+- Check `ck_domain_lifecycle`: `lifecycle IN ('active', 'retired')`
+- Check `ck_domain_revision`: `revision >= 1`
+- Foreign key `owner_user_id` → `demo_users.id`
+- Foreign key `deputy_owner_user_id` → `demo_users.id`
+- Index `ix_domain_lifecycle` on `lifecycle`
+- Index `ix_domain_owner` on `owner_user_id`
+
 ### `endpoints`
 
 Credential-free HTTP/REST or PostgreSQL endpoint descriptions.
@@ -753,6 +1015,149 @@ Constraints and indexes:
 - Check `ck_endpoint_protocol`: `protocol IN ('http-rest', 'postgresql')`
 - Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
 - Index `ix_endpoints_data_product` on `data_product_id`
+
+### `glossary_term_domains`
+
+Joint governance assignments connecting one glossary concept to one or more domains.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `term_id` | `CHAR(32)` | no | PK, FK | — |
+| `domain_id` | `CHAR(32)` | no | PK, FK | — |
+
+Constraints and indexes:
+
+- Foreign key `term_id` → `glossary_terms.id`; on delete `CASCADE`
+- Foreign key `domain_id` → `domains.id`; on delete `RESTRICT`
+- Index `ix_glossary_term_domain_domain` on `domain_id`
+
+### `glossary_term_localizations`
+
+BCP-47 preferred labels, alternative labels and definitions for glossary concepts.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `term_id` | `CHAR(32)` | no | PK, FK | — |
+| `language` | `VARCHAR(35)` | no | PK | — |
+| `preferred_label` | `VARCHAR(255)` | no | — | — |
+| `alternative_labels` | `JSON` | no | — | `list` |
+| `definition` | `TEXT` | no | — | — |
+| `normalized_label` | `VARCHAR(255)` | no | — | — |
+
+Constraints and indexes:
+
+- Foreign key `term_id` → `glossary_terms.id`; on delete `CASCADE`
+- Index `ix_glossary_localization_label` on `language, normalized_label`
+
+### `glossary_term_proposal_reviews`
+
+One revision-bound primary-owner decision per domain affected by a glossary proposal.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `proposal_id` | `CHAR(32)` | no | PK, FK | — |
+| `domain_id` | `CHAR(32)` | no | PK, FK | — |
+| `proposal_revision` | `INTEGER` | no | — | — |
+| `owner_user_id` | `VARCHAR(200)` | no | FK | — |
+| `status` | `VARCHAR(32)` | no | — | `pending` |
+| `decision_comment` | `TEXT` | yes | — | — |
+| `decided_at` | `DATETIME` | yes | — | — |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Check `ck_glossary_review_revision`: `proposal_revision >= 1`
+- Check `ck_glossary_review_status`: `status IN ('pending', 'approved', 'rejected')`
+- Foreign key `proposal_id` → `glossary_term_proposals.id`; on delete `CASCADE`
+- Foreign key `domain_id` → `domains.id`; on delete `RESTRICT`
+- Foreign key `owner_user_id` → `demo_users.id`
+- Index `ix_glossary_review_owner` on `owner_user_id, status`
+
+### `glossary_term_proposals`
+
+Versioned, editable proposals to create, update or retire business-glossary concepts.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `request_number` | `VARCHAR(32)` | no | UK | — |
+| `operation` | `VARCHAR(32)` | no | — | `create` |
+| `target_term_id` | `CHAR(32)` | yes | FK | — |
+| `requester_user_id` | `VARCHAR(200)` | no | FK | — |
+| `source_product_id` | `CHAR(32)` | yes | FK | — |
+| `source_product_revision` | `INTEGER` | yes | — | — |
+| `auto_attach` | `BOOLEAN` | no | — | `False` |
+| `status` | `VARCHAR(32)` | no | — | `submitted` |
+| `requested_payload` | `JSON` | no | — | `dict` |
+| `review_payload` | `JSON` | no | — | `dict` |
+| `revision` | `INTEGER` | no | — | `1` |
+| `decision_comment` | `TEXT` | yes | — | — |
+| `decided_at` | `DATETIME` | yes | — | — |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Unique `unnamed`: `request_number`
+- Check `ck_glossary_proposal_auto_attach_source`: `auto_attach = false OR source_product_id IS NOT NULL`
+- Check `ck_glossary_proposal_operation`: `operation IN ('create', 'update', 'retire', 'add_translation', 'link')`
+- Check `ck_glossary_proposal_revision`: `revision >= 1`
+- Check `ck_glossary_proposal_status`: `status IN ('submitted', 'in_review', 'accepted', 'rejected', 'stale')`
+- Check `ck_glossary_proposal_target`: `(operation = 'create' AND ((status = 'accepted' AND target_term_id IS NOT NULL) OR (status <> 'accepted' AND target_term_id IS NULL))) OR (operation <> 'create' AND target_term_id IS NOT NULL)`
+- Foreign key `target_term_id` → `glossary_terms.id`; on delete `RESTRICT`
+- Foreign key `requester_user_id` → `demo_users.id`
+- Foreign key `source_product_id` → `data_products.id`; on delete `SET NULL`
+- Index `ix_glossary_proposal_requester` on `requester_user_id, status`
+- Index `ix_glossary_proposal_source` on `source_product_id, status`
+
+### `glossary_term_relations`
+
+Directed SKOS exact, close, broader, narrower or related links between local or external concepts.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `source_term_id` | `CHAR(32)` | no | FK | — |
+| `target_term_id` | `CHAR(32)` | yes | FK | — |
+| `target_uri` | `VARCHAR(1000)` | yes | — | — |
+| `relation` | `VARCHAR(32)` | no | — | — |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Check `ck_glossary_relation_not_self`: `target_term_id IS NULL OR source_term_id <> target_term_id`
+- Check `ck_glossary_relation_target`: `(target_term_id IS NOT NULL AND target_uri IS NULL) OR (target_term_id IS NULL AND target_uri IS NOT NULL)`
+- Check `ck_glossary_relation_type`: `relation IN ('exactMatch', 'closeMatch', 'broader', 'narrower', 'related')`
+- Unique `uq_glossary_relation_term`: `source_term_id, target_term_id, relation`
+- Unique `uq_glossary_relation_uri`: `source_term_id, target_uri, relation`
+- Foreign key `source_term_id` → `glossary_terms.id`; on delete `CASCADE`
+- Foreign key `target_term_id` → `glossary_terms.id`; on delete `RESTRICT`
+- Index `ix_glossary_relation_source` on `source_term_id`
+- Index `ix_glossary_relation_target` on `target_term_id`
+
+### `glossary_terms`
+
+Accepted, versioned and federation-ready multilingual business-glossary concepts.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `urn` | `VARCHAR(255)` | no | UK | — |
+| `origin_catalog_id` | `VARCHAR(255)` | no | — | — |
+| `revision` | `INTEGER` | no | — | `1` |
+| `content_hash` | `VARCHAR(64)` | no | — | — |
+| `lifecycle` | `VARCHAR(32)` | no | — | `active` |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+| `retired_at` | `DATETIME` | yes | — | — |
+
+Constraints and indexes:
+
+- Unique `unnamed`: `urn`
+- Check `ck_glossary_term_content_hash`: `length(content_hash) = 64`
+- Check `ck_glossary_term_lifecycle`: `lifecycle IN ('active', 'retired')`
+- Check `ck_glossary_term_revision`: `revision >= 1`
+- Index `ix_glossary_term_lifecycle` on `lifecycle`
 
 ### `governance_submissions`
 
@@ -1289,6 +1694,7 @@ Owner and approver work items for quality, access governance, SLA review and req
 |---|---|:---:|---|---|
 | `id` | `CHAR(32)` | no | PK | — |
 | `task_type` | `VARCHAR(64)` | no | — | — |
+| `task_kind` | `VARCHAR(32)` | no | — | `action` |
 | `status` | `VARCHAR(32)` | no | — | `open` |
 | `assignee_user_id` | `VARCHAR(200)` | no | FK | — |
 | `data_product_id` | `CHAR(32)` | yes | FK | — |
@@ -1297,14 +1703,18 @@ Owner and approver work items for quality, access governance, SLA review and req
 | `governance_submission_id` | `CHAR(32)` | yes | FK | — |
 | `service_level_revision_id` | `CHAR(32)` | yes | FK | — |
 | `source_access_request_id` | `CHAR(32)` | yes | FK | — |
+| `domain_change_request_id` | `CHAR(32)` | yes | FK | — |
+| `glossary_term_proposal_id` | `CHAR(32)` | yes | FK | — |
 | `title` | `VARCHAR(255)` | no | — | — |
 | `detail` | `TEXT` | no | — | — |
 | `created_at` | `DATETIME` | no | — | `utc_now` |
 | `updated_at` | `DATETIME` | no | — | `utc_now` |
 | `completed_at` | `DATETIME` | yes | — | — |
+| `acknowledged_at` | `DATETIME` | yes | — | — |
 
 Constraints and indexes:
 
+- Check `ck_workflow_task_kind`: `task_kind IN ('action', 'information')`
 - Foreign key `assignee_user_id` → `demo_users.id`
 - Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
 - Foreign key `access_request_id` → `access_requests.id`; on delete `CASCADE`
@@ -1312,7 +1722,11 @@ Constraints and indexes:
 - Foreign key `governance_submission_id` → `governance_submissions.id`; on delete `CASCADE`
 - Foreign key `service_level_revision_id` → `service_level_revisions.id`; on delete `CASCADE`
 - Foreign key `source_access_request_id` → `source_access_requests.id`; on delete `CASCADE`
+- Foreign key `domain_change_request_id` → `domain_change_requests.id`; on delete `SET NULL`
+- Foreign key `glossary_term_proposal_id` → `glossary_term_proposals.id`; on delete `SET NULL`
 - Index `ix_workflow_task_assignee` on `assignee_user_id, status`
+- Index `ix_workflow_task_domain_request` on `domain_change_request_id`
+- Index `ix_workflow_task_glossary_proposal` on `glossary_term_proposal_id`
 - Index `ix_workflow_task_product` on `data_product_id`
 - Index `ix_workflow_task_source_access_request` on `source_access_request_id`
 

@@ -51,3 +51,17 @@ revision, health, and audit. A sync configuration is configuration only: no reso
 REST, SSE, OPA decisions, and bundles use HTTP. Direct database consumers use PostgreSQL wire
 protocol. SSE is an HTTP response stream, not a WebSocket. No other data-product protocol is
 implemented.
+
+## Domain and glossary boundary
+
+The standalone catalog owns the governed domain register, multilingual business glossary,
+proposal workflows, product assignments, and their JSON-LD projection. Domains are fachliche
+subject areas and are never derived from the administrative organization hierarchy. Each resource
+keeps a stable DaCa URN, origin catalog, monotonic revision, content hash, and retirement marker so
+it can participate in a future origin-owned federation protocol without making that protocol part
+of this implementation.
+
+The knowledge graph is a read projection over PostgreSQL data and uses DCAT and SKOS vocabulary.
+It is served over HTTP as JSON-LD. No graph database, SPARQL service, control-plane workflow, or
+catalog-to-catalog synchronization is introduced. See
+[`domains-and-glossary.md`](domains-and-glossary.md) for governance and semantic details.

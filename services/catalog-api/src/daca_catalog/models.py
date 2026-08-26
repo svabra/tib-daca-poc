@@ -99,6 +99,12 @@ class DataProduct(Base):
         cascade="all, delete-orphan",
         foreign_keys="ServiceLevelRevision.data_product_id",
     )
+    domain_assignments: Mapped[list[DataProductDomain]] = relationship(
+        back_populates="data_product", cascade="all, delete-orphan"
+    )
+    glossary_term_assignments: Mapped[list[DataProductGlossaryTerm]] = relationship(
+        back_populates="data_product", cascade="all, delete-orphan"
+    )
 
 
 class Endpoint(Base):
@@ -920,16 +926,368 @@ class SourceAccessGrant(Base):
     )
 
 
+class Domain(Base):
+    __tablename__ = "domains"
+    __table_args__ = (
+        CheckConstraint("lifecycle IN ('active', 'retired')", name="ck_domain_lifecycle"),
+        CheckConstraint("revision >= 1", name="ck_domain_revision"),
+        CheckConstraint("length(content_hash) = 64", name="ck_domain_content_hash"),
+        CheckConstraint(
+            "owner_user_id <> deputy_owner_user_id", name="ck_domain_deputy_not_owner"
+        ),
+        Index("ix_domain_lifecycle", "lifecycle"),
+        Index("ix_domain_owner", "owner_user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    urn: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    origin_catalog_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    lifecycle: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    owner_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    deputy_owner_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    localizations: Mapped[list[DomainLocalization]] = relationship(
+        back_populates="domain", cascade="all, delete-orphan"
+    )
+    product_assignments: Mapped[list[DataProductDomain]] = relationship(
+        back_populates="domain", cascade="all, delete-orphan"
+    )
+    term_assignments: Mapped[list[GlossaryTermDomain]] = relationship(
+        back_populates="domain", cascade="all, delete-orphan"
+    )
+
+
+class DomainLocalization(Base):
+    __tablename__ = "domain_localizations"
+    __table_args__ = (Index("ix_domain_localization_label", "language", "normalized_label"),)
+
+    domain_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("domains.id", ondelete="CASCADE"), primary_key=True
+    )
+    language: Mapped[str] = mapped_column(String(35), primary_key=True)
+    preferred_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    definition: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_label: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    domain: Mapped[Domain] = relationship(back_populates="localizations")
+
+
+class DataProductDomain(Base):
+    __tablename__ = "data_product_domains"
+    __table_args__ = (
+        CheckConstraint("position >= 0", name="ck_data_product_domain_position"),
+        Index("ix_data_product_domain_domain", "domain_id"),
+    )
+
+    data_product_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("data_products.id", ondelete="CASCADE"), primary_key=True
+    )
+    domain_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("domains.id", ondelete="RESTRICT"), primary_key=True
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    assigned_by_user_id: Mapped[str] = mapped_column(
+        ForeignKey("demo_users.id"), nullable=False
+    )
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+    data_product: Mapped[DataProduct] = relationship(back_populates="domain_assignments")
+    domain: Mapped[Domain] = relationship(back_populates="product_assignments")
+
+
+class DomainChangeRequest(Base):
+    __tablename__ = "domain_change_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "operation IN ('create', 'update', 'retire')", name="ck_domain_request_operation"
+        ),
+        CheckConstraint(
+            "status IN ('submitted', 'approved', 'rejected', 'stale')",
+            name="ck_domain_request_status",
+        ),
+        CheckConstraint(
+            "(operation = 'create' AND base_revision IS NULL) "
+            "OR (operation IN ('update', 'retire') AND target_domain_id IS NOT NULL "
+            "AND base_revision IS NOT NULL)",
+            name="ck_domain_request_target",
+        ),
+        CheckConstraint("revision >= 1", name="ck_domain_request_revision"),
+        Index("ix_domain_request_requester", "requester_user_id", "status"),
+        Index("ix_domain_request_target", "target_domain_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    request_number: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    operation: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_domain_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("domains.id", ondelete="RESTRICT")
+    )
+    base_revision: Mapped[int | None] = mapped_column(Integer)
+    requester_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="submitted")
+    requested_payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    review_payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    reviewer_user_id: Mapped[str | None] = mapped_column(ForeignKey("demo_users.id"))
+    decision_comment: Mapped[str | None] = mapped_column(Text)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class GlossaryTerm(Base):
+    __tablename__ = "glossary_terms"
+    __table_args__ = (
+        CheckConstraint(
+            "lifecycle IN ('active', 'retired')", name="ck_glossary_term_lifecycle"
+        ),
+        CheckConstraint("revision >= 1", name="ck_glossary_term_revision"),
+        CheckConstraint(
+            "length(content_hash) = 64", name="ck_glossary_term_content_hash"
+        ),
+        Index("ix_glossary_term_lifecycle", "lifecycle"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    urn: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    origin_catalog_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    lifecycle: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    localizations: Mapped[list[GlossaryTermLocalization]] = relationship(
+        back_populates="term", cascade="all, delete-orphan"
+    )
+    domain_assignments: Mapped[list[GlossaryTermDomain]] = relationship(
+        back_populates="term", cascade="all, delete-orphan"
+    )
+    product_assignments: Mapped[list[DataProductGlossaryTerm]] = relationship(
+        back_populates="term", cascade="all, delete-orphan"
+    )
+    outgoing_relations: Mapped[list[GlossaryTermRelation]] = relationship(
+        back_populates="source_term",
+        cascade="all, delete-orphan",
+        foreign_keys="GlossaryTermRelation.source_term_id",
+    )
+
+
+class GlossaryTermLocalization(Base):
+    __tablename__ = "glossary_term_localizations"
+    __table_args__ = (Index("ix_glossary_localization_label", "language", "normalized_label"),)
+
+    term_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("glossary_terms.id", ondelete="CASCADE"), primary_key=True
+    )
+    language: Mapped[str] = mapped_column(String(35), primary_key=True)
+    preferred_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    alternative_labels: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    definition: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_label: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    term: Mapped[GlossaryTerm] = relationship(back_populates="localizations")
+
+
+class GlossaryTermDomain(Base):
+    __tablename__ = "glossary_term_domains"
+    __table_args__ = (Index("ix_glossary_term_domain_domain", "domain_id"),)
+
+    term_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("glossary_terms.id", ondelete="CASCADE"), primary_key=True
+    )
+    domain_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("domains.id", ondelete="RESTRICT"), primary_key=True
+    )
+
+    term: Mapped[GlossaryTerm] = relationship(back_populates="domain_assignments")
+    domain: Mapped[Domain] = relationship(back_populates="term_assignments")
+
+
+class GlossaryTermRelation(Base):
+    __tablename__ = "glossary_term_relations"
+    __table_args__ = (
+        CheckConstraint(
+            "relation IN ('exactMatch', 'closeMatch', 'broader', 'narrower', 'related')",
+            name="ck_glossary_relation_type",
+        ),
+        CheckConstraint(
+            "(target_term_id IS NOT NULL AND target_uri IS NULL) "
+            "OR (target_term_id IS NULL AND target_uri IS NOT NULL)",
+            name="ck_glossary_relation_target",
+        ),
+        CheckConstraint(
+            "target_term_id IS NULL OR source_term_id <> target_term_id",
+            name="ck_glossary_relation_not_self",
+        ),
+        UniqueConstraint(
+            "source_term_id", "target_term_id", "relation", name="uq_glossary_relation_term"
+        ),
+        UniqueConstraint(
+            "source_term_id", "target_uri", "relation", name="uq_glossary_relation_uri"
+        ),
+        Index("ix_glossary_relation_source", "source_term_id"),
+        Index("ix_glossary_relation_target", "target_term_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    source_term_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("glossary_terms.id", ondelete="CASCADE"), nullable=False
+    )
+    target_term_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("glossary_terms.id", ondelete="RESTRICT")
+    )
+    target_uri: Mapped[str | None] = mapped_column(String(1000))
+    relation: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+    source_term: Mapped[GlossaryTerm] = relationship(
+        back_populates="outgoing_relations", foreign_keys=[source_term_id]
+    )
+
+
+class DataProductGlossaryTerm(Base):
+    __tablename__ = "data_product_glossary_terms"
+    __table_args__ = (Index("ix_data_product_glossary_term_term", "glossary_term_id"),)
+
+    data_product_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("data_products.id", ondelete="CASCADE"), primary_key=True
+    )
+    glossary_term_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("glossary_terms.id", ondelete="RESTRICT"), primary_key=True
+    )
+    assigned_by_user_id: Mapped[str] = mapped_column(
+        ForeignKey("demo_users.id"), nullable=False
+    )
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+    data_product: Mapped[DataProduct] = relationship(back_populates="glossary_term_assignments")
+    term: Mapped[GlossaryTerm] = relationship(back_populates="product_assignments")
+
+
+class GlossaryTermProposal(Base):
+    __tablename__ = "glossary_term_proposals"
+    __table_args__ = (
+        CheckConstraint(
+            "operation IN ('create', 'update', 'retire', 'add_translation', 'link')",
+            name="ck_glossary_proposal_operation",
+        ),
+        CheckConstraint(
+            "status IN ('submitted', 'in_review', 'accepted', 'rejected', 'stale')",
+            name="ck_glossary_proposal_status",
+        ),
+        CheckConstraint("revision >= 1", name="ck_glossary_proposal_revision"),
+        CheckConstraint(
+            "(operation = 'create' AND ((status = 'accepted' AND target_term_id IS NOT NULL) "
+            "OR (status <> 'accepted' AND target_term_id IS NULL))) "
+            "OR (operation <> 'create' AND target_term_id IS NOT NULL)",
+            name="ck_glossary_proposal_target",
+        ),
+        CheckConstraint(
+            "auto_attach = false OR source_product_id IS NOT NULL",
+            name="ck_glossary_proposal_auto_attach_source",
+        ),
+        Index("ix_glossary_proposal_requester", "requester_user_id", "status"),
+        Index("ix_glossary_proposal_source", "source_product_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    request_number: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    operation: Mapped[str] = mapped_column(String(32), nullable=False, default="create")
+    target_term_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("glossary_terms.id", ondelete="RESTRICT")
+    )
+    requester_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    source_product_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("data_products.id", ondelete="SET NULL")
+    )
+    source_product_revision: Mapped[int | None] = mapped_column(Integer)
+    auto_attach: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="submitted")
+    requested_payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    review_payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    decision_comment: Mapped[str | None] = mapped_column(Text)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+    reviews: Mapped[list[GlossaryTermProposalReview]] = relationship(
+        back_populates="proposal", cascade="all, delete-orphan"
+    )
+
+
+class GlossaryTermProposalReview(Base):
+    __tablename__ = "glossary_term_proposal_reviews"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'approved', 'rejected')",
+            name="ck_glossary_review_status",
+        ),
+        CheckConstraint("proposal_revision >= 1", name="ck_glossary_review_revision"),
+        Index("ix_glossary_review_owner", "owner_user_id", "status"),
+    )
+
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("glossary_term_proposals.id", ondelete="CASCADE"), primary_key=True
+    )
+    domain_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("domains.id", ondelete="RESTRICT"), primary_key=True
+    )
+    proposal_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    owner_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    decision_comment: Mapped[str | None] = mapped_column(Text)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+    proposal: Mapped[GlossaryTermProposal] = relationship(back_populates="reviews")
+
+
 class WorkflowTask(Base):
     __tablename__ = "workflow_tasks"
     __table_args__ = (
+        CheckConstraint("task_kind IN ('action', 'information')", name="ck_workflow_task_kind"),
         Index("ix_workflow_task_assignee", "assignee_user_id", "status"),
         Index("ix_workflow_task_product", "data_product_id"),
         Index("ix_workflow_task_source_access_request", "source_access_request_id"),
+        Index("ix_workflow_task_domain_request", "domain_change_request_id"),
+        Index("ix_workflow_task_glossary_proposal", "glossary_term_proposal_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
     task_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    task_kind: Mapped[str] = mapped_column(String(32), nullable=False, default="action")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")
     assignee_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
     data_product_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -950,6 +1308,12 @@ class WorkflowTask(Base):
     source_access_request_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("source_access_requests.id", ondelete="CASCADE")
     )
+    domain_change_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("domain_change_requests.id", ondelete="SET NULL")
+    )
+    glossary_term_proposal_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("glossary_term_proposals.id", ondelete="SET NULL")
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     detail: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -959,6 +1323,7 @@ class WorkflowTask(Base):
         DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class PocSimulationEvent(Base):

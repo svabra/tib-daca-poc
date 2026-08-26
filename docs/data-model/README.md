@@ -18,7 +18,7 @@ Update generated sections with `npm run docs:data-model`. Validate them with
 
 | Persistence context | Storage | Tables | Alembic head | Migration fingerprint |
 |---|---|---:|---|---|
-| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 31 | `0014_deputy_data_owner` | `309c11d6bbcc087f` |
+| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 42 | `0015_domains_glossary` | `9312bc86e0e38c11` |
 | [Control-plane data model](control-plane.md) | PostgreSQL (`daca_control_plane`) | 6 | `20260803_0001` | `ff3a5ea9ca863788` |
 | [Sample data-product model](sample-data-product.md) | PostgreSQL (`daca_sample`) | 3 | `0003_weekly_availability` | `938d480b00000576` |
 
@@ -45,10 +45,21 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.audit_events`
 - `catalog.canonical_ontology_terms`
 - `catalog.canonical_ontology_versions`
+- `catalog.data_product_domains`
 - `catalog.data_product_fields`
+- `catalog.data_product_glossary_terms`
 - `catalog.data_products`
 - `catalog.demo_users`
+- `catalog.domain_change_requests`
+- `catalog.domain_localizations`
+- `catalog.domains`
 - `catalog.endpoints`
+- `catalog.glossary_term_domains`
+- `catalog.glossary_term_localizations`
+- `catalog.glossary_term_proposal_reviews`
+- `catalog.glossary_term_proposals`
+- `catalog.glossary_term_relations`
+- `catalog.glossary_terms`
 - `catalog.governance_submissions`
 - `catalog.identity_directory_entries`
 - `catalog.identity_group_memberships`

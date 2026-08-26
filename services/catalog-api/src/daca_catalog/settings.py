@@ -38,6 +38,15 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("SAMPLE_POLICY_PROJECTION_TOKEN", "DACA_POLICY_DEPLOYMENT_TOKEN"),
     )
     projection_timeout_seconds: float = 3.0
+    semantic_suggestion_threshold: float = Field(
+        default=70.0,
+        ge=0,
+        le=100,
+        validation_alias=AliasChoices(
+            "DACA_SEMANTIC_SUGGESTION_THRESHOLD",
+            "SEMANTIC_SUGGESTION_THRESHOLD",
+        ),
+    )
     internal_token: str = "local-development-only"
     daaif_ui_url: str | None = None
 

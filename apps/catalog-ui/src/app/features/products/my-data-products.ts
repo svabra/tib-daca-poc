@@ -303,6 +303,8 @@ export function matchesProduct(
     product.description,
     product.owner,
     product.domain,
+    ...product.domains.flatMap((domain) => [domain.preferredLabel, domain.definition, ...domain.labels.flatMap((label) => [label.preferredLabel, label.definition, ...label.alternativeLabels])]),
+    ...product.glossaryTerms.flatMap((term) => [term.preferredLabel, term.definition, ...term.labels.flatMap((label) => [label.preferredLabel, label.definition, ...label.alternativeLabels])]),
     product.globalId,
     ...product.keywords,
     ...connectedAuthorities(product),

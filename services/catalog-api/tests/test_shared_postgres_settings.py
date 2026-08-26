@@ -36,6 +36,20 @@ def test_catalog_full_database_url_has_precedence() -> None:
     assert settings.resolved_database_url == "sqlite+pysqlite://"
 
 
+def test_semantic_suggestion_threshold_uses_documented_environment_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DACA_SEMANTIC_SUGGESTION_THRESHOLD", "81.5")
+
+    assert Settings(_env_file=None).semantic_suggestion_threshold == 81.5
+
+
+@pytest.mark.parametrize("threshold", [-0.1, 100.1])
+def test_semantic_suggestion_threshold_is_bounded(threshold: float) -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, semantic_suggestion_threshold=threshold)
+
+
 @pytest.mark.parametrize("schema", ["daca-catalog", "Public", "daca sample", ""])
 def test_catalog_schema_rejects_unsafe_identifiers(schema: str) -> None:
     with pytest.raises(ValidationError):
