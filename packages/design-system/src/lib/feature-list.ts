@@ -41,7 +41,7 @@ export const DACA_FEATURE_RELEASE = {
         features: [
           {
             title: 'Domains und Fachbegriffe gemeinsam steuern',
-            description: 'Versionierte Fachdomains und mehrsprachige Glossarterme ordnen Datenprodukte ein. Domain Owner prüfen Vorschläge, während ein SKOS- und DCAT-basierter Wissensgraph die Beziehungen zugänglich macht.',
+            description: '18 ESTV- und 20 Verteidigungskonzepte bilden den Startpunkt. Neue Begriffe lassen sich zentral, aus Domains, der Suche oder Produktmetadaten beantragen; bestehende Begriffe werden über denselben Governance-Workflow geändert. Aus Titel und Keywords werden lokal bis zu drei unverbindliche Vorschläge abgeleitet und nie automatisch übernommen. Domain Owner prüfen sie, und der SKOS-/DCAT-Wissensgraph zeigt Beziehungen und Abkürzungen.',
           },
           {
             title: 'Oracle-Datenquellen kontrolliert erschliessen',
@@ -100,7 +100,7 @@ export const DACA_FEATURE_RELEASE = {
         features: [
           {
             title: 'Govern domains and business terms together',
-            description: 'Versioned subject domains and multilingual glossary terms classify data products. Domain owners review proposals, while a SKOS- and DCAT-based knowledge graph makes the relationships accessible.',
+            description: '18 FTA and 20 defence concepts provide a starting point. Users can propose terms centrally or from domains, search and product metadata; accepted terms use the same governance workflow for changes. Up to three non-binding candidates are derived locally from titles and keywords and are never applied automatically. Domain owners review them, and the SKOS/DCAT graph exposes relations and abbreviations.',
           },
           {
             title: 'Govern access to Oracle data sources',

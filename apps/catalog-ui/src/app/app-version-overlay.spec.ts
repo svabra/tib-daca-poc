@@ -41,6 +41,10 @@ describe('Catalog runtime version overlay', () => {
     expect(dialog?.textContent).toContain(`Featureliste · V${DACA_VERSION}`);
     expect(dialog?.textContent).toContain('Was kann DaCa Catalog?');
     expect(dialog?.textContent).toContain('Domains und Fachbegriffe gemeinsam steuern');
+    expect(dialog?.textContent).toContain('18 ESTV- und 20 Verteidigungskonzepte');
+    expect(dialog?.textContent).toContain('bestehende Begriffe werden über denselben Governance-Workflow geändert');
+    expect(dialog?.textContent).toContain('lokal bis zu drei unverbindliche Vorschläge');
+    expect(dialog?.textContent).toContain('nie automatisch übernommen');
     expect(dialog?.textContent).toContain('Neue Versionen ohne F5 übernehmen');
     expect(dialog?.textContent).toContain('Datenprodukte finden und verstehen');
     expect(dialog?.textContent).toContain('Schnell oder gezielt suchen');

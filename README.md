@@ -139,6 +139,12 @@ notifications, deterministic PoC suggestions, and the JSON-LD knowledge graph ar
 [`docs/domains-and-glossary.md`](docs/domains-and-glossary.md). Free-form product keywords remain
 separate and unchanged. The deterministic suggestion provider uses a minimum score of `70` by
 default; set `DACA_SEMANTIC_SUGGESTION_THRESHOLD` to a value from `0` through `100` to tune it.
+The glossary ships with 38 bilingual reference concepts: 18 for ESTV and 20 for defence. Users can
+start a term proposal centrally, from a domain or search result, or directly from product metadata;
+accepted terms use the same governed proposal route for edits. Metadata Studio can derive up to
+three editable candidates locally from the current title and keywords, but never applies one
+automatically. Abbreviations remain searchable alternative labels of their concepts and are
+exported as `skos:altLabel` in JSON-LD.
 Journeys 08 and 09 can be prepared or reset from `/poc-simulation/domain-glossary` when demo auth
 is enabled.
 

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from .database import default_session_factory
 from .domain_glossary_seed import seed_domain_glossary_reference_data
+from .glossary_reference_seed import seed_glossary_reference_terms
 from .models import (
     AccessRequest,
     AuditEvent,
@@ -197,6 +198,7 @@ def seed_catalog(session: Session) -> bool:
         access_consumers_added = seed_active_access_consumers(session)
         workflow_added = seed_workflow_reference_data(session)
         domain_glossary_added = seed_domain_glossary_reference_data(session)
+        glossary_reference_added = seed_glossary_reference_terms(session)
         return (
             owner_profiles_added
             or relationships_added
@@ -205,6 +207,7 @@ def seed_catalog(session: Session) -> bool:
             or access_consumers_added
             or workflow_added
             or domain_glossary_added
+            or glossary_reference_added
         )
 
     created = datetime(2026, 8, 1, 8, 0, tzinfo=UTC)
@@ -625,6 +628,7 @@ def seed_catalog(session: Session) -> bool:
     session.commit()
     seed_workflow_reference_data(session)
     seed_domain_glossary_reference_data(session)
+    seed_glossary_reference_terms(session)
     return True
 
 

@@ -140,7 +140,7 @@ export type PolicyWire = {
 
 type ConceptLocalizationWire = { language: string; preferredLabel: string; alternativeLabels?: string[]; definition: string; normalizedLabel: string };
 type DomainWire = { id: string; urn: string; originCatalogId: string; revision: number; lifecycle: 'active' | 'retired'; ownerUserId: string; deputyOwnerUserId: string; preferredLabel: string; localizations: ConceptLocalizationWire[]; productCount: number; termCount: number; updatedAt: string };
-type GlossaryTermWire = { id: string; urn: string; originCatalogId: string; revision: number; lifecycle: 'active' | 'retired'; preferredLabel: string; localizations: ConceptLocalizationWire[]; domainIds: string[]; relations: Array<{ id: string; relation: GlossaryTermSummary['relations'][number]['relationType']; targetTermId: string | null; targetUri: string | null }>; updatedAt: string };
+type GlossaryTermWire = { id: string; urn: string; originCatalogId: string; revision: number; lifecycle: 'active' | 'retired'; preferredLabel: string; localizations: ConceptLocalizationWire[]; domainIds: string[]; relations: Array<{ id: string; relation: GlossaryTermSummary['relations'][number]['relationType']; targetTermId: string | null; targetUri: string | null; targetLabel: string }>; updatedAt: string };
 type ProposalReviewWire = { domainId: string; proposalRevision: number; ownerUserId: string; status: 'pending' | 'approved' | 'rejected'; decisionComment: string | null; decidedAt: string | null; updatedAt: string };
 type ProposalWire = Omit<GlossaryTermProposal, 'requesterName' | 'reviews'> & { reviews: ProposalReviewWire[] };
 
@@ -1037,7 +1037,7 @@ export class CatalogApiService {
       preferredLabel: item.preferredLabel, definition: preferred?.definition ?? '',
       labels: item.localizations.map((label) => ({ language: label.language, preferredLabel: label.preferredLabel, alternativeLabels: label.alternativeLabels ?? [], definition: label.definition })),
       domains: domains.filter((domain) => item.domainIds.includes(domain.id)),
-      relations: item.relations.map((relation) => ({ id: relation.id, relationType: relation.relation, targetTermId: relation.targetTermId, targetUri: relation.targetUri ?? '', targetLabel: relation.targetUri ?? relation.targetTermId ?? 'Verknüpfter Term' })),
+      relations: item.relations.map((relation) => ({ id: relation.id, relationType: relation.relation, targetTermId: relation.targetTermId, targetUri: relation.targetUri ?? '', targetLabel: relation.targetLabel })),
       updatedAt: item.updatedAt,
     };
   }

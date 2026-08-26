@@ -1396,6 +1396,7 @@ class GlossaryTermRelationResponse(ApiModel):
     relation: GlossaryRelationType
     target_term_id: uuid.UUID | None
     target_uri: str | None
+    target_label: str
 
 
 class GlossaryTermResponse(ApiModel):

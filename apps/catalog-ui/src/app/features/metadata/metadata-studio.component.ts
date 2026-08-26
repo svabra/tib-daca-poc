@@ -6,15 +6,18 @@ import { StatusBadgeComponent } from '@bit-daca/design-system';
 import { finalize } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DataProduct, DomainSummary, GlossaryTermSummary, ProductActivityItem, SemanticSuggestion } from '../../core/catalog.models';
+import { DemoIdentityService } from '../../core/demo-identity.service';
 import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav.component';
 import { presentProductActivity } from '../activity/product-activity.presenter';
 import { recentProductActivity } from './metadata-activity-preview';
 import { termsForDomains, toggleSemanticSelection, validSelectedTermIds } from './domain-selection';
+import { MetadataTermCandidate, metadataTermCandidates } from './metadata-term-candidates';
+import { GlossaryProposalFormComponent, GlossaryProposalFormValue } from '../domains/glossary-proposal-form.component';
 
 @Component({
   selector: 'daca-metadata-studio',
   standalone: true,
-  imports: [DatePipe, ProductWorkspaceNavComponent, ReactiveFormsModule, RouterLink, StatusBadgeComponent],
+  imports: [DatePipe, GlossaryProposalFormComponent, ProductWorkspaceNavComponent, ReactiveFormsModule, RouterLink, StatusBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <daca-product-workspace-nav
@@ -64,8 +67,30 @@ import { termsForDomains, toggleSemanticSelection, validSelectedTermIds } from '
           <fieldset class="metadata-field metadata-field-wide semantic-picker">
             <legend>Glossarterme</legend>
             <p>Akzeptierte Begriffe werden anhand der gewählten Domains angeboten. Keywords bleiben davon unabhängig.</p>
-            <div class="semantic-options">@for (term of filteredTerms(); track term.id) { <label><input type="checkbox" [checked]="selectedTermIds().includes(term.id)" (change)="toggleTerm(term.id)"><span><strong>{{ term.preferredLabel }}</strong><small>{{ termLanguages(term) }} · {{ term.definition }}</small></span></label> } @empty { <span>{{ selectedDomainIds().length ? 'Keine akzeptierten Terme für diese Domains.' : 'Wählen Sie zuerst mindestens eine Domain.' }}</span> }</div>
-            <button class="daca-button is-secondary" type="button" [disabled]="!productReady() || !selectedDomainIds().length" (click)="openProposal()">Term vorschlagen</button>
+            <div class="semantic-proposal-actions">
+              <button class="daca-button is-secondary" type="button" [disabled]="!productReady() || !selectedDomainIds().length" (click)="openProposal()">Term vorschlagen</button>
+              <button class="semantic-derive-action" type="button" [disabled]="!productReady()" (click)="deriveTermCandidates()">Begriffe aus Metadaten ableiten</button>
+              @if (!selectedDomainIds().length) {
+                <small>Wählen Sie mindestens eine Fachdomain, damit der zuständige Data Owner den Vorschlag prüfen kann.</small>
+              } @else if (canAutoAttach()) {
+                <small>Akzeptierte Vorschläge können automatisch an dieses Produkt angehängt werden.</small>
+              } @else {
+                <small>Sie dürfen einen Begriff vorschlagen. Automatisch anhängen dürfen nur Product Owner oder deren Stellvertretung.</small>
+              }
+            </div>
+            <label class="semantic-term-search">Akzeptierte Terme durchsuchen
+              <input type="search" [value]="termQuery()" (input)="termQuery.set(inputValue($event))" placeholder="Begriff, Abkürzung oder Definition">
+            </label>
+            <div class="semantic-options">@for (term of filteredTerms(); track term.id) { <label><input type="checkbox" [checked]="selectedTermIds().includes(term.id)" (change)="toggleTerm(term.id)"><span><strong>{{ term.preferredLabel }}</strong><small>{{ termLanguages(term) }}@if(termAlternativeLabels(term)){ · {{ termAlternativeLabels(term) }}} · {{ term.definition }}</small></span></label> } @empty { <span>{{ selectedDomainIds().length ? (termQuery().trim() ? 'Keine passenden akzeptierten Terme.' : 'Keine akzeptierten Terme für diese Domains.') : 'Wählen Sie zuerst mindestens eine Domain.' }}</span> }</div>
+            @if (derivedCandidates().length) {
+              <ul class="metadata-term-candidates" aria-label="Aus Metadaten abgeleitete Termkandidaten">
+                @for (candidate of derivedCandidates(); track candidate.label) {
+                  <li><span><strong>{{ candidate.label }}</strong><small>{{ candidate.reason }}</small></span><button type="button" [disabled]="!selectedDomainIds().length" (click)="openProposal(candidate.label, candidate.reason)">Als Term vorschlagen</button></li>
+                }
+              </ul>
+            } @else if (derivationAttempted()) {
+              <p class="metadata-derivation-empty">Aus dem aktuellen Titel und den Keywords liessen sich keine geeigneten Kandidaten ableiten.</p>
+            }
           </fieldset>
           <section class="metadata-field metadata-field-wide suggestion-panel" aria-labelledby="semantic-suggestion-title">
             <div><div><p class="daca-eyebrow">Regelbasiert · PoC</p><h3 id="semantic-suggestion-title">Semantische Vorschläge</h3></div><button class="daca-button is-secondary" type="button" [disabled]="suggestionsLoading()" (click)="loadSuggestions()">{{ suggestionsLoading() ? 'Analysiert …' : 'Neu analysieren' }}</button></div>
@@ -164,21 +189,34 @@ import { termsForDomains, toggleSemanticSelection, validSelectedTermIds } from '
       </aside>
     </div>
 
-    <dialog #termDialog class="daca-card term-dialog" (close)="termForm.reset({ labelDe: '', definitionDe: '', labelEn: '', definitionEn: '' })">
-      <div class="daca-card-header"><div><p class="daca-eyebrow">Glossar-Governance</p><h2>Term vorschlagen</h2></div><button type="button" aria-label="Dialog schliessen" (click)="closeProposal()">×</button></div>
-      <form class="daca-card-body term-form" [formGroup]="termForm" (ngSubmit)="submitProposal()">
-        <p>Der Vorschlag geht an die Data Owners aller gewählten Domains und wird nach vollständiger Freigabe automatisch an dieses Produkt angehängt.</p>
-        <label>Deutscher Begriff *<input formControlName="labelDe" autocomplete="off"></label><label>Deutsche Definition *<textarea rows="3" formControlName="definitionDe"></textarea></label><label>Englischer Begriff<input formControlName="labelEn" autocomplete="off"></label><label>Englische Definition<textarea rows="3" formControlName="definitionEn"></textarea></label>
-        <div><button class="daca-button is-secondary" type="button" (click)="closeProposal()">Abbrechen</button><button class="daca-button" type="submit" [disabled]="termForm.invalid || proposalSaving()">{{ proposalSaving() ? 'Wird eingereicht …' : 'Vorschlag einreichen' }}</button></div>
-      </form>
+    <dialog #termDialog class="daca-card term-dialog" aria-labelledby="metadata-term-dialog-title" (close)="resetProposal()">
+      <div class="daca-card-header"><div><p class="daca-eyebrow">Glossar-Governance</p><h2 id="metadata-term-dialog-title">Term vorschlagen</h2></div><button type="button" aria-label="Dialog schliessen" (click)="closeProposal()">×</button></div>
+      <div class="daca-card-body">
+        @if (proposalContext()) { <p class="term-proposal-context"><strong>Aus den Metadaten abgeleitet:</strong> {{ proposalContext() }}</p> }
+        <daca-glossary-proposal-form
+          [domains]="availableDomains()"
+          [terms]="availableTerms()"
+          [target]="proposalTarget()"
+          [product]="product()"
+          [initialDomainIds]="selectedDomainIds()"
+          [initialLabel]="proposalInitialLabel()"
+          [canAttachProduct]="canAutoAttach()"
+          [submitting]="proposalSaving()"
+          (proposalSubmit)="submitProposal($event)"
+          (proposalCancel)="closeProposal()"
+          (targetSelect)="proposalTarget.set($event)"
+        />
+      </div>
     </dialog>
+
   `,
   styles: [`
-    .semantic-picker{border:1px solid #c9ced3;padding:1rem}.semantic-picker legend{font-weight:800}.semantic-picker>p{margin-top:0;color:#535b63}.semantic-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:.5rem;margin:.75rem 0}.semantic-options label{display:flex;gap:.65rem;padding:.65rem;border:1px solid #d7dadd;border-radius:.25rem}.semantic-options input{margin-top:.2rem}.semantic-options span{display:grid}.semantic-options small{font-weight:400;color:#59616a}.semantic-error{color:#b00020;font-weight:700}.suggestion-panel{padding:1rem;background:#f2f6f8;border-left:4px solid #006699}.suggestion-panel>div,.suggestion-panel li{display:flex;align-items:center;justify-content:space-between;gap:1rem}.suggestion-panel h3{margin:.1rem 0}.suggestion-panel ul{list-style:none;padding:0}.suggestion-panel li{padding:.55rem 0;border-top:1px solid #cbd3d8}.suggestion-panel li span{display:grid}.term-dialog{width:min(38rem,calc(100vw - 2rem));padding:0;border:0}.term-dialog::backdrop{background:#0008}.term-dialog .daca-card-header button{font-size:1.75rem;border:0;background:none}.term-form{display:grid;gap:1rem}.term-form label{display:grid;gap:.35rem;font-weight:700}.term-form>div{display:flex;justify-content:flex-end;gap:.5rem}
+    .semantic-picker{border:1px solid #c9ced3;padding:1rem}.semantic-picker legend{font-weight:800}.semantic-picker>p{margin-top:0;color:#535b63}.semantic-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:.5rem;margin:.75rem 0}.semantic-options label{display:flex;gap:.65rem;padding:.65rem;border:1px solid #d7dadd;border-radius:.25rem}.semantic-options input{margin-top:.2rem}.semantic-options span{display:grid}.semantic-options small{font-weight:400;color:#59616a}.semantic-proposal-actions{display:flex;align-items:center;flex-wrap:wrap;gap:.65rem}.semantic-proposal-actions small{flex-basis:100%;color:#59616a}.semantic-term-search{display:grid;gap:.35rem;max-width:32rem;margin-top:1rem;font-weight:700}.semantic-derive-action{border:0;background:none;color:#006699;text-decoration:underline;text-underline-offset:.16rem;cursor:pointer;font:inherit;font-weight:700}.semantic-derive-action:disabled{color:#747b81;cursor:not-allowed}.metadata-term-candidates{list-style:none;margin:1rem 0 0;padding:0;border-top:1px solid #d7dadd}.metadata-term-candidates li{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:.65rem 0;border-bottom:1px solid #d7dadd}.metadata-term-candidates li span{display:grid}.metadata-term-candidates small,.metadata-derivation-empty{color:#59616a}.metadata-term-candidates button{border:0;background:none;color:#006699;text-decoration:underline;cursor:pointer;font:inherit;font-weight:700}.metadata-term-candidates button:disabled{color:#747b81;cursor:not-allowed}.semantic-error{color:#b00020;font-weight:700}.suggestion-panel{padding:1rem;background:#f2f6f8;border-left:4px solid #006699}.suggestion-panel>div,.suggestion-panel li{display:flex;align-items:center;justify-content:space-between;gap:1rem}.suggestion-panel h3{margin:.1rem 0}.suggestion-panel ul{list-style:none;padding:0}.suggestion-panel li{padding:.55rem 0;border-top:1px solid #cbd3d8}.suggestion-panel li span{display:grid}.term-dialog{width:min(70rem,calc(100vw - 2rem));max-height:92vh;padding:0;border:0;overflow:auto}.term-dialog::backdrop{background:#0008}.term-dialog .daca-card-header button{font-size:1.75rem;border:0;background:none}.term-proposal-context{padding:.65rem;background:#eef5f8;border-left:3px solid #006699}
   `],
 })
 export class MetadataStudioComponent {
   readonly api = inject(CatalogApiService);
+  private readonly identity = inject(DemoIdentityService);
   private readonly route = inject(ActivatedRoute);
   private readonly fb = inject(FormBuilder);
   readonly routeProductId = this.route.snapshot.paramMap.get('id') ?? this.api.product().id;
@@ -205,8 +243,28 @@ export class MetadataStudioComponent {
   readonly suggestions = signal<readonly SemanticSuggestion[]>([]);
   readonly suggestionsLoading = signal(false);
   readonly suggestionsError = signal('');
+  readonly derivedCandidates = signal<readonly MetadataTermCandidate[]>([]);
+  readonly derivationAttempted = signal(false);
+  readonly proposalInitialLabel = signal('');
+  readonly proposalContext = signal('');
   readonly proposalSaving = signal(false);
-  readonly filteredTerms = computed(() => termsForDomains(this.availableTerms(), this.selectedDomainIds()));
+  readonly proposalTarget = signal<GlossaryTermSummary | null>(null);
+  readonly termQuery = signal('');
+  readonly filteredTerms = computed(() => {
+    const terms = termsForDomains(this.availableTerms(), this.selectedDomainIds());
+    const query = this.termQuery().trim().toLocaleLowerCase('de-CH');
+    if (!query) return terms;
+    return terms.filter((term) => term.labels.some((label) => [
+      label.preferredLabel,
+      label.definition,
+      ...label.alternativeLabels,
+    ].some((value) => value.toLocaleLowerCase('de-CH').includes(query))));
+  });
+  readonly canAutoAttach = computed(() => {
+    const product = this.product();
+    const userId = this.identity.userId();
+    return userId === product.ownerUserId || userId === product.deputyOwnerUserId;
+  });
   @ViewChild('termDialog') private termDialog?: ElementRef<HTMLDialogElement>;
   readonly presentActivity = presentProductActivity;
   private appliedRevision = 0;
@@ -223,7 +281,6 @@ export class MetadataStudioComponent {
     quality: [''],
     updateFrequency: [''],
   });
-  readonly termForm = this.fb.nonNullable.group({ labelDe: ['', Validators.required], definitionDe: ['', Validators.required], labelEn: [''], definitionEn: [''] });
 
   constructor() {
     this.api.loadProduct(this.routeProductId).subscribe({
@@ -318,13 +375,40 @@ export class MetadataStudioComponent {
     this.api.loadSemanticSuggestions(this.routeProductId).pipe(finalize(() => this.suggestionsLoading.set(false))).subscribe({ next: (items) => this.suggestions.set(items.slice(0, 5)), error: () => { this.suggestions.set([]); this.suggestionsError.set('Vorschläge sind derzeit nicht verfügbar; die manuelle Auswahl bleibt möglich.'); } });
   }
 
-  openProposal(): void { this.termDialog?.nativeElement.showModal(); }
-  closeProposal(): void { this.termDialog?.nativeElement.close(); }
-  submitProposal(): void {
-    if (this.termForm.invalid || this.proposalSaving() || !this.selectedDomainIds().length) return;
-    const value = this.termForm.getRawValue(); this.proposalSaving.set(true);
-    this.api.createGlossaryTermProposal({ operation: 'create', sourceProductId: this.routeProductId, autoAttach: true, domainIds: this.selectedDomainIds(), labels: [{ language: 'de', preferredLabel: value.labelDe, alternativeLabels: [], definition: value.definitionDe }, ...(value.labelEn ? [{ language: 'en', preferredLabel: value.labelEn, alternativeLabels: [], definition: value.definitionEn }] : [])] }).pipe(finalize(() => this.proposalSaving.set(false))).subscribe({ next: () => { this.closeProposal(); this.messageTone.set('info'); this.message.set('Der Termvorschlag wurde den Domain Owners zur Prüfung übermittelt.'); }, error: (error) => { this.messageTone.set('error'); this.message.set(error?.error?.detail ?? 'Der Termvorschlag konnte nicht eingereicht werden.'); } });
+  deriveTermCandidates(): void {
+    const value = this.form.getRawValue();
+    this.derivedCandidates.set(metadataTermCandidates(value.title, value.keywords));
+    this.derivationAttempted.set(true);
   }
+
+  openProposal(label = '', context = ''): void {
+    if (!this.selectedDomainIds().length) return;
+    this.proposalInitialLabel.set(label.trim());
+    this.proposalContext.set(context);
+    this.termDialog?.nativeElement.showModal();
+    setTimeout(() => this.termDialog?.nativeElement.querySelector<HTMLInputElement>('input[formcontrolname="labelDe"]')?.focus());
+  }
+
+  closeProposal(): void { this.termDialog?.nativeElement.close(); }
+  resetProposal(): void { this.proposalInitialLabel.set(''); this.proposalContext.set(''); this.proposalTarget.set(null); }
+  submitProposal(value: GlossaryProposalFormValue): void {
+    if (this.proposalSaving()) return;
+    this.proposalSaving.set(true);
+    this.api.createGlossaryTermProposal(value).pipe(finalize(() => this.proposalSaving.set(false))).subscribe({
+      next: () => {
+        this.closeProposal();
+        this.messageTone.set('info');
+        this.message.set('Der Termvorschlag wurde den Domain Owners zur Prüfung übermittelt.');
+      },
+      error: (error) => {
+        this.messageTone.set('error');
+        this.message.set(error?.error?.detail ?? 'Der Termvorschlag konnte nicht eingereicht werden.');
+      },
+    });
+  }
+
+  inputValue(event: Event): string { return (event.target as HTMLInputElement).value; }
+  termAlternativeLabels(term: GlossaryTermSummary): string { return term.labels.flatMap((label) => label.alternativeLabels).join(', '); }
 
   loadRecentActivity(): void {
     this.activityLoading.set(true);

@@ -43,12 +43,14 @@ from .control_people import assign_default_control_person, is_active_publication
 from .database import default_session_factory, get_session
 from .deputy_owners import assign_default_deputy_owner
 from .domain_glossary_seed import (
+    ARMOURED_VEHICLE_PROPOSAL_ID,
     DEFENCE_DOMAIN_ID,
     DEFENCE_REQUEST_ID,
     DOMAIN_GLOSSARY_SEED_NAME,
     MOBILITY_DOMAIN_ID,
     VEHICLE_PRODUCT_ID,
 )
+from .glossary_reference_seed import GLOSSARY_REFERENCE_SEED_NAME
 from .governance import (
     bind_access_request_fulfillments,
     can_view_private_product,
@@ -96,6 +98,7 @@ from .models import (
     ProductQualityAssessment,
     ProductSemanticMapping,
     ProvenanceEvent,
+    SeedMarker,
     ServiceLevelRevision,
     WorkflowTask,
     utc_now,
@@ -1257,6 +1260,32 @@ def _term_response(session: Session, term: GlossaryTerm) -> GlossaryTermResponse
             select(GlossaryTermRelation).where(GlossaryTermRelation.source_term_id == term.id)
         )
     )
+    relation_responses: list[dict[str, Any]] = []
+    for relation in relations:
+        target_label = relation.target_uri or "Verknüpfter Term"
+        if relation.target_term_id is not None:
+            target_localizations = list(
+                session.scalars(
+                    select(GlossaryTermLocalization)
+                    .where(GlossaryTermLocalization.term_id == relation.target_term_id)
+                    .order_by(GlossaryTermLocalization.language)
+                )
+            )
+            target_preferred = _preferred_localization(target_localizations)
+            target_label = (
+                target_preferred.preferred_label
+                if target_preferred is not None
+                else str(relation.target_term_id)
+            )
+        relation_responses.append(
+            {
+                "id": relation.id,
+                "relation": relation.relation,
+                "targetTermId": relation.target_term_id,
+                "targetUri": relation.target_uri,
+                "targetLabel": target_label,
+            }
+        )
     preferred = _preferred_localization(localizations)
     return GlossaryTermResponse.model_validate(
         {
@@ -1266,7 +1295,7 @@ def _term_response(session: Session, term: GlossaryTerm) -> GlossaryTermResponse
             "preferredLabel": preferred.preferred_label if preferred else term.urn,
             "localizations": localizations,
             "domainIds": domain_ids,
-            "relations": relations,
+            "relations": relation_responses,
         }
     )
 
@@ -2037,10 +2066,23 @@ def _remove_vehicle_term_proposals(session: Session) -> None:
         )
     )
     proposal_ids = [item.id for item in proposals]
+    protected_reference_term_ids = (
+        {
+            item.target_term_id
+            for item in proposals
+            if item.id == ARMOURED_VEHICLE_PROPOSAL_ID
+            and item.status == "accepted"
+            and item.target_term_id is not None
+        }
+        if session.get(SeedMarker, GLOSSARY_REFERENCE_SEED_NAME) is not None
+        else set()
+    )
     term_ids = [
         item.target_term_id
         for item in proposals
-        if item.operation == "create" and item.target_term_id
+        if item.operation == "create"
+        and item.target_term_id
+        and item.target_term_id not in protected_reference_term_ids
     ]
     if proposal_ids:
         session.execute(
@@ -3150,7 +3192,6 @@ def create_router() -> APIRouter:
                         for item in response_item.localizations
                         for value in (
                             item.preferred_label,
-                            item.definition,
                             *item.alternative_labels,
                         )
                     ),

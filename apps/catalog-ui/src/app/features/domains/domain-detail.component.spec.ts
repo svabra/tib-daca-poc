@@ -3,7 +3,7 @@ import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/route
 import { of } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { FALLBACK_PRODUCT } from '../../core/catalog.seed';
-import { DomainSummary } from '../../core/catalog.models';
+import { DomainSummary, GlossaryTermSummary } from '../../core/catalog.models';
 import { DomainDetailComponent } from './domain-detail.component';
 
 vi.mock('@bit-daca/design-system', async () => {
@@ -41,6 +41,22 @@ const PRODUCT = {
   title: 'Flottenbestand gepanzerte Fahrzeuge',
   domains: [DOMAIN],
 };
+const TERM: GlossaryTermSummary = {
+  id: '33333333-3333-4333-8333-333333333333',
+  urn: 'urn:daca:term:armoured-vehicle',
+  originCatalogId: 'catalog',
+  revision: 1,
+  status: 'active',
+  preferredLabel: 'Gepanzertes Fahrzeug',
+  definition: 'Militärisches Fahrzeug mit konstruktivem Schutz.',
+  labels: [
+    { language: 'de', preferredLabel: 'Gepanzertes Fahrzeug', alternativeLabels: ['GepFz', 'Panzerfahrzeug'], definition: 'Militärisches Fahrzeug mit konstruktivem Schutz.' },
+    { language: 'en', preferredLabel: 'Armoured Vehicle', alternativeLabels: ['AFV'], definition: 'A protected military vehicle.' },
+  ],
+  domains: [DOMAIN],
+  relations: [],
+  updatedAt: '2026-08-25T10:00:00Z',
+};
 
 describe('DomainDetailComponent', () => {
   afterEach(() => TestBed.resetTestingModule());
@@ -75,5 +91,34 @@ describe('DomainDetailComponent', () => {
       .toBe(`/products/${PRODUCT_ID}/overview`);
     expect(root.querySelector('.semantic-graph')?.getAttribute('aria-label'))
       .toContain('mit 1 Produkten und 0 Termen');
+  });
+
+  it('offers a domain-prefilled term proposal and exposes abbreviations in the term presentation', async () => {
+    const api = {
+      loadDomain: vi.fn(() => of(DOMAIN)),
+      loadDataProductsForDomain: vi.fn(() => of([])),
+      loadGlossaryTerms: vi.fn(() => of([TERM])),
+      loadDomainAuditEvents: vi.fn(() => of([])),
+    };
+    await TestBed.configureTestingModule({
+      imports: [DomainDetailComponent],
+      providers: [
+        provideRouter([]),
+        { provide: CatalogApiService, useValue: api },
+        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: DOMAIN_ID }) } } },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(DomainDetailComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const proposalLink = [...root.querySelectorAll<HTMLAnchorElement>('a')]
+      .find((link) => link.textContent?.includes('Term für diese Domain vorschlagen'));
+
+    expect(proposalLink?.getAttribute('href')).toBe(`/glossary/proposals/new?domainId=${DOMAIN_ID}`);
+    expect(root.querySelector('.domain-term-list')?.textContent).toContain('GepFz');
+    expect(root.querySelector('.domain-term-list')?.textContent).toContain('AFV');
+    expect(root.querySelector('.sr-only-graph')?.textContent).toContain('auch: GepFz, Panzerfahrzeug');
   });
 });
