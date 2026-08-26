@@ -40,6 +40,10 @@ export const DACA_FEATURE_RELEASE = {
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
           {
+            title: 'Domains und Fachbegriffe gemeinsam steuern',
+            description: 'Versionierte Fachdomains und mehrsprachige Glossarterme ordnen Datenprodukte ein. Domain Owner prüfen Vorschläge, während ein SKOS- und DCAT-basierter Wissensgraph die Beziehungen zugänglich macht.',
+          },
+          {
             title: 'Oracle-Datenquellen kontrolliert erschliessen',
             description: 'Ein auffindbarer Quellenkatalog, vertrauenswürdige Gruppen, unveränderliche Gruppensnapshots und direkte Owner-Entscheide steuern den neuen DAAIF-Sourcing-PoC.',
           },
@@ -49,7 +53,7 @@ export const DACA_FEATURE_RELEASE = {
           },
           {
             title: 'PoC anhand geführter Journeys erleben',
-            description: 'Der PoC Leitfaden erklärt sieben wiederholbare Abläufe mit Rollen, Voraussetzungen, echten Screenshots und klar ausgewiesenen Grenzen.',
+            description: 'Der PoC Leitfaden erklärt neun wiederholbare Abläufe mit Rollen, Voraussetzungen, echten Screenshots und klar ausgewiesenen Grenzen.',
           },
           {
             title: 'Datenprodukte finden und verstehen',
@@ -95,6 +99,10 @@ export const DACA_FEATURE_RELEASE = {
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
           {
+            title: 'Govern domains and business terms together',
+            description: 'Versioned subject domains and multilingual glossary terms classify data products. Domain owners review proposals, while a SKOS- and DCAT-based knowledge graph makes the relationships accessible.',
+          },
+          {
             title: 'Govern access to Oracle data sources',
             description: 'A discoverable source catalog, trusted groups, immutable group snapshots and direct owner decisions govern the new DAAIF sourcing proof of concept.',
           },
@@ -104,7 +112,7 @@ export const DACA_FEATURE_RELEASE = {
           },
           {
             title: 'Explore the PoC through guided journeys',
-            description: 'The PoC guide explains seven repeatable workflows with roles, prerequisites, real screenshots and clearly stated limitations.',
+            description: 'The PoC guide explains nine repeatable workflows with roles, prerequisites, real screenshots and clearly stated limitations.',
           },
           {
             title: 'Find and understand data products',

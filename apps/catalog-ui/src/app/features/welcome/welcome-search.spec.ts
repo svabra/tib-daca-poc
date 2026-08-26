@@ -1,4 +1,5 @@
 import { FALLBACK_PRODUCTS } from '../../core/catalog.seed';
+import { DomainSummary, GlossaryTermSummary } from '../../core/catalog.models';
 import {
   CATALOG_LIVE_RESULT_LIMIT,
   catalogProductMatches,
@@ -43,6 +44,13 @@ describe('welcome catalog search', () => {
   it('searches complete product metadata for the expert results', () => {
     expect(searchCatalogProducts(FALLBACK_PRODUCTS, 'Mehrwertsteuer').map((product) => product.title))
       .toContain('Mehrwertsteuer – Branchenindikatoren');
+  });
+  it('finds a product through bilingual glossary labels and alternative labels', () => {
+    const domain: DomainSummary = { id: 'defence', urn: 'urn:daca:domain:defence', originCatalogId: 'catalog', revision: 1, status: 'active', preferredLabel: 'Verteidigung', definition: 'Militärische Fähigkeiten', labels: [{ language: 'de', preferredLabel: 'Verteidigung', alternativeLabels: [], definition: 'Militärische Fähigkeiten' }], ownerUserId: 'sibilla.micheli', ownerName: 'Sibilla Micheli', ownerOrganization: 'VBS', deputyOwnerUserId: 'sandro.wenger', deputyOwnerName: 'Sandro Wenger', deputyOwnerOrganization: 'BAZG', productCount: 1, termCount: 1, updatedAt: '' };
+    const glossaryTerm: GlossaryTermSummary = { id: 'vehicle', urn: 'urn:daca:glossary-term:vehicle', originCatalogId: 'catalog', revision: 1, status: 'active', preferredLabel: 'Gepanzertes Fahrzeug', definition: 'Geschütztes Landfahrzeug', domains: [domain], labels: [{ language: 'de', preferredLabel: 'Gepanzertes Fahrzeug', alternativeLabels: ['Panzerfahrzeug'], definition: 'Geschütztes Landfahrzeug' }, { language: 'en', preferredLabel: 'Armored Vehicle', alternativeLabels: ['Armoured Vehicle'], definition: 'Protected land vehicle' }], relations: [], updatedAt: '' };
+    const product = { ...FALLBACK_PRODUCTS[0], domains: [domain], glossaryTerms: [glossaryTerm] };
+    expect(searchCatalogProducts([product], 'Armored Vehicle')).toEqual([product]);
+    expect(searchCatalogProducts([product], 'Armoured Vehicle')).toEqual([product]);
   });
   it('preserves a trimmed quick-search query for the expert-search link', () => {
     expect(expertSearchQueryParams('  ESTV  ')).toEqual({ q: 'ESTV' });

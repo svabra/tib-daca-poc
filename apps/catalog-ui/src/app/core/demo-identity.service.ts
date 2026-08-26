@@ -33,6 +33,7 @@ const POC_USERS: readonly DemoUser[] = [
   { id: 'noemie.rochat', displayName: 'Noémie Rochat', organization: 'Kanton Neuchâtel', email: 'noemie.rochat@ne.ch', phone: '+41 58 000 00 42', avatarUrl: '/assets/data-owners/noemie-rochat.webp', roles: ['data_owner', 'data_consumer'] },
   { id: 'sandro.wenger', displayName: 'Sandro Wenger', organization: 'BAZG', email: 'sandro.wenger@bazg.admin.ch', phone: '+41 58 000 00 91', avatarUrl: '/assets/data-owners/sandro-wenger.webp', roles: ['data_owner', 'data_consumer'] },
   { id: 'sarah.brunner', displayName: 'Sarah Brunner', organization: 'Kanton St. Gallen', email: 'sarah.brunner@sg.ch', phone: '+41 58 000 00 72', avatarUrl: '/assets/data-owners/sarah-brunner.webp', roles: ['data_owner', 'data_consumer'] },
+  { id: 'sibilla.micheli', displayName: 'Sibilla Micheli', organization: 'VBS', email: 'sibilla.micheli@vbs.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'domain_register_owner', 'data_consumer'] },
   { id: 'simone.wyss', displayName: 'Simone Wyss', organization: 'EFV', email: 'simone.wyss@efv.admin.ch', phone: '+41 58 000 00 52', avatarUrl: '/assets/data-owners/simone-wyss.webp', roles: ['data_owner', 'data_consumer'] },
   { id: 'thomas.kriegli', displayName: 'Thomas Kriegli', organization: 'ESTV', email: 'thomas.kriegli@estv.admin.ch', phone: '+41 58 000 00 83', avatarUrl: '/assets/data-owners/thomas-kriegli.webp', roles: ['publication_approver', 'data_consumer'], supervisorUserId: null },
 ];

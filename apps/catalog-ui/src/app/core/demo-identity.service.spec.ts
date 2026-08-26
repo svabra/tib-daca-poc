@@ -20,6 +20,7 @@ const ADDITIONAL_POC_USER_IDS = [
   'sarah.brunner',
   'simone.wyss',
   'lea.hofmann',
+  'sibilla.micheli',
 ] as const;
 
 describe('DemoIdentityService', () => {
@@ -131,8 +132,9 @@ describe('DemoIdentityService', () => {
     });
 
     const users = service.users();
-    expect(users).toHaveLength(12);
-    expect(users.every((user) => Boolean(user.avatarUrl))).toBe(true);
+    expect(users).toHaveLength(13);
+    expect(users.filter((user) => user.id !== 'sibilla.micheli').every((user) => Boolean(user.avatarUrl))).toBe(true);
+    expect(users.find((user) => user.id === 'sibilla.micheli')).toEqual(expect.objectContaining({ organization: 'VBS', avatarUrl: null, roles: expect.arrayContaining(['domain_register_owner']) }));
     expect(users.map((user) => user.id)).toEqual(expect.arrayContaining([
       'joel.ruod',
       'lucien.morel',

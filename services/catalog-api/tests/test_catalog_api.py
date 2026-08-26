@@ -23,7 +23,11 @@ def test_seeded_product_and_health_are_available(client):
 
     page = client.get("/api/v1/data-products")
     assert page.status_code == 200
-    assert len(page.json()["items"]) == 7
+    assert len(page.json()["items"]) == 8
+    assert any(
+        item["title"] == "Flottenbestand gepanzerte Fahrzeuge"
+        for item in page.json()["items"]
+    )
     assert page.json()["items"][0]["title"] == "ESTV-Steuerstatistik nach Kanton"
     assert page.json()["items"][0]["metadata"]["catalogUsage"]["responsibleUserIds"] == [
         "kassandra.valdata"

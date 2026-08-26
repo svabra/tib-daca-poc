@@ -44,7 +44,8 @@ import { accessConsumerSummary, DataOwnerProfile, deliveryProtocols, resolvedDat
         </div>
         <div class="daca-card-body">
           <dl class="product-overview-facts">
-            <div><dt>Fachgebiet</dt><dd>{{ product().domain }}</dd></div>
+            <div><dt>Fachdomains</dt><dd>@for (domain of product().domains; track domain.id) { <a [routerLink]="['/domains', domain.id]">{{ domain.preferredLabel }}</a>@if (!$last) { · } } @empty { {{ product().domain || 'Noch nicht zugeordnet' }} }</dd></div>
+            <div><dt>Glossarterme</dt><dd>@for (term of product().glossaryTerms; track term.id) { <span>{{ term.preferredLabel }}</span>@if (!$last) { · } } @empty { Noch keine akzeptierten Terme }</dd></div>
             <div><dt>Eigentümerin</dt><dd>@if (owner(); as owner) { {{ owner.name }} · {{ owner.organization }} } @else { {{ product().owner }} }</dd></div>
             <div><dt>Aktualisierung</dt><dd>{{ product().updateFrequency }}</dd></div>
             <div><dt>Schnittstellen</dt><dd>{{ protocols().join(' · ') }}</dd></div>

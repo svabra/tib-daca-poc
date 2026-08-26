@@ -52,6 +52,65 @@ class Contact(ApiModel):
     email: str
 
 
+class DomainLocalizationWrite(ApiModel):
+    language: str = Field(
+        min_length=2, max_length=35, pattern=r"^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$"
+    )
+    preferred_label: str = Field(min_length=1, max_length=255)
+    definition: str = Field(min_length=1)
+
+
+class DomainLocalizationResponse(DomainLocalizationWrite):
+    normalized_label: str
+
+
+class DomainReference(ApiModel):
+    id: uuid.UUID
+    urn: str
+    revision: int
+    lifecycle: Literal["active", "retired"]
+    preferred_label: str
+    labels: list[DomainLocalizationResponse] = Field(default_factory=list)
+
+
+class GlossaryTermLocalizationWrite(ApiModel):
+    language: str = Field(
+        min_length=2, max_length=35, pattern=r"^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$"
+    )
+    preferred_label: str = Field(min_length=1, max_length=255)
+    alternative_labels: list[str] = Field(default_factory=list)
+    definition: str = Field(min_length=1)
+
+
+class GlossaryTermLocalizationResponse(GlossaryTermLocalizationWrite):
+    normalized_label: str
+
+
+GlossaryRelationType = Literal["exactMatch", "closeMatch", "broader", "narrower", "related"]
+
+
+class GlossaryTermRelationWrite(ApiModel):
+    relation: GlossaryRelationType
+    target_term_id: uuid.UUID | None = None
+    target_uri: str | None = Field(default=None, min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def require_exactly_one_target(self) -> GlossaryTermRelationWrite:
+        if (self.target_term_id is None) == (self.target_uri is None):
+            raise ValueError("exactly one of targetTermId and targetUri is required")
+        return self
+
+
+class GlossaryTermReference(ApiModel):
+    id: uuid.UUID
+    urn: str
+    revision: int
+    lifecycle: Literal["active", "retired"]
+    preferred_label: str
+    labels: list[GlossaryTermLocalizationResponse] = Field(default_factory=list)
+    domain_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
 class DataProductResponse(ApiModel):
     id: uuid.UUID
     urn: str
@@ -66,6 +125,9 @@ class DataProductResponse(ApiModel):
     description: str
     owner: str
     domain: str
+    domains: list[DomainReference] = Field(default_factory=list)
+    glossary_terms: list[GlossaryTermReference] = Field(default_factory=list)
+    pending_term_proposals: list[uuid.UUID] = Field(default_factory=list)
     lifecycle: Literal["draft", "active", "deprecated", "retired"]
     classification: Literal["public", "internal", "confidential", "restricted"]
     keywords: list[str]
@@ -98,6 +160,8 @@ class DataProductSummary(ApiModel):
     description: str
     owner: str
     domain: str
+    domains: list[DomainReference] = Field(default_factory=list)
+    glossary_terms: list[GlossaryTermReference] = Field(default_factory=list)
     lifecycle: str
     classification: str
     keywords: list[str]
@@ -120,6 +184,8 @@ class DataProductPatch(ApiModel):
     description: str | None = Field(default=None, min_length=1)
     owner: str | None = Field(default=None, min_length=1, max_length=255)
     domain: str | None = Field(default=None, min_length=1, max_length=255)
+    domain_ids: list[uuid.UUID] | None = None
+    glossary_term_ids: list[uuid.UUID] | None = None
     lifecycle: Literal["draft", "active", "deprecated", "retired"] | None = None
     classification: Literal["public", "internal", "confidential", "restricted"] | None = None
     keywords: list[str] | None = None
@@ -138,6 +204,8 @@ class DataProductPatch(ApiModel):
             "description",
             "owner",
             "domain",
+            "domain_ids",
+            "glossary_term_ids",
             "lifecycle",
             "classification",
             "keywords",
@@ -1195,6 +1263,23 @@ class PocGuideConfigResponse(ApiModel):
     environment: str
 
 
+class PocDomainGlossaryAction(ApiModel):
+    confirmation_name: str = Field(min_length=1, max_length=255)
+
+
+class PocDomainGlossaryFixtureResponse(ApiModel):
+    fixture_id: Literal["domain-glossary-governance"]
+    state: Literal[
+        "notPrepared", "ready", "domainPending", "domainApproved", "termPending", "completed"
+    ]
+    product_id: uuid.UUID | None
+    product_title: str | None
+    domain_ids: list[uuid.UUID]
+    term_id: uuid.UUID | None
+    open_domain_request_count: int = Field(ge=0)
+    open_term_proposal_count: int = Field(ge=0)
+
+
 class PocAccessRenewalFixtureResponse(ApiModel):
     fixture_id: Literal["access-renewal-expiring"]
     product_id: uuid.UUID
@@ -1206,6 +1291,204 @@ class PocAccessRenewalFixtureResponse(ApiModel):
     days_until_expiry: int | None = None
     open_renewal_count: int = Field(ge=0)
     active_policy_revision: int | None = None
+
+
+class DomainDraft(ApiModel):
+    owner_user_id: str = Field(min_length=1, max_length=200)
+    deputy_owner_user_id: str = Field(min_length=1, max_length=200)
+    localizations: list[DomainLocalizationWrite] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_domain_draft(self) -> DomainDraft:
+        if self.owner_user_id == self.deputy_owner_user_id:
+            raise ValueError("ownerUserId and deputyOwnerUserId must differ")
+        languages = [item.language.casefold() for item in self.localizations]
+        if len(languages) != len(set(languages)):
+            raise ValueError("each domain language may occur only once")
+        return self
+
+
+class DomainResponse(ApiModel):
+    id: uuid.UUID
+    urn: str
+    origin_catalog_id: str
+    revision: int
+    content_hash: str
+    lifecycle: Literal["active", "retired"]
+    owner_user_id: str
+    deputy_owner_user_id: str
+    preferred_label: str
+    localizations: list[DomainLocalizationResponse]
+    product_count: int = 0
+    term_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+    retired_at: datetime | None
+
+
+class DomainDirectCreate(DomainDraft):
+    pass
+
+
+class DomainDirectUpdate(ApiModel):
+    owner_user_id: str | None = Field(default=None, min_length=1, max_length=200)
+    deputy_owner_user_id: str | None = Field(default=None, min_length=1, max_length=200)
+    localizations: list[DomainLocalizationWrite] | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def require_domain_update(self) -> DomainDirectUpdate:
+        if not self.model_fields_set:
+            raise ValueError("at least one domain field is required")
+        if self.localizations is not None:
+            languages = [item.language.casefold() for item in self.localizations]
+            if len(languages) != len(set(languages)):
+                raise ValueError("each domain language may occur only once")
+        return self
+
+
+class DomainChangeRequestCreate(ApiModel):
+    operation: Literal["create", "update", "retire"]
+    target_domain_id: uuid.UUID | None = None
+    base_revision: int | None = Field(default=None, ge=1)
+    payload: DomainDraft | DomainDirectUpdate | None = None
+
+    @model_validator(mode="after")
+    def validate_request_shape(self) -> DomainChangeRequestCreate:
+        if self.operation == "create":
+            if self.target_domain_id is not None or not isinstance(self.payload, DomainDraft):
+                raise ValueError("create requires a full payload and no targetDomainId")
+        elif self.target_domain_id is None or self.base_revision is None:
+            raise ValueError("update and retire require targetDomainId and baseRevision")
+        elif self.operation == "update" and self.payload is None:
+            raise ValueError("update requires payload")
+        return self
+
+
+class DomainChangeRequestUpdate(ApiModel):
+    review_payload: DomainDraft | DomainDirectUpdate
+
+
+class GovernanceDecision(ApiModel):
+    decision: Literal["approve", "reject"]
+    comment: str = Field(min_length=1, max_length=2000)
+
+
+class DomainChangeRequestResponse(ApiModel):
+    id: uuid.UUID
+    request_number: str
+    operation: Literal["create", "update", "retire"]
+    target_domain_id: uuid.UUID | None
+    base_revision: int | None
+    requester_user_id: str
+    status: Literal["submitted", "approved", "rejected", "stale"]
+    requested_payload: dict[str, Any]
+    review_payload: dict[str, Any]
+    revision: int
+    reviewer_user_id: str | None
+    decision_comment: str | None
+    decided_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class GlossaryTermRelationResponse(ApiModel):
+    id: uuid.UUID
+    relation: GlossaryRelationType
+    target_term_id: uuid.UUID | None
+    target_uri: str | None
+
+
+class GlossaryTermResponse(ApiModel):
+    id: uuid.UUID
+    urn: str
+    origin_catalog_id: str
+    revision: int
+    content_hash: str
+    lifecycle: Literal["active", "retired"]
+    preferred_label: str
+    localizations: list[GlossaryTermLocalizationResponse]
+    domain_ids: list[uuid.UUID]
+    relations: list[GlossaryTermRelationResponse]
+    created_at: datetime
+    updated_at: datetime
+    retired_at: datetime | None
+
+
+class GlossaryTermDraft(ApiModel):
+    domain_ids: list[uuid.UUID] = Field(min_length=1)
+    localizations: list[GlossaryTermLocalizationWrite] = Field(min_length=1)
+    relations: list[GlossaryTermRelationWrite] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_term_draft(self) -> GlossaryTermDraft:
+        if len(self.domain_ids) != len(set(self.domain_ids)):
+            raise ValueError("domainIds must be unique")
+        languages = [item.language.casefold() for item in self.localizations]
+        if len(languages) != len(set(languages)):
+            raise ValueError("each glossary language may occur only once")
+        return self
+
+
+class GlossaryTermProposalCreate(ApiModel):
+    operation: Literal["create", "update", "retire"] = "create"
+    target_term_id: uuid.UUID | None = None
+    source_product_id: uuid.UUID | None = None
+    auto_attach: bool = False
+    payload: GlossaryTermDraft
+
+    @model_validator(mode="after")
+    def validate_proposal_shape(self) -> GlossaryTermProposalCreate:
+        if self.operation == "create" and self.target_term_id is not None:
+            raise ValueError("create must not specify targetTermId")
+        if self.operation != "create" and self.target_term_id is None:
+            raise ValueError("update and retire require targetTermId")
+        if self.auto_attach and self.source_product_id is None:
+            raise ValueError("autoAttach requires sourceProductId")
+        return self
+
+
+class GlossaryTermProposalUpdate(ApiModel):
+    review_payload: GlossaryTermDraft
+
+
+class GlossaryTermProposalReviewResponse(ApiModel):
+    domain_id: uuid.UUID
+    proposal_revision: int
+    owner_user_id: str
+    status: Literal["pending", "approved", "rejected"]
+    decision_comment: str | None
+    decided_at: datetime | None
+    updated_at: datetime
+
+
+class GlossaryTermProposalResponse(ApiModel):
+    id: uuid.UUID
+    request_number: str
+    operation: Literal["create", "update", "retire"]
+    target_term_id: uuid.UUID | None
+    requester_user_id: str
+    source_product_id: uuid.UUID | None
+    source_product_revision: int | None
+    auto_attach: bool
+    status: Literal["submitted", "in_review", "accepted", "rejected", "stale"]
+    requested_payload: dict[str, Any]
+    review_payload: dict[str, Any]
+    revision: int
+    decision_comment: str | None
+    decided_at: datetime | None
+    reviews: list[GlossaryTermProposalReviewResponse]
+    created_at: datetime
+    updated_at: datetime
+
+
+class SemanticSuggestionResponse(ApiModel):
+    kind: Literal["domain", "glossaryTerm"]
+    id: uuid.UUID
+    label: str
+    score: float = Field(ge=0, le=100)
+    matched_fields: list[str]
+    reason: str
+    source: Literal["deterministic-fuzzy"] = "deterministic-fuzzy"
 
 
 class WorkflowTaskResponse(ApiModel):
@@ -1222,8 +1505,14 @@ class WorkflowTaskResponse(ApiModel):
         "governance_correction",
         "service_level_approval",
         "source_access_review",
+        "domain_change_review",
+        "domain_change_decision",
+        "glossary_term_review",
+        "glossary_term_collaboration",
+        "glossary_term_decision",
     ]
     status: Literal["open", "in_progress", "completed"]
+    task_kind: Literal["action", "information"] = "action"
     assignee_user_id: str
     data_product_id: uuid.UUID | None
     access_request_id: uuid.UUID | None
@@ -1231,11 +1520,14 @@ class WorkflowTaskResponse(ApiModel):
     governance_submission_id: uuid.UUID | None = None
     service_level_revision_id: uuid.UUID | None = None
     source_access_request_id: uuid.UUID | None = None
+    domain_change_request_id: uuid.UUID | None = None
+    glossary_term_proposal_id: uuid.UUID | None = None
     title: str
     detail: str
     created_at: datetime
     updated_at: datetime
     completed_at: datetime | None
+    acknowledged_at: datetime | None = None
 
 
 SimulationEventType = Literal[

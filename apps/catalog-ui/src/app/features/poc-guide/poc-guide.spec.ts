@@ -11,7 +11,7 @@ import { PocGuideOverviewComponent } from './poc-guide-overview.component';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 
 describe('PoC guide contract', () => {
-  it('defines seven complete, uniquely addressable journeys and twenty-six screenshot contracts', () => {
+  it('defines nine complete, uniquely addressable journeys and twenty-nine screenshot contracts', () => {
     expect(POC_JOURNEYS.map((journey) => journey.id)).toEqual([
       'understand-and-use-product',
       'data-analysts-journey',
@@ -20,24 +20,24 @@ describe('PoC guide contract', () => {
       'governance-exception',
       'change-history',
       'access-renewal',
+      'domain-governance',
+      'glossary-governance',
     ]);
-    expect(POC_JOURNEYS.map((journey) => journey.number)).toEqual(['01', '02', '03', '04', '05', '06', '07']);
+    expect(POC_JOURNEYS.map((journey) => journey.number)).toEqual(['01', '02', '03', '04', '05', '06', '07', '08', '09']);
     expect(POC_JOURNEYS[1].verification?.label).toBe('Durchgängig verifiziert');
-    expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(7);
+    expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(9);
     const screenshots = POC_JOURNEYS.flatMap((journey) => journey.steps.flatMap((step) => step.screenshots ?? []));
-    expect(screenshots.length).toBe(26);
+    expect(screenshots.length).toBe(29);
     expect(screenshots.slice(0, 4).map((screenshot) => screenshot.src)).toEqual([
       '/assets/poc-guide/journey-01-product-search.webp',
       '/assets/poc-guide/journey-01-data-dictionary.webp',
       '/assets/poc-guide/journey-01-service-level.webp',
       '/assets/poc-guide/journey-01-endpoint-quickstart.webp',
     ]);
-    expect(screenshots.slice(-5).map((screenshot) => screenshot.src)).toEqual([
-      '/assets/poc-guide/journey-07-expiry.webp',
-      '/assets/poc-guide/journey-07-request.webp',
-      '/assets/poc-guide/journey-07-owner-review.webp',
-      '/assets/poc-guide/journey-07-four-eyes.webp',
-      '/assets/poc-guide/journey-07-runtime.webp',
+    expect(screenshots.slice(-3).map((screenshot) => screenshot.src)).toEqual([
+      '/assets/poc-guide/journey-08-semantic-suggestions.webp',
+      '/assets/poc-guide/journey-08-domain-register.webp',
+      '/assets/poc-guide/journey-09-glossary-review.webp',
     ]);
     const consumerActions = POC_JOURNEYS[0].steps.flatMap((step) => step.actions ?? []);
     expect(consumerActions).toContainEqual(expect.objectContaining({
@@ -81,10 +81,10 @@ describe('PoC guide contract', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('h1')?.textContent).toContain('PoC Leitfaden');
     const journeyCards = root.querySelectorAll('[data-poc-guide-journey]');
-    expect(journeyCards.length).toBe(7);
+    expect(journeyCards.length).toBe(9);
     expect(journeyCards.item(0).getAttribute('data-poc-guide-journey')).toBe('understand-and-use-product');
-    expect(journeyCards.item(6).getAttribute('data-poc-guide-journey')).toBe('access-renewal');
-    expect(journeyCards.item(6).textContent).toContain('Zugriff vor Ablauf verlängern');
+    expect(journeyCards.item(8).getAttribute('data-poc-guide-journey')).toBe('glossary-governance');
+    expect(journeyCards.item(8).textContent).toContain('Glossarterm gemeinsam prüfen');
     expect(root.textContent).toContain('Das können Sie testen');
     expect(root.textContent).toContain('Das ist nicht Teil des PoC');
     expect(root.querySelector('a[href="/poc-simulation"]')).not.toBeNull();

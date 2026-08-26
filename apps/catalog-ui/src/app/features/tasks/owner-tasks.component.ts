@@ -46,15 +46,13 @@ import { SourceAccessRequestsComponent } from './source-access-requests.componen
           <button class="daca-button is-secondary" data-testid="retry-workflow-tasks" type="button" (click)="api.refreshWorkflowTasks()">Erneut laden</button>
         </div>
       </section>
-    } @else if (workflowTasks().length) {
-      <section class="owner-workflow-section" aria-labelledby="workflow-title">
-        <div class="owner-tasks-section-heading"><div><p class="daca-eyebrow"><daca-glossary-term term="DAAIF" /> → <daca-glossary-term term="DaCa" /></p><h2 id="workflow-title">Qualität, Governance und Alerts</h2></div><span>{{ workflowTasks().length }}</span></div>
-        <div class="owner-task-list">
-          @for (task of workflowTasks(); track task.id) {
-            <article class="daca-card owner-task-card" [class.is-simulation-alert]="task.taskType.startsWith('simulation_')"><div class="owner-task-priority" aria-hidden="true"></div><div class="owner-task-main"><div><span>{{ taskLabel(task.taskType) }}</span><time>{{ task.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</time></div><h3>{{ task.title }}</h3><p>{{ task.detail }}</p></div><a class="daca-button" [routerLink]="taskRoute(task)" [queryParams]="taskQueryParams(task)">Aufgabe öffnen</a></article>
-          }
-        </div>
-      </section>
+    } @else {
+      @for (group of workflowGroups(); track group.kind) {
+        <section class="owner-workflow-section" [attr.aria-labelledby]="'workflow-'+group.kind">
+          <div class="owner-tasks-section-heading"><div><p class="daca-eyebrow">{{ group.eyebrow }}</p><h2 [id]="'workflow-'+group.kind">{{ group.title }}</h2></div><span>{{ group.tasks.length }}</span></div>
+          @if(group.tasks.length){<div class="owner-task-list">@for (task of group.tasks; track task.id) {<article class="daca-card owner-task-card" [class.is-simulation-alert]="task.taskType.startsWith('simulation_')"><div class="owner-task-priority" aria-hidden="true"></div><div class="owner-task-main"><div><span>{{ taskLabel(task.taskType) }}</span><time>{{ task.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</time></div><h3>{{ task.title }}</h3><p>{{ task.detail }}</p></div>@if(group.kind === 'information'){<div class="owner-task-actions"><a class="daca-button is-secondary" [routerLink]="taskRoute(task)" [queryParams]="taskQueryParams(task)">Kontext öffnen</a><button class="daca-button is-secondary" type="button" (click)="acknowledge(task.id)">Zur Kenntnis nehmen</button></div>}@else{<a class="daca-button" [routerLink]="taskRoute(task)" [queryParams]="taskQueryParams(task)">{{ group.kind === 'collaboration' ? 'Mitarbeit öffnen' : 'Aufgabe öffnen' }}</a>}</article>}</div>}@else{<div class="daca-card owner-task-empty">Keine offenen Einträge.</div>}
+        </section>
+      }
     }
 
     @if (filteredProductId()) {
@@ -172,6 +170,11 @@ export class OwnerTasksComponent {
   });
   readonly filteredProductTitle = computed(() => this.productTitle(this.filteredProductId() ?? ''));
   readonly workflowTasks = computed(() => this.api.workflowTasks().filter((task) => task.taskType !== 'access_request_review' && task.taskType !== 'source_access_review'));
+  readonly workflowGroups = computed(() => ([
+    { kind: 'action' as const, eyebrow: 'Entscheid nötig', title: 'Fachliche Entscheide', tasks: this.workflowTasks().filter((task) => task.kind !== 'collaboration' && task.kind !== 'information') },
+    { kind: 'collaboration' as const, eyebrow: 'Mitarbeit', title: 'Gemeinsame Bearbeitung', tasks: this.workflowTasks().filter((task) => task.kind === 'collaboration') },
+    { kind: 'information' as const, eyebrow: 'Zur Kenntnis', title: 'Entscheidungsinformationen', tasks: this.workflowTasks().filter((task) => task.kind === 'information') },
+  ]));
   readonly openTaskCount = computed(() => this.requests().length + this.api.sourceAccessRequests().length + this.workflowTasks().length);
   readonly taskStatusUnknown = computed(() => Boolean(this.api.ownerAccessRequestError() || this.api.workflowTasksError() || this.api.sourceAccessRequestsError()));
   readonly taskStatusLoading = computed(() => this.api.ownerAccessRequestLoading() || this.api.workflowTasksLoading() || this.api.sourceAccessRequestsLoading());
@@ -234,16 +237,31 @@ export class OwnerTasksComponent {
       publication_approval: 'Vier-Augen-Freigabe',
       governance_correction: 'Korrektur erforderlich',
       service_level_approval: 'SLA-Kontrolle',
+      domain_change_review: 'Domainregister',
+      domain_change_decision: 'Domain-Entscheid',
+      glossary_term_review: 'Glossar-Freigabe',
+      glossary_term_collaboration: 'Glossar-Mitarbeit',
+      glossary_term_decision: 'Glossar-Entscheid',
     } as Record<string, string>)[value] ?? 'Aufgabe';
   }
 
-  taskRoute(task: { taskType: string; dataProductId: string | null; governanceSubmissionId?: string | null }): unknown[] {
+  taskKindLabel(value: 'action' | 'collaboration' | 'information' | undefined): string {
+    return value === 'collaboration' ? 'Mitarbeit' : value === 'information' ? 'Zur Kenntnis' : 'Entscheid nötig';
+  }
+
+  taskRoute(task: { taskType: string; dataProductId: string | null; governanceSubmissionId?: string | null; domainChangeRequestId?: string | null; glossaryTermProposalId?: string | null }): unknown[] {
+    if (task.taskType.startsWith('glossary_term_') && task.glossaryTermProposalId) return ['/glossary/proposals', task.glossaryTermProposalId, 'review'];
+    if (task.taskType.startsWith('domain_change_') || task.domainChangeRequestId) return ['/domains'];
     if (!task.dataProductId) return ['/tasks'];
     if (task.taskType === 'publication_approval' && task.governanceSubmissionId) return ['/governance-submissions', task.governanceSubmissionId];
     if (task.taskType === 'service_level_approval') return ['/products', task.dataProductId, 'sla'];
     if (task.taskType === 'metadata_quality' || task.taskType === 'simulation_quality_alert') return ['/products', task.dataProductId, 'quality'];
     if (task.taskType.startsWith('simulation_')) return ['/products', task.dataProductId, 'overview'];
     return ['/products', task.dataProductId, 'access', 'grant'];
+  }
+
+  acknowledge(taskId: string): void {
+    this.api.acknowledgeTask(taskId).subscribe({ error: () => this.decisionError.set('Die Information konnte nicht bestätigt werden.') });
   }
 
   taskQueryParams(task: { taskType: string; serviceLevelRevisionId?: string | null }): Record<string, string> | null {

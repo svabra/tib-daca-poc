@@ -146,10 +146,10 @@ export class CatalogExpertSearchComponent {
   readonly selectedOwner = signal('all');
   readonly searchMinimumLength = CATALOG_SEARCH_MIN_LENGTH;
   readonly searchReady = computed(() => catalogSearchIsReady(this.query()));
-  readonly domains = computed(() => this.uniqueValues(this.api.products().map((product) => product.domain)));
+  readonly domains = computed(() => this.uniqueValues(this.api.products().flatMap((product) => product.domains.length ? product.domains.map((domain) => domain.preferredLabel) : [product.domain])));
   readonly owners = computed(() => this.uniqueValues(this.api.products().map((product) => product.owner)));
   readonly results = computed(() => [...searchCatalogProducts(this.api.products(), this.query())]
-    .filter((product) => this.selectedDomain() === 'all' || product.domain === this.selectedDomain())
+    .filter((product) => this.selectedDomain() === 'all' || product.domains.some((domain) => domain.preferredLabel === this.selectedDomain()) || (!product.domains.length && product.domain === this.selectedDomain()))
     .filter((product) => this.selectedOwner() === 'all' || product.owner === this.selectedOwner())
     .sort((left, right) => left.title.localeCompare(right.title, 'de-CH')));
 

@@ -7,7 +7,13 @@ import {
   AccessRenewalSubmission,
   AdministrativeOrganization,
   DataProduct,
+  DomainChangeRequest,
+  DomainAuditEvent,
+  DomainGlossaryFixtureState,
+  DomainSummary,
   GovernanceSubmission,
+  GlossaryTermProposal,
+  GlossaryTermSummary,
   EndpointDescriptor,
   IdentityDirectoryEntry,
   IdentityDirectorySource,
@@ -22,6 +28,7 @@ import {
   ProductQualityWorkspace,
   ProvenanceEvent,
   SourceAccessRequest,
+  SemanticSuggestion,
   StoredAccessRequest,
 } from './catalog.models';
 import { FALLBACK_EDGES, FALLBACK_NODES, FALLBACK_OWNED_ACCESS_CONSUMERS, FALLBACK_PRODUCT, FALLBACK_PRODUCTS, FALLBACK_PROVENANCE } from './catalog.seed';
@@ -131,9 +138,17 @@ export type PolicyWire = {
   deployments: Array<{ target: 'opa' | 'postgresql'; observedRevision: number | null; desiredRevision: number }>;
 };
 
+type ConceptLocalizationWire = { language: string; preferredLabel: string; alternativeLabels?: string[]; definition: string; normalizedLabel: string };
+type DomainWire = { id: string; urn: string; originCatalogId: string; revision: number; lifecycle: 'active' | 'retired'; ownerUserId: string; deputyOwnerUserId: string; preferredLabel: string; localizations: ConceptLocalizationWire[]; productCount: number; termCount: number; updatedAt: string };
+type GlossaryTermWire = { id: string; urn: string; originCatalogId: string; revision: number; lifecycle: 'active' | 'retired'; preferredLabel: string; localizations: ConceptLocalizationWire[]; domainIds: string[]; relations: Array<{ id: string; relation: GlossaryTermSummary['relations'][number]['relationType']; targetTermId: string | null; targetUri: string | null }>; updatedAt: string };
+type ProposalReviewWire = { domainId: string; proposalRevision: number; ownerUserId: string; status: 'pending' | 'approved' | 'rejected'; decisionComment: string | null; decidedAt: string | null; updatedAt: string };
+type ProposalWire = Omit<GlossaryTermProposal, 'requesterName' | 'reviews'> & { reviews: ProposalReviewWire[] };
+
 export interface WorkflowTaskWire {
   id: string;
-  taskType: 'metadata_quality' | 'access_governance' | 'access_request_review' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed' | 'publication_approval' | 'governance_correction' | 'service_level_approval' | 'source_access_review';
+  taskType: 'metadata_quality' | 'access_governance' | 'access_request_review' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed' | 'publication_approval' | 'governance_correction' | 'service_level_approval' | 'source_access_review' | 'domain_change_review' | 'domain_change_decision' | 'glossary_term_review' | 'glossary_term_collaboration' | 'glossary_term_decision';
+  kind?: 'action' | 'collaboration' | 'information';
+  taskKind?: 'action' | 'collaboration' | 'information';
   status: 'open' | 'in_progress' | 'completed';
   assigneeUserId: string;
   dataProductId: string | null;
@@ -142,6 +157,8 @@ export interface WorkflowTaskWire {
   governanceSubmissionId?: string | null;
   serviceLevelRevisionId?: string | null;
   sourceAccessRequestId?: string | null;
+  domainChangeRequestId?: string | null;
+  glossaryTermProposalId?: string | null;
   title: string;
   detail: string;
   createdAt: string;
@@ -160,6 +177,7 @@ export class CatalogApiService {
   private readonly ownedAccessConsumerState = signal<readonly OwnedAccessConsumer[]>(FALLBACK_OWNED_ACCESS_CONSUMERS);
   private readonly workflowTaskState = signal<readonly WorkflowTaskWire[]>([]);
   private readonly sourceAccessRequestState = signal<readonly SourceAccessRequest[]>([]);
+  private readonly domainState = signal<readonly DomainSummary[]>([]);
   private productsRefreshGeneration = 0;
   private ownerInboxRefreshGeneration = 0;
   private workflowTasksRefreshGeneration = 0;
@@ -176,6 +194,7 @@ export class CatalogApiService {
   readonly ownedAccessConsumers = this.ownedAccessConsumerState.asReadonly();
   readonly workflowTasks = this.workflowTaskState.asReadonly();
   readonly sourceAccessRequests = this.sourceAccessRequestState.asReadonly();
+  readonly domains = this.domainState.asReadonly();
   readonly ownerAccessRequestLoading = signal(true);
   readonly ownerAccessRequestError = signal<string | null>(null);
   readonly workflowTasksLoading = signal(true);
@@ -334,6 +353,8 @@ export class CatalogApiService {
       description: patch.description,
       owner: patch.owner,
       domain: patch.domain,
+      domainIds: patch.domains?.map((domain) => domain.id),
+      glossaryTermIds: patch.glossaryTerms?.map((term) => term.id),
       lifecycle: patch.lifecycle,
       classification: patch.classification,
       keywords: patch.keywords,
@@ -357,6 +378,177 @@ export class CatalogApiService {
         }),
         catchError((error: unknown) => throwError(() => this.describeError(error))),
       );
+  }
+
+  loadDomains(includeRetired = false): Observable<readonly DomainSummary[]> {
+    return this.http.get<Collection<DomainWire>>('/api/v1/domains', {
+      headers: this.identity.headers(),
+      params: includeRetired ? { includeRetired: true } : {},
+    }).pipe(map((result) => (Array.isArray(result) ? result : result.items).map((item) => this.normalizeDomain(item))), tap((items) => this.domainState.set(items)));
+  }
+
+  loadDomain(domainId: string): Observable<DomainSummary> {
+    return this.http.get<DomainWire>(`/api/v1/domains/${encodeURIComponent(domainId)}`, {
+      headers: this.identity.headers(),
+    }).pipe(map((item) => this.normalizeDomain(item)));
+  }
+
+  loadDataProductsForDomain(domainId: string): Observable<readonly DataProduct[]> {
+    return this.http.get<Collection<ProductWire>>('/api/v1/data-products', {
+      headers: this.identity.headers(),
+      params: { limit: 100, domainId },
+    }).pipe(map((result) => (Array.isArray(result) ? result : result.items).map((item) => this.normalizeProduct(item))));
+  }
+
+  loadDomainAuditEvents(domainId: string): Observable<readonly DomainAuditEvent[]> {
+    return this.http.get<DomainAuditEvent[]>(`/api/v1/domains/${encodeURIComponent(domainId)}/audit-events`, { headers: this.identity.headers() });
+  }
+
+  loadDomainChangeRequests(): Observable<readonly DomainChangeRequest[]> {
+    return this.http.get<Collection<DomainChangeRequest>>('/api/v1/domain-change-requests', {
+      headers: this.identity.headers(),
+    }).pipe(map((result) => (Array.isArray(result) ? result : result.items).map((item) => this.normalizeDomainRequest(item))));
+  }
+
+  createDomainChangeRequest(payload: {
+    operation: DomainChangeRequest['operation'];
+    targetDomainId?: string | null;
+    baseRevision?: number | null;
+    requestedPayload: Record<string, unknown>;
+  }): Observable<DomainChangeRequest> {
+    const requested = payload.requestedPayload;
+    const body = {
+      operation: payload.operation,
+      targetDomainId: payload.targetDomainId,
+      baseRevision: payload.baseRevision,
+      payload: payload.operation === 'retire' ? undefined : {
+        ownerUserId: requested['ownerUserId'],
+        deputyOwnerUserId: requested['deputyOwnerUserId'],
+        localizations: requested['localizations'] ?? requested['labels'],
+      },
+    };
+    return this.http.post<DomainChangeRequest>('/api/v1/domain-change-requests', body, {
+      headers: this.identity.headers(),
+    }).pipe(map((item) => this.normalizeDomainRequest(item)));
+  }
+
+  updateDomainDirect(domain: DomainSummary, payload: { ownerUserId: string; deputyOwnerUserId: string; localizations: Array<{ language: string; preferredLabel: string; definition: string }> }): Observable<DomainSummary> {
+    return this.http.patch<DomainWire>(`/api/v1/domains/${encodeURIComponent(domain.id)}`, payload, { headers: this.identity.headers().set('If-Match', `"${domain.revision}"`) }).pipe(map((item) => this.normalizeDomain(item)), tap(() => this.loadDomains(true).subscribe()));
+  }
+
+  retireDomainDirect(domain: DomainSummary): Observable<DomainSummary> {
+    return this.http.post<DomainWire>(`/api/v1/domains/${encodeURIComponent(domain.id)}/retire`, {}, { headers: this.identity.headers().set('If-Match', `"${domain.revision}"`) }).pipe(map((item) => this.normalizeDomain(item)));
+  }
+
+  decideDomainChangeRequest(request: DomainChangeRequest, decision: 'approve' | 'reject', comment: string): Observable<DomainChangeRequest> {
+    return this.http.post<DomainChangeRequest>(
+      `/api/v1/domain-change-requests/${encodeURIComponent(request.id)}/decision`,
+      { decision, comment },
+      { headers: this.identity.headers().set('If-Match', `"${request.revision}"`) },
+    ).pipe(tap(() => this.refreshWorkflowTasks()));
+  }
+
+  updateDomainChangeRequest(request: DomainChangeRequest, reviewPayload: Record<string, unknown>): Observable<DomainChangeRequest> {
+    return this.http.patch<DomainChangeRequest>(`/api/v1/domain-change-requests/${encodeURIComponent(request.id)}`, { reviewPayload }, { headers: this.identity.headers().set('If-Match', `"${request.revision}"`) }).pipe(map((item) => this.normalizeDomainRequest(item)));
+  }
+
+  loadGlossaryTerms(domainIds: readonly string[] = []): Observable<readonly GlossaryTermSummary[]> {
+    const params: Record<string, string> = domainIds.length ? { domainId: domainIds[0] } : {};
+    const domains$ = this.domainState().length ? of(this.domainState()) : this.loadDomains(true);
+    return domains$.pipe(switchMap((domains) => this.http.get<Collection<GlossaryTermWire>>('/api/v1/glossary/terms', {
+      headers: this.identity.headers(), params,
+    }).pipe(map((result) => (Array.isArray(result) ? result : result.items).map((item) => this.normalizeGlossaryTerm(item, domains))))));
+  }
+
+  loadGlossaryTermProposals(): Observable<readonly GlossaryTermProposal[]> {
+    const domains$ = this.domainState().length ? of(this.domainState()) : this.loadDomains(true);
+    return domains$.pipe(switchMap(() => this.http.get<Collection<ProposalWire>>('/api/v1/glossary/term-proposals', {
+      headers: this.identity.headers(),
+    }).pipe(map((result) => (Array.isArray(result) ? result : result.items).map((item) => this.normalizeProposal(item))))));
+  }
+
+  loadGlossaryTermProposal(proposalId: string): Observable<GlossaryTermProposal> {
+    const domains$ = this.domainState().length ? of(this.domainState()) : this.loadDomains(true);
+    return domains$.pipe(switchMap(() => this.http.get<ProposalWire>(`/api/v1/glossary/term-proposals/${encodeURIComponent(proposalId)}`, {
+      headers: this.identity.headers(),
+    }).pipe(map((item) => this.normalizeProposal(item)))));
+  }
+
+  createGlossaryTermProposal(payload: {
+    operation: GlossaryTermProposal['operation'];
+    targetTermId?: string | null;
+    sourceProductId?: string | null;
+    autoAttach: boolean;
+    domainIds: readonly string[];
+    labels: Array<{ language: string; preferredLabel: string; alternativeLabels: string[]; definition: string }>;
+    relations?: Array<{
+      relation: GlossaryTermSummary['relations'][number]['relationType'];
+      targetTermId?: string | null;
+      targetUri?: string | null;
+    }>;
+  }): Observable<GlossaryTermProposal> {
+    const body = {
+      operation: payload.operation,
+      ...(payload.targetTermId ? { targetTermId: payload.targetTermId } : {}),
+      sourceProductId: payload.sourceProductId,
+      autoAttach: payload.autoAttach,
+      payload: {
+        domainIds: payload.domainIds,
+        localizations: payload.labels,
+        relations: payload.relations ?? [],
+      },
+    };
+    return this.http.post<ProposalWire>('/api/v1/glossary/term-proposals', body, {
+      headers: this.identity.headers(),
+    }).pipe(map((item) => this.normalizeProposal(item)), tap(() => this.refreshWorkflowTasks()));
+  }
+
+  updateGlossaryTermProposal(proposal: GlossaryTermProposal, reviewPayload: Record<string, unknown>): Observable<GlossaryTermProposal> {
+    return this.http.patch<ProposalWire>(
+      `/api/v1/glossary/term-proposals/${encodeURIComponent(proposal.id)}`,
+      { reviewPayload },
+      { headers: this.identity.headers().set('If-Match', `"${proposal.revision}"`) },
+    ).pipe(map((item) => this.normalizeProposal(item)), tap(() => this.refreshWorkflowTasks()));
+  }
+
+  decideGlossaryTermProposal(proposal: GlossaryTermProposal, domainId: string, decision: 'approve' | 'reject', comment: string): Observable<GlossaryTermProposal> {
+    return this.http.post<ProposalWire>(
+      `/api/v1/glossary/term-proposals/${encodeURIComponent(proposal.id)}/reviews/${encodeURIComponent(domainId)}/decision`,
+      { decision, comment },
+      { headers: this.identity.headers().set('If-Match', `"${proposal.revision}"`) },
+    ).pipe(map((item) => this.normalizeProposal(item)), tap(() => { this.refreshWorkflowTasks(); this.refreshProducts(); }));
+  }
+
+  loadSemanticSuggestions(productId: string): Observable<readonly SemanticSuggestion[]> {
+    return this.http.get<Collection<SemanticSuggestion>>(
+      `/api/v1/data-products/${encodeURIComponent(productId)}/semantic-suggestions`,
+      { headers: this.identity.headers() },
+    ).pipe(map((result) => Array.isArray(result) ? result : result.items));
+  }
+
+  acknowledgeTask(taskId: string): Observable<void> {
+    return this.http.post<void>(`/api/v1/tasks/${encodeURIComponent(taskId)}/acknowledge`, {}, {
+      headers: this.identity.headers(),
+    }).pipe(tap(() => this.refreshWorkflowTasks()));
+  }
+
+  loadKnowledgeGraph(domainId?: string): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>('/api/v1/knowledge-graph', {
+      headers: this.identity.headers(),
+      params: domainId ? { domainId } : {},
+    });
+  }
+
+  loadDomainGlossaryFixture(): Observable<DomainGlossaryFixtureState> {
+    return this.http.get<DomainGlossaryFixtureState>('/api/v1/poc/domain-glossary-fixture', { headers: this.identity.headers() });
+  }
+
+  prepareDomainGlossaryFixture(): Observable<DomainGlossaryFixtureState> {
+    return this.http.post<DomainGlossaryFixtureState>('/api/v1/poc/domain-glossary-fixture/prepare', {}, { headers: this.identity.headers() }).pipe(tap(() => { this.refreshProducts(); this.refreshWorkflowTasks(); }));
+  }
+
+  resetDomainGlossaryFixture(confirmationName: string): Observable<DomainGlossaryFixtureState> {
+    return this.http.post<DomainGlossaryFixtureState>('/api/v1/poc/domain-glossary-fixture/reset', { confirmationName }, { headers: this.identity.headers() }).pipe(tap(() => { this.refreshProducts(); this.refreshWorkflowTasks(); }));
   }
 
   createAccessRequest(productId: string, request: AccessRequestSubmission): Observable<StoredAccessRequest> {
@@ -445,7 +637,7 @@ export class CatalogApiService {
       .subscribe({
         next: (tasks) => {
           if (refreshGeneration !== this.workflowTasksRefreshGeneration) return;
-          this.workflowTaskState.set(tasks);
+          this.workflowTaskState.set(tasks.map((task) => ({ ...task, kind: task.taskType === 'glossary_term_collaboration' ? 'collaboration' : task.taskKind ?? task.kind ?? 'action' })));
           this.workflowTasksLoading.set(false);
         },
         error: () => {
@@ -792,6 +984,20 @@ export class CatalogApiService {
       : product.quality
         ? Object.entries(product.quality).map(([key, value]) => `${key}: ${String(value)}`).join(' · ')
         : FALLBACK_PRODUCT.quality;
+    const rawDomains = Array.isArray(product.domains) ? product.domains as unknown as Array<Record<string, unknown>> : [];
+    const domains: DomainSummary[] = rawDomains.map((domain) => {
+      const labels = Array.isArray(domain['labels']) ? domain['labels'] as Array<Record<string, unknown>> : [];
+      const mappedLabels = labels.map((label) => ({ language: String(label['language'] ?? ''), preferredLabel: String(label['preferredLabel'] ?? ''), alternativeLabels: Array.isArray(label['alternativeLabels']) ? label['alternativeLabels'] as string[] : [], definition: String(label['definition'] ?? '') }));
+      const cached = this.domainState().find((item) => item.id === String(domain['id']));
+      return cached ?? { id: String(domain['id']), urn: String(domain['urn'] ?? ''), originCatalogId: '', revision: Number(domain['revision'] ?? 1), status: domain['lifecycle'] === 'retired' ? 'retired' : 'active', preferredLabel: String(domain['preferredLabel'] ?? ''), definition: mappedLabels[0]?.definition ?? '', labels: mappedLabels, ownerUserId: '', ownerName: '', ownerOrganization: '', deputyOwnerUserId: '', deputyOwnerName: '', deputyOwnerOrganization: '', productCount: 0, termCount: 0, updatedAt: '' };
+    });
+    const rawTerms = Array.isArray(product.glossaryTerms) ? product.glossaryTerms as unknown as Array<Record<string, unknown>> : [];
+    const glossaryTerms: GlossaryTermSummary[] = rawTerms.map((term) => {
+      const labels = Array.isArray(term['labels']) ? term['labels'] as Array<Record<string, unknown>> : [];
+      const mappedLabels = labels.map((label) => ({ language: String(label['language'] ?? ''), preferredLabel: String(label['preferredLabel'] ?? ''), alternativeLabels: Array.isArray(label['alternativeLabels']) ? label['alternativeLabels'] as string[] : [], definition: String(label['definition'] ?? '') }));
+      const domainIds = Array.isArray(term['domainIds']) ? term['domainIds'].map(String) : [];
+      return { id: String(term['id']), urn: String(term['urn'] ?? ''), originCatalogId: '', revision: Number(term['revision'] ?? 1), status: term['lifecycle'] === 'retired' ? 'retired' : 'active', preferredLabel: String(term['preferredLabel'] ?? ''), definition: mappedLabels[0]?.definition ?? '', labels: mappedLabels, domains: domains.filter((domain) => domainIds.includes(domain.id)), relations: [], updatedAt: '' };
+    });
     return {
       ...FALLBACK_PRODUCT,
       ...product,
@@ -799,6 +1005,8 @@ export class CatalogApiService {
       contact: typeof product.contact === 'string' ? product.contact : product.contact?.email ?? FALLBACK_PRODUCT.contact,
       license: product.license ?? FALLBACK_PRODUCT.license,
       quality,
+      domains,
+      glossaryTerms,
       ...qualitySummary,
       updateFrequency: product.updateFrequency ?? FALLBACK_PRODUCT.updateFrequency,
       additionalMetadata: product.additionalMetadata ?? product.metadata ?? FALLBACK_PRODUCT.additionalMetadata,
@@ -806,6 +1014,50 @@ export class CatalogApiService {
       createdAt: product.createdAt ?? FALLBACK_PRODUCT.createdAt,
       updatedAt: product.updatedAt ?? FALLBACK_PRODUCT.updatedAt,
     };
+  }
+
+  private normalizeDomain(item: DomainWire): DomainSummary {
+    const owner = this.identity.users().find((user) => user.id === item.ownerUserId);
+    const deputy = this.identity.users().find((user) => user.id === item.deputyOwnerUserId);
+    const preferred = item.localizations.find((label) => label.language.toLocaleLowerCase() === 'de') ?? item.localizations[0];
+    return {
+      id: item.id, urn: item.urn, originCatalogId: item.originCatalogId, revision: item.revision,
+      status: item.lifecycle, preferredLabel: item.preferredLabel, definition: preferred?.definition ?? '',
+      labels: item.localizations.map((label) => ({ language: label.language, preferredLabel: label.preferredLabel, alternativeLabels: label.alternativeLabels ?? [], definition: label.definition })),
+      ownerUserId: item.ownerUserId, ownerName: owner?.displayName ?? item.ownerUserId, ownerOrganization: owner?.organization ?? 'Organisation nicht verfügbar',
+      deputyOwnerUserId: item.deputyOwnerUserId, deputyOwnerName: deputy?.displayName ?? item.deputyOwnerUserId, deputyOwnerOrganization: deputy?.organization ?? 'Organisation nicht verfügbar',
+      productCount: item.productCount, termCount: item.termCount, updatedAt: item.updatedAt,
+    };
+  }
+
+  private normalizeGlossaryTerm(item: GlossaryTermWire, domains: readonly DomainSummary[]): GlossaryTermSummary {
+    const preferred = item.localizations.find((label) => label.language.toLocaleLowerCase() === 'de') ?? item.localizations[0];
+    return {
+      id: item.id, urn: item.urn, originCatalogId: item.originCatalogId, revision: item.revision, status: item.lifecycle,
+      preferredLabel: item.preferredLabel, definition: preferred?.definition ?? '',
+      labels: item.localizations.map((label) => ({ language: label.language, preferredLabel: label.preferredLabel, alternativeLabels: label.alternativeLabels ?? [], definition: label.definition })),
+      domains: domains.filter((domain) => item.domainIds.includes(domain.id)),
+      relations: item.relations.map((relation) => ({ id: relation.id, relationType: relation.relation, targetTermId: relation.targetTermId, targetUri: relation.targetUri ?? '', targetLabel: relation.targetUri ?? relation.targetTermId ?? 'Verknüpfter Term' })),
+      updatedAt: item.updatedAt,
+    };
+  }
+
+  private normalizeProposal(item: ProposalWire): GlossaryTermProposal {
+    const requester = this.identity.users().find((user) => user.id === item.requesterUserId);
+    return {
+      ...item,
+      requesterName: requester?.displayName ?? item.requesterUserId,
+      reviews: item.reviews.map((review) => {
+        const domain = this.domainState().find((candidate) => candidate.id === review.domainId);
+        const owner = this.identity.users().find((user) => user.id === review.ownerUserId);
+        return { id: `${item.id}:${review.domainId}`, domainId: review.domainId, domainLabel: domain?.preferredLabel ?? review.domainId, ownerUserId: review.ownerUserId, ownerName: owner?.displayName ?? review.ownerUserId, status: review.status, decisionComment: review.decisionComment, decidedAt: review.decidedAt };
+      }),
+    };
+  }
+
+  private normalizeDomainRequest(item: DomainChangeRequest): DomainChangeRequest {
+    const requester = this.identity.users().find((user) => user.id === item.requesterUserId);
+    return { ...item, requesterName: requester?.displayName ?? item.requesterUserId };
   }
 
   private withAccessRequests(

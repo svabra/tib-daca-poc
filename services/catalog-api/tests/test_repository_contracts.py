@@ -148,7 +148,7 @@ def test_docker_publish_uses_artifact_free_version_tagged_repositories() -> None
     ) in workflow
 
 
-def test_poc_guide_ships_twenty_six_optimized_webp_screenshots() -> None:
+def test_poc_guide_ships_twenty_nine_optimized_webp_screenshots() -> None:
     image_dir = ROOT / "apps/catalog-ui/public/assets/poc-guide"
     images = sorted(image_dir.glob("*.webp"))
     expected_consumer_journey_images = {
@@ -164,11 +164,17 @@ def test_poc_guide_ships_twenty_six_optimized_webp_screenshots() -> None:
         "journey-07-four-eyes.webp",
         "journey-07-runtime.webp",
     }
+    expected_semantic_journey_images = {
+        "journey-08-domain-register.webp",
+        "journey-08-semantic-suggestions.webp",
+        "journey-09-glossary-review.webp",
+    }
 
     assert expected_consumer_journey_images <= {path.name for path in images}
     assert expected_renewal_journey_images <= {path.name for path in images}
-    assert len(images) == 26
-    assert sum(path.stat().st_size for path in images) < 2_000_000
+    assert expected_semantic_journey_images <= {path.name for path in images}
+    assert len(images) == 29
+    assert sum(path.stat().st_size for path in images) < 2_250_000
     for path in images:
         header = path.read_bytes()[:12]
         assert header[:4] == b"RIFF"

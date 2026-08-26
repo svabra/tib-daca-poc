@@ -13,7 +13,10 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import TypeAdapter
-from sqlalchemy import delete, exists, or_, select, text, update
+from rdflib import DCTERMS, RDF, SKOS, Graph, URIRef
+from rdflib import Literal as RdfLiteral
+from rdflib.namespace import DCAT
+from sqlalchemy import delete, exists, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
@@ -39,6 +42,13 @@ from .access_renewals import (
 from .control_people import assign_default_control_person, is_active_publication_approver
 from .database import default_session_factory, get_session
 from .deputy_owners import assign_default_deputy_owner
+from .domain_glossary_seed import (
+    DEFENCE_DOMAIN_ID,
+    DEFENCE_REQUEST_ID,
+    DOMAIN_GLOSSARY_SEED_NAME,
+    MOBILITY_DOMAIN_ID,
+    VEHICLE_PRODUCT_ID,
+)
 from .governance import (
     bind_access_request_fulfillments,
     can_view_private_product,
@@ -57,9 +67,20 @@ from .models import (
     CanonicalOntologyTerm,
     CanonicalOntologyVersion,
     DataProduct,
+    DataProductDomain,
     DataProductField,
+    DataProductGlossaryTerm,
     DemoUser,
+    Domain,
+    DomainChangeRequest,
+    DomainLocalization,
     Endpoint,
+    GlossaryTerm,
+    GlossaryTermDomain,
+    GlossaryTermLocalization,
+    GlossaryTermProposal,
+    GlossaryTermProposalReview,
+    GlossaryTermRelation,
     GovernanceSubmission,
     IdentityDirectoryEntry,
     IdentityGroup,
@@ -110,9 +131,20 @@ from .schemas import (
     DataProductSummary,
     DemoUserResponse,
     DeploymentAcknowledgement,
+    DomainChangeRequestCreate,
+    DomainChangeRequestResponse,
+    DomainChangeRequestUpdate,
+    DomainDirectCreate,
+    DomainDirectUpdate,
+    DomainResponse,
     EndpointCreate,
     EndpointReadResponse,
     EndpointResponse,
+    GlossaryTermProposalCreate,
+    GlossaryTermProposalResponse,
+    GlossaryTermProposalUpdate,
+    GlossaryTermResponse,
+    GovernanceDecision,
     GovernanceDecisionCreate,
     GovernanceSubmissionCreate,
     GovernanceSubmissionResponse,
@@ -130,6 +162,8 @@ from .schemas import (
     OntologyVersionResponse,
     OwnedAccessConsumerResponse,
     PocAccessRenewalFixtureResponse,
+    PocDomainGlossaryAction,
+    PocDomainGlossaryFixtureResponse,
     PocGuideConfigResponse,
     PocProductFixtureResponse,
     PocProductResetRequest,
@@ -149,6 +183,7 @@ from .schemas import (
     ProvenanceEventResponse,
     SemanticMappingResponse,
     SemanticMappingsUpdate,
+    SemanticSuggestionResponse,
     ServiceLevelDecisionCreate,
     ServiceLevelRevisionListResponse,
     ServiceLevelRevisionResponse,
@@ -164,6 +199,7 @@ from .schemas import (
     to_camel,
 )
 from .seed import seed_catalog
+from .semantic_suggestions import RapidFuzzSuggestionProvider, SuggestionCandidate
 from .service_levels import (
     actor_can_view_revision as can_view_service_level_revision,
 )
@@ -530,6 +566,29 @@ def semantic_profile_payload(session: Session, product: DataProduct) -> dict[str
         for mapping, term in rows
         if mapping.mapping_type == "field_property" and mapping.data_product_field_id in fields
     ]
+    domain_ids = _product_domain_ids(session, product.id)
+    domains = (
+        list(
+            session.scalars(
+                select(Domain).where(Domain.id.in_(domain_ids), Domain.lifecycle == "active")
+            )
+        )
+        if domain_ids
+        else []
+    )
+    terms = list(
+        session.scalars(
+            select(GlossaryTerm)
+            .join(
+                DataProductGlossaryTerm,
+                DataProductGlossaryTerm.glossary_term_id == GlossaryTerm.id,
+            )
+            .where(
+                DataProductGlossaryTerm.data_product_id == product.id,
+                GlossaryTerm.lifecycle == "active",
+            )
+        )
+    )
     return {
         "@context": {
             "dcat": "http://www.w3.org/ns/dcat#",
@@ -541,7 +600,8 @@ def semantic_profile_payload(session: Session, product: DataProduct) -> dict[str
         "dcterms:title": product.title,
         "dcterms:description": product.description,
         "dcterms:conformsTo": ONTOLOGY_URI,
-        "dcat:theme": product.domain,
+        "dcat:theme": [{"@id": domain.urn} for domain in domains] if domains else product.domain,
+        "dcterms:subject": [{"@id": term.urn} for term in terms],
         "dcat:distribution": (
             {
                 "@type": "dcat:Distribution",
@@ -1038,7 +1098,15 @@ def quality_responses(
             dcat_reviewed
             and product.title.strip()
             and len(product.description.strip()) >= 20
-            and product.domain.strip()
+            and session.scalar(
+                select(DataProductDomain.domain_id)
+                .join(Domain, Domain.id == DataProductDomain.domain_id)
+                .where(
+                    DataProductDomain.data_product_id == product.id,
+                    Domain.lifecycle == "active",
+                )
+                .limit(1)
+            )
             and product.contact.get("email")
             and product.update_frequency
             and all(
@@ -1107,9 +1175,186 @@ def quality_response(session: Session, product: DataProduct) -> ProductQualityRe
     return quality_responses(session, [product], persist=True)[product.id]
 
 
+def _normalized_label(value: str) -> str:
+    return " ".join(value.casefold().split())
+
+
+def _canonical_hash(payload: dict[str, Any]) -> str:
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode()).hexdigest()
+
+
+def _has_role(user: DemoUser, role: str) -> bool:
+    return role in (user.roles or [])
+
+
+def _require_role(session: Session, actor: str, role: str, detail: str) -> DemoUser:
+    user = actor_profile(session, actor)
+    if not _has_role(user, role):
+        raise HTTPException(403, detail)
+    return user
+
+
+def _require_active_data_owner(session: Session, user_id: str) -> DemoUser:
+    user = session.get(DemoUser, user_id)
+    if user is None or not user.active or not _has_role(user, "data_owner"):
+        raise HTTPException(422, f"{user_id} is not an active data owner")
+    return user
+
+
+def _preferred_localization(localizations: list[Any], language: str = "de") -> Any | None:
+    return next(
+        (item for item in localizations if item.language.casefold() == language.casefold()),
+        localizations[0] if localizations else None,
+    )
+
+
+def _domain_response(session: Session, domain: Domain) -> DomainResponse:
+    localizations = list(
+        session.scalars(
+            select(DomainLocalization)
+            .where(DomainLocalization.domain_id == domain.id)
+            .order_by(DomainLocalization.language)
+        )
+    )
+    preferred = _preferred_localization(localizations)
+    return DomainResponse.model_validate(
+        {
+            **{column.name: getattr(domain, column.name) for column in Domain.__table__.columns},
+            "preferredLabel": preferred.preferred_label if preferred else domain.urn,
+            "localizations": localizations,
+            "productCount": session.scalar(
+                select(func.count())
+                .select_from(DataProductDomain)
+                .where(DataProductDomain.domain_id == domain.id)
+            )
+            or 0,
+            "termCount": session.scalar(
+                select(func.count())
+                .select_from(GlossaryTermDomain)
+                .where(GlossaryTermDomain.domain_id == domain.id)
+            )
+            or 0,
+        }
+    )
+
+
+def _term_response(session: Session, term: GlossaryTerm) -> GlossaryTermResponse:
+    localizations = list(
+        session.scalars(
+            select(GlossaryTermLocalization)
+            .where(GlossaryTermLocalization.term_id == term.id)
+            .order_by(GlossaryTermLocalization.language)
+        )
+    )
+    domain_ids = list(
+        session.scalars(
+            select(GlossaryTermDomain.domain_id).where(GlossaryTermDomain.term_id == term.id)
+        )
+    )
+    relations = list(
+        session.scalars(
+            select(GlossaryTermRelation).where(GlossaryTermRelation.source_term_id == term.id)
+        )
+    )
+    preferred = _preferred_localization(localizations)
+    return GlossaryTermResponse.model_validate(
+        {
+            **{
+                column.name: getattr(term, column.name) for column in GlossaryTerm.__table__.columns
+            },
+            "preferredLabel": preferred.preferred_label if preferred else term.urn,
+            "localizations": localizations,
+            "domainIds": domain_ids,
+            "relations": relations,
+        }
+    )
+
+
+def _domain_reference(session: Session, domain: Domain) -> dict[str, Any]:
+    item = _domain_response(session, domain)
+    return {
+        "id": item.id,
+        "urn": item.urn,
+        "revision": item.revision,
+        "lifecycle": item.lifecycle,
+        "preferredLabel": item.preferred_label,
+        "labels": [entry.model_dump(by_alias=True) for entry in item.localizations],
+    }
+
+
+def _term_reference(session: Session, term: GlossaryTerm) -> dict[str, Any]:
+    item = _term_response(session, term)
+    return {
+        "id": item.id,
+        "urn": item.urn,
+        "revision": item.revision,
+        "lifecycle": item.lifecycle,
+        "preferredLabel": item.preferred_label,
+        "labels": [entry.model_dump(by_alias=True) for entry in item.localizations],
+        "domainIds": item.domain_ids,
+    }
+
+
+def _product_domain_ids(session: Session, product_id: uuid.UUID) -> list[uuid.UUID]:
+    return list(
+        session.scalars(
+            select(DataProductDomain.domain_id)
+            .where(DataProductDomain.data_product_id == product_id)
+            .order_by(DataProductDomain.position)
+        )
+    )
+
+
+def _product_term_ids(session: Session, product_id: uuid.UUID) -> list[uuid.UUID]:
+    return list(
+        session.scalars(
+            select(DataProductGlossaryTerm.glossary_term_id).where(
+                DataProductGlossaryTerm.data_product_id == product_id
+            )
+        )
+    )
+
+
+def data_product_response(
+    session: Session, product: DataProduct, actor: str | None = None
+) -> DataProductResponse:
+    domain_ids = _product_domain_ids(session, product.id)
+    term_ids = _product_term_ids(session, product.id)
+    domains = (
+        list(session.scalars(select(Domain).where(Domain.id.in_(domain_ids)))) if domain_ids else []
+    )
+    domain_by_id = {item.id: item for item in domains}
+    terms = (
+        list(session.scalars(select(GlossaryTerm).where(GlossaryTerm.id.in_(term_ids))))
+        if term_ids
+        else []
+    )
+    pending: list[uuid.UUID] = []
+    if actor and actor in {product.owner_user_id, product.deputy_owner_user_id}:
+        pending = list(
+            session.scalars(
+                select(GlossaryTermProposal.id).where(
+                    GlossaryTermProposal.source_product_id == product.id,
+                    GlossaryTermProposal.status.in_(("submitted", "in_review")),
+                )
+            )
+        )
+    payload = DataProductResponse.model_validate(product).model_dump(by_alias=True)
+    payload["domains"] = [
+        _domain_reference(session, domain_by_id[domain_id])
+        for domain_id in domain_ids
+        if domain_id in domain_by_id
+    ]
+    payload["glossaryTerms"] = [_term_reference(session, term) for term in terms]
+    payload["pendingTermProposals"] = pending
+    return DataProductResponse.model_validate(payload)
+
+
 def data_product_summary(
-    product: DataProduct, quality: ProductQualityResponse
+    session: Session, product: DataProduct, quality: ProductQualityResponse
 ) -> DataProductSummary:
+    detail = data_product_response(session, product)
     return DataProductSummary(
         id=product.id,
         urn=product.urn,
@@ -1123,6 +1368,8 @@ def data_product_summary(
         description=product.description,
         owner=product.owner,
         domain=product.domain,
+        domains=detail.domains,
+        glossary_terms=detail.glossary_terms,
         lifecycle=product.lifecycle,
         classification=product.classification,
         keywords=product.keywords,
@@ -1281,6 +1528,731 @@ def metadata_without_alert(metadata: dict[str, Any], event_id: uuid.UUID) -> dic
     return copied
 
 
+def _domain_draft_payload(body: DomainDirectCreate | DomainDirectUpdate | Any) -> dict[str, Any]:
+    return body.model_dump(mode="json", by_alias=True, exclude_none=True)
+
+
+def _domain_hash_payload(domain: Domain, localizations: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "urn": domain.urn,
+        "originCatalogId": domain.origin_catalog_id,
+        "lifecycle": domain.lifecycle,
+        "ownerUserId": domain.owner_user_id,
+        "deputyOwnerUserId": domain.deputy_owner_user_id,
+        "localizations": sorted(localizations, key=lambda item: item["language"]),
+    }
+
+
+def _localization_dicts(body: Any) -> list[dict[str, Any]]:
+    return [item.model_dump(mode="json", by_alias=False) for item in body.localizations]
+
+
+def _validate_domain_stewards(session: Session, owner_id: str, deputy_id: str) -> None:
+    if owner_id == deputy_id:
+        raise HTTPException(422, "Domain owner and deputy must differ")
+    _require_active_data_owner(session, owner_id)
+    _require_active_data_owner(session, deputy_id)
+
+
+def _replace_domain_localizations(
+    session: Session, domain_id: uuid.UUID, localizations: list[dict[str, Any]]
+) -> None:
+    session.execute(delete(DomainLocalization).where(DomainLocalization.domain_id == domain_id))
+    for item in localizations:
+        session.add(
+            DomainLocalization(
+                domain_id=domain_id,
+                language=item["language"].strip(),
+                preferred_label=item["preferred_label"].strip(),
+                definition=item["definition"].strip(),
+                normalized_label=_normalized_label(item["preferred_label"]),
+            )
+        )
+
+
+def _create_domain(session: Session, payload: dict[str, Any]) -> Domain:
+    owner_id = payload["ownerUserId"]
+    deputy_id = payload["deputyOwnerUserId"]
+    _validate_domain_stewards(session, owner_id, deputy_id)
+    domain_id = uuid.uuid4()
+    domain = Domain(
+        id=domain_id,
+        urn=f"urn:daca:domain:{domain_id}",
+        origin_catalog_id="urn:daca:catalog:bit-poc",
+        revision=1,
+        content_hash="",
+        lifecycle="active",
+        owner_user_id=owner_id,
+        deputy_owner_user_id=deputy_id,
+    )
+    localizations = [
+        {
+            "language": item["language"],
+            "preferred_label": item["preferredLabel"],
+            "definition": item["definition"],
+        }
+        for item in payload["localizations"]
+    ]
+    domain.content_hash = _canonical_hash(_domain_hash_payload(domain, localizations))
+    session.add(domain)
+    _replace_domain_localizations(session, domain_id, localizations)
+    session.flush()
+    return domain
+
+
+def _update_domain(
+    session: Session,
+    domain: Domain,
+    payload: dict[str, Any],
+    *,
+    retire: bool = False,
+    change_actor: str | None = None,
+) -> Domain:
+    if domain.lifecycle == "retired":
+        raise HTTPException(409, "A retired domain cannot be changed")
+    owner_id = payload.get("ownerUserId", domain.owner_user_id)
+    deputy_id = payload.get("deputyOwnerUserId", domain.deputy_owner_user_id)
+    _validate_domain_stewards(session, owner_id, deputy_id)
+    previous_owner_id = domain.owner_user_id
+    previous_deputy_id = domain.deputy_owner_user_id
+    domain.owner_user_id = owner_id
+    domain.deputy_owner_user_id = deputy_id
+    if retire:
+        domain.lifecycle = "retired"
+        domain.retired_at = utc_now()
+    if "localizations" in payload:
+        localizations = [
+            {
+                "language": item["language"],
+                "preferred_label": item["preferredLabel"],
+                "definition": item["definition"],
+            }
+            for item in payload["localizations"]
+        ]
+        _replace_domain_localizations(session, domain.id, localizations)
+    else:
+        localizations = [
+            {
+                "language": item.language,
+                "preferred_label": item.preferred_label,
+                "definition": item.definition,
+            }
+            for item in session.scalars(
+                select(DomainLocalization).where(DomainLocalization.domain_id == domain.id)
+            )
+        ]
+    domain.revision += 1
+    domain.updated_at = utc_now()
+    domain.content_hash = _canonical_hash(_domain_hash_payload(domain, localizations))
+    if previous_owner_id != owner_id:
+        open_reviews = list(
+            session.scalars(
+                select(GlossaryTermProposalReview)
+                .join(
+                    GlossaryTermProposal,
+                    GlossaryTermProposal.id == GlossaryTermProposalReview.proposal_id,
+                )
+                .where(
+                    GlossaryTermProposalReview.domain_id == domain.id,
+                    GlossaryTermProposalReview.status == "pending",
+                    GlossaryTermProposal.status.in_(("submitted", "in_review")),
+                )
+            )
+        )
+        for review in open_reviews:
+            review.owner_user_id = owner_id
+            review.updated_at = utc_now()
+            for task in session.scalars(
+                select(WorkflowTask).where(
+                    WorkflowTask.glossary_term_proposal_id == review.proposal_id,
+                    WorkflowTask.task_type == "glossary_term_review",
+                    WorkflowTask.status != "completed",
+                    WorkflowTask.assignee_user_id == previous_owner_id,
+                )
+            ):
+                task.assignee_user_id = owner_id
+                task.updated_at = utc_now()
+            audit(
+                session,
+                "glossary-term-proposal",
+                str(review.proposal_id),
+                "review-owner-reassigned",
+                change_actor or "system",
+                review.proposal_revision,
+                {"domainId": str(domain.id), "ownerUserId": owner_id},
+            )
+    if previous_deputy_id != deputy_id:
+        open_proposal_ids = list(
+            session.scalars(
+                select(GlossaryTermProposalReview.proposal_id)
+                .join(
+                    GlossaryTermProposal,
+                    GlossaryTermProposal.id == GlossaryTermProposalReview.proposal_id,
+                )
+                .where(
+                    GlossaryTermProposalReview.domain_id == domain.id,
+                    GlossaryTermProposalReview.status == "pending",
+                    GlossaryTermProposal.status.in_(("submitted", "in_review")),
+                )
+            )
+        )
+        if open_proposal_ids:
+            for task in session.scalars(
+                select(WorkflowTask).where(
+                    WorkflowTask.glossary_term_proposal_id.in_(open_proposal_ids),
+                    WorkflowTask.task_type == "glossary_term_collaboration",
+                    WorkflowTask.status != "completed",
+                    WorkflowTask.assignee_user_id == previous_deputy_id,
+                )
+            ):
+                task.assignee_user_id = deputy_id
+                task.updated_at = utc_now()
+    session.flush()
+    return domain
+
+
+def _create_workflow_task(
+    session: Session,
+    *,
+    task_type: str,
+    task_kind: str,
+    assignee: str,
+    title: str,
+    detail: str,
+    domain_request_id: uuid.UUID | None = None,
+    term_proposal_id: uuid.UUID | None = None,
+    product_id: uuid.UUID | None = None,
+) -> WorkflowTask:
+    task = WorkflowTask(
+        id=uuid.uuid4(),
+        task_type=task_type,
+        task_kind=task_kind,
+        status="open",
+        assignee_user_id=assignee,
+        data_product_id=product_id,
+        domain_change_request_id=domain_request_id,
+        glossary_term_proposal_id=term_proposal_id,
+        title=title,
+        detail=detail,
+    )
+    session.add(task)
+    return task
+
+
+def _complete_linked_tasks(
+    session: Session,
+    *,
+    domain_request_id: uuid.UUID | None = None,
+    term_proposal_id: uuid.UUID | None = None,
+) -> None:
+    statement = select(WorkflowTask).where(WorkflowTask.status != "completed")
+    if domain_request_id is not None:
+        statement = statement.where(WorkflowTask.domain_change_request_id == domain_request_id)
+    elif term_proposal_id is not None:
+        statement = statement.where(WorkflowTask.glossary_term_proposal_id == term_proposal_id)
+    else:
+        return
+    now = utc_now()
+    for task in session.scalars(statement):
+        task.status = "completed"
+        task.completed_at = now
+        task.updated_at = now
+
+
+def _active_domains(session: Session, domain_ids: list[uuid.UUID]) -> list[Domain]:
+    if len(domain_ids) != len(set(domain_ids)):
+        raise HTTPException(422, "domainIds must be unique")
+    domains = list(
+        session.scalars(
+            select(Domain).where(Domain.id.in_(domain_ids), Domain.lifecycle == "active")
+        )
+    )
+    if len(domains) != len(domain_ids):
+        raise HTTPException(422, "Every domainId must reference an active domain")
+    return domains
+
+
+def _replace_term_content(session: Session, term: GlossaryTerm, payload: dict[str, Any]) -> None:
+    domain_ids = [uuid.UUID(str(value)) for value in payload["domainIds"]]
+    _active_domains(session, domain_ids)
+    session.execute(
+        delete(GlossaryTermLocalization).where(GlossaryTermLocalization.term_id == term.id)
+    )
+    session.execute(delete(GlossaryTermDomain).where(GlossaryTermDomain.term_id == term.id))
+    session.execute(
+        delete(GlossaryTermRelation).where(GlossaryTermRelation.source_term_id == term.id)
+    )
+    for item in payload["localizations"]:
+        session.add(
+            GlossaryTermLocalization(
+                term_id=term.id,
+                language=item["language"].strip(),
+                preferred_label=item["preferredLabel"].strip(),
+                alternative_labels=[label.strip() for label in item.get("alternativeLabels", [])],
+                definition=item["definition"].strip(),
+                normalized_label=_normalized_label(item["preferredLabel"]),
+            )
+        )
+    for domain_id in domain_ids:
+        session.add(GlossaryTermDomain(term_id=term.id, domain_id=domain_id))
+    for item in payload.get("relations", []):
+        target_term_id = item.get("targetTermId")
+        if target_term_id:
+            target = session.get(GlossaryTerm, uuid.UUID(str(target_term_id)))
+            if target is None or target.lifecycle != "active":
+                raise HTTPException(422, "Relation targetTermId must reference an active term")
+        session.add(
+            GlossaryTermRelation(
+                id=uuid.uuid4(),
+                source_term_id=term.id,
+                target_term_id=uuid.UUID(str(target_term_id)) if target_term_id else None,
+                target_uri=item.get("targetUri"),
+                relation=item["relation"],
+            )
+        )
+
+
+def _accept_term_proposal(
+    session: Session, proposal: GlossaryTermProposal, actor: str
+) -> GlossaryTerm:
+    payload = proposal.review_payload
+    if proposal.operation == "create":
+        term_id = uuid.uuid4()
+        term = GlossaryTerm(
+            id=term_id,
+            urn=f"urn:daca:glossary-term:{term_id}",
+            origin_catalog_id="urn:daca:catalog:bit-poc",
+            revision=1,
+            content_hash="0" * 64,
+            lifecycle="active",
+        )
+        session.add(term)
+    else:
+        term = session.get(GlossaryTerm, proposal.target_term_id)
+        if term is None:
+            raise HTTPException(409, "The target glossary term no longer exists")
+        if term.lifecycle == "retired":
+            raise HTTPException(409, "The target glossary term is already retired")
+        term.revision += 1
+        term.updated_at = utc_now()
+    if proposal.operation == "retire":
+        term.lifecycle = "retired"
+        term.retired_at = utc_now()
+    else:
+        _replace_term_content(session, term, payload)
+    term.content_hash = _canonical_hash(
+        {"urn": term.urn, "lifecycle": term.lifecycle, "payload": payload}
+    )
+    session.flush()
+    proposal.target_term_id = term.id
+    proposal.status = "accepted"
+    proposal.decided_at = utc_now()
+    proposal.decision_comment = "All responsible domain owners approved this revision"
+    audit(
+        session,
+        "glossary-term",
+        str(term.id),
+        proposal.operation + "-approved",
+        actor,
+        term.revision,
+        {"proposalId": str(proposal.id), "status": term.lifecycle},
+    )
+    _complete_linked_tasks(session, term_proposal_id=proposal.id)
+
+    attachment_message = (
+        "Der akzeptierte Term wurde nicht automatisch an das Quellprodukt angehängt. "
+        "Prüfen Sie die aktuelle Domainzuordnung und ordnen Sie den Term bei Bedarf manuell zu."
+    )
+    if proposal.auto_attach and proposal.source_product_id and proposal.operation != "retire":
+        product = session.scalar(
+            select(DataProduct)
+            .where(DataProduct.id == proposal.source_product_id)
+            .with_for_update()
+        )
+        if product is not None and product.lifecycle != "retired":
+            product_domains = set(_product_domain_ids(session, product.id))
+            term_domains = {uuid.UUID(str(value)) for value in proposal.review_payload["domainIds"]}
+            if product_domains.intersection(term_domains):
+                existing = session.get(
+                    DataProductGlossaryTerm,
+                    {"data_product_id": product.id, "glossary_term_id": term.id},
+                )
+                if existing is None:
+                    session.add(
+                        DataProductGlossaryTerm(
+                            data_product_id=product.id,
+                            glossary_term_id=term.id,
+                            assigned_by_user_id=proposal.requester_user_id,
+                        )
+                    )
+                    product.revision += 1
+                    product.updated_at = utc_now()
+                    audit(
+                        session,
+                        "data-product",
+                        str(product.id),
+                        "glossary-term-attached",
+                        actor,
+                        product.revision,
+                        {"termId": str(term.id), "proposalId": str(proposal.id)},
+                    )
+                attachment_message = (
+                    "Der akzeptierte Term wurde automatisch an das Quellprodukt angehängt."
+                )
+    _create_workflow_task(
+        session,
+        task_type="glossary_term_decision",
+        task_kind="information",
+        assignee=proposal.requester_user_id,
+        product_id=proposal.source_product_id,
+        term_proposal_id=proposal.id,
+        title="Glossartermvorschlag angenommen",
+        detail=attachment_message,
+    )
+    return term
+
+
+def _mark_term_proposal_stale_for_retired_domains(
+    session: Session, proposal: GlossaryTermProposal, actor: str
+) -> bool:
+    """Finalize an otherwise approved proposal when its governance scope changed.
+
+    Locking the reviewed domains closes the race with a concurrent register
+    retirement: either the retirement commits first and this proposal becomes
+    stale, or this decision commits while every reviewed domain is still active.
+    """
+    review_domain_ids = list(dict.fromkeys(review.domain_id for review in proposal.reviews))
+    domains = list(
+        session.scalars(select(Domain).where(Domain.id.in_(review_domain_ids)).with_for_update())
+    )
+    active_domain_ids = {domain.id for domain in domains if domain.lifecycle == "active"}
+    inactive_domain_ids = [
+        domain_id for domain_id in review_domain_ids if domain_id not in active_domain_ids
+    ]
+    if not inactive_domain_ids:
+        return False
+
+    domain_references = ", ".join(str(domain_id) for domain_id in inactive_domain_ids)
+    decision_comment = (
+        "Der Vorschlag ist veraltet, weil während des Reviews mindestens eine "
+        f"betroffene Domain stillgelegt wurde: {domain_references}."
+    )
+    proposal.status = "stale"
+    proposal.decision_comment = decision_comment
+    proposal.decided_at = utc_now()
+    proposal.updated_at = utc_now()
+    _complete_linked_tasks(session, term_proposal_id=proposal.id)
+    _create_workflow_task(
+        session,
+        task_type="glossary_term_decision",
+        task_kind="information",
+        assignee=proposal.requester_user_id,
+        title="Glossartermvorschlag muss neu eingereicht werden",
+        detail=(
+            f"{decision_comment} Nächster manueller Schritt: Prüfen Sie die aktiven "
+            "Domainzuordnungen und reichen Sie einen neuen Vorschlag ein."
+        ),
+        term_proposal_id=proposal.id,
+        product_id=proposal.source_product_id,
+    )
+    audit(
+        session,
+        "glossary-term-proposal",
+        str(proposal.id),
+        "marked-stale",
+        actor,
+        proposal.revision,
+        {
+            "status": proposal.status,
+            "inactiveDomainIds": [str(domain_id) for domain_id in inactive_domain_ids],
+        },
+    )
+    return True
+
+
+def _domain_glossary_fixture_response(
+    session: Session,
+) -> PocDomainGlossaryFixtureResponse:
+    product = session.get(DataProduct, VEHICLE_PRODUCT_ID)
+    if product is None:
+        return PocDomainGlossaryFixtureResponse(
+            fixture_id="domain-glossary-governance",
+            state="notPrepared",
+            product_id=None,
+            product_title=None,
+            domain_ids=[],
+            term_id=None,
+            open_domain_request_count=0,
+            open_term_proposal_count=0,
+        )
+    domain_ids = _product_domain_ids(session, product.id)
+    open_domain_requests = list(
+        session.scalars(
+            select(DomainChangeRequest).where(
+                DomainChangeRequest.id == DEFENCE_REQUEST_ID,
+                DomainChangeRequest.status == "submitted",
+            )
+        )
+    )
+    proposals = list(
+        session.scalars(
+            select(GlossaryTermProposal).where(GlossaryTermProposal.source_product_id == product.id)
+        )
+    )
+    open_proposals = [item for item in proposals if item.status in {"submitted", "in_review"}]
+    accepted = next(
+        (item for item in proposals if item.status == "accepted" and item.target_term_id), None
+    )
+    prepared = bool(product.extra_metadata.get("domainGlossaryFixturePrepared"))
+    if not prepared:
+        state = "notPrepared"
+    elif open_domain_requests:
+        state = "domainPending"
+    elif open_proposals:
+        state = "termPending"
+    elif accepted:
+        state = "completed"
+    elif session.get(DomainChangeRequest, DEFENCE_REQUEST_ID) is not None:
+        state = "domainApproved"
+    else:
+        state = "ready"
+    return PocDomainGlossaryFixtureResponse(
+        fixture_id="domain-glossary-governance",
+        state=state,
+        product_id=product.id,
+        product_title=product.title,
+        domain_ids=domain_ids,
+        term_id=accepted.target_term_id if accepted else None,
+        open_domain_request_count=len(open_domain_requests),
+        open_term_proposal_count=len(open_proposals),
+    )
+
+
+def _remove_vehicle_term_proposals(session: Session) -> None:
+    proposals = list(
+        session.scalars(
+            select(GlossaryTermProposal).where(
+                GlossaryTermProposal.source_product_id == VEHICLE_PRODUCT_ID
+            )
+        )
+    )
+    proposal_ids = [item.id for item in proposals]
+    term_ids = [
+        item.target_term_id
+        for item in proposals
+        if item.operation == "create" and item.target_term_id
+    ]
+    if proposal_ids:
+        session.execute(
+            delete(WorkflowTask).where(WorkflowTask.glossary_term_proposal_id.in_(proposal_ids))
+        )
+        session.execute(
+            delete(GlossaryTermProposalReview).where(
+                GlossaryTermProposalReview.proposal_id.in_(proposal_ids)
+            )
+        )
+        session.execute(
+            delete(GlossaryTermProposal).where(GlossaryTermProposal.id.in_(proposal_ids))
+        )
+        session.flush()
+    session.execute(
+        delete(DataProductGlossaryTerm).where(
+            DataProductGlossaryTerm.data_product_id == VEHICLE_PRODUCT_ID
+        )
+    )
+    session.flush()
+    for term_id in term_ids:
+        remaining = session.scalar(
+            select(DataProductGlossaryTerm.data_product_id)
+            .where(DataProductGlossaryTerm.glossary_term_id == term_id)
+            .limit(1)
+        )
+        term = session.get(GlossaryTerm, term_id)
+        if (
+            remaining is None
+            and term
+            and term.origin_catalog_id == "urn:daca:catalog:bit-poc"
+            and term.lifecycle == "active"
+        ):
+            term.lifecycle = "retired"
+            term.retired_at = utc_now()
+            term.revision += 1
+            term.updated_at = utc_now()
+            term.content_hash = _canonical_hash(
+                {"urn": term.urn, "lifecycle": term.lifecycle, "fixtureReset": True}
+            )
+    session.flush()
+
+
+def _set_vehicle_baseline(session: Session, product: DataProduct, actor: str) -> None:
+    session.execute(
+        delete(DataProductDomain).where(DataProductDomain.data_product_id == product.id)
+    )
+    session.add(
+        DataProductDomain(
+            data_product_id=product.id,
+            domain_id=MOBILITY_DOMAIN_ID,
+            position=0,
+            assigned_by_user_id=actor,
+        )
+    )
+    product.domain = "Mobilität & Logistik"
+    product.revision += 1
+    product.updated_at = utc_now()
+
+
+def _set_fixture_domain_lifecycle(session: Session, domain: Domain, lifecycle: str) -> None:
+    if domain.lifecycle == lifecycle:
+        return
+    domain.lifecycle = lifecycle
+    domain.retired_at = utc_now() if lifecycle == "retired" else None
+    domain.revision += 1
+    domain.updated_at = utc_now()
+    localizations = [
+        {
+            "language": item.language,
+            "preferred_label": item.preferred_label,
+            "definition": item.definition,
+        }
+        for item in session.scalars(
+            select(DomainLocalization).where(DomainLocalization.domain_id == domain.id)
+        )
+    ]
+    domain.content_hash = _canonical_hash(_domain_hash_payload(domain, localizations))
+
+
+def _prepare_domain_glossary_fixture(session: Session, product: DataProduct, actor: str) -> None:
+    existing_change = session.get(DomainChangeRequest, DEFENCE_REQUEST_ID)
+    existing_proposal = session.scalar(
+        select(GlossaryTermProposal.id)
+        .where(GlossaryTermProposal.source_product_id == product.id)
+        .limit(1)
+    )
+    if (
+        product.extra_metadata.get("domainGlossaryFixturePrepared")
+        and existing_change is not None
+        and existing_change.status == "submitted"
+        and existing_proposal is None
+        and _product_domain_ids(session, product.id) == [MOBILITY_DOMAIN_ID]
+        and not _product_term_ids(session, product.id)
+    ):
+        return
+    _remove_vehicle_term_proposals(session)
+    _set_vehicle_baseline(session, product, actor)
+    defence = session.get(Domain, DEFENCE_DOMAIN_ID)
+    if defence is None:
+        raise HTTPException(409, "The stable Defence fixture domain is missing")
+    _set_fixture_domain_lifecycle(session, defence, "retired")
+    metadata = json.loads(json.dumps(product.extra_metadata))
+    metadata["domainGlossaryFixturePrepared"] = True
+    product.extra_metadata = metadata
+    change = session.get(DomainChangeRequest, DEFENCE_REQUEST_ID)
+    if change is None:
+        localizations = list(
+            session.scalars(
+                select(DomainLocalization).where(DomainLocalization.domain_id == defence.id)
+            )
+        )
+        payload = {
+            "ownerUserId": defence.owner_user_id,
+            "deputyOwnerUserId": defence.deputy_owner_user_id,
+            "localizations": [
+                {
+                    "language": item.language,
+                    "preferredLabel": item.preferred_label,
+                    "definition": item.definition,
+                }
+                for item in localizations
+            ],
+        }
+        change = DomainChangeRequest(
+            id=DEFENCE_REQUEST_ID,
+            request_number="DOM-2026-0001",
+            operation="create",
+            target_domain_id=DEFENCE_DOMAIN_ID,
+            requester_user_id="sandro.wenger",
+            status="submitted",
+            requested_payload=payload,
+            review_payload=payload,
+            revision=1,
+        )
+        session.add(change)
+    else:
+        change.status = "submitted"
+        change.target_domain_id = DEFENCE_DOMAIN_ID
+        change.base_revision = None
+        change.reviewer_user_id = None
+        change.decision_comment = None
+        change.decided_at = None
+        change.updated_at = utc_now()
+    session.execute(
+        delete(WorkflowTask).where(WorkflowTask.domain_change_request_id == DEFENCE_REQUEST_ID)
+    )
+    _create_workflow_task(
+        session,
+        task_type="domain_change_review",
+        task_kind="action",
+        assignee="sibilla.micheli",
+        title="Domain request Verteidigung review",
+        detail="Review owner, deputy and the subject-domain definition.",
+        domain_request_id=DEFENCE_REQUEST_ID,
+    )
+    audit(
+        session,
+        "poc-fixture",
+        DOMAIN_GLOSSARY_SEED_NAME,
+        "prepared",
+        actor,
+        product.revision,
+        {"fixtureId": "domain-glossary-governance", "status": "domainPending"},
+    )
+
+
+def _reset_domain_glossary_fixture(session: Session, product: DataProduct, actor: str) -> None:
+    existing_proposal = session.scalar(
+        select(GlossaryTermProposal.id)
+        .where(GlossaryTermProposal.source_product_id == product.id)
+        .limit(1)
+    )
+    if (
+        not product.extra_metadata.get("domainGlossaryFixturePrepared")
+        and existing_proposal is None
+        and _product_domain_ids(session, product.id) == [MOBILITY_DOMAIN_ID]
+        and not _product_term_ids(session, product.id)
+    ):
+        return
+    _remove_vehicle_term_proposals(session)
+    _set_vehicle_baseline(session, product, actor)
+    defence = session.get(Domain, DEFENCE_DOMAIN_ID)
+    if defence is None:
+        raise HTTPException(409, "The stable Defence fixture domain is missing")
+    _set_fixture_domain_lifecycle(session, defence, "active")
+    metadata = json.loads(json.dumps(product.extra_metadata))
+    metadata.pop("domainGlossaryFixturePrepared", None)
+    product.extra_metadata = metadata
+    change = session.get(DomainChangeRequest, DEFENCE_REQUEST_ID)
+    if change is not None:
+        change.status = "approved"
+        change.target_domain_id = DEFENCE_DOMAIN_ID
+        change.base_revision = None
+        change.reviewer_user_id = "sibilla.micheli"
+        change.decision_comment = "Fixture baseline"
+        change.decided_at = utc_now()
+        change.updated_at = utc_now()
+    session.execute(
+        delete(WorkflowTask).where(WorkflowTask.domain_change_request_id == DEFENCE_REQUEST_ID)
+    )
+    audit(
+        session,
+        "poc-fixture",
+        DOMAIN_GLOSSARY_SEED_NAME,
+        "reset",
+        actor,
+        product.revision,
+        {"fixtureId": "domain-glossary-governance", "status": "notPrepared"},
+    )
+
+
 def create_router() -> APIRouter:
     router = APIRouter(prefix="/api/v1")
 
@@ -1306,6 +2278,1019 @@ def create_router() -> APIRouter:
                 .order_by(DemoUser.display_name)
             )
         )
+
+    @router.get("/domains", response_model=list[DomainResponse], tags=["domains & glossary"])
+    def list_domains(
+        session: SessionDep,
+        q: str | None = None,
+        include_retired: Annotated[bool, Query(alias="includeRetired")] = False,
+    ) -> list[DomainResponse]:
+        statement = select(Domain)
+        if not include_retired:
+            statement = statement.where(Domain.lifecycle == "active")
+        domains = list(session.scalars(statement.order_by(Domain.created_at)))
+        responses = [_domain_response(session, item) for item in domains]
+        if q and q.strip():
+            needle = _normalized_label(q)
+            responses = [
+                item
+                for item in responses
+                if any(
+                    needle in entry.normalized_label
+                    or needle in _normalized_label(entry.definition)
+                    for entry in item.localizations
+                )
+            ]
+        return responses
+
+    @router.get("/domains/{domain_id}", response_model=DomainResponse, tags=["domains & glossary"])
+    def get_domain(domain_id: uuid.UUID, response: Response, session: SessionDep) -> DomainResponse:
+        domain = session.get(Domain, domain_id)
+        if domain is None:
+            raise HTTPException(404, "Domain not found")
+        response.headers["ETag"] = etag_for_revision(domain.revision)
+        return _domain_response(session, domain)
+
+    @router.get(
+        "/domains/{domain_id}/audit-events",
+        response_model=list[AuditEventResponse],
+        tags=["domains & glossary"],
+    )
+    def get_domain_audit_events(domain_id: uuid.UUID, session: SessionDep) -> list[AuditEvent]:
+        if session.get(Domain, domain_id) is None:
+            raise HTTPException(404, "Domain not found")
+        request_ids = list(
+            session.scalars(
+                select(DomainChangeRequest.id).where(
+                    DomainChangeRequest.target_domain_id == domain_id
+                )
+            )
+        )
+        predicates = [
+            (AuditEvent.resource_type == "domain") & (AuditEvent.resource_id == str(domain_id))
+        ]
+        if request_ids:
+            predicates.append(
+                (AuditEvent.resource_type == "domain-change-request")
+                & (AuditEvent.resource_id.in_([str(value) for value in request_ids]))
+            )
+        return list(
+            session.scalars(
+                select(AuditEvent).where(or_(*predicates)).order_by(AuditEvent.occurred_at.desc())
+            )
+        )
+
+    @router.post(
+        "/domains", response_model=DomainResponse, status_code=201, tags=["domains & glossary"]
+    )
+    def create_domain_direct(
+        body: DomainDirectCreate, session: SessionDep, actor: ActorDep
+    ) -> DomainResponse:
+        _require_role(
+            session,
+            actor,
+            "domain_register_owner",
+            "Only the domain register owner may change the register directly",
+        )
+        domain = _create_domain(session, _domain_draft_payload(body))
+        audit(
+            session,
+            "domain",
+            str(domain.id),
+            "created",
+            actor,
+            domain.revision,
+            {"status": domain.lifecycle},
+        )
+        session.commit()
+        return _domain_response(session, domain)
+
+    @router.patch(
+        "/domains/{domain_id}", response_model=DomainResponse, tags=["domains & glossary"]
+    )
+    def update_domain_direct(
+        domain_id: uuid.UUID,
+        body: DomainDirectUpdate,
+        response: Response,
+        session: SessionDep,
+        actor: ActorDep,
+        if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    ) -> DomainResponse:
+        _require_role(
+            session,
+            actor,
+            "domain_register_owner",
+            "Only the domain register owner may change the register directly",
+        )
+        domain = session.scalar(select(Domain).where(Domain.id == domain_id).with_for_update())
+        if domain is None:
+            raise HTTPException(404, "Domain not found")
+        require_revision(if_match, domain.revision)
+        domain = _update_domain(session, domain, _domain_draft_payload(body), change_actor=actor)
+        audit(
+            session,
+            "domain",
+            str(domain.id),
+            "updated",
+            actor,
+            domain.revision,
+            {"changedFields": sorted(body.model_fields_set), "status": domain.lifecycle},
+        )
+        session.commit()
+        response.headers["ETag"] = etag_for_revision(domain.revision)
+        return _domain_response(session, domain)
+
+    @router.post(
+        "/domains/{domain_id}/retire", response_model=DomainResponse, tags=["domains & glossary"]
+    )
+    def retire_domain_direct(
+        domain_id: uuid.UUID,
+        response: Response,
+        session: SessionDep,
+        actor: ActorDep,
+        if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    ) -> DomainResponse:
+        _require_role(
+            session,
+            actor,
+            "domain_register_owner",
+            "Only the domain register owner may retire a domain",
+        )
+        domain = session.scalar(select(Domain).where(Domain.id == domain_id).with_for_update())
+        if domain is None:
+            raise HTTPException(404, "Domain not found")
+        require_revision(if_match, domain.revision)
+        domain = _update_domain(session, domain, {}, retire=True, change_actor=actor)
+        audit(
+            session,
+            "domain",
+            str(domain.id),
+            "retired",
+            actor,
+            domain.revision,
+            {"status": domain.lifecycle},
+        )
+        session.commit()
+        response.headers["ETag"] = etag_for_revision(domain.revision)
+        return _domain_response(session, domain)
+
+    @router.post(
+        "/domain-change-requests",
+        response_model=DomainChangeRequestResponse,
+        status_code=201,
+        tags=["domains & glossary"],
+    )
+    def create_domain_change_request(
+        body: DomainChangeRequestCreate, session: SessionDep, actor: ActorDep
+    ) -> DomainChangeRequest:
+        _require_role(session, actor, "data_owner", "Only a data owner may request a domain change")
+        if body.target_domain_id:
+            target = session.get(Domain, body.target_domain_id)
+            if target is None:
+                raise HTTPException(404, "Target domain not found")
+            if target.lifecycle == "retired":
+                raise HTTPException(409, "A retired domain cannot be changed")
+            if body.base_revision != target.revision:
+                raise HTTPException(412, f"The current domain revision is {target.revision}")
+        payload = (
+            body.payload.model_dump(mode="json", by_alias=True, exclude_none=True)
+            if body.payload
+            else {}
+        )
+        request_id = uuid.uuid4()
+        change = DomainChangeRequest(
+            id=request_id,
+            request_number=f"DOM-{request_id.hex[:8].upper()}",
+            operation=body.operation,
+            target_domain_id=body.target_domain_id,
+            base_revision=body.base_revision,
+            requester_user_id=actor,
+            status="submitted",
+            requested_payload=payload,
+            review_payload=payload,
+            revision=1,
+        )
+        session.add(change)
+        register_owners = [
+            user
+            for user in session.scalars(select(DemoUser).where(DemoUser.active.is_(True)))
+            if _has_role(user, "domain_register_owner")
+        ]
+        if not register_owners:
+            raise HTTPException(409, "No active domain register owner is configured")
+        for owner in register_owners:
+            _create_workflow_task(
+                session,
+                task_type="domain_change_review",
+                task_kind="action",
+                assignee=owner.id,
+                title=f"Review domain request {change.request_number}",
+                detail=f"A data owner requested a domain {body.operation} operation.",
+                domain_request_id=change.id,
+            )
+        audit(
+            session,
+            "domain-change-request",
+            str(change.id),
+            "submitted",
+            actor,
+            change.revision,
+            {"operation": change.operation, "status": change.status},
+        )
+        session.commit()
+        return change
+
+    @router.get(
+        "/domain-change-requests",
+        response_model=list[DomainChangeRequestResponse],
+        tags=["domains & glossary"],
+    )
+    def list_domain_change_requests(
+        session: SessionDep, actor: ActorDep
+    ) -> list[DomainChangeRequest]:
+        profile = actor_profile(session, actor)
+        statement = select(DomainChangeRequest)
+        if not _has_role(profile, "domain_register_owner"):
+            statement = statement.where(DomainChangeRequest.requester_user_id == actor)
+        return list(session.scalars(statement.order_by(DomainChangeRequest.created_at.desc())))
+
+    @router.patch(
+        "/domain-change-requests/{request_id}",
+        response_model=DomainChangeRequestResponse,
+        tags=["domains & glossary"],
+    )
+    def edit_domain_change_request(
+        request_id: uuid.UUID,
+        body: DomainChangeRequestUpdate,
+        response: Response,
+        session: SessionDep,
+        actor: ActorDep,
+        if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    ) -> DomainChangeRequest:
+        _require_role(
+            session,
+            actor,
+            "domain_register_owner",
+            "Only the domain register owner may edit a review draft",
+        )
+        change = session.scalar(
+            select(DomainChangeRequest)
+            .where(DomainChangeRequest.id == request_id)
+            .with_for_update()
+        )
+        if change is None:
+            raise HTTPException(404, "Domain change request not found")
+        if change.status != "submitted":
+            raise HTTPException(409, "Only a submitted request may be edited")
+        require_revision(if_match, change.revision)
+        change.review_payload = body.review_payload.model_dump(
+            mode="json", by_alias=True, exclude_none=True
+        )
+        change.revision += 1
+        change.updated_at = utc_now()
+        audit(
+            session,
+            "domain-change-request",
+            str(change.id),
+            "review-draft-updated",
+            actor,
+            change.revision,
+            {"status": change.status},
+        )
+        session.commit()
+        response.headers["ETag"] = etag_for_revision(change.revision)
+        return change
+
+    @router.post(
+        "/domain-change-requests/{request_id}/decision",
+        response_model=DomainChangeRequestResponse,
+        tags=["domains & glossary"],
+    )
+    def decide_domain_change_request(
+        request_id: uuid.UUID,
+        body: GovernanceDecision,
+        session: SessionDep,
+        actor: ActorDep,
+        if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    ) -> DomainChangeRequest:
+        _require_role(
+            session,
+            actor,
+            "domain_register_owner",
+            "Only the domain register owner may decide a request",
+        )
+        change = session.scalar(
+            select(DomainChangeRequest)
+            .where(DomainChangeRequest.id == request_id)
+            .with_for_update()
+        )
+        if change is None:
+            raise HTTPException(404, "Domain change request not found")
+        if change.status != "submitted":
+            raise HTTPException(409, "The request already has a final decision")
+        require_revision(if_match, change.revision)
+        now = utc_now()
+        affected_domain: Domain | None = None
+        if body.decision == "reject":
+            change.status = "rejected"
+        elif change.operation == "create":
+            fixture_target = (
+                session.scalar(
+                    select(Domain).where(Domain.id == change.target_domain_id).with_for_update()
+                )
+                if change.id == DEFENCE_REQUEST_ID and change.target_domain_id
+                else None
+            )
+            if fixture_target is not None and fixture_target.lifecycle == "retired":
+                fixture_target.lifecycle = "active"
+                fixture_target.retired_at = None
+                created = _update_domain(
+                    session,
+                    fixture_target,
+                    change.review_payload,
+                    change_actor=actor,
+                )
+            else:
+                created = _create_domain(session, change.review_payload)
+                change.target_domain_id = created.id
+            affected_domain = created
+            change.status = "approved"
+        else:
+            target = session.scalar(
+                select(Domain).where(Domain.id == change.target_domain_id).with_for_update()
+            )
+            if target is None:
+                change.status = "stale"
+                session.commit()
+                raise HTTPException(409, "The target domain no longer exists")
+            if target.revision != change.base_revision:
+                change.status = "stale"
+                session.commit()
+                raise HTTPException(412, f"The current domain revision is {target.revision}")
+            affected_domain = _update_domain(
+                session,
+                target,
+                change.review_payload,
+                retire=change.operation == "retire",
+                change_actor=actor,
+            )
+            change.status = "approved"
+        change.reviewer_user_id = actor
+        change.decision_comment = body.comment.strip()
+        change.decided_at = now
+        change.updated_at = now
+        _complete_linked_tasks(session, domain_request_id=change.id)
+        _create_workflow_task(
+            session,
+            task_type="domain_change_decision",
+            task_kind="information",
+            assignee=change.requester_user_id,
+            title=f"Domain request {change.status}",
+            detail=body.comment.strip(),
+            domain_request_id=change.id,
+        )
+        if affected_domain is not None:
+            audit(
+                session,
+                "domain",
+                str(affected_domain.id),
+                change.operation + "-approved",
+                actor,
+                affected_domain.revision,
+                {"requestId": str(change.id), "status": affected_domain.lifecycle},
+            )
+        audit(
+            session,
+            "domain-change-request",
+            str(change.id),
+            "decided",
+            actor,
+            change.revision,
+            {"operation": change.operation, "status": change.status},
+        )
+        session.commit()
+        return change
+
+    @router.get(
+        "/glossary/terms", response_model=list[GlossaryTermResponse], tags=["domains & glossary"]
+    )
+    def list_glossary_terms(
+        session: SessionDep,
+        q: str | None = None,
+        domain_id: Annotated[uuid.UUID | None, Query(alias="domainId")] = None,
+        include_retired: Annotated[bool, Query(alias="includeRetired")] = False,
+    ) -> list[GlossaryTermResponse]:
+        statement = select(GlossaryTerm)
+        if not include_retired:
+            active_domain = exists(
+                select(GlossaryTermDomain.term_id)
+                .join(Domain, Domain.id == GlossaryTermDomain.domain_id)
+                .where(
+                    GlossaryTermDomain.term_id == GlossaryTerm.id,
+                    Domain.lifecycle == "active",
+                )
+            )
+            statement = statement.where(GlossaryTerm.lifecycle == "active", active_domain)
+        if domain_id:
+            statement = statement.join(GlossaryTermDomain).where(
+                GlossaryTermDomain.domain_id == domain_id
+            )
+        responses = [
+            _term_response(session, item)
+            for item in session.scalars(statement.order_by(GlossaryTerm.created_at))
+        ]
+        if q and q.strip():
+            needle = _normalized_label(q)
+            responses = [
+                item
+                for item in responses
+                if any(
+                    needle in entry.normalized_label
+                    or any(needle in _normalized_label(label) for label in entry.alternative_labels)
+                    or needle in _normalized_label(entry.definition)
+                    for entry in item.localizations
+                )
+            ]
+        return responses
+
+    @router.get(
+        "/glossary/terms/{term_id}",
+        response_model=GlossaryTermResponse,
+        tags=["domains & glossary"],
+    )
+    def get_glossary_term(
+        term_id: uuid.UUID, response: Response, session: SessionDep
+    ) -> GlossaryTermResponse:
+        term = session.get(GlossaryTerm, term_id)
+        if term is None:
+            raise HTTPException(404, "Glossary term not found")
+        response.headers["ETag"] = etag_for_revision(term.revision)
+        return _term_response(session, term)
+
+    @router.post(
+        "/glossary/term-proposals",
+        response_model=GlossaryTermProposalResponse,
+        status_code=201,
+        tags=["domains & glossary"],
+    )
+    def create_term_proposal(
+        body: GlossaryTermProposalCreate, session: SessionDep, actor: ActorDep
+    ) -> GlossaryTermProposal:
+        payload = body.payload.model_dump(mode="json", by_alias=True)
+        target = None
+        existing_domain_ids: list[uuid.UUID] = []
+        if body.target_term_id:
+            target = session.get(GlossaryTerm, body.target_term_id)
+            if target is None:
+                raise HTTPException(404, "Target glossary term not found")
+            if target.lifecycle == "retired":
+                raise HTTPException(409, "A retired term cannot be changed")
+            existing_domain_ids = list(
+                session.scalars(
+                    select(GlossaryTermDomain.domain_id).where(
+                        GlossaryTermDomain.term_id == target.id
+                    )
+                )
+            )
+        if body.operation == "retire":
+            payload["domainIds"] = [str(value) for value in existing_domain_ids]
+            domain_ids = existing_domain_ids
+        else:
+            domain_ids = list(dict.fromkeys([*existing_domain_ids, *body.payload.domain_ids]))
+            _active_domains(session, body.payload.domain_ids)
+        domains = list(session.scalars(select(Domain).where(Domain.id.in_(domain_ids))))
+        if len(domains) != len(domain_ids):
+            raise HTTPException(409, "A governed domain no longer exists")
+        source_product = None
+        if body.source_product_id:
+            source_product = find_product(session, body.source_product_id)
+            if body.auto_attach and actor not in {
+                source_product.owner_user_id,
+                source_product.deputy_owner_user_id,
+            }:
+                raise HTTPException(
+                    403,
+                    "Only the source product owner or deputy may request automatic attachment",
+                )
+            if body.auto_attach and not set(body.payload.domain_ids).intersection(
+                _product_domain_ids(session, source_product.id)
+            ):
+                raise HTTPException(
+                    422, "The source product and proposed term need at least one shared domain"
+                )
+        proposal_id = uuid.uuid4()
+        proposal = GlossaryTermProposal(
+            id=proposal_id,
+            request_number=f"TERM-{proposal_id.hex[:8].upper()}",
+            operation=body.operation,
+            target_term_id=target.id if target else None,
+            requester_user_id=actor,
+            source_product_id=source_product.id if source_product else None,
+            source_product_revision=source_product.revision if source_product else None,
+            auto_attach=body.auto_attach,
+            status="in_review",
+            requested_payload=payload,
+            review_payload=payload,
+            revision=1,
+        )
+        session.add(proposal)
+        for domain in domains:
+            session.add(
+                GlossaryTermProposalReview(
+                    proposal_id=proposal.id,
+                    domain_id=domain.id,
+                    proposal_revision=proposal.revision,
+                    owner_user_id=domain.owner_user_id,
+                    status="pending",
+                )
+            )
+            _create_workflow_task(
+                session,
+                task_type="glossary_term_review",
+                task_kind="action",
+                assignee=domain.owner_user_id,
+                title=f"Review glossary proposal {proposal.request_number}",
+                detail="Your domain must decide this exact proposal revision.",
+                term_proposal_id=proposal.id,
+                product_id=proposal.source_product_id,
+            )
+            _create_workflow_task(
+                session,
+                task_type="glossary_term_collaboration",
+                task_kind="action",
+                assignee=domain.deputy_owner_user_id,
+                title=f"Collaborate on glossary proposal {proposal.request_number}",
+                detail="You may edit the review draft, but only the primary owner may decide.",
+                term_proposal_id=proposal.id,
+                product_id=proposal.source_product_id,
+            )
+        audit(
+            session,
+            "glossary-term-proposal",
+            str(proposal.id),
+            "submitted",
+            actor,
+            proposal.revision,
+            {"operation": proposal.operation, "status": proposal.status},
+        )
+        session.commit()
+        session.refresh(proposal)
+        return proposal
+
+    @router.get(
+        "/glossary/term-proposals",
+        response_model=list[GlossaryTermProposalResponse],
+        tags=["domains & glossary"],
+    )
+    def list_term_proposals(session: SessionDep, actor: ActorDep) -> list[GlossaryTermProposal]:
+        governed_domains = list(
+            session.scalars(
+                select(Domain.id).where(
+                    or_(Domain.owner_user_id == actor, Domain.deputy_owner_user_id == actor)
+                )
+            )
+        )
+        visible_review = exists(
+            select(GlossaryTermProposalReview.proposal_id).where(
+                GlossaryTermProposalReview.proposal_id == GlossaryTermProposal.id,
+                GlossaryTermProposalReview.domain_id.in_(governed_domains),
+            )
+        )
+        return list(
+            session.scalars(
+                select(GlossaryTermProposal)
+                .where(or_(GlossaryTermProposal.requester_user_id == actor, visible_review))
+                .options(selectinload(GlossaryTermProposal.reviews))
+                .order_by(GlossaryTermProposal.created_at.desc())
+            )
+        )
+
+    @router.get(
+        "/glossary/term-proposals/{proposal_id}",
+        response_model=GlossaryTermProposalResponse,
+        tags=["domains & glossary"],
+    )
+    def get_term_proposal(
+        proposal_id: uuid.UUID, response: Response, session: SessionDep, actor: ActorDep
+    ) -> GlossaryTermProposal:
+        proposal = session.scalar(
+            select(GlossaryTermProposal)
+            .where(GlossaryTermProposal.id == proposal_id)
+            .options(selectinload(GlossaryTermProposal.reviews))
+        )
+        if proposal is None:
+            raise HTTPException(404, "Glossary term proposal not found")
+        domain_ids = [review.domain_id for review in proposal.reviews]
+        domains = list(session.scalars(select(Domain).where(Domain.id.in_(domain_ids))))
+        if proposal.requester_user_id != actor and not any(
+            actor in {domain.owner_user_id, domain.deputy_owner_user_id} for domain in domains
+        ):
+            raise HTTPException(404, "Glossary term proposal not found")
+        response.headers["ETag"] = etag_for_revision(proposal.revision)
+        return proposal
+
+    @router.patch(
+        "/glossary/term-proposals/{proposal_id}",
+        response_model=GlossaryTermProposalResponse,
+        tags=["domains & glossary"],
+    )
+    def edit_term_proposal(
+        proposal_id: uuid.UUID,
+        body: GlossaryTermProposalUpdate,
+        response: Response,
+        session: SessionDep,
+        actor: ActorDep,
+        if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    ) -> GlossaryTermProposal:
+        proposal = session.scalar(
+            select(GlossaryTermProposal)
+            .where(GlossaryTermProposal.id == proposal_id)
+            .options(selectinload(GlossaryTermProposal.reviews))
+            .with_for_update()
+        )
+        if proposal is None:
+            raise HTTPException(404, "Glossary term proposal not found")
+        if proposal.status not in {"submitted", "in_review"}:
+            raise HTTPException(409, "Only an open proposal may be edited")
+        require_revision(if_match, proposal.revision)
+        current_domains = list(
+            session.scalars(
+                select(Domain).where(
+                    Domain.id.in_([review.domain_id for review in proposal.reviews])
+                )
+            )
+        )
+        if not any(
+            actor in {domain.owner_user_id, domain.deputy_owner_user_id}
+            for domain in current_domains
+        ):
+            raise HTTPException(403, "Only a responsible domain owner or deputy may edit")
+        new_domain_ids = body.review_payload.domain_ids
+        _active_domains(session, new_domain_ids)
+        existing_domain_ids = (
+            list(
+                session.scalars(
+                    select(GlossaryTermDomain.domain_id).where(
+                        GlossaryTermDomain.term_id == proposal.target_term_id
+                    )
+                )
+            )
+            if proposal.target_term_id
+            else []
+        )
+        governance_domain_ids = list(dict.fromkeys([*existing_domain_ids, *new_domain_ids]))
+        if proposal.operation == "retire":
+            governance_domain_ids = existing_domain_ids
+        new_domains = list(
+            session.scalars(select(Domain).where(Domain.id.in_(governance_domain_ids)))
+        )
+        if len(new_domains) != len(governance_domain_ids):
+            raise HTTPException(409, "A governed domain no longer exists")
+        _complete_linked_tasks(session, term_proposal_id=proposal.id)
+        session.execute(
+            delete(GlossaryTermProposalReview).where(
+                GlossaryTermProposalReview.proposal_id == proposal.id
+            )
+        )
+        session.flush()
+        proposal.revision += 1
+        proposal.status = "in_review"
+        proposal.review_payload = body.review_payload.model_dump(mode="json", by_alias=True)
+        proposal.updated_at = utc_now()
+        for domain in new_domains:
+            session.add(
+                GlossaryTermProposalReview(
+                    proposal_id=proposal.id,
+                    domain_id=domain.id,
+                    proposal_revision=proposal.revision,
+                    owner_user_id=domain.owner_user_id,
+                    status="pending",
+                )
+            )
+            _create_workflow_task(
+                session,
+                task_type="glossary_term_review",
+                task_kind="action",
+                assignee=domain.owner_user_id,
+                title=f"Review glossary proposal {proposal.request_number}",
+                detail=f"The review draft changed to revision {proposal.revision}.",
+                term_proposal_id=proposal.id,
+                product_id=proposal.source_product_id,
+            )
+            _create_workflow_task(
+                session,
+                task_type="glossary_term_collaboration",
+                task_kind="action",
+                assignee=domain.deputy_owner_user_id,
+                title=f"Collaborate on glossary proposal {proposal.request_number}",
+                detail=f"The review draft changed to revision {proposal.revision}.",
+                term_proposal_id=proposal.id,
+                product_id=proposal.source_product_id,
+            )
+        audit(
+            session,
+            "glossary-term-proposal",
+            str(proposal.id),
+            "review-draft-updated",
+            actor,
+            proposal.revision,
+            {"status": proposal.status},
+        )
+        session.commit()
+        session.refresh(proposal)
+        response.headers["ETag"] = etag_for_revision(proposal.revision)
+        return proposal
+
+    @router.post(
+        "/glossary/term-proposals/{proposal_id}/reviews/{domain_id}/decision",
+        response_model=GlossaryTermProposalResponse,
+        tags=["domains & glossary"],
+    )
+    def decide_term_proposal_review(
+        proposal_id: uuid.UUID,
+        domain_id: uuid.UUID,
+        body: GovernanceDecision,
+        session: SessionDep,
+        actor: ActorDep,
+        if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    ) -> GlossaryTermProposal:
+        proposal = session.scalar(
+            select(GlossaryTermProposal)
+            .where(GlossaryTermProposal.id == proposal_id)
+            .options(selectinload(GlossaryTermProposal.reviews))
+            .with_for_update()
+        )
+        if proposal is None:
+            raise HTTPException(404, "Glossary term proposal not found")
+        if proposal.status not in {"submitted", "in_review"}:
+            raise HTTPException(409, "The proposal already has a final decision")
+        require_revision(if_match, proposal.revision)
+        review = next((item for item in proposal.reviews if item.domain_id == domain_id), None)
+        if review is None:
+            raise HTTPException(404, "Domain review not found")
+        if review.owner_user_id != actor:
+            raise HTTPException(403, "Only the primary domain owner may decide this review")
+        if review.proposal_revision != proposal.revision:
+            raise HTTPException(409, "This review belongs to a stale proposal revision")
+        if review.status != "pending":
+            raise HTTPException(409, "This domain already decided the current revision")
+        review.status = "approved" if body.decision == "approve" else "rejected"
+        review.decision_comment = body.comment.strip()
+        review.decided_at = utc_now()
+        review.updated_at = utc_now()
+        decided_task = session.scalar(
+            select(WorkflowTask)
+            .where(
+                WorkflowTask.glossary_term_proposal_id == proposal.id,
+                WorkflowTask.task_type == "glossary_term_review",
+                WorkflowTask.assignee_user_id == actor,
+                WorkflowTask.status != "completed",
+            )
+            .order_by(WorkflowTask.created_at, WorkflowTask.id)
+            .limit(1)
+        )
+        if decided_task is not None:
+            decided_task.status = "completed"
+            decided_task.completed_at = utc_now()
+            decided_task.updated_at = utc_now()
+        if body.decision == "reject":
+            proposal.status = "rejected"
+            proposal.decision_comment = body.comment.strip()
+            proposal.decided_at = utc_now()
+            _complete_linked_tasks(session, term_proposal_id=proposal.id)
+            _create_workflow_task(
+                session,
+                task_type="glossary_term_decision",
+                task_kind="information",
+                assignee=proposal.requester_user_id,
+                title="Glossary term proposal rejected",
+                detail=body.comment.strip(),
+                term_proposal_id=proposal.id,
+                product_id=proposal.source_product_id,
+            )
+        else:
+            session.flush()
+            if all(
+                item.status == "approved" for item in proposal.reviews
+            ) and not _mark_term_proposal_stale_for_retired_domains(session, proposal, actor):
+                _accept_term_proposal(session, proposal, actor)
+        audit(
+            session,
+            "glossary-term-proposal",
+            str(proposal.id),
+            "domain-review-decided",
+            actor,
+            proposal.revision,
+            {
+                "domainId": str(domain_id),
+                "decision": review.status,
+                "status": proposal.status,
+            },
+        )
+        session.commit()
+        session.refresh(proposal)
+        return proposal
+
+    @router.get(
+        "/data-products/{product_id}/semantic-suggestions",
+        response_model=list[SemanticSuggestionResponse],
+        tags=["domains & glossary"],
+    )
+    def semantic_suggestions(
+        product_id: uuid.UUID,
+        request: Request,
+        session: SessionDep,
+        actor: OptionalActorDep,
+        threshold: Annotated[float | None, Query(ge=0, le=100)] = None,
+    ) -> list[SemanticSuggestionResponse]:
+        product = find_product(session, product_id)
+        require_product_view(session, product, actor)
+        effective_threshold = (
+            threshold
+            if threshold is not None
+            else getattr(request.app.state.settings, "semantic_suggestion_threshold", 70.0)
+        )
+        fields: dict[str, str] = {
+            "title": product.title,
+            "description": product.description,
+            "keywords": " ".join(product.keywords),
+        }
+        descriptions = " ".join(
+            item.business_description or ""
+            for item in session.scalars(
+                select(DataProductField).where(DataProductField.data_product_id == product.id)
+            )
+        ).strip()
+        if descriptions:
+            fields["fieldDescriptions"] = descriptions
+        candidates: list[SuggestionCandidate] = []
+        for domain in session.scalars(select(Domain).where(Domain.lifecycle == "active")):
+            response_item = _domain_response(session, domain)
+            candidates.append(
+                SuggestionCandidate(
+                    kind="domain",
+                    id=domain.id,
+                    label=response_item.preferred_label,
+                    search_values=tuple(
+                        value
+                        for item in response_item.localizations
+                        for value in (item.preferred_label, item.definition)
+                    ),
+                )
+            )
+        for term in session.scalars(select(GlossaryTerm).where(GlossaryTerm.lifecycle == "active")):
+            response_item = _term_response(session, term)
+            candidates.append(
+                SuggestionCandidate(
+                    kind="glossaryTerm",
+                    id=term.id,
+                    label=response_item.preferred_label,
+                    search_values=tuple(
+                        value
+                        for item in response_item.localizations
+                        for value in (
+                            item.preferred_label,
+                            item.definition,
+                            *item.alternative_labels,
+                        )
+                    ),
+                )
+            )
+        return [
+            SemanticSuggestionResponse.model_validate(item, from_attributes=True)
+            for item in RapidFuzzSuggestionProvider().rank(
+                candidates, fields, threshold=effective_threshold, limit=5
+            )
+        ]
+
+    @router.get("/knowledge-graph", tags=["domains & glossary"])
+    def knowledge_graph(
+        session: SessionDep,
+        domain_id: Annotated[uuid.UUID | None, Query(alias="domainId")] = None,
+    ) -> Response:
+        graph = Graph()
+        catalog = URIRef("urn:daca:catalog:bit-poc")
+        register = URIRef("urn:daca:domain-register:bit-poc")
+        graph.add((catalog, RDF.type, DCAT.Catalog))
+        graph.add((catalog, DCAT.themeTaxonomy, register))
+        graph.add((register, RDF.type, SKOS.ConceptScheme))
+        domain_statement = select(Domain).where(Domain.lifecycle == "active")
+        if domain_id:
+            domain_statement = domain_statement.where(Domain.id == domain_id)
+        domains = list(session.scalars(domain_statement))
+        selected_ids = {item.id for item in domains}
+        for domain in domains:
+            domain_uri = URIRef(domain.urn)
+            glossary_scheme = URIRef(f"{domain.urn}:glossary")
+            graph.add((domain_uri, RDF.type, SKOS.Concept))
+            graph.add((domain_uri, SKOS.inScheme, register))
+            graph.add((glossary_scheme, RDF.type, SKOS.ConceptScheme))
+            for label in session.scalars(
+                select(DomainLocalization).where(DomainLocalization.domain_id == domain.id)
+            ):
+                graph.add(
+                    (
+                        domain_uri,
+                        SKOS.prefLabel,
+                        RdfLiteral(label.preferred_label, lang=label.language),
+                    )
+                )
+                graph.add(
+                    (domain_uri, SKOS.definition, RdfLiteral(label.definition, lang=label.language))
+                )
+        term_ids = (
+            set(
+                session.scalars(
+                    select(GlossaryTermDomain.term_id)
+                    .join(Domain, Domain.id == GlossaryTermDomain.domain_id)
+                    .where(
+                        GlossaryTermDomain.domain_id.in_(selected_ids),
+                        Domain.lifecycle == "active",
+                    )
+                )
+            )
+            if selected_ids
+            else set()
+        )
+        terms = (
+            list(
+                session.scalars(
+                    select(GlossaryTerm).where(
+                        GlossaryTerm.id.in_(term_ids), GlossaryTerm.lifecycle == "active"
+                    )
+                )
+            )
+            if term_ids
+            else []
+        )
+        for term in terms:
+            term_uri = URIRef(term.urn)
+            graph.add((term_uri, RDF.type, SKOS.Concept))
+            for assignment in session.scalars(
+                select(GlossaryTermDomain).where(
+                    GlossaryTermDomain.term_id == term.id,
+                    GlossaryTermDomain.domain_id.in_(selected_ids),
+                )
+            ):
+                domain = session.get(Domain, assignment.domain_id)
+                graph.add((term_uri, SKOS.inScheme, URIRef(f"{domain.urn}:glossary")))
+            for label in session.scalars(
+                select(GlossaryTermLocalization).where(GlossaryTermLocalization.term_id == term.id)
+            ):
+                graph.add(
+                    (
+                        term_uri,
+                        SKOS.prefLabel,
+                        RdfLiteral(label.preferred_label, lang=label.language),
+                    )
+                )
+                graph.add(
+                    (term_uri, SKOS.definition, RdfLiteral(label.definition, lang=label.language))
+                )
+                for alternative in label.alternative_labels:
+                    graph.add(
+                        (term_uri, SKOS.altLabel, RdfLiteral(alternative, lang=label.language))
+                    )
+            for relation in session.scalars(
+                select(GlossaryTermRelation).where(GlossaryTermRelation.source_term_id == term.id)
+            ):
+                target = (
+                    session.get(GlossaryTerm, relation.target_term_id)
+                    if relation.target_term_id
+                    else None
+                )
+                target_uri = URIRef(target.urn if target else relation.target_uri)
+                predicate = {
+                    "exactMatch": SKOS.exactMatch,
+                    "closeMatch": SKOS.closeMatch,
+                    "broader": SKOS.broader,
+                    "narrower": SKOS.narrower,
+                    "related": SKOS.related,
+                }[relation.relation]
+                graph.add((term_uri, predicate, target_uri))
+        product_statement = select(DataProduct).where(
+            DataProduct.discoverable.is_(True), DataProduct.lifecycle != "retired"
+        )
+        for product in session.scalars(product_statement):
+            product_domains = set(_product_domain_ids(session, product.id)).intersection(
+                selected_ids
+            )
+            if not product_domains:
+                continue
+            product_uri = URIRef(product.urn)
+            graph.add((product_uri, RDF.type, DCAT.Dataset))
+            graph.add((product_uri, DCTERMS.title, RdfLiteral(product.title)))
+            for assigned_domain_id in product_domains:
+                domain = session.get(Domain, assigned_domain_id)
+                graph.add((product_uri, DCAT.theme, URIRef(domain.urn)))
+            for assigned_term_id in set(_product_term_ids(session, product.id)).intersection(
+                term_ids
+            ):
+                term = session.get(GlossaryTerm, assigned_term_id)
+                if term and term.lifecycle == "active":
+                    graph.add((product_uri, DCTERMS.subject, URIRef(term.urn)))
+        serialized = graph.serialize(format="json-ld", indent=2, ensure_ascii=False)
+        return Response(content=serialized, media_type="application/ld+json")
 
     @router.get(
         "/source-catalog",
@@ -1674,6 +3659,53 @@ def create_router() -> APIRouter:
         session.commit()
         return access_renewal_fixture_response(session, on_date=today)
 
+    @router.get(
+        "/poc/domain-glossary-fixture",
+        response_model=PocDomainGlossaryFixtureResponse,
+        tags=["POC simulation"],
+    )
+    def get_domain_glossary_fixture(
+        session: SessionDep, actor: ActorDep
+    ) -> PocDomainGlossaryFixtureResponse:
+        product = find_product(session, VEHICLE_PRODUCT_ID)
+        if actor not in {product.owner_user_id, product.deputy_owner_user_id}:
+            raise HTTPException(403, "Only the fixture product stewards may manage this fixture")
+        return _domain_glossary_fixture_response(session)
+
+    @router.post(
+        "/poc/domain-glossary-fixture/prepare",
+        response_model=PocDomainGlossaryFixtureResponse,
+        tags=["POC simulation"],
+    )
+    def prepare_domain_glossary_fixture_route(
+        session: SessionDep, actor: ActorDep
+    ) -> PocDomainGlossaryFixtureResponse:
+        product = find_product(session, VEHICLE_PRODUCT_ID)
+        if actor not in {product.owner_user_id, product.deputy_owner_user_id}:
+            raise HTTPException(403, "Only the fixture product stewards may manage this fixture")
+        _prepare_domain_glossary_fixture(session, product, actor)
+        session.commit()
+        return _domain_glossary_fixture_response(session)
+
+    @router.post(
+        "/poc/domain-glossary-fixture/reset",
+        response_model=PocDomainGlossaryFixtureResponse,
+        tags=["POC simulation"],
+    )
+    def reset_domain_glossary_fixture_route(
+        body: PocDomainGlossaryAction,
+        session: SessionDep,
+        actor: ActorDep,
+    ) -> PocDomainGlossaryFixtureResponse:
+        product = find_product(session, VEHICLE_PRODUCT_ID)
+        if actor not in {product.owner_user_id, product.deputy_owner_user_id}:
+            raise HTTPException(403, "Only the fixture product stewards may manage this fixture")
+        if body.confirmation_name != "DOMAIN-GLOSSARY":
+            raise HTTPException(422, "confirmationName must exactly match DOMAIN-GLOSSARY")
+        _reset_domain_glossary_fixture(session, product, actor)
+        session.commit()
+        return _domain_glossary_fixture_response(session)
+
     @router.post(
         "/metadata-publications",
         response_model=MetadataPublicationResponse,
@@ -1804,6 +3836,27 @@ def create_router() -> APIRouter:
         )
         session.add(product)
         session.flush()
+        if business and business.domain:
+            legacy_matches = list(
+                session.scalars(
+                    select(Domain)
+                    .join(DomainLocalization)
+                    .where(
+                        Domain.lifecycle == "active",
+                        DomainLocalization.normalized_label == _normalized_label(business.domain),
+                    )
+                )
+            )
+            unique_legacy_matches = {item.id: item for item in legacy_matches}
+            if len(unique_legacy_matches) == 1:
+                session.add(
+                    DataProductDomain(
+                        data_product_id=product.id,
+                        domain_id=next(iter(unique_legacy_matches)),
+                        position=0,
+                        assigned_by_user_id=owner.id,
+                    )
+                )
         assign_default_deputy_owner(session, product)
         assign_default_control_person(session, product)
         endpoint = body.technical_metadata.endpoint
@@ -2038,6 +4091,36 @@ def create_router() -> APIRouter:
                 .order_by(WorkflowTask.created_at.desc())
             )
         )
+
+    @router.post(
+        "/tasks/{task_id}/acknowledge",
+        response_model=WorkflowTaskResponse,
+        tags=["workflow"],
+    )
+    def acknowledge_task(task_id: uuid.UUID, session: SessionDep, actor: ActorDep) -> WorkflowTask:
+        task = session.get(WorkflowTask, task_id)
+        if task is None or task.assignee_user_id != actor:
+            raise HTTPException(404, "Workflow task not found")
+        if task.task_kind != "information":
+            raise HTTPException(409, "Only information tasks may be acknowledged")
+        if task.status == "completed":
+            return task
+        now = utc_now()
+        task.status = "completed"
+        task.acknowledged_at = now
+        task.completed_at = now
+        task.updated_at = now
+        audit(
+            session,
+            "workflow-task",
+            str(task.id),
+            "acknowledged",
+            actor,
+            None,
+            {"taskType": task.task_type, "status": task.status},
+        )
+        session.commit()
+        return task
 
     @router.get(
         "/poc/simulation-events/mine",
@@ -2403,6 +4486,7 @@ def create_router() -> APIRouter:
         actor: OptionalActorDep,
         limit: Annotated[int, Query(ge=1, le=100)] = 25,
         cursor: str | None = None,
+        domain_id: Annotated[uuid.UUID | None, Query(alias="domainId")] = None,
     ) -> DataProductPage:
         approver_visibility = exists(
             select(GovernanceSubmission.id).where(
@@ -2420,6 +4504,15 @@ def create_router() -> APIRouter:
             else DataProduct.discoverable.is_(True)
         )
         statement = select(DataProduct).where(visibility).order_by(DataProduct.id).limit(limit + 1)
+        if domain_id is not None:
+            statement = statement.where(
+                exists(
+                    select(DataProductDomain.data_product_id).where(
+                        DataProductDomain.data_product_id == DataProduct.id,
+                        DataProductDomain.domain_id == domain_id,
+                    )
+                )
+            )
         if cursor:
             statement = statement.where(DataProduct.id > decode_cursor(cursor))
         rows = list(session.scalars(statement))
@@ -2427,7 +4520,9 @@ def create_router() -> APIRouter:
         items = rows[:limit]
         quality_by_product = quality_responses(session, items)
         return DataProductPage(
-            items=[data_product_summary(item, quality_by_product[item.id]) for item in items],
+            items=[
+                data_product_summary(session, item, quality_by_product[item.id]) for item in items
+            ],
             next_cursor=encode_cursor(items[-1].id) if has_more and items else None,
         )
 
@@ -2436,12 +4531,12 @@ def create_router() -> APIRouter:
     )
     def get_data_product(
         product_id: uuid.UUID, response: Response, session: SessionDep, actor: OptionalActorDep
-    ) -> DataProduct:
+    ) -> DataProductResponse:
         product = find_product(session, product_id)
         if not can_view_private_product(session, product, actor):
             raise HTTPException(404, "Data product not found")
         response.headers["ETag"] = etag_for_revision(product.revision)
-        return product
+        return data_product_response(session, product, actor)
 
     @router.patch(
         "/data-products/{product_id}", response_model=DataProductResponse, tags=["data products"]
@@ -2453,12 +4548,113 @@ def create_router() -> APIRouter:
         session: SessionDep,
         actor: ActorDep,
         if_match: Annotated[str | None, Header(alias="If-Match")] = None,
-    ) -> DataProduct:
+    ) -> DataProductResponse:
         current = find_product(session, product_id)
+        if patch.model_fields_set.intersection(
+            {"domain_ids", "glossary_term_ids"}
+        ) and actor not in {
+            current.owner_user_id,
+            current.deputy_owner_user_id,
+        }:
+            raise HTTPException(
+                403,
+                "Only the product owner or deputy may change domains or glossary terms",
+            )
         if requires_four_eyes(session, current):
             require_product_owner(current, actor)
         require_revision(if_match, current.revision)
         changes = patch.model_dump(exclude_unset=True, by_alias=False)
+        requested_domain_ids = changes.pop("domain_ids", None)
+        requested_term_ids = changes.pop("glossary_term_ids", None)
+        unmatched_legacy_domain: str | None = None
+        if requested_domain_ids is not None and "domain" in changes:
+            raise HTTPException(422, "Use domainIds instead of the deprecated domain field")
+        if "domain" in changes:
+            legacy_value = changes.pop("domain").strip()
+            if _normalized_label(legacy_value) == _normalized_label("Nicht zugeordnet"):
+                requested_domain_ids = []
+            else:
+                matches = list(
+                    session.scalars(
+                        select(Domain)
+                        .join(DomainLocalization)
+                        .where(
+                            Domain.lifecycle == "active",
+                            DomainLocalization.normalized_label == _normalized_label(legacy_value),
+                        )
+                    )
+                )
+                unique_matches = {item.id: item for item in matches}
+                if len(unique_matches) > 1:
+                    raise HTTPException(
+                        422,
+                        "The deprecated domain value must uniquely match an active domain label",
+                    )
+                if unique_matches:
+                    requested_domain_ids = list(unique_matches)
+                else:
+                    requested_domain_ids = []
+                    unmatched_legacy_domain = legacy_value
+        effective_domain_ids = (
+            list(requested_domain_ids)
+            if requested_domain_ids is not None
+            else _product_domain_ids(session, product_id)
+        )
+        if requested_domain_ids is not None:
+            domains_for_product = _active_domains(session, effective_domain_ids)
+        else:
+            domains_for_product = (
+                list(session.scalars(select(Domain).where(Domain.id.in_(effective_domain_ids))))
+                if effective_domain_ids
+                else []
+            )
+        domain_by_id = {item.id: item for item in domains_for_product}
+        active_domain_ids = {item.id for item in domains_for_product if item.lifecycle == "active"}
+        if requested_domain_ids is not None:
+            first = domain_by_id.get(effective_domain_ids[0]) if effective_domain_ids else None
+            if first is None:
+                changes["domain"] = unmatched_legacy_domain or "Nicht zugeordnet"
+            else:
+                preferred = _preferred_localization(
+                    list(
+                        session.scalars(
+                            select(DomainLocalization).where(
+                                DomainLocalization.domain_id == first.id
+                            )
+                        )
+                    )
+                )
+                changes["domain"] = preferred.preferred_label if preferred else first.urn
+        effective_term_ids = (
+            list(requested_term_ids)
+            if requested_term_ids is not None
+            else _product_term_ids(session, product_id)
+        )
+        if len(effective_term_ids) != len(set(effective_term_ids)):
+            raise HTTPException(422, "glossaryTermIds must be unique")
+        term_statement = select(GlossaryTerm).where(GlossaryTerm.id.in_(effective_term_ids))
+        if requested_term_ids is not None:
+            term_statement = term_statement.where(GlossaryTerm.lifecycle == "active")
+        terms = list(session.scalars(term_statement)) if effective_term_ids else []
+        if requested_term_ids is not None and len(terms) != len(effective_term_ids):
+            raise HTTPException(422, "Every glossaryTermId must reference an active term")
+        for term in (
+            terms if requested_domain_ids is not None or requested_term_ids is not None else []
+        ):
+            if term.lifecycle == "retired":
+                continue
+            term_domains = set(
+                session.scalars(
+                    select(GlossaryTermDomain.domain_id).where(
+                        GlossaryTermDomain.term_id == term.id
+                    )
+                )
+            )
+            if not term_domains.intersection(active_domain_ids):
+                raise HTTPException(
+                    422,
+                    f"Glossary term {term.id} has no active domain shared with the product",
+                )
         if "metadata" in changes:
             changes["extra_metadata"] = changes.pop("metadata")
         next_revision = current.revision + 1
@@ -2472,6 +4668,33 @@ def create_router() -> APIRouter:
         if result.rowcount != 1:
             session.rollback()
             raise HTTPException(412, "The product was changed by another editor")
+        if requested_domain_ids is not None:
+            session.execute(
+                delete(DataProductDomain).where(DataProductDomain.data_product_id == product_id)
+            )
+            for position, domain_id in enumerate(effective_domain_ids):
+                session.add(
+                    DataProductDomain(
+                        data_product_id=product_id,
+                        domain_id=domain_id,
+                        position=position,
+                        assigned_by_user_id=actor,
+                    )
+                )
+        if requested_term_ids is not None:
+            session.execute(
+                delete(DataProductGlossaryTerm).where(
+                    DataProductGlossaryTerm.data_product_id == product_id
+                )
+            )
+            for term_id in effective_term_ids:
+                session.add(
+                    DataProductGlossaryTerm(
+                        data_product_id=product_id,
+                        glossary_term_id=term_id,
+                        assigned_by_user_id=actor,
+                    )
+                )
         audit(
             session,
             "data-product",
@@ -2486,7 +4709,7 @@ def create_router() -> APIRouter:
         enqueue_active_i14y_delivery(session, current)
         session.commit()
         response.headers["ETag"] = etag_for_revision(next_revision)
-        return current
+        return data_product_response(session, current, actor)
 
     @router.get(
         "/ontology/versions/current", response_model=OntologyVersionResponse, tags=["ontology"]
