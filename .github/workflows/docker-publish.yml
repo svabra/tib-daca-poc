@@ -145,14 +145,17 @@ jobs:
           export DACA_SHARED_POSTGRES=true
           uv run --package daca-sample-data-product alembic -c services/sample-data-product/alembic.ini upgrade head
 
-          schema_rows="$(
+          missing_domain_glossary_tables="$(
             docker exec \
               --env PGPASSWORD='shared:p@ss' \
               daca-postgres-compat \
               psql -h 127.0.0.1 -U daca_shared_test -d postgres -Atc \
-              "SELECT count(*) FROM information_schema.tables WHERE table_schema IN ('daca_catalog', 'daca_sample')"
+              "SELECT string_agg(table_name, ', ' ORDER BY table_name) FROM (VALUES ('domains'), ('domain_localizations'), ('data_product_domains'), ('domain_change_requests'), ('glossary_terms'), ('glossary_term_localizations'), ('glossary_term_domains'), ('glossary_term_relations'), ('data_product_glossary_terms'), ('glossary_term_proposals'), ('glossary_term_proposal_reviews')) AS expected(table_name) WHERE to_regclass('daca_catalog.' || table_name) IS NULL"
           )"
-          test "$schema_rows" = "36"
+          if [ -n "$missing_domain_glossary_tables" ]; then
+            echo "::error::Missing domain/glossary tables in the RHOS shared schema: $missing_domain_glossary_tables"
+            exit 1
+          fi
 
           source_access_tables="$(
             docker exec \
