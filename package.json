@@ -1,6 +1,6 @@
 {
   "name": "bit-daca",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "private": true,
   "description": "BIT Distributed Data Catalog proof of concept",
   "workspaces": [
@@ -19,6 +19,7 @@
     "test:web": "npm run test --workspaces --if-present",
     "test:python": "uv run --all-packages pytest",
     "test:opa": "node scripts/test-opa.mjs",
+    "test:e2e:modeling:edge": "node scripts/edge_modeling_e2e.mjs",
     "docs:data-model": "uv run python scripts/render_data_model.py",
     "docs:data-model:check": "uv run python scripts/render_data_model.py --check",
     "docs:openapi": "uv run python scripts/render_metadata_publication_openapi.py",

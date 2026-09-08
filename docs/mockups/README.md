@@ -13,6 +13,40 @@ They use the shared BIT/Swiss federal design package and live/fallback-labelled 
 The lineage canvas intentionally supports horizontal touch/trackpad exploration on narrow screens
 so labels remain readable instead of shrinking the full graph to illegible text.
 
+## Logical-model and mapping references
+
+The logical-model extension is grounded in the existing federal-CI capture and three supplied
+desktop interaction references. The graph is the primary desktop mapping reference, the matrix is
+the complete keyboard/screen-reader alternative, and the split view defines the separation of
+dataset, field, physical-column, and mapping details.
+
+| Purpose | Reference |
+|---|---|
+| Existing DaCa visual baseline | `daca-current-poc.png` |
+| Logical/physical split and field details | `logical-model-mapping-split.png` (1774×887) |
+| Primary graphical mapping workspace | `logical-model-mapping-graph.png` (1774×887) |
+| Accessible table/matrix workflow | `logical-model-mapping-matrix.png` (1774×887) |
+
+The three mapping files are design references rather than claims of already implemented browser
+captures. Verified implementation captures are compared against them at matching viewports.
+
+### Verified Microsoft Edge captures
+
+The implementation was exercised in Microsoft Edge 152.0.4191.66 against a freshly migrated,
+twice-seeded fixture database. Full-page captures preserve navigation and model context; focused
+captures place the graph or matrix and inspector together for direct comparison with the supplied
+references.
+
+| State | Full page | Focused workspace |
+|---|---|---|
+| Graph at 1774×887 | `edge-qa/mappings-1774x887.png` | `edge-qa/mappings-workspace-1774x887.png` |
+| Matrix at 1440×900 | `edge-qa/mappings-1440x900.png` | `edge-qa/mappings-workspace-1440x900.png` |
+| Mobile matrix at 390×844 | `edge-qa/mappings-390x844.png` | `edge-qa/mappings-workspace-390x844.png` |
+| Model inventory at 1774×887 | `edge-qa/models-1774x887.png` | — |
+
+The reproducible flow and the measured responsive invariants are recorded in
+`apps/catalog-ui/design-qa.md` and implemented by `scripts/edge_modeling_e2e.mjs`.
+
 ## Modern combined-workspace explorations
 
 The `modern/` deck explores five denser desktop directions in which metadata editing, delivery

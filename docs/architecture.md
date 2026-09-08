@@ -52,9 +52,9 @@ REST, SSE, OPA decisions, and bundles use HTTP. Direct database consumers use Po
 protocol. SSE is an HTTP response stream, not a WebSocket. No other data-product protocol is
 implemented.
 
-## Domain and glossary boundary
+## Domain and terminology boundary
 
-The standalone catalog owns the governed domain register, multilingual business glossary,
+The standalone catalog owns the governed domain register, versioned multilingual terminology,
 proposal workflows, product assignments, and their JSON-LD projection. Domains are fachliche
 subject areas and are never derived from the administrative organization hierarchy. Each resource
 keeps a stable DaCa URN, origin catalog, monotonic revision, content hash, and retirement marker so
@@ -65,3 +65,28 @@ The knowledge graph is a read projection over PostgreSQL data and uses DCAT and 
 It is served over HTTP as JSON-LD. No graph database, SPARQL service, control-plane workflow, or
 catalog-to-catalog synchronization is introduced. See
 [`domains-and-glossary.md`](domains-and-glossary.md) for governance and semantic details.
+
+Federal organizational scope is a separate imported tree. A checked LINDAS Staatskalender
+snapshot is validated and written explicitly; request handling never calls LINDAS. Modeling
+resources store only the selected organization node and derive department and office from its
+ancestor chain. Domains remain fachliche categories and are not derived from this tree.
+
+## Logical and physical model boundary
+
+The catalog persists DCAT-AP-CH dataset metadata, logical SHACL structures, imported physical
+model snapshots, and DaCa asset mappings as four separate versioned layers. Physical models are
+PostgreSQL tables/views or S3 Parquet objects normalized to mapping-capable fields. The S3 adapter
+lists objects and reads Parquet footer metadata only; it is not a data-delivery endpoint and does
+not introduce a runtime dependency on DAAIF. Logical models do
+not depend on a data product, distribution, physical source, or mapping. Mappings pin exact
+logical-field and physical-snapshot versions so automatic drift detection never rewrites historic
+evidence. I14Y is a cached, read-only reference source; publication remains a separate disabled
+port and I14Y MappingTables are not reused for physical mappings.
+
+The complete data flow, roles, standards, fixtures, and external DAAIF user step are documented in
+[`logical-models-i14y-mapping.md`](logical-models-i14y-mapping.md).
+
+Logical model submission is an owner decision workflow, not a second publish step. The submitted
+version, domain, reviewer and rendered review snapshot are immutable. DeepL Free and TERMDAT are
+optional server-side assistance ports for unclassified content; their failures never block manual
+authoring and their accepted output is stored with version-bound provenance.

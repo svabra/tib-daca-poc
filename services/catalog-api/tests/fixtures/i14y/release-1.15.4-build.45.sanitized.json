@@ -1,0 +1,46 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "I14Y Public API",
+    "description": "Deployment info: 1.15.4-build.45, Assembly: 1.15.4.0",
+    "version": "v1"
+  },
+  "servers": [
+    {
+      "url": "https://api.i14y.admin.ch/api/public/v1/",
+      "description": "PROD",
+      "variables": {}
+    },
+    {
+      "url": "https://api-a.i14y.admin.ch/api/public/v1/",
+      "description": "ABN",
+      "variables": {}
+    }
+  ],
+  "paths": {
+    "/agents": {"get": {}},
+    "/agents/{agentId}": {"get": {}},
+    "/catalogs": {"get": {}},
+    "/catalogs/{catalogId}": {"get": {}},
+    "/catalogs/{catalogId}/dcat/exports/{dataFormat}": {"get": {}},
+    "/catalogs/{catalogId}/records": {"get": {}},
+    "/catalogs/{catalogId}/records/{recordId}": {"get": {}},
+    "/concepts": {"get": {}},
+    "/concepts/{conceptId}": {"get": {}},
+    "/concepts/{conceptId}/exports/json": {"get": {}},
+    "/concepts/{conceptId}/codelist-entries/exports/{dataFormat}": {"get": {}},
+    "/concepts/{conceptId}/codelist-entries/search": {"get": {}},
+    "/concepts/{conceptId}/codelist-entries/search/exports/{dataFormat}": {"get": {}},
+    "/dataservices": {"get": {}},
+    "/dataservices/{dataServiceId}": {"get": {}},
+    "/datasets": {"get": {}},
+    "/datasets/{datasetId}": {"get": {}},
+    "/datasets/{datasetId}/structures/exports/{dataFormat}": {"get": {}},
+    "/mappingtables": {"get": {}},
+    "/mappingtables/{mappingTableId}": {"get": {}},
+    "/mappingtables/{mappingTableId}/relations/exports/{dataFormat}": {"get": {}},
+    "/publicservices": {"get": {}},
+    "/publicservices/{publicServiceId}": {"get": {}},
+    "/search": {"get": {}}
+  }
+}

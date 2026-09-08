@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
 from daca_catalog.models import (
     IdentityDirectoryEntry,
@@ -305,7 +305,7 @@ def test_future_i14y_consent_is_scheduled_not_delivered(client, session_factory,
         ),
     )
     future_grant = access_grant("person", "noemie.rochat", i14y=True)
-    future_grant["validFrom"] = "2026-09-01"
+    future_grant["validFrom"] = (datetime.now(UTC).date() + timedelta(days=30)).isoformat()
     draft = client.put(
         f"/api/v1/data-products/{ESTV_PRODUCT_ID}/access-settings",
         headers={**OWNER_HEADERS, "If-Match": '"1"'},

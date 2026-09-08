@@ -11,7 +11,7 @@ import { PocGuideOverviewComponent } from './poc-guide-overview.component';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 
 describe('PoC guide contract', () => {
-  it('defines nine complete, uniquely addressable journeys and twenty-nine screenshot contracts', () => {
+  it('defines ten complete, uniquely addressable journeys and twenty-nine screenshot contracts', () => {
     expect(POC_JOURNEYS.map((journey) => journey.id)).toEqual([
       'understand-and-use-product',
       'data-analysts-journey',
@@ -22,10 +22,11 @@ describe('PoC guide contract', () => {
       'access-renewal',
       'domain-governance',
       'glossary-governance',
+      'create-data-model',
     ]);
-    expect(POC_JOURNEYS.map((journey) => journey.number)).toEqual(['01', '02', '03', '04', '05', '06', '07', '08', '09']);
+    expect(POC_JOURNEYS.map((journey) => journey.number)).toEqual(['01', '02', '03', '04', '05', '06', '07', '08', '09', '10']);
     expect(POC_JOURNEYS[1].verification?.label).toBe('Durchgängig verifiziert');
-    expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(9);
+    expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(10);
     const screenshots = POC_JOURNEYS.flatMap((journey) => journey.steps.flatMap((step) => step.screenshots ?? []));
     expect(screenshots.length).toBe(29);
     expect(screenshots.slice(0, 4).map((screenshot) => screenshot.src)).toEqual([
@@ -81,9 +82,9 @@ describe('PoC guide contract', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('h1')?.textContent).toContain('PoC Leitfaden');
     const journeyCards = root.querySelectorAll('[data-poc-guide-journey]');
-    expect(journeyCards.length).toBe(9);
+    expect(journeyCards.length).toBe(10);
     expect(journeyCards.item(0).getAttribute('data-poc-guide-journey')).toBe('understand-and-use-product');
-    expect(journeyCards.item(8).getAttribute('data-poc-guide-journey')).toBe('glossary-governance');
+    expect(journeyCards.item(9).getAttribute('data-poc-guide-journey')).toBe('create-data-model');
     expect(journeyCards.item(8).textContent).toContain('Glossarterm gemeinsam prüfen');
     expect(root.textContent).toContain('Das können Sie testen');
     expect(root.textContent).toContain('Das ist nicht Teil des PoC');

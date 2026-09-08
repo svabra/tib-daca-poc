@@ -62,7 +62,6 @@ jobs:
       fail-fast: false
       matrix:
         postgres-version:
-          - "17"
           - "18.4"
     steps:
       - name: Checkout
@@ -106,13 +105,19 @@ jobs:
       - name: Run migrations, idempotent seed and Catalog API tests
         env:
           DATABASE_URL: postgresql+psycopg://daca_catalog:daca_catalog_test@localhost:55432/daca_catalog
-          DACA_TEST_DATABASE_URL: postgresql+psycopg://daca_catalog:daca_catalog_test@localhost:55432/daca_catalog
+          DACA_TEST_DATABASE_URL: postgresql+psycopg://daca_catalog:daca_catalog_test@localhost:55432/daca_catalog_test
           DACA_CONTROL_DATABASE_URL: postgresql+psycopg://daca_control:daca_control_test@localhost:55432/daca_control_plane
           ALEMBIC_DATABASE_URL: postgresql+psycopg://daca_sample_owner:daca_sample_owner_test@localhost:55432/daca_sample
         run: |
+          docker exec daca-postgres-compat createdb -U daca_admin -O daca_catalog daca_catalog_test
           uv run --package daca-catalog-api alembic -c services/catalog-api/alembic.ini upgrade head
           uv run --package daca-catalog-api daca-catalog-seed
           uv run --package daca-catalog-api daca-catalog-seed
+          uv run --package daca-catalog-api alembic -c services/catalog-api/alembic.ini downgrade 0015_domains_glossary
+          uv run --package daca-catalog-api alembic -c services/catalog-api/alembic.ini upgrade head
+          uv run --package daca-catalog-api daca-catalog-seed
+          uv run --package daca-catalog-api daca-catalog-seed
+          uv run --package daca-catalog-api alembic -c services/catalog-api/alembic.ini check
           uv run --package daca-control-plane-api alembic -c services/control-plane-api/alembic.ini upgrade head
           uv run --package daca-control-plane-api daca-control-plane-seed
           uv run --package daca-control-plane-api daca-control-plane-seed

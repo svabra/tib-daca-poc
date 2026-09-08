@@ -963,6 +963,7 @@ class IdentityGroupDetailResponse(IdentityGroupSummaryResponse):
 
 class AdministrativeOrganizationResponse(ApiModel):
     id: str
+    parent_id: str | None = None
     department_code: str
     office_code: str | None
     display_name: str
@@ -970,6 +971,9 @@ class AdministrativeOrganizationResponse(ApiModel):
         "federal_council", "chancellery", "department", "office", "affiliated"
     ]
     label: str
+    source_id: str | None = None
+    source_uri: str | None = None
+    breadcrumb: list[dict[str, str]] = Field(default_factory=list)
 
 
 class IdentityGroupCreate(ApiModel):
@@ -1511,6 +1515,8 @@ class WorkflowTaskResponse(ApiModel):
         "glossary_term_review",
         "glossary_term_collaboration",
         "glossary_term_decision",
+        "logical_model_review",
+        "logical_model_changes_requested",
     ]
     status: Literal["open", "in_progress", "completed"]
     task_kind: Literal["action", "information"] = "action"
@@ -1523,6 +1529,7 @@ class WorkflowTaskResponse(ApiModel):
     source_access_request_id: uuid.UUID | None = None
     domain_change_request_id: uuid.UUID | None = None
     glossary_term_proposal_id: uuid.UUID | None = None
+    logical_model_review_id: uuid.UUID | None = None
     title: str
     detail: str
     created_at: datetime

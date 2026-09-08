@@ -1,0 +1,35 @@
+@prefix dct: <http://purl.org/dc/terms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<https://register.ld.admin.ch/i14y/dataset/CH_KT_BL_dataset_12480/structure/CH_KT_BL_dataset_12480Shape>
+    a sh:NodeShape ;
+    dct:created "2026-09-07T01:26:12"^^xsd:dateTime ;
+    dct:description "Zentraler Firmenindex (Zefix). Tagesaktueller Auszug."@de ;
+    dct:modified "2026-09-07T01:26:12"^^xsd:dateTime ;
+    rdfs:label "Firmen nach Zweck, Rechtsform und Standort"@de ;
+    sh:closed true ;
+    sh:property
+        <https://register.ld.admin.ch/i14y/dataset/CH_KT_BL_dataset_12480/structure/CH_KT_BL_dataset_12480Shape/rechtsform_code> ,
+        <https://register.ld.admin.ch/i14y/dataset/CH_KT_BL_dataset_12480/structure/CH_KT_BL_dataset_12480Shape/rechtsform> .
+
+<https://register.ld.admin.ch/i14y/dataset/CH_KT_BL_dataset_12480/structure/CH_KT_BL_dataset_12480Shape/rechtsform_code>
+    a sh:PropertyShape ;
+    dct:conformsTo <https://register.ld.admin.ch/i14y/concept/legalForm/version/1.2.0> ;
+    sh:datatype xsd:string ;
+    sh:maxCount 1 ;
+    sh:minCount 1 ;
+    sh:name "rechtsform_code"@de ;
+    sh:order 13 ;
+    sh:path <https://register.ld.admin.ch/i14y/dataset/CH_KT_BL_dataset_12480/structure/CH_KT_BL_dataset_12480Shape/rechtsform_code> .
+
+<https://register.ld.admin.ch/i14y/dataset/CH_KT_BL_dataset_12480/structure/CH_KT_BL_dataset_12480Shape/rechtsform>
+    a sh:PropertyShape ;
+    dct:conformsTo <https://register.ld.admin.ch/i14y/concept/legalForm/version/1.2.0> ;
+    sh:datatype xsd:string ;
+    sh:maxCount 1 ;
+    sh:minCount 1 ;
+    sh:name "rechtsform"@de ;
+    sh:order 14 ;
+    sh:path <https://register.ld.admin.ch/i14y/dataset/CH_KT_BL_dataset_12480/structure/CH_KT_BL_dataset_12480Shape/rechtsform> .

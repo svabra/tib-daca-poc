@@ -56,20 +56,8 @@ databases on the named `daca-postgres` volume. pgAdmin is a local-only convenien
 development credentials from `.env.example`; no pgAdmin or PostgreSQL workload is deployed by
 the production manifests.
 
-The migration does not delete an earlier catalog SQLite volume or a repository-local `*.db`
-file. If such a volume still exists, first identify and back it up; remove it only after checking
-the copied database:
-
-```powershell
-docker volume ls --filter name=catalog-sqlite
-New-Item -ItemType Directory -Force backup
-docker run --rm --mount source=<legacy-volume>,target=/source,readonly `
-  --mount type=bind,source=${PWD}\backup,target=/backup `
-  alpine sh -c "cp /source/*.db /backup/"
-docker volume rm <legacy-volume>
-```
-
-The last command permanently removes only the explicitly named legacy volume and is optional.
+The PoC supports PostgreSQL 18.4 only. Catalog tests require a dedicated database whose name ends
+in `_test`; destructive test preparation refuses every other database name.
 
 Each API container runs its own Alembic migration before startup. To rerun migrations explicitly:
 
@@ -132,14 +120,15 @@ business metadata, confirmed KOBY Graphify context, and confirmed mappings for t
 and every key field. The semantic profile is available as DCAT-oriented JSON-LD at
 `GET /api/v1/data-products/{id}/semantic-profile`; no SPARQL endpoint is exposed.
 
-The catalog also maintains governed subject domains and a multilingual business glossary. Products
+The catalog also maintains governed subject domains and versioned multilingual terminology. Products
 can belong to several domains and can reference only accepted terms governed by at least one of
 those domains. Domain-register requests, unanimous multi-domain term review, requester
 notifications, deterministic PoC suggestions, and the JSON-LD knowledge graph are described in
 [`docs/domains-and-glossary.md`](docs/domains-and-glossary.md). Free-form product keywords remain
 separate and unchanged. The deterministic suggestion provider uses a minimum score of `70` by
 default; set `DACA_SEMANTIC_SUGGESTION_THRESHOLD` to a value from `0` through `100` to tune it.
-The glossary ships with 38 bilingual reference concepts: 18 for ESTV and 20 for defence. Users can
+The terminology seed retains 38 bilingual reference concepts and adds three controlled business
+objects for Immobilienmanagement VBS. Users can
 start a term proposal centrally, from a domain or search result, or directly from product metadata;
 accepted terms use the same governed proposal route for edits. Metadata Studio can derive up to
 three editable candidates locally from the current title and keywords, but never applies one
@@ -178,6 +167,86 @@ The full browser-driven customer journey across a transient DAAIF and DaCa stack
 container logs and a SHA-qualified result summary, then removes every journey container and
 volume. Run it locally with `npm run journey:data-analyst`; the official GitHub workflow is a
 manual `workflow_dispatch` on `main` only.
+
+## Work with logical models and I14Y Concepts
+
+`Datenmodelle` is independent of `Meine Datenprodukte`. It supports logical-first authoring,
+PostgreSQL- and S3/Parquet-metadata-first derivation, versioned logical-to-physical mappings, and
+schema drift. A physical model is a mapping-capable table/view or Parquet structure imported from
+a data source. The deterministic fixture source contains
+`logistics.vehicle_inventory` and `hr_core.public.org_unit`; a real connector reads only
+`information_schema` and `pg_catalog` when its server-side secret is configured. No database
+credentials or data rows are accepted by the browser or modelling APIs.
+
+The S3 adapter lists configured objects and reads only embedded Parquet schemas. It can point at
+the same S3-compatible store as DAAIF without making DAAIF a runtime dependency. Configure
+`DACA_PHYSICAL_S3_ENDPOINT_URL`, `DACA_PHYSICAL_S3_BUCKET`, `DACA_PHYSICAL_S3_PREFIX`,
+`DACA_PHYSICAL_S3_ACCESS_KEY_ID`, and `DACA_PHYSICAL_S3_SECRET_ACCESS_KEY` on the Catalog API.
+For the local MinIO fixture, write the deterministic Parquet object with
+`uv run --project services/catalog-api daca-s3-fixture-seed`. Searches under **Physische Modelle**
+run solely against the already imported catalog metadata in PostgreSQL.
+
+The federal modeling scope is imported from a checked, hashed Staatskalender snapshot. The
+validated hierarchy contains the Federal Chancellery and seven departments, including
+`VBS → Bundesamt für Rüstung armasuisse (20005536) → armasuisse Immobilien (20053180)`.
+At runtime the UI reads this hierarchy exclusively from PostgreSQL. Run the offline validation or
+explicit import with:
+
+```powershell
+uv run --project services/catalog-api daca-federal-org-import --check
+uv run --project services/catalog-api daca-federal-org-import --apply
+```
+
+TERMDAT search uses its official public API in two phases: summary search followed by targeted,
+parallel language-detail requests for the returned entry IDs. Website-only, in-progress entries
+are not represented as public API results. DeepL Free is optional and server-side only. Set
+`DACA_DEEPL_API_KEY` to enable translation. Only `unclassified` text may leave DaCa, existing
+translations are never overwritten, and accepted machine/TERMDAT suggestions store version-bound
+hash and source provenance. TERMDAT reuse licensing is not stated unambiguously enough for a
+production decision; production use requires confirmation from the Federal Chancellery.
+
+Journey 10 uses Mirjam Keller (Data Steward, armasuisse Immobilien), Daniel Wenger (primary owner
+of the `Immobilienmanagement VBS` domain) and Eliane Rossi (delegated deputy). Submission creates
+an immutable review snapshot and owner task; acceptance publishes immediately, while rejection
+requires a comment and creates a `changes_requested` successor for the submitting steward.
+
+I14Y Concepts are a read-only cached reference source. A full refresh is never triggered on UI
+startup; run it explicitly as a scoped modelling persona:
+
+```powershell
+curl.exe -X POST `
+  -H "X-DaCa-User: cinthya.thor" `
+  http://localhost:8001/api/v1/i14y/concepts/sync
+curl.exe -H "X-DaCa-User: cinthya.thor" `
+  http://localhost:8001/api/v1/i14y/sync-status
+```
+
+The sync verifies the current official OpenAPI document, uses its `PROD` server, pages Concepts
+with bounded concurrency, and retains the previous complete cache on failure. Automated tests use
+the checked, sanitized real-response fixtures and do not call the live service. DCAT-AP-CH and
+SHACL exports are available from each logical-model version in Turtle and JSON-LD.
+
+The architecture, roles, three demo journeys, namespace bindings, fixture provenance (including
+retrieval timestamps plus original and sanitized-file hashes), targeted Concept/CodeList sync
+commands, and mapping/drift semantics are documented in
+[`docs/logical-models-i14y-mapping.md`](docs/logical-models-i14y-mapping.md). Because DAAIF is a
+separate repository, add Christian Spider there through the validated external helper:
+
+```powershell
+uv run python scripts/seed_daaif_christian_spider.py --repo <daaif-repository> --check
+uv run python scripts/seed_daaif_christian_spider.py --repo <daaif-repository> --apply
+```
+
+With the Catalog API and UI running locally, the three modeling journeys can be repeated in a
+real Microsoft Edge instance. The harness exercises logical-first, physical-first, and
+existing-to-existing workflows, including role switching, keyboard-only drift resolution,
+reload persistence, the 390×844 matrix layout, and optional evidence captures:
+
+```powershell
+npm run test:e2e:modeling:edge -- `
+  --base-url http://127.0.0.1:4200 `
+  --screenshot-dir docs/mockups/edge-qa
+```
 
 ## Exercise the control plane
 

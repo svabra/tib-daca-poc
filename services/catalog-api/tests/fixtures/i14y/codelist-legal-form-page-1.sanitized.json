@@ -1,0 +1,43 @@
+{
+  "data": [
+    {
+      "annotations": [],
+      "code": "0328",
+      "conceptId": "89bc55cc-3858-4c13-a5c8-7dc935dff29b",
+      "id": "221b7107-2442-4c9c-808b-153accc13bcc",
+      "name": {
+        "de": "Ausländische öffentliche Verwaltung",
+        "en": "Foreign public administration",
+        "fr": "Administration publique étrangère",
+        "it": "Amministrazione pubblica estera"
+      },
+      "parentCode": "03"
+    },
+    {
+      "annotations": [],
+      "code": "0221",
+      "conceptId": "89bc55cc-3858-4c13-a5c8-7dc935dff29b",
+      "id": "26e2c31c-1ab7-4fe1-9d16-35acd1f92793",
+      "name": {
+        "de": "Verwaltungseinheit des Kantons",
+        "en": "Administrative unit of the canton",
+        "fr": "Unité de l'administration cantonale",
+        "it": "Unità amministrativa del cantone"
+      },
+      "parentCode": "02"
+    },
+    {
+      "annotations": [],
+      "code": "0232",
+      "conceptId": "89bc55cc-3858-4c13-a5c8-7dc935dff29b",
+      "id": "2896b964-8bd6-45bb-bbe1-6673014548c1",
+      "name": {
+        "de": "Einrichtung des öffentlichen Rechts des Bezirks",
+        "en": "Public-law institution of the district",
+        "fr": "Institution de droit public du district",
+        "it": "Istituzione di diritto pubblico del distretto"
+      },
+      "parentCode": "02"
+    }
+  ]
+}

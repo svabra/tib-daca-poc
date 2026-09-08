@@ -62,9 +62,18 @@ from .governance import (
 from .governance import (
     response_payload as governance_response_payload,
 )
+from .i14y_public_api import I14YPublicApiPort, VerifiedI14YPublicApi
+from .i14y_publication import DisabledI14YPublicationAdapter, I14YPublicationPort
+from .logical_model_review_api import create_logical_model_review_router
+from .modeling_api import create_modeling_router
+from .modeling_assistance_api import create_modeling_assistance_router
+from .modeling_lifecycle_api import create_modeling_lifecycle_router
+from .modeling_resources_api import create_modeling_resources_router
+from .modeling_seed import seed_modeling_catalog
 from .models import (
     AccessRequest,
     AdministrativeOrganization,
+    AdministrativeOrganizationLabel,
     AuditEvent,
     CanonicalOntologyTerm,
     CanonicalOntologyVersion,
@@ -269,6 +278,7 @@ from .source_access import (
 from .source_access import (
     requests_for_owner as source_requests_for_owner,
 )
+from .terminology_api import create_terminology_router
 from .workflow_seed import ONTOLOGY_URI, stable_id, term_uri
 
 SessionDep = Annotated[Session, Depends(get_session)]
@@ -3436,31 +3446,73 @@ def create_router() -> APIRouter:
     def list_administrative_organizations(
         session: SessionDep,
         actor: ActorDep,
+        parent_id: Annotated[str | None, Query(alias="parentId")] = None,
+        language: Literal["de", "fr", "it", "en", "rm"] = "de",
     ) -> list[AdministrativeOrganizationResponse]:
         del actor
+        statement = select(AdministrativeOrganization).where(AdministrativeOrganization.active.is_(True))
+        if parent_id is not None:
+            statement = statement.where(AdministrativeOrganization.parent_id == parent_id)
         organizations = session.scalars(
-            select(AdministrativeOrganization)
-            .where(AdministrativeOrganization.active.is_(True))
+            statement
             .order_by(
                 AdministrativeOrganization.department_order,
                 AdministrativeOrganization.office_order,
             )
         )
-        return [
-            AdministrativeOrganizationResponse(
+        result = []
+        for item in organizations:
+            localized = session.get(AdministrativeOrganizationLabel, (item.id, language))
+            result.append(AdministrativeOrganizationResponse(
                 id=item.id,
+                parent_id=item.parent_id,
                 department_code=item.department_code,
                 office_code=item.office_code,
-                display_name=item.display_name,
+                display_name=localized.label if localized else item.display_name,
                 organization_type=item.organization_type,
                 label=(
                     f"{item.department_code} - {item.office_code}"
                     if item.office_code
                     else item.department_code
                 ),
-            )
-            for item in organizations
-        ]
+                source_id=item.source_id,
+                source_uri=item.source_uri,
+            ))
+        return result
+
+    @router.get(
+        "/identity-directory/organizations/{organization_id}",
+        response_model=AdministrativeOrganizationResponse,
+        tags=["identity directory"],
+    )
+    def get_administrative_organization(
+        organization_id: str,
+        session: SessionDep,
+        actor: ActorDep,
+        language: Literal["de", "fr", "it", "en", "rm"] = "de",
+    ) -> AdministrativeOrganizationResponse:
+        del actor
+        item = session.get(AdministrativeOrganization, organization_id)
+        if item is None or not item.active:
+            raise HTTPException(404, "Organization not found")
+        breadcrumb: list[dict[str, str]] = []
+        cursor: AdministrativeOrganization | None = item
+        seen: set[str] = set()
+        while cursor is not None:
+            if cursor.id in seen:
+                raise HTTPException(500, "Organization hierarchy contains a cycle")
+            seen.add(cursor.id)
+            localized = session.get(AdministrativeOrganizationLabel, (cursor.id, language))
+            breadcrumb.append({"id": cursor.id, "label": localized.label if localized else cursor.display_name})
+            cursor = session.get(AdministrativeOrganization, cursor.parent_id) if cursor.parent_id else None
+        breadcrumb.reverse()
+        localized = session.get(AdministrativeOrganizationLabel, (item.id, language))
+        return AdministrativeOrganizationResponse(
+            id=item.id, parent_id=item.parent_id, department_code=item.department_code,
+            office_code=item.office_code, display_name=localized.label if localized else item.display_name,
+            organization_type=item.organization_type, label=item.office_code or item.department_code,
+            source_id=item.source_id, source_uri=item.source_uri, breadcrumb=breadcrumb,
+        )
 
     @router.get(
         "/identity-directory/people",
@@ -6642,16 +6694,30 @@ def create_app(
     *,
     settings: Settings | None = None,
     session_factory: sessionmaker[Session] | None = None,
+    i14y_client: I14YPublicApiPort | None = None,
+    i14y_publication_port: I14YPublicationPort | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     resolved_session_factory = session_factory or default_session_factory(resolved_settings)
+    resolved_i14y_client = i14y_client or VerifiedI14YPublicApi()
+    resolved_i14y_publication_port = (
+        i14y_publication_port
+        if i14y_publication_port is not None
+        else DisabledI14YPublicationAdapter()
+    )
+    owns_i14y_client = i14y_client is None
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if resolved_settings.seed_on_startup:
             with resolved_session_factory() as session:
                 seed_catalog(session)
-        yield
+                seed_modeling_catalog(session)
+        try:
+            yield
+        finally:
+            if owns_i14y_client:
+                await resolved_i14y_client.aclose()
 
     runtime_version = get_runtime_version()
     app = FastAPI(
@@ -6663,6 +6729,8 @@ def create_app(
     )
     app.state.settings = resolved_settings
     app.state.session_factory = resolved_session_factory
+    app.state.i14y_client = resolved_i14y_client
+    app.state.i14y_publication_port = resolved_i14y_publication_port
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved_settings.cors_origins,
@@ -6683,6 +6751,12 @@ def create_app(
 
     install_problem_handlers(app)
     app.include_router(create_router())
+    app.include_router(create_modeling_router())
+    app.include_router(create_modeling_assistance_router())
+    app.include_router(create_terminology_router())
+    app.include_router(create_modeling_lifecycle_router())
+    app.include_router(create_logical_model_review_router())
+    app.include_router(create_modeling_resources_router())
 
     @app.get("/health/live", response_model=HealthResponse, tags=["health"])
     def live() -> HealthResponse:

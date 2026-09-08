@@ -1,12 +1,14 @@
 import re
 from functools import lru_cache
+from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
 
 _POSTGRES_SCHEMA = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
+_S3_BUCKET = re.compile(r"^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$")
 
 
 class Settings(BaseSettings):
@@ -49,6 +51,18 @@ class Settings(BaseSettings):
     )
     internal_token: str = "local-development-only"
     daaif_ui_url: str | None = None
+    daca_physical_metadata_adapter: Literal["fixture", "postgresql", "s3", "all"] = "fixture"
+    daca_physical_postgres_dsn: SecretStr | None = None
+    daca_physical_s3_endpoint_url: str | None = None
+    daca_physical_s3_bucket: str | None = None
+    daca_physical_s3_prefix: str = ""
+    daca_physical_s3_region: str = "us-east-1"
+    daca_physical_s3_access_key_id: SecretStr | None = None
+    daca_physical_s3_secret_access_key: SecretStr | None = None
+    daca_physical_s3_max_objects: int = Field(default=500, ge=1, le=10_000)
+    daca_deepl_api_key: SecretStr | None = None
+    daca_deepl_api_url: str = "https://api-free.deepl.com/v2/translate"
+    daca_termdat_api_url: str = "https://api.termdat.bk.admin.ch/v2"
 
     @field_validator("daca_catalog_schema")
     @classmethod
@@ -73,6 +87,52 @@ class Settings(BaseSettings):
             raise ValueError("DAAIF_UI_URL must not contain credentials")
         if parsed.query or parsed.fragment:
             raise ValueError("DAAIF_UI_URL must not contain a query or fragment")
+        return normalized
+
+    @field_validator("daca_physical_postgres_dsn")
+    @classmethod
+    def validate_physical_postgres_dsn(cls, value: SecretStr | str | None) -> SecretStr | None:
+        if value is None:
+            return None
+        normalized = value.get_secret_value().strip() if isinstance(value, SecretStr) else value.strip()
+        if not normalized:
+            return None
+        parsed = urlsplit(normalized)
+        if parsed.scheme not in {"postgresql", "postgresql+psycopg", "postgresql+psycopg2"} or not parsed.hostname:
+            raise ValueError("DACA_PHYSICAL_POSTGRES_DSN must be a PostgreSQL DSN")
+        return SecretStr(normalized)
+
+    @field_validator("daca_physical_s3_endpoint_url")
+    @classmethod
+    def validate_physical_s3_endpoint(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        normalized = value.strip().rstrip("/")
+        parsed = urlsplit(normalized)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("DACA_PHYSICAL_S3_ENDPOINT_URL must be an absolute HTTP(S) URL")
+        if parsed.username is not None or parsed.password is not None:
+            raise ValueError("DACA_PHYSICAL_S3_ENDPOINT_URL must not contain credentials")
+        if parsed.query or parsed.fragment:
+            raise ValueError("DACA_PHYSICAL_S3_ENDPOINT_URL must not contain a query or fragment")
+        return normalized
+
+    @field_validator("daca_physical_s3_bucket")
+    @classmethod
+    def validate_physical_s3_bucket(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        normalized = value.strip()
+        if not _S3_BUCKET.fullmatch(normalized):
+            raise ValueError("DACA_PHYSICAL_S3_BUCKET must be a valid S3 bucket name")
+        return normalized
+
+    @field_validator("daca_physical_s3_prefix")
+    @classmethod
+    def validate_physical_s3_prefix(cls, value: str) -> str:
+        normalized = value.strip().strip("/")
+        if ".." in normalized.split("/"):
+            raise ValueError("DACA_PHYSICAL_S3_PREFIX must not contain parent traversal")
         return normalized
 
     @property

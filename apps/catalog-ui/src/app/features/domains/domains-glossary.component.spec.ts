@@ -5,7 +5,7 @@ import { of } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 import { DomainSummary, GlossaryTermProposal, GlossaryTermSummary } from '../../core/catalog.models';
-import { DomainsGlossaryComponent } from './domains-glossary.component';
+import { DomainsGlossaryComponent, resolveSemanticTab } from './domains-glossary.component';
 
 vi.mock('@bit-daca/design-system', async () => {
   const { Component } = await import('@angular/core');
@@ -121,6 +121,13 @@ async function render() {
 describe('DomainsGlossaryComponent term lifecycle proposals', () => {
   afterEach(() => TestBed.resetTestingModule());
 
+  it('keeps the legacy tab query contract while route-specific pages remain authoritative', () => {
+    expect(resolveSemanticTab('domains', 'terms')).toBe('terms');
+    expect(resolveSemanticTab(undefined, 'governance')).toBe('governance');
+    expect(resolveSemanticTab('terms', 'governance')).toBe('terms');
+    expect(resolveSemanticTab('governance', 'terms')).toBe('governance');
+  });
+
   it('shows a tab-aware create action and routes accepted-term updates through the central form', async () => {
     const { fixture } = await render();
     const component = fixture.componentInstance;
@@ -153,11 +160,13 @@ describe('DomainsGlossaryComponent term lifecycle proposals', () => {
     expect(navigation?.getAttribute('role')).toBeNull();
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/domains',
-      '/domains?tab=terms',
-      '/domains?tab=governance',
+      '/domains/terminology',
+      '/domains/concepts',
+      '/domains/themes',
+      '/domains/governance',
     ]);
     expect(links[0].getAttribute('aria-current')).toBe('page');
-    expect(links[1].getAttribute('aria-current')).toBeNull();
+    expect(links[2].getAttribute('aria-current')).toBeNull();
 
     component.tab.set('terms');
     fixture.detectChanges();
@@ -168,7 +177,7 @@ describe('DomainsGlossaryComponent term lifecycle proposals', () => {
   it('submits a confirmed retirement proposal with the existing governed payload', async () => {
     const { fixture, api } = await render();
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    const selectTab = vi.spyOn(fixture.componentInstance, 'selectTab');
+    const selectTab = vi.spyOn(fixture.componentInstance, 'selectTab').mockImplementation((tab) => fixture.componentInstance.tab.set(tab));
 
     fixture.componentInstance.requestTermRetirement(TERM);
 
@@ -202,6 +211,6 @@ describe('DomainsGlossaryComponent term lifecycle proposals', () => {
 
     component.termQuery.set('nicht vorhanden');
     fixture.detectChanges();
-    expect(root.textContent).toContain('Keine passenden Glossarterme gefunden.');
+    expect(root.textContent).toContain('Keine passenden Terminology-Terme gefunden.');
   });
 });

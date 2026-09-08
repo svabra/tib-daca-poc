@@ -8,6 +8,13 @@ import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 import { DomainChangeRequest, DomainSummary, GlossaryTermProposal, GlossaryTermSummary } from '../../core/catalog.models';
 
+export type SemanticTab = 'domains' | 'terms' | 'governance';
+
+export function resolveSemanticTab(routeTab: unknown, legacyTab: string | null): SemanticTab {
+  if (routeTab === 'terms' || routeTab === 'governance') return routeTab;
+  return legacyTab === 'terms' || legacyTab === 'governance' ? legacyTab : 'domains';
+}
+
 @Component({
   selector: 'daca-domains-glossary',
   standalone: true,
@@ -17,7 +24,7 @@ import { DomainChangeRequest, DomainSummary, GlossaryTermProposal, GlossaryTermS
     <section class="daca-page-heading">
       <div>
         <p class="daca-eyebrow">Fachliche Semantik</p>
-        <h1>Domains & Glossar</h1>
+        <h1>Domäne und Terminology</h1>
         <p>Domains ordnen Datenprodukte fachlich ein. Sie sind keine Organisationen, Ämter oder Abteilungen.</p>
       </div>
       @if (tab() === 'domains' && canRequestDomain()) {
@@ -30,14 +37,16 @@ import { DomainChangeRequest, DomainSummary, GlossaryTermProposal, GlossaryTermS
     @if (notice()) { <p class="daca-alert" role="status">{{ notice() }}</p> }
     @if (error()) { <p class="daca-alert is-error" role="alert">{{ error() }} <button class="daca-button is-secondary" type="button" (click)="load()">Erneut laden</button></p> }
 
-    <nav class="semantic-tabs" aria-label="Domains und Glossar">
-      <a routerLink="/domains" [attr.aria-current]="tab() === 'domains' ? 'page' : null" [class.is-active]="tab() === 'domains'">Domains <span>{{ domains().length }}</span></a>
-      <a routerLink="/domains" [queryParams]="{ tab: 'terms' }" [attr.aria-current]="tab() === 'terms' ? 'page' : null" [class.is-active]="tab() === 'terms'">Glossar <span>{{ terms().length }}</span></a>
-      <a routerLink="/domains" [queryParams]="{ tab: 'governance' }" [attr.aria-current]="tab() === 'governance' ? 'page' : null" [class.is-active]="tab() === 'governance'">Governance <span>{{ openGovernanceCount() }}</span></a>
+    <nav class="semantic-tabs" aria-label="Domäne und Terminology">
+      <a routerLink="/domains" [attr.aria-current]="tab() === 'domains' ? 'page' : null" [class.is-active]="tab() === 'domains'">Domänen <span>{{ domains().length }}</span></a>
+      <a routerLink="/domains/terminology" [attr.aria-current]="tab() === 'terms' ? 'page' : null" [class.is-active]="tab() === 'terms'">Terminology <span>{{ terms().length }}</span></a>
+      <a routerLink="/domains/concepts">I14Y-Konzepte</a>
+      <a routerLink="/domains/themes">Themen</a>
+      <a routerLink="/domains/governance" [attr.aria-current]="tab() === 'governance' ? 'page' : null" [class.is-active]="tab() === 'governance'">Governance <span>{{ openGovernanceCount() }}</span></a>
     </nav>
 
     @if (loading()) {
-      <div class="daca-card semantic-state" aria-live="polite">Domainregister und Glossar werden geladen …</div>
+      <div class="daca-card semantic-state" aria-live="polite">Domainregister und Terminology werden geladen …</div>
     } @else if (!error() && tab() === 'domains') {
       <label class="semantic-search">Domains durchsuchen <input type="search" [value]="query()" (input)="query.set(searchValue($event))" placeholder="Name, Definition oder Owner"></label>
       @if (filteredDomains().length) {
@@ -51,14 +60,14 @@ import { DomainChangeRequest, DomainSummary, GlossaryTermProposal, GlossaryTermS
         </div>
       } @else { <div class="daca-card semantic-state">Keine passende Domain gefunden.</div> }
     } @else if (!error() && tab() === 'terms') {
-      <label class="semantic-search">Glossar durchsuchen <input type="search" [value]="termQuery()" (input)="termQuery.set(searchValue($event))" placeholder="Begriff, Abkürzung oder Definition"></label>
+      <label class="semantic-search">Terminology durchsuchen <input type="search" [value]="termQuery()" (input)="termQuery.set(searchValue($event))" placeholder="Begriff, Abkürzung oder Definition"></label>
       @if (filteredTerms().length) {
         <div class="semantic-grid">
           @for (term of filteredTerms(); track term.id) {
             <article class="daca-card semantic-card"><div class="daca-card-header"><div><p class="daca-eyebrow">SKOS Concept</p><h2>{{ term.preferredLabel }}</h2></div><daca-status-badge [tone]="term.status === 'active' ? 'green' : 'neutral'">{{ term.status }}</daca-status-badge></div><div class="daca-card-body"><p>{{ term.definition || 'Noch keine Definition hinterlegt.' }}</p><div class="semantic-chips">@for (domain of term.domains; track domain.id) { <a [routerLink]="['/domains', domain.id]">{{ domain.preferredLabel }}</a> }</div><dl><div><dt>Sprachen</dt><dd>{{ languages(term) }}</dd></div><div><dt>Abkürzungen</dt><dd>{{ alternativeLabels(term) || '–' }}</dd></div><div><dt>Relationen</dt><dd>{{ term.relations.length }}</dd></div></dl>@if(term.status==='active'){<div class="domain-actions term-actions"><a class="daca-button is-secondary" routerLink="/glossary/proposals/new" [queryParams]="{ termId: term.id }">Änderung vorschlagen</a><button type="button" (click)="requestTermRetirement(term)">Stilllegung beantragen</button></div>}</div></article>
           }
         </div>
-      } @else { <div class="daca-card semantic-state">{{ termQuery().trim() ? 'Keine passenden Glossarterme gefunden.' : 'Noch keine akzeptierten Glossarterme.' }}</div> }
+      } @else { <div class="daca-card semantic-state">{{ termQuery().trim() ? 'Keine passenden Terminology-Terme gefunden.' : 'Noch keine akzeptierten Terminology-Terme.' }}</div> }
     } @else if (!error()) {
       <div class="semantic-governance">
         <section><h2>Domain-Anträge</h2>@if (domainRequests().length) { @for (request of domainRequests(); track request.id) { <article class="daca-card governance-row"><div><strong>{{ requestTitle(request) }}</strong><p>{{ request.requesterName }} · Revision {{ request.revision }} · {{ request.status }}</p></div>@if (isRegisterOwner() && request.status === 'submitted') { <div><button class="daca-button is-secondary" type="button" (click)="openDomainRequestReview(request)">Antrag bearbeiten</button><button class="daca-button" type="button" (click)="decideDomain(request, 'approve')">Genehmigen</button><button class="daca-button is-secondary" type="button" (click)="decideDomain(request, 'reject')">Ablehnen</button></div> }</article> } } @else { <div class="daca-card semantic-state">Keine Domain-Anträge.</div> }</section>
@@ -92,7 +101,7 @@ export class DomainsGlossaryComponent {
   private readonly fb = inject(FormBuilder);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  readonly tab = signal<'domains' | 'terms' | 'governance'>('domains');
+  readonly tab = signal<SemanticTab>('domains');
   readonly domains = signal<readonly DomainSummary[]>([]);
   readonly terms = signal<readonly GlossaryTermSummary[]>([]);
   readonly domainRequests = signal<readonly DomainChangeRequest[]>([]);
@@ -124,9 +133,9 @@ export class DomainsGlossaryComponent {
   readonly requestForm = this.fb.nonNullable.group({ label: ['', [Validators.required, Validators.maxLength(160)]], definition: ['', [Validators.required, Validators.maxLength(2000)]], ownerUserId: ['', Validators.required], deputyOwnerUserId: ['', Validators.required] });
 
   constructor() {
+    const routeTab = this.route.snapshot.data['semanticTab'];
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
-      const tab = params.get('tab');
-      this.tab.set(tab === 'terms' || tab === 'governance' ? tab : 'domains');
+      this.tab.set(resolveSemanticTab(routeTab, params.get('tab')));
     });
     this.load();
   }
@@ -137,14 +146,9 @@ export class DomainsGlossaryComponent {
   }
 
   searchValue(event: Event): string { return (event.target as HTMLInputElement).value; }
-  selectTab(tab: 'domains' | 'terms' | 'governance'): void {
+  selectTab(tab: SemanticTab): void {
     this.tab.set(tab);
-    void this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: { tab: tab === 'domains' ? null : tab },
-      queryParamsHandling: 'merge',
-      replaceUrl: true,
-    });
+    void this.router.navigateByUrl(({ domains: '/domains', terms: '/domains/terminology', governance: '/domains/governance' } as const)[tab]);
   }
   languages(term: GlossaryTermSummary): string { return term.labels.map((label) => label.language.toUpperCase()).join(', ') || '–'; }
   alternativeLabels(term: GlossaryTermSummary): string { return term.labels.flatMap((label) => label.alternativeLabels).join(', '); }

@@ -1,0 +1,67 @@
+{
+  "data": {
+    "id": "89bc55cc-3858-4c13-a5c8-7dc935dff29b",
+    "identifiers": ["legalForm"],
+    "version": "1.2.0",
+    "conceptType": "CodeList",
+    "name": {
+      "de": "Rechtsform eines Unternehmens",
+      "en": "Legal form of a company",
+      "fr": "Forme juridique d'une entreprise",
+      "it": "Forma giuridica di una società"
+    },
+    "description": {
+      "de": "Die Codierung der Rechtsform ist vierstellig.",
+      "en": "The coding of the legal form has four digits."
+    },
+    "conformsTo": [],
+    "keywords": [],
+    "themes": [
+      {
+        "code": "118",
+        "name": {
+          "de": "Unternehmen",
+          "en": "Businesses",
+          "fr": "Entreprises",
+          "it": "Imprese"
+        }
+      },
+      {
+        "code": "125",
+        "name": {
+          "de": "Öffentliche Statistik",
+          "en": "Official statistics",
+          "fr": "Statistique publique",
+          "it": "Statistica pubblica"
+        }
+      }
+    ],
+    "minLength": null,
+    "maxLength": null,
+    "minValue": null,
+    "maxValue": null,
+    "numberDecimals": null,
+    "pattern": null,
+    "measurementUnit": null,
+    "codeListEntryDefaultSortProperty": null,
+    "codeListEntryValueMaxLength": 4,
+    "codeListEntryValueType": "String",
+    "codeListEntries": null,
+    "publicationLevel": "Public",
+    "registrationStatus": "Standard",
+    "publisher": {
+      "id": "a88d610b-62f9-4e45-b288-3b23ff4f1758",
+      "identifier": "CH1",
+      "name": {
+        "de": "Bundesamt für Statistik (BFS)",
+        "en": "Federal Statistical Office (FSO)"
+      }
+    },
+    "system": {
+      "createdAt": "2026-02-04T10:43:33.822867+00:00",
+      "modifiedAt": "2026-02-10T10:11:14.40798+00:00"
+    },
+    "replaces": [],
+    "isReplacedBy": []
+  }
+}

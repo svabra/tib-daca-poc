@@ -1,6 +1,6 @@
 {
   "name": "@daca/control-plane-ui",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "private": true,
   "type": "module",
   "packageManager": "npm@11.13.0",

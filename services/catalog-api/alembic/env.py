@@ -1,6 +1,7 @@
 from logging.config import fileConfig
 
 from alembic import context
+from daca_catalog.alembic_support import include_autogenerate_object
 from daca_catalog.models import Base
 from daca_catalog.settings import get_settings
 from sqlalchemy import engine_from_config, pool, text
@@ -22,6 +23,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        include_object=include_autogenerate_object,
         version_table_schema=None if schema == "public" else schema,
     )
     with context.begin_transaction():
@@ -43,6 +45,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
+            include_object=include_autogenerate_object,
             version_table_schema=None if schema == "public" else schema,
         )
         with context.begin_transaction():

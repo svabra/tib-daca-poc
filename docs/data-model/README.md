@@ -18,7 +18,7 @@ Update generated sections with `npm run docs:data-model`. Validate them with
 
 | Persistence context | Storage | Tables | Alembic head | Migration fingerprint |
 |---|---|---:|---|---|
-| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 42 | `0015_domains_glossary` | `9312bc86e0e38c11` |
+| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 86 | `0023_physical_models_s3` | `8c06a6caf27d756b` |
 | [Control-plane data model](control-plane.md) | PostgreSQL (`daca_control_plane`) | 6 | `20260803_0001` | `ff3a5ea9ca863788` |
 | [Sample data-product model](sample-data-product.md) | PostgreSQL (`daca_sample`) | 3 | `0003_weekly_availability` | `938d480b00000576` |
 
@@ -41,19 +41,36 @@ Arrows are API calls or projections, never cross-database foreign keys. The cont
 The context prefix disambiguates names such as the two independent `audit_events` tables.
 
 - `catalog.access_requests`
+- `catalog.administrative_organization_labels`
 - `catalog.administrative_organizations`
+- `catalog.asset_mapping_logical_fields`
+- `catalog.asset_mapping_physical_columns`
+- `catalog.asset_mapping_versions`
+- `catalog.asset_mappings`
 - `catalog.audit_events`
 - `catalog.canonical_ontology_terms`
 - `catalog.canonical_ontology_versions`
+- `catalog.data_model_role_assignments`
 - `catalog.data_product_domains`
 - `catalog.data_product_fields`
 - `catalog.data_product_glossary_terms`
 - `catalog.data_products`
+- `catalog.dcat_catalog_versions`
+- `catalog.dcat_catalogs`
+- `catalog.dcat_data_service_versions`
+- `catalog.dcat_data_services`
+- `catalog.dcat_dataset_version_localizations`
+- `catalog.dcat_dataset_versions`
+- `catalog.dcat_datasets`
+- `catalog.dcat_distribution_versions`
+- `catalog.dcat_distributions`
 - `catalog.demo_users`
 - `catalog.domain_change_requests`
 - `catalog.domain_localizations`
 - `catalog.domains`
 - `catalog.endpoints`
+- `catalog.federal_organization_import_runs`
+- `catalog.federal_person_memberships`
 - `catalog.glossary_term_domains`
 - `catalog.glossary_term_localizations`
 - `catalog.glossary_term_proposal_reviews`
@@ -61,13 +78,33 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.glossary_term_relations`
 - `catalog.glossary_terms`
 - `catalog.governance_submissions`
+- `catalog.i14y_code_list_entries`
+- `catalog.i14y_concepts`
+- `catalog.i14y_sync_runs`
 - `catalog.identity_directory_entries`
 - `catalog.identity_group_memberships`
 - `catalog.identity_groups`
 - `catalog.lineage_edges`
+- `catalog.logical_concept_links`
+- `catalog.logical_entities`
+- `catalog.logical_entity_versions`
+- `catalog.logical_field_versions`
+- `catalog.logical_fields`
+- `catalog.logical_model_assistance_provenance`
+- `catalog.logical_model_reviews`
+- `catalog.logical_model_versions`
+- `catalog.logical_models`
 - `catalog.metadata_delivery_outbox`
 - `catalog.metadata_publications`
 - `catalog.ontology_term_alignments`
+- `catalog.physical_columns`
+- `catalog.physical_databases`
+- `catalog.physical_drift_changes`
+- `catalog.physical_drift_reports`
+- `catalog.physical_schema_snapshots`
+- `catalog.physical_schemas`
+- `catalog.physical_sources`
+- `catalog.physical_tables`
 - `catalog.poc_product_fixtures`
 - `catalog.poc_simulation_events`
 - `catalog.policy_deployments`
@@ -81,6 +118,13 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.source_access_grants`
 - `catalog.source_access_requests`
 - `catalog.source_catalog_entries`
+- `catalog.terminology_external_references`
+- `catalog.terminology_term_relations`
+- `catalog.terminology_term_responsibilities`
+- `catalog.terminology_term_version_domains`
+- `catalog.terminology_term_version_labels`
+- `catalog.terminology_term_versions`
+- `catalog.terminology_terms`
 - `catalog.workflow_tasks`
 - `control-plane.audit_events`
 - `control-plane.catalog_instances`

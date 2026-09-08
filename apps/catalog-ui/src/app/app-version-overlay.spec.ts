@@ -40,11 +40,11 @@ describe('Catalog runtime version overlay', () => {
     expect(dialog?.getAttribute('aria-describedby')).toBe('daca-feature-list-introduction');
     expect(dialog?.textContent).toContain(`Featureliste · V${DACA_VERSION}`);
     expect(dialog?.textContent).toContain('Was kann DaCa Catalog?');
-    expect(dialog?.textContent).toContain('Domains und Fachbegriffe gemeinsam steuern');
-    expect(dialog?.textContent).toContain('18 ESTV- und 20 Verteidigungskonzepte');
-    expect(dialog?.textContent).toContain('bestehende Begriffe werden über denselben Governance-Workflow geändert');
-    expect(dialog?.textContent).toContain('lokal bis zu drei unverbindliche Vorschläge');
-    expect(dialog?.textContent).toContain('nie automatisch übernommen');
+    expect(dialog?.textContent).toContain('Logische Datenmodelle erstellen und freigeben');
+    expect(dialog?.textContent).toContain('Physische Modelle aus PostgreSQL und S3 verstehen');
+    expect(dialog?.textContent).toContain('Logische und physische Modelle verbinden');
+    expect(dialog?.textContent).toContain('Domänen und Terminology gemeinsam steuern');
+    expect(dialog?.textContent).toContain('TERMDAT-Suche');
     expect(dialog?.textContent).toContain('Neue Versionen ohne F5 übernehmen');
     expect(dialog?.textContent).toContain('Datenprodukte finden und verstehen');
     expect(dialog?.textContent).toContain('Schnell oder gezielt suchen');
@@ -52,11 +52,11 @@ describe('Catalog runtime version overlay', () => {
     expect(dialog?.textContent).toContain('Änderungen nachvollziehen');
     expect(dialog?.textContent).toContain('Verantwortung und Stellvertretung sichtbar machen');
     expect(dialog?.textContent).toContain('PoC anhand geführter Journeys erleben');
-    expect(dialog?.textContent).toContain('neun wiederholbare Abläufe');
+    expect(dialog?.textContent).toContain('zehn wiederholbare Abläufe');
     expect(dialog?.textContent).toContain('Zugriff gezielt freigeben und verlängern');
     expect(dialog?.textContent).toContain('Oracle-Datenquellen kontrolliert erschliessen');
     expect(dialog?.textContent).toContain('aktuellen PoC-Stand');
-    expect(features.length).toBe(13);
+    expect(features.length).toBe(16);
     expect(trigger?.getAttribute('aria-expanded')).toBe('true');
 
     const close = fixture.nativeElement.querySelector('.daca-feature-dialog-close') as HTMLButtonElement | null;

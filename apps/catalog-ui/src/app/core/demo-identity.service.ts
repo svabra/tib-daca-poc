@@ -1,6 +1,22 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
-import { catchError, of } from 'rxjs';
+import { catchError, forkJoin, of } from 'rxjs';
+
+export type ModelingRole = 'data_owner' | 'deputy_data_owner' | 'data_steward';
+
+export interface ModelingPersona {
+  id: string;
+  userId: string;
+  displayName: string;
+  departmentCode: string;
+  organizationId: string;
+  organizationName: string;
+  role: ModelingRole;
+  delegatedOwnerUserId: string | null;
+  primaryOrganizationId?: string | null;
+  sortRank?: number;
+  organizationBreadcrumb?: { id: string; label: string; type: string }[];
+}
 
 export interface DemoUser {
   id: string;
@@ -10,7 +26,20 @@ export interface DemoUser {
   phone: string | null;
   avatarUrl: string | null;
   roles: string[];
+  /** Organisational scope used by the modeling workspaces. Older demo users may not expose it yet. */
+  department?: string | null;
+  office?: string | null;
+  primaryModelingRole?: ModelingRole | null;
+  modelingRoles?: readonly ModelingRole[];
+  modelingAssignments?: readonly ModelingPersona[];
   supervisorUserId?: string | null;
+}
+
+export interface ModelPublicationScope {
+  department: string;
+  office: string;
+  dataOwner: { id: string };
+  deputyDataOwner?: { id: string } | null;
 }
 
 const KASSANDRA: DemoUser = {
@@ -33,7 +62,15 @@ const POC_USERS: readonly DemoUser[] = [
   { id: 'noemie.rochat', displayName: 'Noémie Rochat', organization: 'Kanton Neuchâtel', email: 'noemie.rochat@ne.ch', phone: '+41 58 000 00 42', avatarUrl: '/assets/data-owners/noemie-rochat.webp', roles: ['data_owner', 'data_consumer'] },
   { id: 'sandro.wenger', displayName: 'Sandro Wenger', organization: 'BAZG', email: 'sandro.wenger@bazg.admin.ch', phone: '+41 58 000 00 91', avatarUrl: '/assets/data-owners/sandro-wenger.webp', roles: ['data_owner', 'data_consumer'] },
   { id: 'sarah.brunner', displayName: 'Sarah Brunner', organization: 'Kanton St. Gallen', email: 'sarah.brunner@sg.ch', phone: '+41 58 000 00 72', avatarUrl: '/assets/data-owners/sarah-brunner.webp', roles: ['data_owner', 'data_consumer'] },
-  { id: 'sibilla.micheli', displayName: 'Sibilla Micheli', organization: 'VBS', email: 'sibilla.micheli@vbs.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'domain_register_owner', 'data_consumer'] },
+  { id: 'christian.spider', displayName: 'Christian Spider', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'christian.spider@vtg.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'data_owner' },
+  { id: 'sibilla.micheli', displayName: 'Sibilla Micheli', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'sibilla.micheli@vbs.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'domain_register_owner', 'data_consumer'], primaryModelingRole: 'deputy_data_owner' },
+  { id: 'cinthya.thor', displayName: 'Cinthya Thor', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'cinthya.thor@vtg.admin.ch', phone: null, avatarUrl: null, roles: ['data_consumer'], primaryModelingRole: 'data_steward' },
+  { id: 'lawrence.hill', displayName: 'Lawrence Hill', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'lawrence.hill@vtg.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'data_owner' },
+  { id: 'hong.an.captain', displayName: 'Hong An Captain', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'hong-an.captain@vtg.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'deputy_data_owner' },
+  { id: 'christian.man', displayName: 'Christian Man', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'christian.man@vtg.admin.ch', phone: null, avatarUrl: null, roles: ['data_consumer'], primaryModelingRole: 'data_steward' },
+  { id: 'mirjam.keller', displayName: 'Mirjam Keller', organization: 'armasuisse Immobilien', department: 'VBS', office: 'vbs-armasuisse-immobilien', email: 'mirjam.keller@ar.admin.ch', phone: null, avatarUrl: null, roles: ['data_consumer'], primaryModelingRole: 'data_steward' },
+  { id: 'daniel.wenger', displayName: 'Daniel Wenger', organization: 'armasuisse Immobilien', department: 'VBS', office: 'vbs-armasuisse-immobilien', email: 'daniel.wenger@ar.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'data_owner' },
+  { id: 'eliane.rossi', displayName: 'Eliane Rossi', organization: 'armasuisse Immobilien', department: 'VBS', office: 'vbs-armasuisse-immobilien', email: 'eliane.rossi@ar.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'deputy_data_owner' },
   { id: 'simone.wyss', displayName: 'Simone Wyss', organization: 'EFV', email: 'simone.wyss@efv.admin.ch', phone: '+41 58 000 00 52', avatarUrl: '/assets/data-owners/simone-wyss.webp', roles: ['data_owner', 'data_consumer'] },
   { id: 'thomas.kriegli', displayName: 'Thomas Kriegli', organization: 'ESTV', email: 'thomas.kriegli@estv.admin.ch', phone: '+41 58 000 00 83', avatarUrl: '/assets/data-owners/thomas-kriegli.webp', roles: ['publication_approver', 'data_consumer'], supervisorUserId: null },
 ];
@@ -51,12 +88,18 @@ export class DemoIdentityService {
   readonly userId = this.userIdState.asReadonly();
   readonly user = computed(() => this.usersState().find((user) => user.id === this.userIdState()) ?? this.usersState()[0] ?? KASSANDRA);
   readonly headers = computed(() => new HttpHeaders({ 'X-DaCa-User': this.userIdState() }));
+  readonly canEditModels = computed(() => this.modelingRoles(this.user()).length > 0);
+  readonly canPublishModels = computed(() => this.modelingRoles(this.user()).some((role) => role === 'data_owner' || role === 'deputy_data_owner'));
 
   constructor() {
     const initialUrl = window.location.href;
     const requestedUserId = this.requestedDemoUserId();
-    this.http.get<DemoUser[]>('/api/v1/demo-users').pipe(catchError(() => of(POC_USERS))).subscribe((users) => {
-      const available = users.length ? users : POC_USERS;
+    forkJoin({
+      users: this.http.get<DemoUser[]>('/api/v1/demo-users').pipe(catchError(() => of([...POC_USERS]))),
+      personas: this.http.get<ModelingPersona[]>('/api/v1/modeling/personas').pipe(catchError(() => of([]))),
+    }).subscribe(({ users, personas }) => {
+      const source = users.length ? users : POC_USERS;
+      const available = source.map((user) => this.withModelingPersonas(user, personas));
       this.usersState.set(available);
       this.directoryResolved = true;
       const preferredUserId = this.pendingUserId ?? requestedUserId;
@@ -68,6 +111,45 @@ export class DemoIdentityService {
       }
       this.removeInitialDemoUserQueryParameter(requestedUserId, initialUrl);
     });
+  }
+
+  modelingRoles(user: DemoUser): readonly ModelingRole[] {
+    if (user.modelingRoles?.length) return user.modelingRoles;
+    return user.primaryModelingRole ? [user.primaryModelingRole] : [];
+  }
+
+  canPublishModel(model: ModelPublicationScope | null | undefined): boolean {
+    if (!model) return false;
+    const user = this.user();
+    const assignments = user.modelingAssignments ?? [];
+    if (assignments.length) {
+      return assignments.some((assignment) => assignment.departmentCode === model.department
+        && assignment.organizationId === model.office
+        && ((assignment.role === 'data_owner' && user.id === model.dataOwner.id)
+          || (assignment.role === 'deputy_data_owner' && assignment.delegatedOwnerUserId === model.dataOwner.id)));
+    }
+    const inScope = user.department === model.department && user.office === model.office;
+    const roles = this.modelingRoles(user);
+    return inScope && ((roles.includes('data_owner') && user.id === model.dataOwner.id)
+      || (roles.includes('deputy_data_owner') && user.id === model.deputyDataOwner?.id));
+  }
+
+  private withModelingPersonas(user: DemoUser, personas: readonly ModelingPersona[]): DemoUser {
+    const fallback = POC_USERS.find((item) => item.id === user.id);
+    const assignments = personas.filter((item) => item.userId === user.id);
+    if (!assignments.length && !fallback?.primaryModelingRole && !user.primaryModelingRole && !user.modelingRoles?.length) return user;
+    const roles = [...new Set(assignments.map((item) => item.role))];
+    const assignment = assignments[0];
+    return {
+      ...fallback,
+      ...user,
+      roles: user.roles,
+      department: assignment?.departmentCode ?? user.department ?? fallback?.department ?? null,
+      office: assignment?.organizationId ?? user.office ?? fallback?.office ?? null,
+      primaryModelingRole: roles[0] ?? user.primaryModelingRole ?? fallback?.primaryModelingRole ?? null,
+      modelingRoles: roles.length ? roles : user.modelingRoles ?? (user.primaryModelingRole ? [user.primaryModelingRole] : fallback?.primaryModelingRole ? [fallback.primaryModelingRole] : []),
+      modelingAssignments: assignments,
+    };
   }
 
   select(userId: string): void {

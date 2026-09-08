@@ -2,7 +2,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from fastapi import Request
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -15,23 +15,15 @@ def build_engine(
     database_schema: str = "public",
     **kwargs: Any,
 ) -> Engine:
+    if not database_url.startswith("postgresql"):
+        raise ValueError("The DaCa Catalog API supports PostgreSQL only")
     options: dict[str, Any] = {"pool_pre_ping": True}
-    if database_url.startswith("sqlite"):
-        options["connect_args"] = {"check_same_thread": False}
-        options["pool_pre_ping"] = False
-    elif database_url.startswith("postgresql") and database_schema != "public":
+    if database_schema != "public":
         options["connect_args"] = {
             "options": f"-csearch_path={database_schema},public",
         }
     options.update(kwargs)
     engine = create_engine(database_url, **options)
-    if database_url.startswith("sqlite"):
-        @event.listens_for(engine, "connect")
-        def configure_sqlite(dbapi_connection: Any, _connection_record: Any) -> None:
-            cursor = dbapi_connection.cursor()
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.execute("PRAGMA busy_timeout=5000")
-            cursor.close()
     return engine
 
 

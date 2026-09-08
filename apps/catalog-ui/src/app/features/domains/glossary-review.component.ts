@@ -9,8 +9,8 @@ import { GlossaryTermProposal, SemanticSuggestion } from '../../core/catalog.mod
 import { canDecideGlossaryProposal, canEditGlossaryProposal, relatedConceptIsComplete } from './domain-review-policy';
 
 @Component({selector:'daca-glossary-review',standalone:true,imports:[ReactiveFormsModule,RouterLink,StatusBadgeComponent],changeDetection:ChangeDetectionStrategy.OnPush,template:`
-  <a routerLink="/domains">← Domains & Glossar</a>
-  <section class="daca-page-heading"><div><p class="daca-eyebrow">Glossar-Governance</p><h1>Termvorschlag prüfen</h1><p>Bearbeitungen erzeugen eine neue Vorschlagsrevision und setzen frühere Freigaben zurück.</p></div></section>
+  <a routerLink="/domains/governance">← Domänen &amp; Konzepte</a>
+  <section class="daca-page-heading"><div><p class="daca-eyebrow">Terminology-Governance</p><h1>Termvorschlag prüfen</h1><p>Bearbeitungen erzeugen eine neue Vorschlagsrevision und setzen frühere Freigaben zurück.</p></div></section>
   @if(message()){<p class="daca-alert" [class.is-error]="messageTone()==='error'" [attr.role]="messageTone()==='error'?'alert':'status'">{{message()}}</p>}
   @if(loading()){<div class="daca-card review-state">Vorschlag wird geladen …</div>}
   @else if(proposal();as item){

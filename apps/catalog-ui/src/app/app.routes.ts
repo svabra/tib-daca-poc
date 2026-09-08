@@ -4,6 +4,7 @@ import { PRODUCT_ACTIVITY_ROUTE } from './features/activity/product-activity.rou
 import { PRODUCT_SERVICE_LEVEL_ROUTE } from './features/service-level/product-service-level.route';
 import { PRODUCT_USAGE_ROUTE } from './features/usage/product-usage.route';
 import { DOMAIN_ROUTES } from './features/domains/domain.routes';
+import { DATA_MODEL_ROUTES } from './features/data-models/data-model.routes';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', component: WelcomePageComponent, title: 'Willkommen | DaCa' },
@@ -14,6 +15,7 @@ export const routes: Routes = [
     data: { preload: true },
     title: 'Meine Datenprodukte | DaCa',
   },
+  ...DATA_MODEL_ROUTES,
   {
     path: 'search',
     loadComponent: () => import('./features/search/catalog-expert-search.component').then((m) => m.CatalogExpertSearchComponent),
@@ -64,7 +66,7 @@ export const routes: Routes = [
   {
     path: 'poc-simulation/domain-glossary',
     loadComponent: () => import('./features/poc-simulation/domain-glossary-fixture.component').then((m) => m.DomainGlossaryFixtureComponent),
-    title: 'Domains & Glossar | PoC Simulation',
+    title: 'Domäne und Terminology | PoC Simulation',
   },
   {
     path: 'poc-simulation/quality-below-threshold',

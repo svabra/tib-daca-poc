@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-07",
+  "retrievedAt": "2026-09-07T18:41:55Z",
+  "retrievalEvidence": "UTC capture time preserved from the original fixture creation metadata; the JSON-LD structure export was retrieved later as recorded on that fixture.",
+  "purpose": "Offline contract and parser tests; no test performs an external HTTP request.",
+  "upstreamContract": {
+    "openapi": "3.0.4",
+    "apiVersion": "v1",
+    "deployment": "1.15.4-build.45",
+    "assembly": "1.15.4.0",
+    "releaseLastModified": "Wed, 26 Aug 2026 09:11:48 GMT",
+    "releaseEtag": "\"6a8eadd4-2bdb0\"",
+    "releaseBytes": 179632,
+    "releaseSha256": "78e1a82d3bbf91704596a7aec6bfa56f076913fa4639f945a5f90fedd94c1b04"
+  },
+  "fixtures": [
+    {
+      "file": "release-1.15.4-build.45.sanitized.json",
+      "source": "https://apiconsole.i14y.admin.ch/public/v1/Release.json",
+      "retrievedAt": "2026-09-07T18:41:55Z",
+      "mediaType": "application/json",
+      "fixtureBytes": 1643,
+      "fixtureSha256": "4c5ded4235bbc3eafd8b705b68eba7e4444d467dd89597950fbd02666421b054",
+      "sanitization": "Retains info, servers and every public path/GET operation; omits generated schemas, examples and prose."
+    },
+    {
+      "file": "concept-legal-form-1.2.0.sanitized.json",
+      "source": "https://api.i14y.admin.ch/api/public/v1/concepts/89bc55cc-3858-4c13-a5c8-7dc935dff29b",
+      "retrievedAt": "2026-09-07T18:41:55Z",
+      "resourceId": "89bc55cc-3858-4c13-a5c8-7dc935dff29b",
+      "permalink": "https://register.ld.admin.ch/i14y/concept/legalForm/version/1.2.0",
+      "mediaType": "application/json",
+      "fixtureBytes": 1778,
+      "fixtureSha256": "1ef65b76e5f2fb51961c7700e4136e01248be74756e480e8104d494c7aea6582",
+      "sanitization": "Keeps stable identifiers, classifications, short public labels, publisher and source timestamps; shortens long descriptions and omits unrelated optional fields. The observed missing responsiblePerson and additive replaces fields are retained as contract evidence."
+    },
+    {
+      "file": "codelist-legal-form-page-1.sanitized.json",
+      "source": "https://api.i14y.admin.ch/api/public/v1/concepts/89bc55cc-3858-4c13-a5c8-7dc935dff29b/codelist-entries/search?language=de&page=1&pageSize=3",
+      "retrievedAt": "2026-09-07T18:41:55Z",
+      "resourceId": "89bc55cc-3858-4c13-a5c8-7dc935dff29b",
+      "mediaType": "application/json",
+      "fixtureBytes": 1329,
+      "fixtureSha256": "ee7f1545c689b2cd33bf88d6d65fd6baf23a910ed67c4c1914a3738e4a8a5e48",
+      "sanitization": "Verbatim three public entries from the requested page; HTTP pagination headers are represented in MockTransport tests."
+    },
+    {
+      "file": "dataset-structure-ce087cbd-excerpt.ttl",
+      "source": "https://api.i14y.admin.ch/api/public/v1/datasets/ce087cbd-83a5-409f-a0c7-41175c6d5e0d/structures/exports/Ttl",
+      "retrievedAt": "2026-09-07T18:41:55Z",
+      "resourceId": "ce087cbd-83a5-409f-a0c7-41175c6d5e0d",
+      "upstreamMediaType": "text/turtle",
+      "upstreamBytes": 33712,
+      "upstreamSha256": "3da1800dca0d6558e48b578bcd4ef275f08572cfddeb7e4a19f273d89922c0cf",
+      "fixtureBytes": 1841,
+      "fixtureSha256": "2a4740319a6ee840d67bfdda036b508a2f2c2e0d81e2dd3b8e1704bef1174b2d",
+      "sanitization": "Valid RDF excerpt retaining the real NodeShape metadata and the two legalForm-linked PropertyShapes; trims the other twenty properties and shortens the public description."
+    },
+    {
+      "file": "dataset-structure-ce087cbd-excerpt.jsonld",
+      "source": "https://api.i14y.admin.ch/api/public/v1/datasets/ce087cbd-83a5-409f-a0c7-41175c6d5e0d/structures/exports/JsonLd",
+      "retrievedAt": "2026-09-07T18:53:36Z",
+      "resourceId": "ce087cbd-83a5-409f-a0c7-41175c6d5e0d",
+      "upstreamMediaType": "application/ld+json",
+      "upstreamBytes": 31529,
+      "upstreamSha256": "617b63f158133881d726f35213c8c8b04ff7ef300c0d5d71d5c2e2a8571a1def",
+      "fixtureBytes": 3508,
+      "fixtureSha256": "765f151a0f0225c960798e08a29f02654b65cc9dbded3f221b5107f284db867f",
+      "sanitization": "Valid JSON-LD excerpt retaining the same real NodeShape and legalForm PropertyShapes as the Turtle fixture; graph-isomorphic to that sanitized Turtle excerpt."
+    }
+  ]
+}

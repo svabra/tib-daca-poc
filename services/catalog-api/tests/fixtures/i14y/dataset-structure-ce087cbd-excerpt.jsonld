@@ -1,0 +1,89 @@
+[
+  {
+    "@id": "https://register.ld.admin.ch/i14y/dataset/CH_KT_BL_dataset_12480/structure/CH_KT_BL_dataset_12480Shape/rechtsform_code",
+    "@type": ["http://www.w3.org/ns/shacl#PropertyShape"],
+    "http://purl.org/dc/terms/conformsTo": [
+      {"@id": "https://register.ld.admin.ch/i14y/concept/legalForm/version/1.2.0"}
+    ],
+    "http://www.w3.org/ns/shacl#datatype": [
+      {"@id": "http://www.w3.org/2001/XMLSchema#string"}
+    ],
+    "http://www.w3.org/ns/shacl#maxCount": [
+      {"@type": "http://www.w3.org/2001/XMLSchema#integer", "@value": 1}
+    ],
+    "http://www.w3.org/ns/shacl#minCount": [
+      {"@type": "http://www.w3.org/2001/XMLSchema#integer", "@value": 1}
+    ],
+    "http://www.w3.org/ns/shacl#name": [
+      {"@language": "de", "@value": "rechtsform_code"}
+    ],
+    "http://www.w3.org/ns/shacl#order": [
+      {"@type": "http://www.w3.org/2001/XMLSchema#integer", "@value": 13}
+    ],
+    "http://www.w3.org/ns/shacl#path": [
+      {
+        "@id": "https://register.ld.admin.ch/i14y/dataset/CH_KT_BL_dataset_12480/structure/CH_KT_BL_dataset_12480Shape/rechtsform_code"
+      }
+    ]
+  },
+  {
+    "@id": "https://register.ld.admin.ch/i14y/dataset/CH_KT_BL_dataset_12480/structure/CH_KT_BL_dataset_12480Shape/rechtsform",
+    "@type": ["http://www.w3.org/ns/shacl#PropertyShape"],
+    "http://purl.org/dc/terms/conformsTo": [
+      {"@id": "https://register.ld.admin.ch/i14y/concept/legalForm/version/1.2.0"}
+    ],
+    "http://www.w3.org/ns/shacl#datatype": [
+      {"@id": "http://www.w3.org/2001/XMLSchema#string"}
+    ],
+    "http://www.w3.org/ns/shacl#maxCount": [
+      {"@type": "http://www.w3.org/2001/XMLSchema#integer", "@value": 1}
+    ],
+    "http://www.w3.org/ns/shacl#minCount": [
+      {"@type": "http://www.w3.org/2001/XMLSchema#integer", "@value": 1}
+    ],
+    "http://www.w3.org/ns/shacl#name": [
+      {"@language": "de", "@value": "rechtsform"}
+    ],
+    "http://www.w3.org/ns/shacl#order": [
+      {"@type": "http://www.w3.org/2001/XMLSchema#integer", "@value": 14}
+    ],
+    "http://www.w3.org/ns/shacl#path": [
+      {
+        "@id": "https://register.ld.admin.ch/i14y/dataset/CH_KT_BL_dataset_12480/structure/CH_KT_BL_dataset_12480Shape/rechtsform"
+      }
+    ]
+  },
+  {
+    "@id": "https://register.ld.admin.ch/i14y/dataset/CH_KT_BL_dataset_12480/structure/CH_KT_BL_dataset_12480Shape",
+    "@type": ["http://www.w3.org/ns/shacl#NodeShape"],
+    "http://purl.org/dc/terms/created": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#dateTime",
+        "@value": "2026-09-07T01:26:12"
+      }
+    ],
+    "http://purl.org/dc/terms/description": [
+      {"@language": "de", "@value": "Zentraler Firmenindex (Zefix). Tagesaktueller Auszug."}
+    ],
+    "http://purl.org/dc/terms/modified": [
+      {
+        "@type": "http://www.w3.org/2001/XMLSchema#dateTime",
+        "@value": "2026-09-07T01:26:12"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {"@language": "de", "@value": "Firmen nach Zweck, Rechtsform und Standort"}
+    ],
+    "http://www.w3.org/ns/shacl#closed": [
+      {"@type": "http://www.w3.org/2001/XMLSchema#boolean", "@value": true}
+    ],
+    "http://www.w3.org/ns/shacl#property": [
+      {
+        "@id": "https://register.ld.admin.ch/i14y/dataset/CH_KT_BL_dataset_12480/structure/CH_KT_BL_dataset_12480Shape/rechtsform_code"
+      },
+      {
+        "@id": "https://register.ld.admin.ch/i14y/dataset/CH_KT_BL_dataset_12480/structure/CH_KT_BL_dataset_12480Shape/rechtsform"
+      }
+    ]
+  }
+]

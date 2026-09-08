@@ -11,7 +11,7 @@ interface SemanticGraphNode { id: string; label: string; kind: 'domain' | 'produ
 interface SemanticGraphEdge { id: string; label: string; path: string }
 
 @Component({selector:'daca-domain-detail',standalone:true,imports:[DatePipe,RouterLink,StatusBadgeComponent],changeDetection:ChangeDetectionStrategy.OnPush,template:`
-  <a routerLink="/domains">← Domains & Glossar</a>
+  <a routerLink="/domains">← Domänen &amp; Konzepte</a>
   @if (loading()) { <div class="daca-card detail-state">Domain wird geladen …</div> }
   @else if (error()) { <p class="daca-alert is-error" role="alert">{{ error() }}</p> }
   @else if (domain(); as item) {

@@ -33,7 +33,10 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
-          "options": { "prebundle": { "exclude": ["@bit-daca/design-system"] } },
+          "options": {
+            "prebundle": { "exclude": ["@bit-daca/design-system"] },
+            "proxyConfig": "proxy.conf.json"
+          },
           "configurations": {
             "production": { "buildTarget": "catalog-ui:build:production" },
             "development": { "buildTarget": "catalog-ui:build:development" }

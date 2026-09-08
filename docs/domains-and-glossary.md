@@ -132,7 +132,7 @@ The default minimum score is `70` and can be changed with
 
 Term capture is contextual but always uses the same governed proposal form:
 
-- the `Glossar` section under `Domains & Glossar` has a primary `Neuen Term vorschlagen` action,
+- the `Terminology` section under `Domäne und Terminology` has a primary `Neuen Term vorschlagen` action,
   searchable accepted terms, and an `Änderung vorschlagen` action on every active term;
 - each domain detail page starts a proposal with that domain preselected;
 - a product overview starts a proposal with its product and current domains retained;

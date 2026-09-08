@@ -68,6 +68,71 @@ final result: passed
 
 ---
 
+# Design QA — TERMDAT action inside the title input
+
+## Comparison target
+
+- Source visual truth: the user-supplied annotated model-editor screenshot, which places `In TERMDAT suchen` at the right edge inside the German title input.
+- Rendered implementation: live Microsoft Edge capture of `http://localhost:8080/models/new` after rebuilding the Compose service.
+- State: desktop editor with `mwst` entered, title focus lost, and nine automatic TERMDAT hits visible.
+
+## Findings and verification
+
+- Input and action now share one border and one row; the button is vertically aligned, bold, and separated by a single internal divider.
+- The title input remains the flexible region while the action keeps a stable width, matching the annotated target without changing the result banner below.
+- `focus-within` presents one focus treatment around the complete input/action group. On narrow screens the action stacks inside the same group with a horizontal divider.
+- Automatic blur search still returns the visible TERMDAT hit banner, and the explicit button remains keyboard-accessible.
+- The focused Angular suite passed all 9 tests, the production build passed, and the Edge console reported no errors.
+
+final result: passed
+
+---
+
+# Design QA — TERMDAT action alignment
+
+## Comparison target
+
+- Source visual truth: user-provided Edge screenshot in the current conversation (2395 × 1435 source pixels, rendered here at 2048 × 1227).
+- Rendered implementation: live Edge capture emitted during this implementation session from `http://localhost:8080/models/new`.
+- Viewport: 1680 × 891 browser pixels for the implementation capture; desktop TERMDAT modal with ten results for `Mehrwertsteuer`.
+- State: automatic search completed, modal open, followed by the in-modal overwrite preview.
+
+## Findings
+
+- No actionable P0, P1, or P2 differences remain for the requested button treatment.
+- The previous uneven wrapping and variable action widths are resolved. The combined action spans the full action column; both individual actions occupy equal columns below it.
+
+## Required fidelity surfaces
+
+- Fonts and typography: all result and confirmation buttons use the shared application font at weight 800, centered with a consistent line height and controlled multiline wrapping.
+- Spacing and layout rhythm: the modal is widened to 1040 px, result cards use stable content/action columns, and each action uses a 48 px minimum height with a uniform 0.55 rem gap.
+- Colors and visual tokens: the existing federal-red primary and neutral secondary/disabled tokens are unchanged.
+- Image quality and asset fidelity: this dialog contains no image assets; the existing federal shell and wordmark remain unchanged behind the modal.
+- Copy and content: the combined and individual adoption labels remain complete and readable, including disabled `Keine Beschreibung verfügbar` states.
+- Responsive behavior: below 820 px cards stack; below 560 px all three actions become one full-width column.
+
+## Full-view and focused evidence
+
+- Full view: the live Edge modal shows aligned actions across description-present and description-missing results without horizontal overflow.
+- Focused state: the overwrite preview shows aligned `Abbrechen` and `Bestehende Werte überschreiben` actions and preserves the explicit replacement warning.
+
+## Comparison history
+
+1. The supplied screenshot showed primary and secondary actions wrapping into inconsistent widths and rows.
+2. The result-action area was changed from wrapping flex layout to a fixed two-column grid with a full-width primary row.
+3. The post-fix Edge capture shows consistent button geometry, typography, and alignment across all visible result cards.
+
+## Runtime checks
+
+- Live TERMDAT search and result modal exercised in Microsoft Edge.
+- Combined adoption opened the explicit overwrite preview.
+- Browser console: zero errors.
+- Focused Angular tests: 9 passed. Production build passed.
+
+final result: passed
+
+---
+
 # Design QA — Expanding landing-page search widget
 
 ## Comparison target

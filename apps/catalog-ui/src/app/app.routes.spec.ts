@@ -2,6 +2,7 @@ import { PRODUCT_ACTIVITY_ROUTE } from './features/activity/product-activity.rou
 import { PRODUCT_SERVICE_LEVEL_ROUTE } from './features/service-level/product-service-level.route';
 import { PRODUCT_USAGE_ROUTE } from './features/usage/product-usage.route';
 import { DOMAIN_ROUTES } from './features/domains/domain.routes';
+import { DATA_MODEL_ROUTES } from './features/data-models/data-model.routes';
 
 describe('catalog routes', () => {
   it('defines a lazy product activity page at the public history route', () => {
@@ -27,5 +28,12 @@ describe('catalog routes', () => {
     expect(DOMAIN_ROUTES.find((route) => route.path === 'domains/:id')?.loadComponent).toBeTypeOf('function');
     expect(DOMAIN_ROUTES.find((route) => route.path === 'glossary/proposals/new')?.loadComponent).toBeTypeOf('function');
     expect(DOMAIN_ROUTES.find((route) => route.path === 'glossary/proposals/:id/review')?.loadComponent).toBeTypeOf('function');
+  });
+
+  it('exposes the independent modeling, physical asset and mapping workspaces', () => {
+    for (const path of ['models', 'models/new', 'models/:id', 'physical-models', 'mappings']) {
+      expect(DATA_MODEL_ROUTES.find((route) => route.path === path)?.loadComponent).toBeTypeOf('function');
+    }
+    expect(DOMAIN_ROUTES.find((route) => route.path === 'domains/concepts')?.loadComponent).toBeTypeOf('function');
   });
 });

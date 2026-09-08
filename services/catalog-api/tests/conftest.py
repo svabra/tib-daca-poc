@@ -9,26 +9,22 @@ from daca_catalog.models import Base
 from daca_catalog.seed import seed_catalog
 from daca_catalog.settings import Settings
 from fastapi.testclient import TestClient
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.engine import make_url
 
 
 def drop_test_schema(engine, database_url: str) -> None:
-    if database_url.startswith("sqlite"):
-        with engine.connect() as connection:
-            connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
-            Base.metadata.drop_all(connection)
-            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
-        return
+    parsed = make_url(database_url)
+    if not parsed.drivername.startswith("postgresql") or not (parsed.database or "").endswith("_test"):
+        raise RuntimeError("Destructive Catalog API tests require an isolated PostgreSQL database ending in _test")
     Base.metadata.drop_all(engine)
 
 
 @pytest.fixture
 def session_factory():
-    database_url = os.getenv("DACA_TEST_DATABASE_URL", "sqlite+pysqlite://")
-    engine_options = {}
-    if database_url.startswith("sqlite"):
-        engine_options["poolclass"] = StaticPool
-    engine = build_engine(database_url, **engine_options)
+    database_url = os.getenv("DACA_TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("DACA_TEST_DATABASE_URL must point to an isolated PostgreSQL *_test database")
+    engine = build_engine(database_url)
     drop_test_schema(engine, database_url)
     Base.metadata.create_all(engine)
     factory = build_session_factory(engine)
@@ -41,7 +37,7 @@ def session_factory():
 
 @pytest.fixture
 def client(session_factory):
-    database_url = os.getenv("DACA_TEST_DATABASE_URL", "sqlite+pysqlite://")
+    database_url = os.environ["DACA_TEST_DATABASE_URL"]
     settings = Settings(
         database_url=database_url,
         cors_origins=["http://testserver"],

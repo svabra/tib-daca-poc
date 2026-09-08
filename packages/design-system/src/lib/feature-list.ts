@@ -40,8 +40,20 @@ export const DACA_FEATURE_RELEASE = {
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
           {
-            title: 'Domains und Fachbegriffe gemeinsam steuern',
-            description: '18 ESTV- und 20 Verteidigungskonzepte bilden den Startpunkt. Neue Begriffe lassen sich zentral, aus Domains, der Suche oder Produktmetadaten beantragen; bestehende Begriffe werden über denselben Governance-Workflow geändert. Aus Titel und Keywords werden lokal bis zu drei unverbindliche Vorschläge abgeleitet und nie automatisch übernommen. Domain Owner prüfen sie, und der SKOS-/DCAT-Wissensgraph zeigt Beziehungen und Abkürzungen.',
+            title: 'Logische Datenmodelle erstellen und freigeben',
+            description: 'Data Stewards modellieren mehrsprachige Datensätze, Entitäten und Felder unabhängig von einer technischen Umsetzung. Verwaltungseinheiten, Verantwortliche, Klassifizierung, Domäne und Geschäftsobjekte werden kontrolliert zugewiesen; der zuständige Domain Owner nimmt das Modell an oder fordert Änderungen an.',
+          },
+          {
+            title: 'Physische Modelle aus PostgreSQL und S3 verstehen',
+            description: 'Durchsuchbare Metadaten-Snapshots zeigen PostgreSQL-Tabellen und -Views sowie Parquet-Strukturen aus S3, ohne Dateninhalte oder Zugangsdaten offenzulegen. Neue Snapshots machen technische Änderungen und mögliche Umbenennungen als Drift sichtbar.',
+          },
+          {
+            title: 'Logische und physische Modelle verbinden',
+            description: 'Der Mapping-Arbeitsplatz verbindet logische Felder mit konkreten PostgreSQL- oder S3-/Parquet-Strukturen. Graph und Matrix teilen denselben Entwurf; Validierung, Mehrfachzuordnungen, Driftbruch und die Auflösung gegen einen neuen Snapshot bleiben versioniert nachvollziehbar.',
+          },
+          {
+            title: 'Domänen und Terminology gemeinsam steuern',
+            description: 'Mehrsprachige Fachbegriffe und Geschäftsobjekte lassen sich kontrolliert erfassen, versionieren und per SKOS verknüpfen. Die TERMDAT-Suche liefert nach dem Titel-Fokusverlust sichtbare Treffer; Titel und Beschreibungen können anschließend bewusst übernommen oder bestehende Inhalte ausdrücklich überschrieben werden.',
           },
           {
             title: 'Oracle-Datenquellen kontrolliert erschliessen',
@@ -53,7 +65,7 @@ export const DACA_FEATURE_RELEASE = {
           },
           {
             title: 'PoC anhand geführter Journeys erleben',
-            description: 'Der PoC Leitfaden erklärt neun wiederholbare Abläufe mit Rollen, Voraussetzungen, echten Screenshots und klar ausgewiesenen Grenzen.',
+            description: 'Der PoC Leitfaden erklärt zehn wiederholbare Abläufe mit Rollen, Voraussetzungen, echten Screenshots und klar ausgewiesenen Grenzen. Die Modellierungsabläufe decken Ableitung, Mapping, Validierung, Driftauflösung und die Freigabe eines armasuisse-Modells durch den Domain Owner ab.',
           },
           {
             title: 'Datenprodukte finden und verstehen',
@@ -99,8 +111,20 @@ export const DACA_FEATURE_RELEASE = {
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
           {
-            title: 'Govern domains and business terms together',
-            description: '18 FTA and 20 defence concepts provide a starting point. Users can propose terms centrally or from domains, search and product metadata; accepted terms use the same governance workflow for changes. Up to three non-binding candidates are derived locally from titles and keywords and are never applied automatically. Domain owners review them, and the SKOS/DCAT graph exposes relations and abbreviations.',
+            title: 'Create and approve logical data models',
+            description: 'Data stewards model multilingual datasets, entities and fields independently of any technical implementation. Administrative scope, responsibilities, classification, domain and business objects are assigned from governed lists; the responsible domain owner accepts the model or requests changes.',
+          },
+          {
+            title: 'Understand physical models from PostgreSQL and S3',
+            description: 'Searchable metadata snapshots expose PostgreSQL tables and views as well as Parquet structures from S3 without revealing data contents or credentials. New snapshots make technical changes and possible renames visible as drift.',
+          },
+          {
+            title: 'Connect logical and physical models',
+            description: 'The mapping workspace connects logical fields to specific PostgreSQL or S3/Parquet structures. Graph and matrix share one draft; validation, multi-mappings, drift breakage and resolution against a new snapshot remain versioned and traceable.',
+          },
+          {
+            title: 'Govern domains and terminology together',
+            description: 'Multilingual terms and business objects can be captured, versioned and linked with SKOS. TERMDAT search reports visible matches after the title loses focus; titles and descriptions can then be adopted deliberately or existing content can be overwritten explicitly.',
           },
           {
             title: 'Govern access to Oracle data sources',
@@ -112,7 +136,7 @@ export const DACA_FEATURE_RELEASE = {
           },
           {
             title: 'Explore the PoC through guided journeys',
-            description: 'The PoC guide explains nine repeatable workflows with roles, prerequisites, real screenshots and clearly stated limitations.',
+            description: 'The PoC guide explains ten repeatable workflows with roles, prerequisites, real screenshots and clearly stated limitations. Modeling journeys cover derivation, mapping, validation, drift resolution and domain-owner approval of an armasuisse model.',
           },
           {
             title: 'Find and understand data products',

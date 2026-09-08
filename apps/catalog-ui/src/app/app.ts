@@ -38,7 +38,8 @@ export class App {
   readonly navigation: readonly DacaNavigationItem[] = [
     { label: 'Startseite', path: '/', exact: true },
     { label: 'Meine Datenprodukte', path: '/products' },
-    { label: 'Domains & Glossar', path: '/domains' },
+    { label: 'Datenmodelle', path: '/models' },
+    { label: 'Domäne und Terminology', path: '/domains' },
     { label: 'Aufgaben', path: '/tasks' },
     {
       label: 'PoC Leitfaden',
@@ -54,7 +55,8 @@ export class App {
         { label: 'Journey 06: Änderungsverlauf', path: '/poc-guide/change-history' },
         { label: 'Journey 07: Zugriff verlängern', path: '/poc-guide/access-renewal' },
         { label: 'Journey 08: Domain-Governance', path: '/poc-guide/domain-governance' },
-        { label: 'Journey 09: Glossar-Governance', path: '/poc-guide/glossary-governance' },
+        { label: 'Journey 09: Terminology-Governance', path: '/poc-guide/glossary-governance' },
+        { label: 'Journey 10: Datenmodell erstellen', path: '/poc-guide/create-data-model' },
         { label: 'Simulationen und Grenzfälle', path: '/poc-simulation' },
       ],
     },

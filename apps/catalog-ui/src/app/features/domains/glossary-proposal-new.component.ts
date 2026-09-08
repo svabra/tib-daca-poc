@@ -17,8 +17,8 @@ import { GlossaryProposalFormComponent, GlossaryProposalFormValue } from './glos
     <button class="context-back" type="button" (click)="cancel()">← {{ returnLabel() }}</button>
     <section class="daca-page-heading">
       <div>
-        <p class="daca-eyebrow">Glossar-Governance</p>
-        <h1>{{ target() ? 'Glossarterm ändern' : 'Neuen Term vorschlagen' }}</h1>
+        <p class="daca-eyebrow">Terminology-Governance</p>
+        <h1>{{ target() ? 'Terminology-Term ändern' : 'Neuen Term vorschlagen' }}</h1>
         <p>Erfassen Sie ein fachliches Konzept. Abkürzungen und Synonyme werden als alternative Sprachlabels desselben Konzepts gespeichert.</p>
       </div>
       <daca-status-badge tone="blue">SKOS Concept</daca-status-badge>
@@ -35,12 +35,12 @@ import { GlossaryProposalFormComponent, GlossaryProposalFormValue } from './glos
       <section class="daca-card submitted-state">
         <div class="daca-card-header"><h2>Vorschlag eingereicht</h2><daca-status-badge tone="orange">{{ proposal.status }}</daca-status-badge></div>
         <div class="daca-card-body">
-          <p>Die zuständigen Domain Owners wurden informiert. Erst ihre Freigaben erzeugen oder ändern den Glossarterm.</p>
+          <p>Die zuständigen Domain Owners wurden informiert. Erst ihre Freigaben erzeugen oder ändern den Terminology-Term.</p>
           <div><a class="daca-button" [routerLink]="['/glossary/proposals', proposal.id, 'review']">Status öffnen</a><button class="daca-button is-secondary" type="button" (click)="cancel()">{{ returnLabel() }}</button></div>
         </div>
       </section>
     } @else if (loading()) {
-      <div class="daca-card loading-state" aria-live="polite">Domains, Glossar und Produktkontext werden geladen …</div>
+      <div class="daca-card loading-state" aria-live="polite">Domänen, Terminology und Produktkontext werden geladen …</div>
     } @else if (!error()) {
       <section class="daca-card proposal-card">
         <div class="daca-card-body">
@@ -96,7 +96,7 @@ export class GlossaryProposalNewComponent {
     ? 'Zurück zum Datenprodukt'
     : this.requestedDomainIds().length === 1
       ? 'Zurück zur Domain'
-      : 'Zurück zum Glossar');
+      : 'Zurück zur Terminology');
 
   constructor() {
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
@@ -130,7 +130,7 @@ export class GlossaryProposalNewComponent {
     } else if (this.requestedDomainIds().length === 1) {
       void this.router.navigate(['/domains', this.requestedDomainIds()[0]]);
     } else {
-      void this.router.navigate(['/domains'], { queryParams: { tab: 'terms' } });
+      void this.router.navigate(['/domains/glossary']);
     }
   }
 
@@ -158,7 +158,7 @@ export class GlossaryProposalNewComponent {
         const activeDomains = domains.filter((domain) => domain.status === 'active');
         const target = this.targetTermId ? terms.find((term) => term.id === this.targetTermId) ?? null : null;
         if (this.targetTermId && !target) {
-          this.error.set('Der zu ändernde Glossarterm wurde nicht gefunden oder ist nicht mehr aktiv.');
+          this.error.set('Der zu ändernde Terminology-Term wurde nicht gefunden oder ist nicht mehr aktiv.');
           return;
         }
         const defaults = this.requestedDomainIds().length
