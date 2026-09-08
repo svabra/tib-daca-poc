@@ -380,6 +380,7 @@ class AdministrativeOrganization(Base):
             "department_code", "office_code", name="uq_administrative_organization_codes"
         ),
         Index("ix_administrative_organization_sort", "department_order", "office_order"),
+        Index("ix_administrative_org_parent", "parent_id", "active"),
     )
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
@@ -1347,6 +1348,7 @@ class WorkflowTask(Base):
         Index("ix_workflow_task_source_access_request", "source_access_request_id"),
         Index("ix_workflow_task_domain_request", "domain_change_request_id"),
         Index("ix_workflow_task_glossary_proposal", "glossary_term_proposal_id"),
+        Index("ix_workflow_task_logical_review", "logical_model_review_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
@@ -1460,7 +1462,10 @@ class TerminologyTerm(Base):
 
 class TerminologyTermVersion(Base):
     __tablename__ = "terminology_term_versions"
-    __table_args__ = (UniqueConstraint("term_id", "revision", name="uq_terminology_term_version"),)
+    __table_args__ = (
+        UniqueConstraint("term_id", "revision", name="uq_terminology_term_version"),
+        Index("ix_terminology_kind_status", "concept_kind", "status"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
     term_id: Mapped[uuid.UUID] = mapped_column(

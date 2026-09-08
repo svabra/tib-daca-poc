@@ -53,6 +53,48 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # The previous revision cannot represent S3 sources or Parquet relations.
+    # Remove their versioned dependants before restoring the narrower check
+    # constraints. This is intentionally lossy: retaining these rows would
+    # leave the database in a state that revision 0022 cannot validate.
+    op.execute(
+        """
+        DELETE FROM asset_mappings
+        WHERE physical_source_id IN (
+            SELECT id FROM physical_sources WHERE adapter_type = 's3'
+        )
+        OR id IN (
+            SELECT DISTINCT mapping_version.asset_mapping_id
+            FROM asset_mapping_versions AS mapping_version
+            JOIN asset_mapping_physical_columns AS mapping_column
+              ON mapping_column.asset_mapping_version_id = mapping_version.id
+            JOIN physical_columns AS physical_column
+              ON physical_column.id = mapping_column.physical_column_id
+            JOIN physical_tables AS physical_table
+              ON physical_table.id = physical_column.physical_table_id
+            WHERE physical_table.kind = 'parquet'
+        )
+        """
+    )
+    op.execute(
+        """
+        DELETE FROM physical_drift_reports
+        WHERE source_id IN (
+            SELECT id FROM physical_sources WHERE adapter_type = 's3'
+        )
+        """
+    )
+    op.execute(
+        """
+        DELETE FROM physical_schema_snapshots
+        WHERE source_id IN (
+            SELECT id FROM physical_sources WHERE adapter_type = 's3'
+        )
+        """
+    )
+    op.execute("DELETE FROM physical_sources WHERE adapter_type = 's3'")
+    op.execute("DELETE FROM physical_tables WHERE kind = 'parquet'")
+
     with op.batch_alter_table("physical_tables") as batch:
         batch.drop_constraint("ck_physical_table_schema_confidence", type_="check")
         batch.drop_constraint("ck_physical_table_size", type_="check")

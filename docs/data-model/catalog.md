@@ -23,8 +23,8 @@ DAAIF is an external source system and its internal data model is outside this r
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
 - Alembic head: `0023_physical_models_s3`
-- Schema fingerprint: `03dae35037a2e4fb`
-- Migration fingerprint: `8c06a6caf27d756b`
+- Schema fingerprint: `787b2c0838a6eb08`
+- Migration fingerprint: `59d9542270a48ee1`
 - Tables: `86`
 
 ## Domain status vocabulary
@@ -1416,6 +1416,7 @@ Constraints and indexes:
 - Unique `uq_administrative_organization_codes`: `department_code, office_code`
 - Foreign key `parent_id` → `administrative_organizations.id`; on delete `RESTRICT`
 - Foreign key `import_run_id` → `federal_organization_import_runs.id`; on delete `SET NULL`
+- Index `ix_administrative_org_parent` on `parent_id, active`
 - Index `ix_administrative_organization_sort` on `department_order, office_order`
 
 ### `asset_mapping_logical_fields`
@@ -3478,6 +3479,7 @@ Constraints and indexes:
 - Foreign key `term_id` → `terminology_terms.id`; on delete `CASCADE`
 - Foreign key `predecessor_version_id` → `terminology_term_versions.id`; on delete `SET NULL`
 - Foreign key `created_by_user_id` → `demo_users.id`
+- Index `ix_terminology_kind_status` on `concept_kind, status`
 
 ### `terminology_terms`
 
@@ -3546,6 +3548,7 @@ Constraints and indexes:
 - Index `ix_workflow_task_assignee` on `assignee_user_id, status`
 - Index `ix_workflow_task_domain_request` on `domain_change_request_id`
 - Index `ix_workflow_task_glossary_proposal` on `glossary_term_proposal_id`
+- Index `ix_workflow_task_logical_review` on `logical_model_review_id`
 - Index `ix_workflow_task_product` on `data_product_id`
 - Index `ix_workflow_task_source_access_request` on `source_access_request_id`
 
