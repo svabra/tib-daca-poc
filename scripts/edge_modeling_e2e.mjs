@@ -257,6 +257,11 @@ async function logicalFirstFlow() {
     "document.querySelector('input[formcontrolname=\"titleDe\"]') !== null",
     'logical-model editor did not finish loading',
   );
+  await clickText('button[type="submit"]', 'Als Entwurf speichern');
+  await waitFor(
+    "document.querySelector('.save-action > button + .save-validation')?.textContent.includes('Titel (Deutsch)') && document.querySelector('.save-action > button + .save-validation')?.textContent.includes('Feld 1 – Feldname')",
+    'logical-model validation summary was not rendered directly below save',
+  );
   const reference = expectStatus(
     await api('cinthya.thor', '/api/v1/logical-models/70d964d8-334c-50bc-9177-88e3dbfba28f'),
     200,
@@ -310,6 +315,9 @@ async function logicalFirstFlow() {
     200,
     'read submitted logical model',
   ).body;
+  invariant(submitted.conceptIds.length === 0, 'Optional model-level I14Y concepts were unexpectedly required or persisted');
+  const submittedFields = submitted.entities.flatMap((entity) => entity.fields);
+  invariant(submittedFields.every((field) => field.conceptIds.length === 0 && field.primaryConceptId === null && field.valueListConceptId === null), 'Logical model did not persist correctly without optional field-level I14Y concepts');
   const removedDirectPublish = await api(
     'cinthya.thor',
     `/api/v1/logical-models/${modelId}/versions/${submitted.versionId}/publish`,
@@ -367,7 +375,7 @@ async function dataModelJourneyTen() {
     publisher: {name: 'armasuisse Immobilien', identifier: '20053180', uri: 'https://ld.admin.ch/office/20053180'},
     accessRights: 'urn:daca:access-rights:unclassified', themes: [], conceptIds: [],
     entities: [{name: 'immobilienportfolio', businessObject: 'Immobilienobjekt', businessObjectVersionId: property.versionId, position: 1, comment: null,
-      fields: [{name: 'infrastrukturbedarf', businessObject: 'Infrastrukturbedarf', businessObjectVersionId: need.versionId, dataType: 'xsd:string', shortDescription: 'Versionierter Infrastrukturbedarf.', classification: 'unclassified', nullable: true, minCount: 0, maxCount: 1, position: 1, conceptIds: [], primaryConceptId: null, valueListConceptId: null, conceptMatchExplicitlyNone: true}],
+      fields: [{name: 'infrastrukturbedarf', businessObject: 'Infrastrukturbedarf', businessObjectVersionId: need.versionId, dataType: 'xsd:string', shortDescription: 'Versionierter Infrastrukturbedarf.', classification: 'unclassified', nullable: true, minCount: 0, maxCount: 1, position: 1, conceptIds: [], primaryConceptId: null, valueListConceptId: null}],
     }], distributions: [], dataServices: [], assistanceProvenance: [],
   };
   let modelResponse = expectStatus(await api('mirjam.keller', '/api/v1/logical-models', {method: 'POST', body: write}), 201, 'create journey 10 model');
