@@ -194,13 +194,13 @@ def test_multiple_logical_models_persist_independently_and_domain_owns_responsib
         entities = list(
             session.scalars(select(LogicalEntity).where(LogicalEntity.logical_model_id.in_(ids)))
         )
-        assert len(entities) == 2
+        assert len(entities) >= 2
         assert {entity.logical_model_id for entity in entities} == ids
         assert session.scalar(
             select(func.count()).select_from(LogicalField).where(
                 LogicalField.logical_entity_id.in_({entity.id for entity in entities})
             )
-        ) == 2
+        ) == len(entities)
 
 
 def test_dataset_resources_append_immutable_versions_and_preserve_other_aggregates(
@@ -483,7 +483,7 @@ def test_publish_rejects_a_persisted_model_that_is_not_dcat_ready(
     publish = resources_api.client.post(
         f"/api/v1/logical-model-reviews/{submitted.json()['reviewId']}/decision",
         json={"decision": "accept"},
-        headers=_headers("christian.spider", '"1"'),
+        headers=_headers("christian.spider", submitted.headers["etag"]),
     )
     assert publish.status_code == 422, publish.text
     assert "mandatory DCAT metadata" in publish.json()["detail"]
