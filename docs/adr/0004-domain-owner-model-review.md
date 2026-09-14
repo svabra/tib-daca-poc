@@ -15,6 +15,13 @@ separate direct-publish endpoint. Rejection requires a comment and creates a
 Federal scope is taken from the imported organization hierarchy. The reference journey correctly
 places armasuisse under VBS and uses the chain `VBS → armasuisse → armasuisse Immobilien`.
 
+Saving and submission remain separate actions. Saving persists an editable draft in PostgreSQL
+and creates no workflow task. The selected DaCa domain is the authoritative source for both the
+primary reviewer and the visible deputy; clients cannot replace these assignments on a logical
+model. Submission is available only for the latest valid, saved draft. Its task opens the immutable
+review snapshot directly. The deputy remains visible for continuity but receives no task and cannot
+decide the review in this PoC.
+
 ## Consequences
 
 Data Stewards cannot self-publish. Each write remains protected by actor scope, row locking and

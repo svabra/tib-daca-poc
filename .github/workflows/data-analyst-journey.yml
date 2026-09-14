@@ -47,10 +47,10 @@ jobs:
           --require-main
 
       - name: Upload browser and container evidence
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: data-analyst-golden-path-${{ github.run_id }}
           path: daca/output/playwright/data-analyst-journey/
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3

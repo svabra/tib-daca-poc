@@ -313,7 +313,7 @@ def test_logical_model_retire_creates_immutable_successor_and_owner_tombstones(
     published = lifecycle_api.client.post(
         f"/api/v1/logical-model-reviews/{submitted_payload['reviewId']}/decision",
         json={"decision": "accept"},
-        headers=_headers(OWNER, '"1"'),
+        headers=_headers(OWNER, submitted.headers["etag"]),
     )
     assert published.status_code == 200, published.text
     published_payload = published.json()
@@ -322,7 +322,7 @@ def test_logical_model_retire_creates_immutable_successor_and_owner_tombstones(
         f"{published_payload['versionId']}/retire"
     )
 
-    retired = lifecycle_api.client.post(path, headers=_headers(OWNER, '"1"'))
+    retired = lifecycle_api.client.post(path, headers=_headers(OWNER, published.headers["etag"]))
     assert retired.status_code == 200, retired.text
     payload = retired.json()
     assert payload["status"] == "retired"

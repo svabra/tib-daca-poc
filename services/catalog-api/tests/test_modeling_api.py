@@ -80,6 +80,16 @@ def test_logical_workflow_appends_versions_and_owner_publishes_without_distribut
     review_id = submitted.json()["reviewId"]
     assert review_id
 
+    owner_tasks = client.get("/api/v1/tasks/mine", headers=_headers("christian.spider"))
+    deputy_tasks = client.get("/api/v1/tasks/mine", headers=_headers("sibilla.micheli"))
+    assert owner_tasks.status_code == 200
+    assert any(
+        task["taskType"] == "logical_model_review"
+        and task["logicalModelReviewId"] == review_id
+        for task in owner_tasks.json()
+    )
+    assert not any(task["taskType"] == "logical_model_review" for task in deputy_tasks.json())
+
     steward_publish = client.post(
         f"/api/v1/logical-model-reviews/{review_id}/decision",
         json={"decision": "accept"},

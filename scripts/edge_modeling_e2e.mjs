@@ -262,21 +262,26 @@ async function logicalFirstFlow() {
     "document.querySelector('.save-action > button + .save-validation')?.textContent.includes('Titel (Deutsch)') && document.querySelector('.save-action > button + .save-validation')?.textContent.includes('Feld 1 – Feldname')",
     'logical-model validation summary was not rendered directly below save',
   );
+  await waitFor(
+    "getComputedStyle(document.querySelector('input[formcontrolname=\"titleDe\"]')).backgroundColor !== 'rgb(255, 255, 255)'",
+    'invalid logical-model fields were not highlighted after saving',
+  );
+  const tooltipOpened = await evaluate(`(() => {
+    const host = document.querySelector('[dacaFieldHelp="titleDe"]');
+    host?.dispatchEvent(new MouseEvent('mouseenter', {bubbles: true}));
+    return Boolean(document.querySelector('[role="tooltip"].is-visible'));
+  })()`);
+  invariant(tooltipOpened, 'semantic field tooltip did not open on hover');
   const reference = expectStatus(
     await api('cinthya.thor', '/api/v1/logical-models/70d964d8-334c-50bc-9177-88e3dbfba28f'),
     200,
     'load logical-first reference',
   ).body;
-  await waitFor(
-    "[...document.querySelectorAll('select[formcontrolname=\"dataOwnerId\"] option')].some((item) => item.value === 'christian.spider')",
-    'scoped Data Owner options did not finish loading',
-  );
   await setControls({
     'input[formcontrolname="titleDe"]': title,
     'textarea[formcontrolname="descriptionDe"]': 'Browsergeprüftes logical-first Modell ohne Distribution, Produkt oder physische Quelle.',
     'input[formcontrolname="identifiers"]': `EDGE-LOGICAL-${Date.now()}`,
     'select[formcontrolname="dataDomainId"]': reference.dataDomainId,
-    'select[formcontrolname="dataOwnerId"]': 'christian.spider',
     'input[formcontrolname="creatorName"]': 'Edge QA Harness',
     'select[formcontrolname="classification"]': 'internal',
     'input[formcontrolname="entityName"]': 'edge_employee',
@@ -284,10 +289,9 @@ async function logicalFirstFlow() {
     '.field-list textarea[formcontrolname="shortDescription"]': 'Stabiler synthetischer Identifikator.',
   });
   await waitFor(
-    "[...document.querySelectorAll('select[formcontrolname=\"deputyDataOwnerId\"] option')].some((item) => item.value === 'sibilla.micheli')",
-    'delegated deputy options did not finish loading',
+    "document.querySelector('.review-owner-info')?.textContent.includes('Christian Spider') && document.querySelector('.review-owner-info')?.textContent.includes('Sibilla Micheli')",
+    'domain-bound primary owner and deputy were not rendered',
   );
-  await setControls({'select[formcontrolname="deputyDataOwnerId"]': 'sibilla.micheli'});
   const businessObjectsSelected = await evaluate(`(() => {
     const selects = [...document.querySelectorAll('.field-list select[formcontrolname="entityBusinessObjectVersionId"], .field-list select[formcontrolname="businessObjectVersionId"]')];
     for (const select of selects) {
@@ -305,9 +309,14 @@ async function logicalFirstFlow() {
     'logical-first draft was not persisted and routed to its detail page',
   );
   const modelId = await evaluate("location.pathname.split('/').pop()");
+  await navigate(`/models/${modelId}`, 'cinthya.thor');
+  await waitFor(
+    `document.body.innerText.includes(${JSON.stringify(title)}) && document.body.innerText.includes('Alle Änderungen gespeichert')`,
+    'persisted logical-model draft did not survive a reload',
+  );
   await clickText('button', 'Zur Domänenfreigabe einreichen');
   await waitFor(
-    "document.body.innerText.includes('Die Freigabe wurde vorgeschlagen')",
+    "document.body.innerText.includes('Der Prüfauftrag wurde an')",
     'logical-first review submission did not complete',
   );
   const submitted = expectStatus(
@@ -325,10 +334,25 @@ async function logicalFirstFlow() {
   );
   invariant(removedDirectPublish.status === 404, `Removed direct publish endpoint returned ${removedDirectPublish.status}`);
 
-  await navigate(`/models/${modelId}`, 'christian.spider');
+  await navigate('/tasks', 'sibilla.micheli');
+  const deputyReceivedTask = await evaluate(`document.body.innerText.includes(${JSON.stringify(title)})`);
+  invariant(!deputyReceivedTask, 'Deputy unexpectedly received the personal logical-model review task');
+
+  await navigate('/tasks', 'christian.spider');
+  await waitFor(
+    `document.body.innerText.includes(${JSON.stringify(title)}) && [...document.querySelectorAll('a')].some((item) => item.textContent.includes('Aufgabe öffnen'))`,
+    'Domain Owner did not receive the personal logical-model review task',
+  );
+  const reviewTaskOpened = await evaluate(`(() => {
+    const card = [...document.querySelectorAll('.owner-task-card')].find((item) => item.textContent.includes(${JSON.stringify(title)}));
+    const link = [...(card?.querySelectorAll('a') ?? [])].find((item) => item.textContent.includes('Aufgabe öffnen'));
+    link?.click();
+    return Boolean(link);
+  })()`);
+  invariant(reviewTaskOpened, 'Owner review task could not be opened');
   await waitFor(
     "[...document.querySelectorAll('button')].some((item) => item.textContent.includes('Annehmen und publizieren') && !item.disabled)",
-    'Domain Owner did not receive the review decision action',
+    'logical-model review workspace did not expose the owner decision',
   );
   await clickText('button', 'Annehmen und publizieren');
   await waitFor(

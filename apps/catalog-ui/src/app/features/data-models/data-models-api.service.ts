@@ -13,6 +13,7 @@ import {
   LogicalEntity,
   LogicalEntityWrite,
   LogicalModel,
+  LogicalModelReview,
   LogicalModelReadiness,
   LogicalModelSummary,
   LogicalModelWrite,
@@ -28,13 +29,24 @@ import {
 export type ModelingApiErrorKind = 'conflict' | 'permission' | 'validation' | 'not_found' | 'unavailable' | 'unknown';
 export type LogicalModelExportRepresentation = 'dcat-ttl' | 'dcat-jsonld' | 'shacl-ttl' | 'shacl-jsonld';
 
+export interface ModelingValidationIssue {
+  location: string;
+  message: string;
+  type: string;
+}
+
 export interface LogicalModelExportFile {
   blob: Blob;
   filename: string;
 }
 
 export class ModelingApiError extends Error {
-  constructor(readonly kind: ModelingApiErrorKind, readonly status: number, message: string) {
+  constructor(
+    readonly kind: ModelingApiErrorKind,
+    readonly status: number,
+    message: string,
+    readonly issues: readonly ModelingValidationIssue[] = [],
+  ) {
     super(message);
     this.name = 'ModelingApiError';
   }
@@ -164,6 +176,32 @@ export class DataModelsApiService {
       `/api/v1/logical-models/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}/submit`, null,
       { headers: this.writeHeaders(etag), observe: 'response' },
     )).pipe(map((result) => ({ ...result, body: this.normalizeLogicalModel(result.body) })));
+  }
+
+  loadLogicalModelReview(reviewId: string): Observable<ApiResult<LogicalModelReview>> {
+    return this.identitySafeResponse(this.http.get<Record<string, unknown>>(
+      `/api/v1/logical-model-reviews/${encodeURIComponent(reviewId)}`,
+      { headers: this.identity.headers(), observe: 'response' },
+    )).pipe(map((result) => {
+      const value = asRecord(result.body);
+      return {
+        etag: result.etag,
+        body: {
+          id: textValue(value['id']),
+          logicalModelId: textValue(value['logicalModelId']),
+          submittedVersionId: textValue(value['submittedVersionId']),
+          domainId: textValue(value['domainId']),
+          submitterUserId: textValue(value['submitterUserId']),
+          reviewerUserId: textValue(value['reviewerUserId']),
+          status: textValue(value['status'], 'pending') as LogicalModelReview['status'],
+          reviewSnapshot: this.normalizeLogicalModel(value['reviewSnapshot']),
+          decisionComment: nullableText(value['decisionComment']),
+          decidedAt: nullableText(value['decidedAt']),
+          resultVersionId: nullableText(value['resultVersionId']),
+          createdAt: textValue(value['createdAt']),
+        },
+      };
+    }));
   }
 
   decideLogicalModelReview(reviewId: string, decision: 'accept' | 'reject', comment: string | null, etag: string): Observable<ApiResult<LogicalModel>> {
@@ -736,8 +774,19 @@ export class DataModelsApiService {
     if (!(error instanceof HttpErrorResponse)) return new ModelingApiError('unavailable', 0, 'Die Modelldaten sind derzeit nicht erreichbar. Es wurde nichts gespeichert.');
     if (error.status === 401 || error.status === 403) return new ModelingApiError('permission', error.status, 'Für diese Aktion fehlt die erforderliche Rolle oder Organisationszuordnung.');
     if (error.status === 404) return new ModelingApiError('not_found', 404, 'Das Modell oder Asset ist nicht mehr verfügbar.');
-    if (error.status === 409 || error.status === 412 || error.status === 428) return new ModelingApiError('conflict', error.status, 'Der Stand wurde zwischenzeitlich geändert. Bitte neu laden und die Änderungen erneut prüfen.');
-    if (error.status === 422) return new ModelingApiError('validation', 422, 'Die Angaben sind unvollständig oder widersprüchlich. Bitte prüfen Sie die markierten Felder.');
+    const problem = asRecord(error.error);
+    const detail = textValue(problem['detail']);
+    const issues = asArray(problem['errors']).map((item) => {
+      const issue = asRecord(item);
+      return {
+        location: textValue(issue['location']),
+        message: textValue(issue['message'], 'Der Wert ist ungültig.'),
+        type: textValue(issue['type'], 'validation'),
+      };
+    }).filter((issue) => issue.location);
+    if (error.status === 412 || error.status === 428) return new ModelingApiError('conflict', error.status, 'Der Stand wurde zwischenzeitlich geändert. Bitte neu laden und die Änderungen erneut prüfen.');
+    if (error.status === 409) return new ModelingApiError('conflict', 409, detail || 'Die Änderung steht im Konflikt mit einem bestehenden Katalogeintrag.');
+    if (error.status === 422) return new ModelingApiError('validation', 422, detail || 'Die Angaben sind unvollständig oder widersprüchlich. Bitte prüfen Sie die markierten Felder.', issues);
     if (error.status === 0 || error.status === 503 || error.status === 504) return new ModelingApiError('unavailable', error.status, 'Die Katalog-API ist derzeit nicht erreichbar. Es wurde nichts gespeichert.');
     return new ModelingApiError('unknown', error.status, 'Die Aktion ist fehlgeschlagen. Es wurde nichts gespeichert.');
   }

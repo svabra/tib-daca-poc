@@ -205,6 +205,13 @@ def _normalize_logical_write_scope(session: Session, body: LogicalModelWrite) ->
     body.organization_unit_id = organization.id
     body.organization_id = organization.id
     body.department_code = organization.department_code
+    domain = session.get(Domain, body.data_domain_id)
+    if domain is None or domain.lifecycle != "active":
+        raise HTTPException(422, "dataDomainId must identify an active DaCa domain")
+    # Domain responsibility is governed by the domain register.  Clients may
+    # display these values, but must not be able to assign a different reviewer.
+    body.data_owner_user_id = domain.owner_user_id
+    body.deputy_owner_user_id = domain.deputy_owner_user_id
 
 
 def _dataset_version(session: Session, version: LogicalModelVersion) -> DcatDatasetVersion:
@@ -620,7 +627,7 @@ def create_modeling_router() -> APIRouter:
         model = get_logical_model(session, model_id)
         version = get_logical_version(session, model.id)
         _require_version_scope(session, actor, version)
-        response.headers["ETag"] = _etag(model.revision)
+        response.headers["ETag"] = _etag(version.lock_version)
         return logical_version_payload(session, model, version)
 
     @router.get(
@@ -655,10 +662,10 @@ def create_modeling_router() -> APIRouter:
         model = get_logical_model(session, model_id, lock=True)
         source = get_logical_version(session, model.id, lock=True)
         _require_version_scope(session, actor, source)
-        _require_etag(if_match, model.revision)
+        _require_etag(if_match, source.lock_version)
         version = clone_logical_version(session, model, source, actor)
         session.commit()
-        response.headers["ETag"] = _etag(model.revision)
+        response.headers["ETag"] = _etag(version.lock_version)
         return logical_version_payload(session, model, version)
 
     @router.put(

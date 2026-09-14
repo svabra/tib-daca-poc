@@ -116,6 +116,21 @@ export interface LogicalModel extends LogicalModelSummary {
   assistanceProvenance?: readonly LogicalModelAssistanceProvenance[];
 }
 
+export interface LogicalModelReview {
+  id: string;
+  logicalModelId: string;
+  submittedVersionId: string;
+  domainId: string;
+  submitterUserId: string;
+  reviewerUserId: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  reviewSnapshot: LogicalModel;
+  decisionComment: string | null;
+  decidedAt: string | null;
+  resultVersionId: string | null;
+  createdAt: string;
+}
+
 export interface LogicalModelAssistanceProvenance {
   fieldPath: string;
   language: 'de' | 'fr' | 'it' | 'en' | 'rm' | null;

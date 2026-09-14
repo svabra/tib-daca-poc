@@ -82,6 +82,13 @@ describe('OwnerTasksComponent service-level workflow task', () => {
     })).toEqual(['/domains']);
   });
 
+  it('links a logical-model task to its immutable review snapshot', async () => {
+    const { fixture } = await render();
+    const component = fixture.componentInstance;
+    expect(component.taskLabel('logical_model_review')).toBe('Datenmodell-Prüfung');
+    expect(component.taskRoute({taskType:'logical_model_review',dataProductId:null,logicalModelReviewId:'review-7'})).toEqual(['/model-reviews','review-7']);
+  });
+
   it('shows an unknown owner-inbox status with retry instead of claiming that the inbox is empty', async () => {
     const api = apiStub();
     api.ownerAccessRequestError.set('Zugriffsanfragen konnten nicht geladen werden. Der Aufgabenstatus ist unbekannt.');
