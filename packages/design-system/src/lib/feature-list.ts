@@ -40,8 +40,12 @@ export const DACA_FEATURE_RELEASE = {
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
           {
-            title: 'Logische Datenmodelle erstellen und freigeben',
-            description: 'Data Stewards modellieren mehrsprachige Datensätze, Entitäten und Felder unabhängig von einer technischen Umsetzung. Verwaltungseinheiten, Verantwortliche, Klassifizierung, Domäne und Geschäftsobjekte werden kontrolliert zugewiesen; der zuständige Domain Owner nimmt das Modell an oder fordert Änderungen an.',
+            title: 'Logische Datenmodelle verständlich erfassen',
+            description: 'Data Stewards speichern mehrere unabhängige, mehrsprachige Modelle als Entwurf in PostgreSQL. Feldhilfen erklären die Semantik in Deutsch, Französisch oder Italienisch; konkrete Fehlerlisten und rote Feldmarkierungen unterstützen die Korrektur. I14Y-Concepts bleiben optional.',
+          },
+          {
+            title: 'Entwürfe gezielt zur Domänenfreigabe einreichen',
+            description: 'Speichern und Einreichen sind bewusst getrennt. Die gewählte Domäne bestimmt den primären Domain Owner und die sichtbare Stellvertretung. Erst das Einreichen erzeugt einen persönlichen Prüfauftrag mit unveränderlichem Snapshot; nur der primäre Owner kann publizieren oder mit Begründung Änderungen verlangen.',
           },
           {
             title: 'Physische Modelle aus PostgreSQL und S3 verstehen',
@@ -111,8 +115,12 @@ export const DACA_FEATURE_RELEASE = {
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
           {
-            title: 'Create and approve logical data models',
-            description: 'Data stewards model multilingual datasets, entities and fields independently of any technical implementation. Administrative scope, responsibilities, classification, domain and business objects are assigned from governed lists; the responsible domain owner accepts the model or requests changes.',
+            title: 'Capture logical data models with clear guidance',
+            description: 'Data stewards persist multiple independent multilingual models as PostgreSQL drafts. Field help explains semantics in German, French or Italian, while concrete error lists and red field highlights guide corrections. I14Y Concepts remain optional.',
+          },
+          {
+            title: 'Submit drafts deliberately for domain approval',
+            description: 'Saving and submission are deliberately separate. The selected domain determines the primary domain owner and visible deputy. Only submission creates a personal review task with an immutable snapshot; only the primary owner can publish or request changes with a reason.',
           },
           {
             title: 'Understand physical models from PostgreSQL and S3',
