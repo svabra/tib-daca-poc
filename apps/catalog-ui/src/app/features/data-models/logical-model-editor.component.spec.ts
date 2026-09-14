@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { of, Subject } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService, DemoUser } from '../../core/demo-identity.service';
@@ -20,6 +20,7 @@ describe('LogicalModelEditorComponent contracts',()=>{
   const actor:DemoUser={id:'cinthya.thor',displayName:'Cinthya Thor',organization:'Verteidigung',email:'cinthya.thor@vtg.admin.ch',phone:null,avatarUrl:null,roles:['data_consumer'],department:'VBS',office:'vbs-verteidigung',primaryModelingRole:'data_steward'};
   let download:ReturnType<typeof vi.fn>;
   let retire:ReturnType<typeof vi.fn>;
+  let createLogicalModel:ReturnType<typeof vi.fn>;
   let searchTermdat:ReturnType<typeof vi.fn>;
   let scrollIntoView:ReturnType<typeof vi.fn>;
   let canPublish:ReturnType<typeof signal<boolean>>;
@@ -27,6 +28,7 @@ describe('LogicalModelEditorComponent contracts',()=>{
   beforeEach(()=>{
     download=vi.fn();
     retire=vi.fn();
+    createLogicalModel=vi.fn(()=>of({body:FALLBACK_LOGICAL_MODEL,etag:'"1"'}));
     searchTermdat=vi.fn(()=>of({items:[],total:0}));
     scrollIntoView=vi.fn();
     Object.defineProperty(HTMLElement.prototype,'scrollIntoView',{configurable:true,value:scrollIntoView});
@@ -39,7 +41,7 @@ describe('LogicalModelEditorComponent contracts',()=>{
         {provide:CatalogApiService,useValue:{domains:signal([]).asReadonly(),loadDomains:()=>of([])}},
         {provide:I14yConceptsApiService,useValue:{search:()=>of({items:[],total:0}),load:vi.fn()}},
         {provide:ModelingAssistanceService,useValue:{organizations:()=>of([]),myScopes:()=>of([]),personas:()=>of([]),businessObjects:()=>of({items:[],total:0}),translate:()=>of({sourceTextHash:'source-hash',translations:{},retrievedAt:'2026-09-08T10:00:00Z',payloadHash:'payload-hash'}),searchTermdat}},
-        {provide:DataModelsApiService,useValue:{downloadLogicalModelExport:download,retireLogicalModel:retire,listLogicalModelVersions:()=>of([FALLBACK_LOGICAL_MODEL]),loadLogicalModelReadiness:()=>of({logicalModelId:FALLBACK_LOGICAL_MODEL.id,logicalModelVersionId:FALLBACK_LOGICAL_MODEL.versionId,datasetId:'dataset-1',dcatReady:true,i14yReady:false,dcatIssues:[],i14yIssues:['I14Y readiness requires a distribution or data service']})}},
+        {provide:DataModelsApiService,useValue:{createLogicalModel,downloadLogicalModelExport:download,retireLogicalModel:retire,listLogicalModelVersions:()=>of([FALLBACK_LOGICAL_MODEL]),loadLogicalModelReadiness:()=>of({logicalModelId:FALLBACK_LOGICAL_MODEL.id,logicalModelVersionId:FALLBACK_LOGICAL_MODEL.versionId,datasetId:'dataset-1',dcatReady:true,i14yReady:false,dcatIssues:[],i14yIssues:['I14Y readiness requires a distribution or data service']})}},
       ],
     });
   });
@@ -48,6 +50,52 @@ describe('LogicalModelEditorComponent contracts',()=>{
   it('uses the latest version lock for version-specific writes after a root reload',()=>{
     const reloadedModel={...FALLBACK_LOGICAL_MODEL,revision:7,lockVersion:2};
     expect(logicalModelVersionEtag(reloadedModel)).toBe('"2"');
+  });
+
+  it('keeps save actionable and lists every insufficient field directly below it',()=>{
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);fixture.detectChanges();
+    const root=fixture.nativeElement as HTMLElement;
+    const save=root.querySelector<HTMLButtonElement>('.save-action > button[type="submit"]')!;
+    expect(save.disabled).toBe(false);
+    save.click();fixture.detectChanges();
+
+    const validation=root.querySelector<HTMLElement>('.save-action > button + .save-validation');
+    expect(validation).not.toBeNull();
+    expect(validation?.getAttribute('role')).toBe('alert');
+    expect(validation?.textContent).toContain('Titel (Deutsch)');
+    expect(validation?.textContent).toContain('DaCa-Domäne');
+    expect(validation?.textContent).toContain('Feld 1 – Feldname');
+    expect(validation?.textContent).toContain('Feld 1 – Geschäftsobjekt');
+    expect(validation?.textContent).not.toContain('I14Y-Concept-Links');
+    expect(createLogicalModel).not.toHaveBeenCalled();
+  });
+
+  it('saves a complete model without selecting any optional I14Y concept',()=>{
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);const component=fixture.componentInstance;
+    vi.spyOn(TestBed.inject(Router),'navigate').mockResolvedValue(true);
+    component.form.controls.dataset.patchValue({
+      titleDe:'Mitarbeitende',descriptionDe:'Logisches Personalmodell',identifiers:'VBS-HR-OPTIONAL-I14Y',
+      dataDomainId:'11111111-1111-4111-8111-111111111111',dataOwnerId:'christian.spider',creatorName:'HR-Core',
+    });
+    component.fields.at(0).patchValue({
+      entityName:'mitarbeitende',entityBusinessObjectVersionId:'22222222-2222-4222-8222-222222222222',
+      name:'personalnummer',businessObjectVersionId:'33333333-3333-4333-8333-333333333333',shortDescription:'Stabile Personalnummer',
+      conceptIds:[],primaryConceptId:'',valueListConceptId:'',
+    });
+    fixture.detectChanges();
+    const root=fixture.nativeElement as HTMLElement;
+    expect(root.textContent).toContain('I14Y-Concept-Links (optional)');
+    expect(root.querySelector<HTMLSelectElement>('select[formControlName="primaryConceptId"]')?.required).toBe(false);
+
+    component.save();
+
+    expect(component.validationIssues()).toEqual([]);
+    expect(createLogicalModel).toHaveBeenCalledOnce();
+    const write=createLogicalModel.mock.calls[0][0] as LogicalModelWrite;
+    expect(write.conceptIds).toEqual([]);
+    expect(write.fields[0].conceptIds).toEqual([]);
+    expect(write.fields[0].primaryConceptId).toBeNull();
+    expect(write.fields[0].valueListConceptId).toBeNull();
   });
 
   it('searches TERMDAT on title blur and exposes a prominent hit action',()=>{

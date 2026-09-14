@@ -21,6 +21,8 @@ describe('DataModelsApiService', () => {
     expect(request.request.body.departmentCode).toBeUndefined();
     expect(request.request.body.organizationId).toBeUndefined();
     expect(request.request.body.creator).toEqual({type:'Application',applicationName:'HR-Core'}); expect(request.request.body.entities[0].fields[0].name).toBe('personalnummer');
+    expect(request.request.body.conceptIds).toEqual([]);
+    expect(request.request.body.entities[0].fields[0]).toEqual(expect.objectContaining({conceptIds:[],primaryConceptId:null,valueListConceptId:null}));
     expect(request.request.body.localizations).toEqual([{language:'de',title:'Mitarbeitende',description:'Fachliches Modell'}]);
     expect(request.request.body).toEqual(expect.objectContaining({contactPoints:[{name:'Cinthya Thor',email:'cinthya.thor@vtg.admin.ch'}],publisher:{name:'Verteidigung',identifier:'vbs-verteidigung',uri:'urn:daca:organization:vbs-verteidigung'},accessRights:'urn:daca:access-rights:internal',themes:[],distributions:[],dataServices:[]}));
     request.flush({ id:'model-1',urn:'urn:daca:logical-model:model-1',revision:1,identifiers:['VBS-HR-1'],localizations:[{language:'de',title:'Mitarbeitende',description:'Fachliches Modell'}],departmentCode:'VBS',organizationId:'vbs-verteidigung',dataOwnerUserId:'christian.spider',dataDomainId:'domain-personal',dataClassification:'internal',dateCreated:'2026-09-07',creator:{type:'Application',applicationName:'HR-Core'},versionId:'version-1',lockVersion:1,status:'draft',contactPoints:[{name:'Cinthya Thor',email:'cinthya.thor@vtg.admin.ch'}],publisher:{name:'Verteidigung'},accessRights:'urn:daca:access-rights:internal',entities:[] }, { headers: { ETag:'"1"' } });
