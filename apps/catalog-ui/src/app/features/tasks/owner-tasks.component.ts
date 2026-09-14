@@ -242,6 +242,8 @@ export class OwnerTasksComponent {
       glossary_term_review: 'Glossar-Freigabe',
       glossary_term_collaboration: 'Glossar-Mitarbeit',
       glossary_term_decision: 'Glossar-Entscheid',
+      logical_model_review: 'Datenmodell-Prüfung',
+      logical_model_changes_requested: 'Datenmodell überarbeiten',
     } as Record<string, string>)[value] ?? 'Aufgabe';
   }
 
@@ -249,7 +251,9 @@ export class OwnerTasksComponent {
     return value === 'collaboration' ? 'Mitarbeit' : value === 'information' ? 'Zur Kenntnis' : 'Entscheid nötig';
   }
 
-  taskRoute(task: { taskType: string; dataProductId: string | null; governanceSubmissionId?: string | null; domainChangeRequestId?: string | null; glossaryTermProposalId?: string | null }): unknown[] {
+  taskRoute(task: { taskType: string; dataProductId: string | null; governanceSubmissionId?: string | null; domainChangeRequestId?: string | null; glossaryTermProposalId?: string | null; logicalModelReviewId?: string | null }): unknown[] {
+    if (task.taskType === 'logical_model_review' && task.logicalModelReviewId) return ['/model-reviews', task.logicalModelReviewId];
+    if (task.taskType === 'logical_model_changes_requested' && task.logicalModelReviewId) return ['/model-reviews', task.logicalModelReviewId];
     if (task.taskType.startsWith('glossary_term_') && task.glossaryTermProposalId) return ['/glossary/proposals', task.glossaryTermProposalId, 'review'];
     if (task.taskType.startsWith('domain_change_') || task.domainChangeRequestId) return ['/domains'];
     if (!task.dataProductId) return ['/tasks'];

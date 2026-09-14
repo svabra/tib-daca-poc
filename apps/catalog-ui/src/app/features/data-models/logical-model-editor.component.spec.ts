@@ -8,6 +8,7 @@ import { I14yConceptsApiService } from '../domains/i14y-concepts-api.service';
 import { DataModelsApiService, LogicalModelExportFile } from './data-models-api.service';
 import { I14yConceptReference, LogicalField, LogicalModelWrite } from './data-models.models';
 import { LogicalModelEditorComponent, logicalModelVersionEtag, normalizeFieldConceptSelection } from './logical-model-editor.component';
+import { logicalModelHelpLocale } from './logical-model-field-help.directive';
 import { FALLBACK_LOGICAL_MODEL } from './mapping-fallback';
 import { ModelingAssistanceService, TermdatEntry } from './modeling-assistance.service';
 
@@ -38,7 +39,7 @@ describe('LogicalModelEditorComponent contracts',()=>{
       providers:[
         provideRouter([]),
         {provide:DemoIdentityService,useValue:{user:signal(actor).asReadonly(),users:signal([actor]).asReadonly(),modelingRoles:()=>['data_steward'],canPublishModels:signal(false).asReadonly(),canPublishModel:()=>canPublish(),canEditModels:signal(true).asReadonly()}},
-        {provide:CatalogApiService,useValue:{domains:signal([]).asReadonly(),loadDomains:()=>of([])}},
+        {provide:CatalogApiService,useValue:{domains:signal([{id:'11111111-1111-4111-8111-111111111111',urn:'urn:daca:domain:personal',originCatalogId:'catalog',revision:1,status:'active',preferredLabel:'Personal',definition:'',labels:[],ownerUserId:'christian.spider',ownerName:'Christian Spider',ownerOrganization:'Verteidigung',deputyOwnerUserId:'sibilla.micheli',deputyOwnerName:'Sibilla Micheli',deputyOwnerOrganization:'Verteidigung',productCount:0,termCount:0,updatedAt:''}]).asReadonly(),loadDomains:()=>of([]),refreshWorkflowTasks:vi.fn()}},
         {provide:I14yConceptsApiService,useValue:{search:()=>of({items:[],total:0}),load:vi.fn()}},
         {provide:ModelingAssistanceService,useValue:{organizations:()=>of([]),myScopes:()=>of([]),personas:()=>of([]),businessObjects:()=>of({items:[],total:0}),translate:()=>of({sourceTextHash:'source-hash',translations:{},retrievedAt:'2026-09-08T10:00:00Z',payloadHash:'payload-hash'}),searchTermdat}},
         {provide:DataModelsApiService,useValue:{createLogicalModel,downloadLogicalModelExport:download,retireLogicalModel:retire,listLogicalModelVersions:()=>of([FALLBACK_LOGICAL_MODEL]),loadLogicalModelReadiness:()=>of({logicalModelId:FALLBACK_LOGICAL_MODEL.id,logicalModelVersionId:FALLBACK_LOGICAL_MODEL.versionId,datasetId:'dataset-1',dcatReady:true,i14yReady:false,dcatIssues:[],i14yIssues:['I14Y readiness requires a distribution or data service']})}},
@@ -52,8 +53,29 @@ describe('LogicalModelEditorComponent contracts',()=>{
     expect(logicalModelVersionEtag(reloadedModel)).toBe('"2"');
   });
 
+  it('selects German, French or Italian help from the browser language and otherwise falls back to German',()=>{
+    expect(logicalModelHelpLocale('fr-CH')).toBe('fr');
+    expect(logicalModelHelpLocale('it')).toBe('it');
+    expect(logicalModelHelpLocale('en-US')).toBe('de');
+    expect(logicalModelHelpLocale(null)).toBe('de');
+  });
+
+  it('shows accessible semantic help on hover and keyboard focus',()=>{
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);fixture.detectChanges();
+    const host=(fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.termdat-title-field')!;
+    const trigger=host.querySelector<HTMLButtonElement>('.daca-field-help-trigger')!;
+    const tooltip=document.getElementById(trigger.getAttribute('aria-describedby')!)!;
+    expect(tooltip.getAttribute('role')).toBe('tooltip');
+    host.dispatchEvent(new MouseEvent('mouseenter'));fixture.detectChanges();
+    expect(tooltip.classList.contains('is-visible')).toBe(true);
+    expect(tooltip.textContent).toContain('Name des beschriebenen Datensatzes');
+    host.dispatchEvent(new MouseEvent('mouseleave'));trigger.focus();fixture.detectChanges();
+    expect(tooltip.classList.contains('is-visible')).toBe(true);
+  });
+
   it('keeps save actionable and lists every insufficient field directly below it',()=>{
     const fixture=TestBed.createComponent(LogicalModelEditorComponent);fixture.detectChanges();
+    const component=fixture.componentInstance;
     const root=fixture.nativeElement as HTMLElement;
     const save=root.querySelector<HTMLButtonElement>('.save-action > button[type="submit"]')!;
     expect(save.disabled).toBe(false);
@@ -67,6 +89,11 @@ describe('LogicalModelEditorComponent contracts',()=>{
     expect(validation?.textContent).toContain('Feld 1 – Feldname');
     expect(validation?.textContent).toContain('Feld 1 – Geschäftsobjekt');
     expect(validation?.textContent).not.toContain('I14Y-Concept-Links');
+    expect(root.querySelector('form')?.classList.contains('validation-attempted')).toBe(true);
+    const title=root.querySelector<HTMLInputElement>('input[formControlName="titleDe"]')!;
+    expect(title.classList.contains('ng-invalid')).toBe(true);
+    component.form.controls.dataset.controls.titleDe.setValue('Gültiger Titel');fixture.detectChanges();
+    expect(title.classList.contains('ng-invalid')).toBe(false);
     expect(createLogicalModel).not.toHaveBeenCalled();
   });
 
@@ -87,9 +114,9 @@ describe('LogicalModelEditorComponent contracts',()=>{
     expect(root.textContent).toContain('I14Y-Concept-Links (optional)');
     expect(root.querySelector<HTMLSelectElement>('select[formControlName="primaryConceptId"]')?.required).toBe(false);
 
+    expect(component.validationIssues()).toEqual([]);
     component.save();
 
-    expect(component.validationIssues()).toEqual([]);
     expect(createLogicalModel).toHaveBeenCalledOnce();
     const write=createLogicalModel.mock.calls[0][0] as LogicalModelWrite;
     expect(write.conceptIds).toEqual([]);

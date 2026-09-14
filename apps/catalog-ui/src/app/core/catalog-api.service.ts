@@ -146,7 +146,7 @@ type ProposalWire = Omit<GlossaryTermProposal, 'requesterName' | 'reviews'> & { 
 
 export interface WorkflowTaskWire {
   id: string;
-  taskType: 'metadata_quality' | 'access_governance' | 'access_request_review' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed' | 'publication_approval' | 'governance_correction' | 'service_level_approval' | 'source_access_review' | 'domain_change_review' | 'domain_change_decision' | 'glossary_term_review' | 'glossary_term_collaboration' | 'glossary_term_decision';
+  taskType: 'metadata_quality' | 'access_governance' | 'access_request_review' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed' | 'publication_approval' | 'governance_correction' | 'service_level_approval' | 'source_access_review' | 'domain_change_review' | 'domain_change_decision' | 'glossary_term_review' | 'glossary_term_collaboration' | 'glossary_term_decision' | 'logical_model_review' | 'logical_model_changes_requested';
   kind?: 'action' | 'collaboration' | 'information';
   taskKind?: 'action' | 'collaboration' | 'information';
   status: 'open' | 'in_progress' | 'completed';
@@ -159,6 +159,7 @@ export interface WorkflowTaskWire {
   sourceAccessRequestId?: string | null;
   domainChangeRequestId?: string | null;
   glossaryTermProposalId?: string | null;
+  logicalModelReviewId?: string | null;
   title: string;
   detail: string;
   createdAt: string;

@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: sample-data-product
-          image: docker-hub.nexus.bit.admin.ch/svabra/tib-daca-sample-data-product:0.1.21
+          image: docker-hub.nexus.bit.admin.ch/svabra/tib-daca-sample-data-product:0.1.22
           imagePullPolicy: Always
           ports:
             - name: http

@@ -12,7 +12,7 @@ def _headers(actor: str, etag: str | None = None) -> dict[str, str]:
     return headers
 
 
-def test_logical_clone_uses_monotone_root_revision_for_optimistic_concurrency(
+def test_logical_clone_uses_current_version_lock_for_optimistic_concurrency(
     client, session_factory
 ) -> None:
     with session_factory() as session:

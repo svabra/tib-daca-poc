@@ -148,6 +148,14 @@ def test_docker_publish_uses_artifact_free_version_tagged_repositories() -> None
     ) in workflow
 
 
+def test_data_analyst_evidence_is_uploaded_only_for_failures_for_three_days() -> None:
+    workflow = (ROOT / ".github/workflows/data-analyst-journey.yml").read_text(encoding="utf-8")
+    assert "uses: actions/upload-artifact@v4" in workflow
+    assert "if: failure()" in workflow
+    assert "retention-days: 3" in workflow
+    assert "if: always()" not in workflow
+
+
 def test_postgres_compatibility_checks_domain_glossary_tables_by_name() -> None:
     workflow = (ROOT / ".github/workflows/docker-publish.yml").read_text(encoding="utf-8")
     expected_tables = (

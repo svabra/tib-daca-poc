@@ -156,13 +156,14 @@ legacy data-product permissions.
 | Persona | Modelling role | Scenario |
 |---|---|---|
 | Christian Spider | Data Owner | Owner of the logical-first personnel model |
-| Sibilla Micheli | Deputy Data Owner | Delegated personnel-model approval |
+| Sibilla Micheli | Deputy Data Owner | Visible personnel-model deputy |
 | Cinthya Thor | Data Steward | Logical-first editing and existing-to-existing mapping |
 | Lawrence Hill | Data Owner | Owner of the vehicle-inventory model |
-| Hong An Captain | Deputy Data Owner | Delegated vehicle-model approval |
+| Hong An Captain | Deputy Data Owner | Visible vehicle-model deputy |
 | Christian Man | Data Steward | PostgreSQL import and derivation |
 
-Data Owners and deputies may view, edit, and finally publish models in scope.  Data Stewards may
+Data Owners and deputies may view and edit models in scope. The primary Domain Owner alone receives
+and decides a logical-model review task in this PoC. Data Stewards may
 edit models and fields, import technical metadata, associate I14Y Concepts, create and validate
 mappings, and submit for review, but cannot publish.
 
@@ -176,8 +177,10 @@ the same office first, then the same department, then the rest of the Confederat
 
 The Immobilienmanagement journey adds Mirjam Keller as Data Steward, Daniel Wenger as primary
 domain owner and Eliane Rossi as his active deputy. Its controlled business-object terminology
-contains `Immobilienobjekt`, `Infrastrukturbedarf` and `Bauprojekt`. A steward submission creates
-an immutable review snapshot and task for Daniel. Acceptance creates the published successor and
+contains `Immobilienobjekt`, `Infrastrukturbedarf` and `Bauprojekt`. The selected domain binds
+Daniel and Eliane from the domain register; a draft save creates no task. A separate steward
+submission creates an immutable review snapshot and personal task for Daniel, which links directly
+to the review workspace. Acceptance creates the published successor and
 sets `dct:issued`; rejection requires a comment and returns a `changes_requested` successor to the
 submitting steward.
 

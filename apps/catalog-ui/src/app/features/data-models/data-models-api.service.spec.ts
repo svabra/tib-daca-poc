@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { computed, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { DemoIdentityService } from '../../core/demo-identity.service';
-import { DataModelsApiService } from './data-models-api.service';
+import { DataModelsApiService, ModelingApiError } from './data-models-api.service';
 import { DcatContactPoint, LogicalModelCreator, LogicalModelWrite } from './data-models.models';
 
 describe('DataModelsApiService', () => {
@@ -156,5 +156,21 @@ describe('DataModelsApiService', () => {
 
     expect(downloaded?.blob).toBe(body);
     expect(downloaded?.filename).toBe('modell-shape.jsonld');
+  });
+
+  it('preserves semantic conflict details instead of presenting every 409 as a stale edit', () => {
+    let received:ModelingApiError|undefined;
+    api.listLogicalModels().subscribe({error:(error:ModelingApiError)=>{received=error;}});
+    http.expectOne('/api/v1/logical-models').flush({type:'urn:daca:problem:conflict',detail:'The requested identifier already exists'},{status:409,statusText:'Conflict'});
+    expect(received?.message).toBe('The requested identifier already exists');
+    expect(received?.status).toBe(409);
+  });
+
+  it('retains RFC-7807 field locations for form highlighting', () => {
+    let received:ModelingApiError|undefined;
+    api.listLogicalModels().subscribe({error:(error:ModelingApiError)=>{received=error;}});
+    http.expectOne('/api/v1/logical-models').flush({type:'urn:daca:problem:validation',detail:'Request invalid',errors:[{location:'body.identifiers',message:'Field required',type:'missing'}]},{status:422,statusText:'Unprocessable Entity'});
+    expect(received?.kind).toBe('validation');
+    expect(received?.issues).toEqual([{location:'body.identifiers',message:'Field required',type:'missing'}]);
   });
 });

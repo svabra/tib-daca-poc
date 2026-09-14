@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
+from copy import deepcopy
 from dataclasses import dataclass
 
 import pytest
@@ -24,6 +25,8 @@ from daca_catalog.models import (
     DcatDatasetVersion,
     DcatDistribution,
     DcatDistributionVersion,
+    LogicalEntity,
+    LogicalField,
     LogicalModel,
     LogicalModelVersion,
 )
@@ -143,6 +146,61 @@ def _logical_body(*, access_rights: str) -> dict[str, object]:
         "distributions": [],
         "dataServices": [],
     }
+
+
+def test_multiple_logical_models_persist_independently_and_domain_owns_responsibility(
+    resources_api: ResourcesApi,
+) -> None:
+    first_body = _logical_body(access_rights="urn:daca:access-rights:internal")
+    second_body = deepcopy(first_body)
+    second_body["identifiers"] = [f"second-model-{uuid.uuid4()}"]
+    second_body["dataOwnerUserId"] = "client-cannot-assign-owner"
+    second_body["deputyOwnerUserId"] = None
+    second_body["localizations"][0]["title"] = "Zweites unabhängiges Modell"
+
+    first = resources_api.client.post(
+        "/api/v1/logical-models", headers=_headers("cinthya.thor"), json=first_body
+    )
+    second = resources_api.client.post(
+        "/api/v1/logical-models", headers=_headers("cinthya.thor"), json=second_body
+    )
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    assert first.json()["id"] != second.json()["id"]
+    assert second.json()["dataOwnerUserId"] == "christian.spider"
+    assert second.json()["deputyOwnerUserId"] == "sibilla.micheli"
+
+    revised_body = deepcopy(first_body)
+    revised_body["localizations"][0]["description"] = "Gespeicherte zweite Entwurfsversion."
+    revised = resources_api.client.put(
+        f"/api/v1/logical-models/{first.json()['id']}/versions/{first.json()['versionId']}",
+        headers=_headers("cinthya.thor", first.headers["etag"]),
+        json=revised_body,
+    )
+    assert revised.status_code == 200, revised.text
+    assert revised.json()["revision"] == 2
+    assert revised.headers["etag"] == '"2"'
+
+    with resources_api.session_factory() as session:
+        ids = {uuid.UUID(first.json()["id"]), uuid.UUID(second.json()["id"])}
+        assert session.scalar(
+            select(func.count()).select_from(LogicalModel).where(LogicalModel.id.in_(ids))
+        ) == 2
+        assert session.scalar(
+            select(func.count()).select_from(LogicalModelVersion).where(
+                LogicalModelVersion.logical_model_id.in_(ids)
+            )
+        ) == 3
+        entities = list(
+            session.scalars(select(LogicalEntity).where(LogicalEntity.logical_model_id.in_(ids)))
+        )
+        assert len(entities) == 2
+        assert {entity.logical_model_id for entity in entities} == ids
+        assert session.scalar(
+            select(func.count()).select_from(LogicalField).where(
+                LogicalField.logical_entity_id.in_({entity.id for entity in entities})
+            )
+        ) == 2
 
 
 def test_dataset_resources_append_immutable_versions_and_preserve_other_aggregates(
