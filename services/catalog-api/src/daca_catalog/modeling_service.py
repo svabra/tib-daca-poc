@@ -47,6 +47,7 @@ from .models import (
     LogicalFieldVersion,
     LogicalModel,
     LogicalModelAssistanceProvenance,
+    LogicalModelIdentifierReservation,
     LogicalModelReview,
     LogicalModelVersion,
     PhysicalColumn,
@@ -252,6 +253,7 @@ def logical_version_payload(session: Session, model: LogicalModel, version: Logi
         "predecessorVersionId": version.predecessor_version_id,
         "lockVersion": version.lock_version,
         "status": version.status,
+        "identifierMode": version.identifier_mode,
         "reviewId": session.scalar(select(LogicalModelReview.id).where(LogicalModelReview.submitted_version_id == version.id)),
         "title": german.title,
         "description": german.description,
@@ -471,7 +473,7 @@ def create_dcat_dataset_version(
         identifiers=body.identifiers,
         data_owner_user_id=body.data_owner_user_id,
         deputy_owner_user_id=body.deputy_owner_user_id,
-        creator=body.creator.model_dump(mode="json", by_alias=True),
+        creator=body.creator.model_dump(mode="json", by_alias=True) if body.creator else None,
         data_domain_id=body.data_domain_id,
         department_code=body.department_code,
         organization_id=body.organization_id,
@@ -513,7 +515,7 @@ def populate_dcat_dataset_version(
     dataset_version.identifiers = body.identifiers
     dataset_version.data_owner_user_id = body.data_owner_user_id
     dataset_version.deputy_owner_user_id = body.deputy_owner_user_id
-    dataset_version.creator = body.creator.model_dump(mode="json", by_alias=True)
+    dataset_version.creator = body.creator.model_dump(mode="json", by_alias=True) if body.creator else None
     dataset_version.data_domain_id = body.data_domain_id
     dataset_version.department_code = body.department_code
     dataset_version.organization_id = body.organization_id
@@ -716,6 +718,7 @@ def create_logical_model(
     )
     session.add(model)
     session.flush()
+    reserve_logical_model_identifier(session, model, body)
     _dataset, dataset_version = create_dcat_dataset_version(
         session, body, model.id, 1
     )
@@ -727,6 +730,7 @@ def create_logical_model(
         revision=1,
         lock_version=model.revision,
         status="draft",
+        identifier_mode=body.identifier_mode,
         content_hash=content_hash,
         created_by_user_id=actor,
         updated_by_user_id=actor,
@@ -738,6 +742,53 @@ def create_logical_model(
     write_logical_version(session, model, version, body, actor, replacing=False)
     record_audit(session, "logical-model", model.id, "created", actor, 1)
     return model, version
+
+
+def reserve_logical_model_identifier(
+    session: Session,
+    model: LogicalModel,
+    body: LogicalModelWrite,
+    *,
+    legacy_identifier: str | None = None,
+) -> None:
+    """Reserve the current identifier for this root, including after retirement."""
+
+    identifier = body.identifiers[0]
+    reservation = session.get(LogicalModelIdentifierReservation, model.id)
+    existing = session.scalar(
+        select(LogicalModelIdentifierReservation).where(
+            LogicalModelIdentifierReservation.normalized_identifier == identifier.casefold()
+        )
+    )
+    # Historical data can contain duplicate identifiers because it pre-dates
+    # the catalog-wide unique reservation.  Migration reserves one root so no
+    # new model can claim that value.  A second legacy root may still save an
+    # unchanged identifier; once it chooses a new identifier, it receives its
+    # own reservation and the old duplicate remains protected by the first.
+    if (
+        reservation is None
+        and existing is not None
+        and existing.logical_model_id != model.id
+        and legacy_identifier is not None
+        and legacy_identifier.casefold() == identifier.casefold()
+    ):
+        return
+    if reservation is None:
+        session.add(
+            LogicalModelIdentifierReservation(
+                logical_model_id=model.id,
+                identifier=identifier,
+                normalized_identifier=identifier.casefold(),
+                updated_at=utc_now(),
+            )
+        )
+    else:
+        reservation.identifier = identifier
+        reservation.normalized_identifier = identifier.casefold()
+        reservation.updated_at = utc_now()
+    # Force the unique index here, while the request can still report a
+    # field-specific problem rather than succeeding until commit.
+    session.flush()
 
 
 def _retire_logical_field(
@@ -1030,6 +1081,7 @@ def logical_write_from_payload(payload: dict[str, Any]) -> LogicalModelWrite:
             "dataOwnerUserId": payload["dataOwnerUserId"],
             "deputyOwnerUserId": payload["deputyOwnerUserId"],
             "creator": payload["creator"],
+            "identifierMode": payload.get("identifierMode", "manual"),
             "dataDomainId": payload["dataDomainId"],
             "departmentCode": payload["departmentCode"],
             "organizationId": payload["organizationId"],
@@ -1135,6 +1187,7 @@ def create_logical_successor(
         revision=model.revision,
         lock_version=model.revision,
         status="draft",
+        identifier_mode=body.identifier_mode,
         content_hash=canonical_hash(body.model_dump(mode="json", by_alias=True)),
         created_by_user_id=actor,
         updated_by_user_id=actor,
@@ -1143,6 +1196,12 @@ def create_logical_successor(
     )
     session.add(version)
     session.flush()
+    reserve_logical_model_identifier(
+        session,
+        model,
+        body,
+        legacy_identifier=(source_dataset_version.identifiers or [None])[0],
+    )
     write_logical_version(session, model, version, body, actor, replacing=False)
     version.status = status
     dataset_version.status = (

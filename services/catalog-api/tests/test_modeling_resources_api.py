@@ -28,6 +28,7 @@ from daca_catalog.models import (
     LogicalEntity,
     LogicalField,
     LogicalModel,
+    LogicalModelIdentifierReservation,
     LogicalModelVersion,
 )
 from daca_catalog.rdf_metadata import parse_dcat_datasets
@@ -201,6 +202,68 @@ def test_multiple_logical_models_persist_independently_and_domain_owns_responsib
                 LogicalField.logical_entity_id.in_({entity.id for entity in entities})
             )
         ) == len(entities)
+
+
+def test_logical_model_identifier_is_case_insensitive_atomic_and_released_on_revision(
+    resources_api: ResourcesApi,
+) -> None:
+    first_body = _logical_body(access_rights="urn:daca:access-rights:internal")
+    first_body["identifiers"] = ["VBS_Identifier_Test"]
+    first = resources_api.client.post(
+        "/api/v1/logical-models", headers=_headers("cinthya.thor"), json=first_body
+    )
+    assert first.status_code == 201, first.text
+
+    unavailable = resources_api.client.get(
+        "/api/v1/logical-model-identifiers/availability",
+        headers=_headers("cinthya.thor"),
+        params={"identifier": "vbs_identifier_test"},
+    )
+    assert unavailable.status_code == 200
+    assert unavailable.json() == {"available": False}
+
+    duplicate_body = deepcopy(first_body)
+    duplicate_body["identifiers"] = ["vBs_iDeNtIfIeR_tEsT"]
+    duplicate = resources_api.client.post(
+        "/api/v1/logical-models", headers=_headers("cinthya.thor"), json=duplicate_body
+    )
+    assert duplicate.status_code == 409, duplicate.text
+    assert duplicate.headers["content-type"].startswith("application/problem+json")
+    assert duplicate.json()["errorCode"] == "DACA-LM-IDENTIFIER-DUPLICATE"
+    assert duplicate.json()["errors"] == [{
+        "location": "body.identifiers.0",
+        "message": "Dieser Identifier ist bereits vergeben.",
+        "type": "unique",
+    }]
+    assert "INSERT" not in duplicate.json()["detail"]
+
+    revised_body = deepcopy(first_body)
+    revised_body["identifiers"] = ["VBS_Identifier_Neu"]
+    revised = resources_api.client.put(
+        f"/api/v1/logical-models/{first.json()['id']}/versions/{first.json()['versionId']}",
+        headers=_headers("cinthya.thor", first.headers["etag"]),
+        json=revised_body,
+    )
+    assert revised.status_code == 200, revised.text
+    assert revised.headers["etag"] == '"2"'
+    old_identifier = resources_api.client.get(
+        "/api/v1/logical-model-identifiers/availability",
+        headers=_headers("cinthya.thor"),
+        params={"identifier": "VBS_Identifier_Test"},
+    )
+    assert old_identifier.json() == {"available": True}
+    current_identifier = resources_api.client.get(
+        "/api/v1/logical-model-identifiers/availability",
+        headers=_headers("cinthya.thor"),
+        params={"identifier": "VBS_Identifier_Neu"},
+    )
+    assert current_identifier.json() == {"available": False}
+
+    with resources_api.session_factory() as session:
+        reservation = session.get(LogicalModelIdentifierReservation, uuid.UUID(first.json()["id"]))
+        assert reservation is not None
+        assert reservation.identifier == "VBS_Identifier_Neu"
+        assert reservation.normalized_identifier == "vbs_identifier_neu"
 
 
 def test_dataset_resources_append_immutable_versions_and_preserve_other_aggregates(

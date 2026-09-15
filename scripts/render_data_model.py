@@ -61,6 +61,7 @@ CATALOG_TABLES = {
     "logical_model_versions": "Immutable structural and workflow revisions pinned to one authoritative DCAT dataset version.",
     "logical_models": "Federation-ready logical model roots that can exist without products, distributions or physical assets.",
     "logical_model_assistance_provenance": "Version-bound DeepL and TERMDAT provenance for accepted or edited multilingual model values.",
+    "logical_model_identifier_reservations": "Case-folded catalog-wide logical-model identifier reservations, atomically owned by one logical-model root.",
     "logical_model_reviews": "Immutable domain-owner review snapshots, decisions and successor-version references for submitted logical models.",
     "physical_columns": "Snapshot-bound PostgreSQL column metadata with stable source-relative key and DaCa URN.",
     "physical_databases": "Snapshot-bound database nodes in the physical metadata hierarchy.",

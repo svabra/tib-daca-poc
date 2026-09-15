@@ -2,7 +2,7 @@
 openapi: "3.1.0"
 info:
   title: "DaCa Metadata Publication API"
-  version: "0.1.23"
+  version: "0.1.24"
   description: "Focused integration contract for publishing REST metadata from DAAIF into DaCa. Set DACA_OPEN_METADATA_PUBLICATION=true on the Catalog API. The endpoint accepts metadata only, never credentials or product records, and does not grant access."
 servers:
   - url: "http://localhost:8080"

@@ -1,6 +1,6 @@
 {
   "name": "bit-daca",
-  "version": "0.1.23",
+  "version": "0.1.24",
   "private": true,
   "description": "BIT Distributed Data Catalog proof of concept",
   "workspaces": [
@@ -20,6 +20,8 @@
     "test:python": "uv run --all-packages pytest",
     "test:opa": "node scripts/test-opa.mjs",
     "test:e2e:modeling:edge": "node scripts/edge_modeling_e2e.mjs",
+    "test:ui-regression": "npm run test:e2e:modeling:edge --",
+    "setup:git-hooks": "node scripts/install-git-hooks.mjs",
     "docs:data-model": "uv run python scripts/render_data_model.py",
     "docs:data-model:check": "uv run python scripts/render_data_model.py --check",
     "docs:openapi": "uv run python scripts/render_metadata_publication_openapi.py",
@@ -35,7 +37,8 @@
     "journey:data-analyst": "uv run --package daca-journey-runner daca-journey data-analyst-golden-path",
     "journey:data-analyst:headed": "uv run --package daca-journey-runner daca-journey data-analyst-golden-path --headed",
     "start:catalog-ui": "npm run start --workspace @daca/catalog-ui",
-    "start:control-plane-ui": "npm run start --workspace @daca/control-plane-ui"
+    "start:control-plane-ui": "npm run start --workspace @daca/control-plane-ui",
+    "prepare": "npm run setup:git-hooks"
   },
   "dependencies": {
     "@fontsource/noto-sans": "5.3.0"

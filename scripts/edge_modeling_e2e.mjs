@@ -10,7 +10,7 @@ for (let index = 2; index < process.argv.length; index += 2) {
   args.set(process.argv[index], process.argv[index + 1]);
 }
 
-const baseUrl = (args.get('--base-url') ?? 'http://127.0.0.1:4200').replace(/\/$/, '');
+const baseUrl = (args.get('--base-url') ?? 'http://127.0.0.1:8080').replace(/\/$/, '');
 const edgePath = args.get('--edge-path')
   ?? process.env.EDGE_PATH
   ?? 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
@@ -257,6 +257,10 @@ async function logicalFirstFlow() {
     "document.querySelector('input[formcontrolname=\"titleDe\"]') !== null",
     'logical-model editor did not finish loading',
   );
+  await waitFor(
+    "[...document.querySelectorAll('button[type=\"submit\"]')].some((button) => button.textContent.includes('Als Entwurf speichern') && !button.disabled)",
+    'logical-model editor did not receive the active modelling role',
+  );
   await clickText('button[type="submit"]', 'Als Entwurf speichern');
   await waitFor(
     "document.querySelector('.save-action > button + .save-validation')?.textContent.includes('Titel (Deutsch)') && document.querySelector('.save-action > button + .save-validation')?.textContent.includes('Feld 1 – Feldname')",
@@ -269,9 +273,11 @@ async function logicalFirstFlow() {
   const tooltipOpened = await evaluate(`(() => {
     const host = document.querySelector('[dacaFieldHelp="titleDe"]');
     host?.dispatchEvent(new MouseEvent('mouseenter', {bubbles: true}));
-    return Boolean(document.querySelector('[role="tooltip"].is-visible'));
+    const trigger = host?.querySelector('.daca-field-help-trigger');
+    trigger?.dispatchEvent(new MouseEvent('mouseenter', {bubbles: true}));
+    return Boolean(trigger && !trigger.hidden && document.querySelector('[role="tooltip"].is-visible'));
   })()`);
-  invariant(tooltipOpened, 'semantic field tooltip did not open on hover');
+  invariant(tooltipOpened, 'semantic field help icon or tooltip did not open on hover');
   const reference = expectStatus(
     await api('cinthya.thor', '/api/v1/logical-models/70d964d8-334c-50bc-9177-88e3dbfba28f'),
     200,
@@ -282,7 +288,6 @@ async function logicalFirstFlow() {
     'textarea[formcontrolname="descriptionDe"]': 'Browsergeprüftes logical-first Modell ohne Distribution, Produkt oder physische Quelle.',
     'input[formcontrolname="identifiers"]': `EDGE-LOGICAL-${Date.now()}`,
     'select[formcontrolname="dataDomainId"]': reference.dataDomainId,
-    'input[formcontrolname="creatorName"]': 'Edge QA Harness',
     'select[formcontrolname="classification"]': 'internal',
     'input[formcontrolname="entityName"]': 'edge_employee',
     '.field-list input[formcontrolname="name"]': 'employee_id',
@@ -309,6 +314,49 @@ async function logicalFirstFlow() {
     'logical-first draft was not persisted and routed to its detail page',
   );
   const modelId = await evaluate("location.pathname.split('/').pop()");
+  const identifier = await evaluate("document.querySelector('input[formcontrolname=\"identifiers\"]')?.value");
+  invariant(typeof identifier === 'string' && identifier.length > 0, 'saved logical model identifier was unavailable');
+  const secretClassificationDisabled = await evaluate("document.querySelector('.classification-hero option[value=\"secret\"]')?.disabled === true");
+  invariant(secretClassificationDisabled, 'secret classification is not visibly disabled');
+  await navigate('/models/new', 'cinthya.thor');
+  await waitFor(
+    "document.querySelector('input[formcontrolname=\"titleDe\"]') !== null",
+    'duplicate-identifier editor did not finish loading',
+  );
+  await waitFor(
+    "[...document.querySelectorAll('.field-list select[formcontrolname=\"entityBusinessObjectVersionId\"], .field-list select[formcontrolname=\"businessObjectVersionId\"]')].length === 2 && [...document.querySelectorAll('.field-list select[formcontrolname=\"entityBusinessObjectVersionId\"], .field-list select[formcontrolname=\"businessObjectVersionId\"]')].every((select) => [...select.options].some((option) => option.value))",
+    'duplicate-identifier business objects did not finish loading',
+  );
+  await setControls({
+    'input[formcontrolname="titleDe"]': `Duplicate ID ${Date.now()}`,
+    'textarea[formcontrolname="descriptionDe"]': 'Browser test for a structured duplicate identifier error.',
+    'input[formcontrolname="identifiers"]': identifier,
+    'select[formcontrolname="dataDomainId"]': reference.dataDomainId,
+    'select[formcontrolname="classification"]': 'internal',
+    'input[formcontrolname="entityName"]': 'duplicate_record',
+    '.field-list input[formcontrolname="name"]': 'duplicate_id',
+    '.field-list textarea[formcontrolname="shortDescription"]': 'Browser test for conflict feedback.',
+  });
+  const duplicateObjectsSelected = await evaluate(`(() => {
+    const selects = [...document.querySelectorAll('.field-list select[formcontrolname="entityBusinessObjectVersionId"], .field-list select[formcontrolname="businessObjectVersionId"]')];
+    for (const select of selects) {
+      const option = [...select.options].find((item) => item.value);
+      if (!option) return false;
+      select.value = option.value;
+      select.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+    return selects.length === 2;
+  })()`);
+  invariant(duplicateObjectsSelected, 'duplicate-identifier test has no versioned business objects');
+  await clickText('button[type="submit"]', 'Als Entwurf speichern');
+  await waitFor(
+    "document.querySelector('.save-problem')?.textContent.includes('Identifier bereits vergeben') && document.querySelector('.save-problem')?.textContent.includes('DACA-LM-IDENTIFIER-DUPLICATE') && !document.querySelector('.save-problem')?.textContent.includes('The requested change conflicts')",
+    'duplicate identifier did not display a structured, user-facing error',
+  );
+  await waitFor(
+    "document.querySelector('input[formcontrolname=\"identifiers\"]')?.classList.contains('ng-invalid')",
+    'duplicate identifier input was not marked invalid',
+  );
   await navigate(`/models/${modelId}`, 'cinthya.thor');
   await waitFor(
     `document.body.innerText.includes(${JSON.stringify(title)}) && document.body.innerText.includes('Alle Änderungen gespeichert')`,
@@ -679,6 +727,10 @@ async function existingToExistingFlow(physical) {
     return [...select.selectedOptions].some((option) => option.textContent.includes('logistics.vehicle_inventory.designation_de'));
   })()`);
   invariant(keyboardSelection, 'Keyboard did not select the replacement physical column');
+  await waitFor(
+    "document.querySelector('.mapping-dialog button[type=\"submit\"]')?.disabled === false",
+    'resolved mapping dialog did not apply the keyboard selection',
+  );
   await pressKey('Tab', 'Tab', 9);
   const submitFocused = await evaluate(`(() => {
     const button = document.querySelector('.mapping-dialog button[type="submit"]');

@@ -19,7 +19,7 @@ export const LOGICAL_MODEL_FIELD_HELP: Record<string, HelpText> = {
   descriptionEn: help('Optionale englische Übersetzung der Datensatzbeschreibung.', 'Traduction anglaise facultative de la description du jeu de données.', 'Traduzione inglese facoltativa della descrizione del set di dati.'),
   titleRm: help('Optionale rätoromanische Übersetzung des Datensatztitels.', 'Traduction romanche facultative du titre du jeu de données.', 'Traduzione romancia facoltativa del titolo del set di dati.'),
   descriptionRm: help('Optionale rätoromanische Übersetzung der Datensatzbeschreibung.', 'Traduction romanche facultative de la description du jeu de données.', 'Traduzione romancia facoltativa della descrizione del set di dati.'),
-  identifiers: help('Stabile fachliche Kennungen, durch Kommas getrennt; zum Beispiel eine URN oder Register-ID.', 'Identifiants métier stables séparés par des virgules, par exemple une URN ou un identifiant de registre.', 'Identificatori specialistici stabili separati da virgole, ad esempio un URN o un ID di registro.'),
+  identifiers: help('Katalogweit eindeutiger Identifier als genau ein String ohne Leerzeichen. Den organisations-abgeleiteten Modus für stabile, organisationsbezogene Modelle nutzen; für übergreifende oder externe Kennungen den manuellen Identifier verwenden.', 'Identifiant unique dans le catalogue: une seule chaîne sans espace. Utilisez le mode dérivé de l’organisation pour les modèles stables liés à une organisation; utilisez un identifiant manuel pour les identifiants transversaux ou externes.', 'Identificatore univoco nel catalogo: una sola stringa senza spazi. Usare la modalità derivata dall’organizzazione per modelli stabili legati a un’organizzazione; usare un identificatore manuale per identificatori trasversali o esterni.'),
   department: help('Departement, in dessen Verwaltungskontext das Modell geführt wird.', 'Département dans le contexte administratif duquel le modèle est géré.', 'Dipartimento nel cui contesto amministrativo viene gestito il modello.'),
   office: help('Bundesamt oder Verwaltungseinheit, die das Modell organisatorisch führt.', 'Office fédéral ou unité administrative responsable de la gestion organisationnelle du modèle.', 'Ufficio federale o unità amministrativa responsabile della gestione organizzativa del modello.'),
   division: help('Optionale untergeordnete Organisationseinheit für den präzisen Bearbeitungsscope.', 'Unité organisationnelle subordonnée facultative pour préciser le périmètre de traitement.', 'Unità organizzativa subordinata facoltativa per precisare l’ambito di elaborazione.'),
@@ -88,9 +88,11 @@ export class LogicalModelFieldHelpDirective implements AfterViewInit, OnDestroy 
     trigger.type = 'button';
     trigger.className = 'daca-field-help-trigger';
     trigger.textContent = 'i';
+    trigger.hidden = true;
     trigger.setAttribute('aria-label', locale === 'fr' ? 'Afficher la description du champ' : locale === 'it' ? 'Mostra la descrizione del campo' : 'Feldbeschreibung anzeigen');
     trigger.setAttribute('aria-describedby', this.tooltipId);
     trigger.addEventListener('click', (event) => this.toggleFromTrigger(event));
+    trigger.addEventListener('mouseenter', () => this.open());
     trigger.addEventListener('focus', () => this.open());
     trigger.addEventListener('blur', () => this.close());
     this.element.nativeElement.append(trigger);
@@ -104,14 +106,34 @@ export class LogicalModelFieldHelpDirective implements AfterViewInit, OnDestroy 
     }
   }
 
-  @HostListener('mouseenter') open(): void {
+  @HostListener('mouseenter') reveal(): void {
+    this.trigger?.removeAttribute('hidden');
+    this.element.nativeElement.classList.add('is-field-help-revealed');
+  }
+
+  @HostListener('focusin') onFocusIn(): void {
+    this.reveal();
+  }
+
+  @HostListener('mouseleave') onMouseLeave(): void {
+    this.close();
+    this.hideTrigger();
+  }
+
+  @HostListener('focusout', ['$event']) onFocusOut(event: FocusEvent): void {
+    if (event.relatedTarget instanceof Node && this.element.nativeElement.contains(event.relatedTarget)) return;
+    this.close();
+    this.hideTrigger();
+  }
+
+  open(): void {
     if (!this.tooltip || !this.trigger) return;
     this.tooltip.hidden = false;
     this.tooltip.classList.add('is-visible');
     this.positionTooltip();
   }
 
-  @HostListener('mouseleave') close(): void {
+  close(): void {
     if (this.tooltip) {
       this.tooltip.classList.remove('is-visible');
       this.tooltip.hidden = true;
@@ -130,6 +152,11 @@ export class LogicalModelFieldHelpDirective implements AfterViewInit, OnDestroy 
     event.preventDefault();
     event.stopPropagation();
     if (this.tooltip?.hidden) this.open(); else this.close();
+  }
+
+  private hideTrigger(): void {
+    this.trigger?.setAttribute('hidden', '');
+    this.element.nativeElement.classList.remove('is-field-help-revealed');
   }
 
   private positionTooltip(): void {

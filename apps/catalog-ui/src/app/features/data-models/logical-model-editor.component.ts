@@ -1,7 +1,7 @@
 import { afterNextRender, ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, Injector, input, signal, viewChild } from '@angular/core';
 import { AbstractControl, FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { finalize, take } from 'rxjs';
+import { debounceTime, distinctUntilChanged, finalize, take } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService, ModelingPersona } from '../../core/demo-identity.service';
 import { I14yConceptsApiService } from '../domains/i14y-concepts-api.service';
@@ -11,7 +11,7 @@ import { DataModelsApiService, LogicalModelExportFile, LogicalModelExportReprese
 import { CreatorType, DataClassification, LogicalEntity, LogicalEntityWrite, LogicalField, LogicalFieldWrite, LogicalModel, LogicalModelAssistanceProvenance, LogicalModelCreator, LogicalModelWrite } from './data-models.models';
 import { DatasetSummaryComponent } from './dataset-summary.component';
 import { LogicalModelGovernanceComponent } from './logical-model-governance.component';
-import { BusinessObjectTerm, FederalOrganization, ModelingAssistanceService, TermdatEntry } from './modeling-assistance.service';
+import { BusinessObjectTerm, FederalOrganization, ModelingAssistanceService, ModelingScope, TermdatEntry } from './modeling-assistance.service';
 import { WorkContextComponent } from './work-context.component';
 import { LogicalModelFieldHelpDirective } from './logical-model-field-help.directive';
 
@@ -26,6 +26,7 @@ export interface LogicalModelValidationIssue {
 }
 
 const LOGICAL_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_.-]{0,254}$/;
+const LOGICAL_IDENTIFIER_PATTERN = /^\S+$/;
 
 export function normalizeFieldConceptSelection(
   conceptIds: readonly string[],
@@ -36,7 +37,7 @@ export function normalizeFieldConceptSelection(
   const valueList = valueListConceptId?.trim();
   if (valueList && !normalized.includes(valueList)) normalized.push(valueList);
   const primary = primaryConceptId?.trim();
-  return { conceptIds: normalized, primaryConceptId: primary && normalized.includes(primary) ? primary : normalized[0] ?? null };
+  return { conceptIds: normalized, primaryConceptId: primary && normalized.includes(primary) ? primary : null };
 }
 
 export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>): string {
@@ -51,7 +52,7 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
     @if (model(); as current) { <daca-data-model-workspace-nav [modelId]="current.id" [modelTitle]="current.title.de" activeSection="model" /> }
     <section class="daca-page-heading model-editor-heading">
       <div><p class="daca-eyebrow">{{ model() ? 'Logisches Datenmodell' : 'Neues logisches Datenmodell' }}</p><h1>{{ model()?.title?.de || 'Modell erfassen' }}</h1><p>Datensatzattribute und SHACL-Feldattribute bleiben getrennt. Eine physische Quelle ist nicht erforderlich.</p></div>
-      <div class="heading-tools"><label class="classification-hero" dacaFieldHelp="classification">Klassifizierung<select [formControl]="form.controls.dataset.controls.classification"><option value="unclassified">Nicht klassifiziert</option><option value="internal">Intern</option><option value="confidential">Vertraulich</option><option value="secret">Geheim</option></select></label><daca-work-context [user]="identity.user()" /></div>
+      <div class="heading-tools"><label class="classification-hero" dacaFieldHelp="classification">Klassifizierung<select [formControl]="form.controls.dataset.controls.classification"><option value="unclassified">Nicht klassifiziert</option><option value="internal">Intern</option><option value="confidential">Vertraulich</option><option value="secret" disabled>Geheim</option></select></label><daca-work-context [user]="identity.user()" /></div>
     </section>
     @if (sourceSnapshotId()) { <p class="daca-alert">Dieser Entwurf wurde aus dem physischen Snapshot <code>{{ sourceSnapshotId() }}</code> vorbereitet. Alle Vorschlagswerte bleiben editierbar.</p> }
     @if (model(); as current) { <daca-dataset-summary [model]="current" /><daca-logical-model-governance [model]="current" /> }
@@ -70,15 +71,15 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
             <label class="is-wide" dacaFieldHelp="descriptionDe">Beschreibung (Deutsch) *<textarea rows="3" formControlName="descriptionDe" (blur)="assistDescription()"></textarea></label>
             <details class="is-wide language-details"><summary>Weitere Sprachen</summary><div><label dacaFieldHelp="titleFr">Titel Französisch<input formControlName="titleFr"></label><label dacaFieldHelp="descriptionFr">Beschreibung Französisch<textarea rows="2" formControlName="descriptionFr"></textarea></label><label dacaFieldHelp="titleIt">Titel Italienisch<input formControlName="titleIt"></label><label dacaFieldHelp="descriptionIt">Beschreibung Italienisch<textarea rows="2" formControlName="descriptionIt"></textarea></label><label dacaFieldHelp="titleEn">Titel Englisch<input formControlName="titleEn"></label><label dacaFieldHelp="descriptionEn">Beschreibung Englisch<textarea rows="2" formControlName="descriptionEn"></textarea></label><label dacaFieldHelp="titleRm">Titel Rätoromanisch<input formControlName="titleRm"></label><label dacaFieldHelp="descriptionRm">Beschreibung Rätoromanisch<textarea rows="2" formControlName="descriptionRm"></textarea></label></div></details>
             @if(translationSuggestions().length){<aside class="translation-overlay is-wide" aria-label="Verfügbare Übersetzungsvorschläge"><h3>✨ Automatische Übersetzungen verfügbar</h3>@for(item of translationSuggestions();track item.field){<section><strong>{{ item.label }}</strong><div><span><small>Aktuell</small>{{ item.current }}</span><span><small>Vorschlag</small>{{ item.suggestion }}</span></div><button type="button" (click)="acceptTranslation(item.field)">Übernehmen</button><button type="button" (click)="discardTranslation(item.field)">Verwerfen</button></section>}</aside>}
-            <label class="is-wide" dacaFieldHelp="identifiers">Identifier (kommagetrennt) *<input formControlName="identifiers" placeholder="urn:… oder fachlicher Identifier"></label>
-            <label dacaFieldHelp="department">Departement *<select formControlName="department" (change)="departmentChanged()"><option value="">Bitte wählen</option>@for(org of departments();track org.id){<option [value]="org.id">{{ org.displayName }}</option>}</select></label>
-            <label dacaFieldHelp="office">Amt / Verwaltungseinheit *<select formControlName="office" (change)="officeChanged()"><option value="">Bitte wählen</option>@for(org of offices();track org.id){<option [value]="org.id">{{ org.displayName }}</option>}</select></label>
-            <label dacaFieldHelp="division">Abteilung / Bereich<select formControlName="division" (change)="scopeChanged()"><option value="">Keine</option>@for(org of divisions();track org.id){<option [value]="org.id">{{ org.displayName }}</option>}</select></label>
-            <label dacaFieldHelp="dataDomainId">DaCa-Domäne *<select formControlName="dataDomainId" (change)="domainChanged()"><option value="">Bitte wählen</option>@for(domain of catalogApi.domains();track domain.id){<option [value]="domain.id">{{ domain.preferredLabel }}</option>}</select></label>
+            <label dacaFieldHelp="department">Departement *<select formControlName="department" (change)="departmentChanged()"><option value="">Bitte wählen</option>@for(org of departments();track org.id){<option [value]="org.id" [disabled]="!canNavigateOrganization(org)">{{ org.displayName }}</option>}</select></label>
+            <label dacaFieldHelp="office">Amt / Verwaltungseinheit<select formControlName="office" (change)="officeChanged()"><option value="">Keine</option>@for(org of offices();track org.id){<option [value]="org.id" [disabled]="!canNavigateOrganization(org)">{{ org.displayName }}</option>}</select></label>
+            <label dacaFieldHelp="division">Abteilung / Bereich<select formControlName="division" (change)="scopeChanged()"><option value="">Keine</option>@for(org of divisions();track org.id){<option [value]="org.id" [disabled]="!canNavigateOrganization(org)">{{ org.displayName }}</option>}</select></label>
+            <label class="is-wide identifier-field" dacaFieldHelp="identifiers">Identifier *<span class="identifier-toggle"><input type="checkbox" formControlName="identifierMode" (change)="identifierModeChanged()"> Organisations-abgeleiteter Identifier</span><span class="identifier-input" [class.is-derived]="form.controls.dataset.controls.identifierMode.value">@if(form.controls.dataset.controls.identifierMode.value){<span class="identifier-prefix">{{ organizationIdentifierPrefix() }}</span>}<input formControlName="identifiers" (input)="identifierChanged()" placeholder="Eindeutiger Identifier ohne Leerzeichen"></span><small>@if(identifierAvailability()==='checking'){Identifier wird geprüft …}@else if(identifierAvailability()==='available'){Identifier ist katalogweit verfügbar.}@else if(identifierAvailability()==='taken'){Dieser Identifier ist bereits vergeben.}@else{Ein Identifier ist genau ein String ohne Leerzeichen.}</small></label>
+            <label dacaFieldHelp="dataDomainId">DaCa-Domäne * <a class="new-domain-link" routerLink="/domains" target="_blank" title="Öffnet die Domain-Registrierung in einem neuen Tab">Neue Domäne erstellen</a><select formControlName="dataDomainId" (change)="domainChanged()"><option value="">Bitte wählen</option>@for(domain of catalogApi.domains();track domain.id){<option [value]="domain.id">{{ domain.preferredLabel }}</option>}</select></label>
             <div class="role-assignment"><strong>Data Steward (Organisation)</strong><span>{{ organizationStewards() || 'Nicht zugewiesen' }}</span><small>Diese Rolle gilt organisationsweit und wird nicht am einzelnen Modell gespeichert.</small></div>
-            <label dacaFieldHelp="creatorType">Ersteller-Typ *<select formControlName="creatorType"><option value="application">Applikation</option><option value="internal_organisation">Interne Verwaltungseinheit</option><option value="internal_person">Interne Person</option><option value="external_organisation_or_person">Externe Organisation/Person</option></select></label>
+            <label dacaFieldHelp="creatorType">Ersteller-Typ<select formControlName="creatorType"><option value="">Nicht erfasst</option><option value="application">Applikation</option><option value="internal_organisation">Interne Verwaltungseinheit</option><option value="internal_person">Interne Person</option><option value="external_organisation_or_person">Externe Organisation/Person</option></select></label>
             @switch(form.controls.dataset.controls.creatorType.value){
-              @case('application'){<label dacaFieldHelp="creatorName">Applikationsname *<input formControlName="creatorName" placeholder="z. B. HR-Core"></label>}
+              @case('application'){<label dacaFieldHelp="creatorName">Applikationsname<input formControlName="creatorName" placeholder="z. B. HR-Core"></label>}
               @case('internal_organisation'){<label dacaFieldHelp="creatorIdentifier">Organisations-ID *<input formControlName="creatorIdentifier" placeholder="z. B. vtg"></label><label dacaFieldHelp="creatorName">Englischer Name *<input formControlName="creatorName"></label>}
               @case('internal_person'){<label dacaFieldHelp="creatorName">User-ID *<input formControlName="creatorName" placeholder="vorname.nachname"></label>}
               @case('external_organisation_or_person'){<label dacaFieldHelp="creatorName">Organisationsname *<input formControlName="creatorName"></label><label dacaFieldHelp="creatorPersonName">Person (optional)<input formControlName="creatorPersonName"></label>}
@@ -100,9 +101,9 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
                   <label dacaFieldHelp="nullable">Nullability<select formControlName="nullable"><option [ngValue]="true">Null erlaubt</option><option [ngValue]="false">Pflichtfeld</option></select></label><label dacaFieldHelp="minCount">minCount<input type="number" min="0" formControlName="minCount"></label><label dacaFieldHelp="maxCount">maxCount<input type="number" min="1" formControlName="maxCount"></label>
                   <label dacaFieldHelp="fieldClassification">Klassifizierung<select formControlName="classification"><option value="unclassified">Nicht klassifiziert</option><option value="internal">Intern</option><option value="confidential">Vertraulich</option><option value="secret">Geheim</option></select></label><label dacaFieldHelp="sourceSystem">System<input formControlName="sourceSystem"></label>
                   <label class="is-wide" dacaFieldHelp="shortDescription">Kurzbeschreibung *<textarea rows="2" formControlName="shortDescription"></textarea></label><label class="is-wide" dacaFieldHelp="comment">Kommentar<textarea rows="2" formControlName="comment"></textarea></label>
-                  <label class="is-wide" dacaFieldHelp="conceptIds">I14Y-Concept-Links (optional)<select class="concept-multi" multiple size="5" formControlName="conceptIds" (change)="selectConcepts(index, selectValues($event))">@for(concept of concepts();track concept.id){<option [value]="concept.id" [attr.data-concept-id]="concept.id">{{ conceptName(concept) }} · {{ concept.conceptType }} · v{{ concept.version }}</option>}@for(conceptId of missingConceptIds(field);track conceptId){<option [value]="conceptId" [attr.data-concept-id]="conceptId">{{ conceptLabel(conceptId) }}</option>}</select><small>Keine Auswahl ist erforderlich. Mehrere Concepts können mit Strg/⌘ oder Umschalt ausgewählt werden.</small></label>
-                  <label class="is-wide" dacaFieldHelp="primaryConceptId">Primär für I14Y (optional)<select formControlName="primaryConceptId" [required]="linkedConceptIds(field).length > 0">@if(!linkedConceptIds(field).length){<option value="">Kein Concept verknüpft</option>}@for(conceptId of linkedConceptIds(field);track conceptId){<option [value]="conceptId">{{ conceptLabel(conceptId) }}</option>}</select><small>Nur bei einer Concept-Verknüpfung wird das primäre Concept als <code>dcterms:conformsTo</code> exportiert.</small></label>
-                  <label class="is-wide" dacaFieldHelp="valueListConceptId">Werteliste (I14Y CodeList, optional)<select formControlName="valueListConceptId" (change)="selectConcept(index, selectValue($event), true)"><option value="">Keine Werteliste</option>@for(concept of codeLists();track concept.id){<option [value]="concept.id">{{ conceptName(concept) }} · {{ concept.identifiers[0] }}</option>}</select></label>
+                  <label class="is-wide" dacaFieldHelp="conceptIds">I14Y-Concept-Links (optional)<button type="button" class="i14y-reset" (click)="resetConceptLinks(index)">Zurücksetzen</button><select class="concept-multi" multiple size="5" formControlName="conceptIds" (change)="selectConcepts(index, selectValues($event))">@for(concept of concepts();track concept.id){<option [value]="concept.id" [attr.data-concept-id]="concept.id">{{ conceptName(concept) }} · {{ concept.conceptType }} · v{{ concept.version }}</option>}@for(conceptId of missingConceptIds(field);track conceptId){<option [value]="conceptId" [attr.data-concept-id]="conceptId">{{ conceptLabel(conceptId) }}</option>}</select><small>Keine Auswahl ist erforderlich. Mehrere Concepts können mit Strg/⌘ oder Umschalt ausgewählt werden.</small></label>
+                  <label class="is-wide" dacaFieldHelp="primaryConceptId">Primär für I14Y (optional)<button type="button" class="i14y-reset" (click)="resetPrimaryConcept(index)">Zurücksetzen</button><select formControlName="primaryConceptId"><option value="">Kein primäres Concept</option>@for(conceptId of linkedConceptIds(field);track conceptId){<option [value]="conceptId">{{ conceptLabel(conceptId) }}</option>}</select><small>Nur bei einer gewählten primären Verknüpfung wird dieses Concept als <code>dcterms:conformsTo</code> exportiert.</small></label>
+                  <label class="is-wide" dacaFieldHelp="valueListConceptId">Werteliste (I14Y CodeList, optional)<button type="button" class="i14y-reset" (click)="resetValueList(index)">Zurücksetzen</button><select formControlName="valueListConceptId" (change)="selectConcept(index, selectValue($event), true)"><option value="">Keine Werteliste</option>@for(concept of codeLists();track concept.id){<option [value]="concept.id">{{ conceptName(concept) }} · {{ concept.identifiers[0] }}</option>}</select></label>
                 </div>
               </fieldset>
             }
@@ -122,7 +123,7 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
           <div class="editor-primary-actions">
             <button class="daca-button is-secondary" type="button" [disabled]="!canSubmitForReview()" [attr.title]="submitBlockedReason()" (click)="submitForReview()">Zur Domänenfreigabe einreichen</button>
             @if(model()?.status === 'published'){<button class="daca-button is-secondary" type="button" [disabled]="!canPublishCurrentModel() || saving()" (click)="retire()">Modell stilllegen</button>}
-            <div class="save-action"><button class="daca-button" type="submit" [disabled]="saving() || !identity.canEditModels() || model()?.status === 'retired' || model()?.status === 'review_pending'">{{ saving() ? 'Wird gespeichert …' : 'Als Entwurf speichern' }}</button>@if(validationAttempted() && validationIssues().length){<section class="save-validation" role="alert" aria-live="assertive"><strong>Bitte korrigieren Sie folgende Angaben:</strong><ul>@for(issue of validationIssues();track issue.field + issue.message){<li><span>{{ issue.field }}:</span> {{ issue.message }}</li>}</ul></section>}@else if(saveError()){<p class="save-validation" role="alert">{{ saveError() }}</p>}</div>
+            <div class="save-action"><button class="daca-button" type="submit" [disabled]="saving() || !canEditCurrentModel() || model()?.status === 'retired' || model()?.status === 'review_pending'">{{ saving() ? 'Wird gespeichert …' : 'Als Entwurf speichern' }}</button>@if(saveProblem();as problem){<section class="save-problem" role="alert" aria-live="assertive"><strong>{{ saveProblemTitle(problem) }}</strong><p>{{ problem.message }}</p>@if(problem.suggestedAction){<p class="save-problem-action">{{ problem.suggestedAction }}</p>}@if(validationIssues().length){<ul>@for(issue of validationIssues();track issue.field + issue.message){<li><button type="button" (click)="focusIssue(issue)"><span>{{ issue.field }}:</span> {{ issue.message }}</button></li>}</ul>}<div class="save-problem-technical"><small>Technische Details · Fehlercode {{ supportErrorCode(problem) }} · HTTP {{ problem.status }} · Request-ID {{ problem.requestId || 'nicht verfügbar' }}@if(problem.technicalDetails){ · {{ problem.technicalDetails.category }} · {{ problem.technicalDetails.sqlState }} · {{ problem.technicalDetails.constraint }} · {{ problem.technicalDetails.timestamp }}}</small><button type="button" class="daca-button is-secondary" (click)="copyErrorMessage(problem)">{{ errorCopied() ? 'Kopiert' : 'Copy Error Message' }}</button></div></section>}@else if(validationAttempted() && validationIssues().length){<section class="save-validation" role="alert" aria-live="assertive"><strong>Bitte korrigieren Sie folgende Angaben:</strong><ul>@for(issue of validationIssues();track issue.field + issue.message){<li><button type="button" (click)="focusIssue(issue)"><span>{{ issue.field }}:</span> {{ issue.message }}</button></li>}</ul></section>}</div>
           </div>
         </footer>
         @if (model()?.status === 'review_pending') { <p class="publish-note">Die Aufgabe liegt beim primären Domain Owner der gewählten Domäne. Der Entscheid erfolgt über den persönlichen Prüfauftrag.</p> }
@@ -130,25 +131,34 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
     }
   `,
   styles: [`
-    .model-editor-heading{align-items:center}.editor-state{padding:2rem;box-shadow:none}.model-editor-form{display:grid;gap:1.25rem}.editor-section{box-shadow:none}.editor-section>header{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.1rem 1.25rem;border-bottom:1px solid var(--daca-border)}.editor-section>header>div{display:flex;align-items:center;gap:1rem}.editor-section>header>div>span{display:grid;place-items:center;width:38px;height:38px;background:var(--daca-federal-blue);color:#fff;font-weight:800}.editor-section h2{margin:0;font-size:1.12rem}.editor-section header small{color:var(--daca-muted)}.structure-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.5rem}.editor-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;padding:1.25rem}.editor-grid label{display:grid;align-content:start;gap:.4rem;color:#30363b;font-size:.72rem;font-weight:750}.editor-grid input,.editor-grid select,.editor-grid textarea{width:100%;min-height:42px;border:1px solid var(--daca-border-strong);border-radius:0;padding:.55rem .65rem;background:#fff;color:var(--daca-ink)}.editor-grid textarea{resize:vertical}.editor-grid select.concept-multi{min-height:8rem}.editor-grid label>small{color:var(--daca-muted);font-size:.64rem;font-weight:500}.editor-grid .is-wide{grid-column:1/-1}.termdat-feedback{display:flex;min-height:44px;align-items:center;justify-content:space-between;gap:.8rem;border-left:4px solid var(--daca-border-strong);padding:.7rem .85rem;background:#f4f6f7;color:var(--daca-muted);font-size:.72rem}.termdat-feedback.has-hits{border-left-color:#167347;background:#edf7f0;color:#174c32}.termdat-feedback button{min-height:40px;border:1px solid currentColor;padding:.45rem .75rem;background:#fff;color:inherit;font-weight:750;cursor:pointer}.termdat-loading{display:flex;align-items:center;gap:.65rem}.termdat-spinner{display:block;box-sizing:border-box;width:20px;height:20px;flex:0 0 20px;border:3px solid rgba(31,111,139,.34);border-top-color:#176783;border-radius:999px;animation:termdat-spinner-rotate .8s linear infinite;transform-origin:center}@keyframes termdat-spinner-rotate{to{transform:rotate(360deg)}}.termdat-modal{width:min(1040px,100%)}.termdat-modal li{grid-template-columns:minmax(0,1fr) minmax(390px,1.15fr);align-items:start}.termdat-result-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;gap:.55rem;width:100%}.termdat-result-actions .daca-button{width:100%;min-height:48px;padding:.65rem .85rem;font-weight:800;line-height:1.25;text-align:center;white-space:normal}.termdat-result-actions .daca-button:first-child{grid-column:1/-1}.termdat-result-actions .daca-button:disabled{font-weight:800}.termdat-adoption{display:grid;scroll-margin-block:1rem;gap:.75rem;margin:1rem 0;border-left:4px solid var(--daca-federal-blue);padding:1rem;background:#eef5f8}.termdat-adoption h3,.termdat-adoption p{margin:0}.termdat-overwrite-warning{border-left:4px solid #b26a00;padding:.65rem .8rem;background:#fff1c7;color:#4f3d00}.termdat-adoption-row{display:grid;grid-template-columns:minmax(8rem,.7fr) 1fr 1fr auto;align-items:start;gap:.7rem;border-top:1px solid var(--daca-border);padding-top:.7rem}.termdat-adoption-row>span{display:grid;gap:.2rem;white-space:pre-wrap}.termdat-adoption-row small{color:var(--daca-muted);font-weight:700;text-transform:uppercase}.termdat-adoption-row em{padding:.2rem .4rem;background:#fff1c7;color:#634c00;font-size:.67rem;font-style:normal;font-weight:750}.termdat-adoption-actions{display:flex;justify-content:flex-end;gap:.5rem}.termdat-adoption-actions .daca-button{min-width:190px;font-weight:800}.role-assignment{display:grid;align-content:start;gap:.25rem;border-left:4px solid var(--daca-blue);padding:.65rem .8rem;background:var(--daca-blue-soft);font-size:.7rem}.role-assignment small{color:var(--daca-muted);font-size:.62rem}.language-details{border:1px solid var(--daca-border);padding:.85rem}.language-details summary{cursor:pointer;font-weight:750}.language-details>div{display:grid;grid-template-columns:1fr 2fr;gap:.8rem;margin-top:1rem}.media-hint{display:grid;gap:.25rem;border-left:4px solid var(--daca-blue);padding:.8rem 1rem;background:var(--daca-blue-soft);font-size:.72rem}.media-hint span{color:var(--daca-muted)}.field-list{display:grid;gap:1rem;padding:1.25rem}.field-list fieldset{position:relative;margin:0;border:1px solid var(--daca-border);padding:0}.field-list legend{margin-left:1rem;padding:.35rem .65rem;background:#f2f5f7;font-size:.76rem;font-weight:800}.remove-field{position:absolute;top:.35rem;right:.7rem;min-height:32px;border:0;background:transparent;color:var(--daca-red-dark);font-size:.68rem;font-weight:750;cursor:pointer}.export-section{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.25rem;border-top:4px solid var(--daca-red);box-shadow:none}.export-section h2,.export-section p{margin:.25rem 0}.export-section>div:last-child{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.5rem}.editor-actions{position:sticky;z-index:5;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:1rem;border:1px solid var(--daca-border);border-top:4px solid var(--daca-red);padding:.9rem 1rem;background:#fff;box-shadow:0 -8px 20px #15293d18}.editor-actions>div{display:flex;align-items:center;flex-wrap:wrap;gap:.6rem}.editor-actions .editor-primary-actions{align-items:flex-start;justify-content:flex-end}.save-action{display:grid;justify-items:stretch;gap:.45rem;min-width:250px}.save-validation{max-width:430px;margin:0;border-left:4px solid var(--daca-red);padding:.6rem .75rem;background:#fff0f0;color:var(--daca-red-dark);font-size:.7rem;text-align:left}.save-validation ul{display:grid;gap:.25rem;margin:.4rem 0 0;padding-left:1.1rem}.save-validation li span{color:inherit;font-size:inherit;font-weight:800}.editor-actions span,.publish-note{color:var(--daca-muted);font-size:.7rem}.publish-note{margin:-.75rem 0 0;text-align:right}@media(prefers-reduced-motion:reduce){.termdat-spinner{animation:none}}@media(max-width:980px){.editor-grid{grid-template-columns:1fr 1fr}.termdat-modal li{grid-template-columns:minmax(0,1fr) minmax(340px,1fr)}.termdat-adoption-row{grid-template-columns:1fr 1fr}.termdat-adoption-row>strong,.termdat-adoption-row>em{grid-column:1/-1}.export-section,.editor-actions{align-items:flex-start;flex-direction:column}.export-section>div:last-child{justify-content:flex-start}.editor-actions>div:last-child{width:100%}.save-action{width:100%}}@media(max-width:820px){.model-editor-heading{align-items:flex-start;flex-direction:column}.editor-grid,.language-details>div,.termdat-adoption-row,.termdat-modal li{grid-template-columns:1fr}.termdat-result-actions,.termdat-adoption-actions{width:100%}.termdat-adoption-actions .daca-button{min-width:0}.termdat-feedback{align-items:stretch;flex-direction:column}.editor-actions{position:static}.editor-actions>div,.editor-actions .daca-button{width:100%}.editor-section>header{align-items:flex-start;flex-direction:column}.structure-actions,.structure-actions .daca-button{width:100%}}@media(max-width:560px){.termdat-result-actions{grid-template-columns:1fr}.termdat-result-actions .daca-button:first-child{grid-column:auto}.termdat-result-actions .daca-button{min-height:44px}.termdat-adoption-actions{display:grid;grid-template-columns:1fr}.termdat-adoption-actions .daca-button{width:100%}}
+    .model-editor-heading{align-items:center}.editor-state{padding:2rem;box-shadow:none}.model-editor-form{display:grid;gap:1.25rem}.editor-section{box-shadow:none}.editor-section>header{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.1rem 1.25rem;border-bottom:1px solid var(--daca-border)}.editor-section>header>div{display:flex;align-items:center;gap:1rem}.editor-section>header>div>span{display:grid;place-items:center;width:38px;height:38px;background:var(--daca-federal-blue);color:#fff;font-weight:800}.editor-section h2{margin:0;font-size:1.12rem}.editor-section header small{color:var(--daca-muted)}.structure-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.5rem}.editor-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;padding:1.25rem}.editor-grid label{display:grid;align-content:start;gap:.4rem;color:#30363b;font-size:.72rem;font-weight:750}.editor-grid input,.editor-grid select,.editor-grid textarea{width:100%;min-height:42px;border:1px solid var(--daca-border-strong);border-radius:0;padding:.55rem .65rem;background:#fff;color:var(--daca-ink)}.validation-attempted .editor-grid input.ng-invalid,.validation-attempted .editor-grid select.ng-invalid,.validation-attempted .editor-grid textarea.ng-invalid{border-color:#b3162b;background:rgba(179,22,43,.10)}.editor-grid textarea{resize:vertical}.editor-grid select.concept-multi{min-height:8rem}.editor-grid label>small{color:var(--daca-muted);font-size:.64rem;font-weight:500}.editor-grid .is-wide{grid-column:1/-1}.termdat-feedback{display:flex;min-height:44px;align-items:center;justify-content:space-between;gap:.8rem;border-left:4px solid var(--daca-border-strong);padding:.7rem .85rem;background:#f4f6f7;color:var(--daca-muted);font-size:.72rem}.termdat-feedback.has-hits{border-left-color:#167347;background:#edf7f0;color:#174c32}.termdat-feedback button{min-height:40px;border:1px solid currentColor;padding:.45rem .75rem;background:#fff;color:inherit;font-weight:750;cursor:pointer}.termdat-loading{display:flex;align-items:center;gap:.65rem}.termdat-spinner{display:block;box-sizing:border-box;width:20px;height:20px;flex:0 0 20px;border:3px solid rgba(31,111,139,.34);border-top-color:#176783;border-radius:999px;animation:termdat-spinner-rotate .8s linear infinite;transform-origin:center}@keyframes termdat-spinner-rotate{to{transform:rotate(360deg)}}.termdat-modal{width:min(1040px,100%)}.termdat-modal li{grid-template-columns:minmax(0,1fr) minmax(390px,1.15fr);align-items:start}.termdat-result-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;gap:.55rem;width:100%}.termdat-result-actions .daca-button{width:100%;min-height:48px;padding:.65rem .85rem;font-weight:800;line-height:1.25;text-align:center;white-space:normal}.termdat-result-actions .daca-button:first-child{grid-column:1/-1}.termdat-result-actions .daca-button:disabled{font-weight:800}.termdat-adoption{display:grid;scroll-margin-block:1rem;gap:.75rem;margin:1rem 0;border-left:4px solid var(--daca-federal-blue);padding:1rem;background:#eef5f8}.termdat-adoption h3,.termdat-adoption p{margin:0}.termdat-overwrite-warning{border-left:4px solid #b26a00;padding:.65rem .8rem;background:#fff1c7;color:#4f3d00}.termdat-adoption-row{display:grid;grid-template-columns:minmax(8rem,.7fr) 1fr 1fr auto;align-items:start;gap:.7rem;border-top:1px solid var(--daca-border);padding-top:.7rem}.termdat-adoption-row>span{display:grid;gap:.2rem;white-space:pre-wrap}.termdat-adoption-row small{color:var(--daca-muted);font-weight:700;text-transform:uppercase}.termdat-adoption-row em{padding:.2rem .4rem;background:#fff1c7;color:#634c00;font-size:.67rem;font-style:normal;font-weight:750}.termdat-adoption-actions{display:flex;justify-content:flex-end;gap:.5rem}.termdat-adoption-actions .daca-button{min-width:190px;font-weight:800}.role-assignment{display:grid;align-content:start;gap:.25rem;border-left:4px solid var(--daca-blue);padding:.65rem .8rem;background:var(--daca-blue-soft);font-size:.7rem}.role-assignment small{color:var(--daca-muted);font-size:.62rem}.language-details{border:1px solid var(--daca-border);padding:.85rem}.language-details summary{cursor:pointer;font-weight:750}.language-details>div{display:grid;grid-template-columns:1fr 2fr;gap:.8rem;margin-top:1rem}.media-hint{display:grid;gap:.25rem;border-left:4px solid var(--daca-blue);padding:.8rem 1rem;background:var(--daca-blue-soft);font-size:.72rem}.media-hint span{color:var(--daca-muted)}.field-list{display:grid;gap:1rem;padding:1.25rem}.field-list fieldset{position:relative;margin:0;border:1px solid var(--daca-border);padding:0}.field-list legend{margin-left:1rem;padding:.35rem .65rem;background:#f2f5f7;font-size:.76rem;font-weight:800}.remove-field{position:absolute;top:.35rem;right:.7rem;min-height:32px;border:0;background:transparent;color:var(--daca-red-dark);font-size:.68rem;font-weight:750;cursor:pointer}.export-section{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.25rem;border-top:4px solid var(--daca-red);box-shadow:none}.export-section h2,.export-section p{margin:.25rem 0}.export-section>div:last-child{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.5rem}.editor-actions{position:sticky;z-index:5;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:1rem;border:1px solid var(--daca-border);border-top:4px solid var(--daca-red);padding:.9rem 1rem;background:#fff;box-shadow:0 -8px 20px #15293d18}.editor-actions>div{display:flex;align-items:center;flex-wrap:wrap;gap:.6rem}.editor-actions .editor-primary-actions{align-items:flex-start;justify-content:flex-end}.save-action{display:grid;justify-items:stretch;gap:.45rem;min-width:250px}.save-validation,.save-problem{max-width:430px;margin:0;border-left:4px solid var(--daca-red);padding:.6rem .75rem;background:#fff0f0;color:var(--daca-red-dark);font-size:.7rem;text-align:left}.save-problem{display:grid;gap:.45rem}.save-problem p{margin:0}.save-problem-action{font-weight:700}.save-validation ul,.save-problem ul{display:grid;gap:.25rem;margin:.4rem 0 0;padding-left:1.1rem}.save-validation li span,.save-problem li span{color:inherit;font-size:inherit;font-weight:800}.save-validation li button,.save-problem li button{border:0;padding:0;background:transparent;color:inherit;text-align:left;cursor:pointer;text-decoration:underline}.save-problem-technical{display:flex;align-items:center;justify-content:space-between;gap:.5rem;border-top:1px solid #b3162b55;padding-top:.45rem;color:#5f6970}.save-problem-technical small{font-size:.58rem;overflow-wrap:anywhere}.save-problem-technical .daca-button{min-height:30px;padding:.25rem .45rem;font-size:.62rem;white-space:nowrap}.editor-actions span,.publish-note{color:var(--daca-muted);font-size:.7rem}.publish-note{margin:-.75rem 0 0;text-align:right}@media(prefers-reduced-motion:reduce){.termdat-spinner{animation:none}}@media(max-width:980px){.editor-grid{grid-template-columns:1fr 1fr}.termdat-modal li{grid-template-columns:minmax(0,1fr) minmax(340px,1fr)}.termdat-adoption-row{grid-template-columns:1fr 1fr}.termdat-adoption-row>strong,.termdat-adoption-row>em{grid-column:1/-1}.export-section,.editor-actions{align-items:flex-start;flex-direction:column}.export-section>div:last-child{justify-content:flex-start}.editor-actions>div:last-child{width:100%}.save-action{width:100%}}@media(max-width:820px){.model-editor-heading{align-items:flex-start;flex-direction:column}.editor-grid,.language-details>div,.termdat-adoption-row,.termdat-modal li{grid-template-columns:1fr}.termdat-result-actions,.termdat-adoption-actions{width:100%}.termdat-adoption-actions .daca-button{min-width:0}.termdat-feedback{align-items:stretch;flex-direction:column}.editor-actions{position:static}.editor-actions>div,.editor-actions .daca-button{width:100%}.editor-section>header{align-items:flex-start;flex-direction:column}.structure-actions,.structure-actions .daca-button{width:100%}}@media(max-width:560px){.termdat-result-actions{grid-template-columns:1fr}.termdat-result-actions .daca-button:first-child{grid-column:auto}.termdat-result-actions .daca-button{min-height:44px}.termdat-adoption-actions{display:grid;grid-template-columns:1fr}.termdat-adoption-actions .daca-button{width:100%}}
   `],
 })
 export class LogicalModelEditorComponent {
   readonly id = input<string>(); readonly sourceSnapshotId = input<string>();
   readonly identity = inject(DemoIdentityService); readonly catalogApi = inject(CatalogApiService);
   private readonly api = inject(DataModelsApiService); private readonly conceptsApi = inject(I14yConceptsApiService); private readonly assistance = inject(ModelingAssistanceService); private readonly router = inject(Router); private readonly fb = inject(FormBuilder); private readonly injector = inject(Injector);
-  readonly model = signal<LogicalModel | null>(null); readonly concepts = signal<readonly I14yConcept[]>([]); readonly loading = signal(false); readonly saving = signal(false); readonly exporting = signal<LogicalModelExportRepresentation | null>(null); readonly error = signal<string | null>(null); readonly saveError = signal<string | null>(null); readonly notice = signal<string | null>(null); readonly etag = signal('');
+  readonly model = signal<LogicalModel | null>(null); readonly concepts = signal<readonly I14yConcept[]>([]); readonly loading = signal(false); readonly saving = signal(false); readonly exporting = signal<LogicalModelExportRepresentation | null>(null); readonly error = signal<string | null>(null); readonly saveError = signal<string | null>(null); readonly saveProblem = signal<ModelingApiError | null>(null); readonly errorCopied = signal(false); readonly notice = signal<string | null>(null); readonly etag = signal('');
   readonly validationAttempted = signal(false);
   readonly canPublishCurrentModel = computed(() => this.identity.canPublishModel(this.model()));
+  readonly canEditCurrentModel = computed(() => {
+    const current = this.model();
+    if (!current) return this.identity.canEditModels();
+    return this.identity.canEditModels() && this.modelingScopes().some((scope) => scope.descendantOrganizationIds?.includes(current.office));
+  });
   readonly codeLists = computed(() => this.concepts().filter((item) => item.conceptType === 'CodeList'));
   readonly modelingUsers = computed(() => this.identity.users().filter((user) => this.identity.modelingRoles(user).includes('data_owner')));
   readonly deputyUsers = computed(() => this.identity.users().filter((user) => this.identity.modelingRoles(user).includes('deputy_data_owner')));
   readonly departments = signal<readonly FederalOrganization[]>([]);
   readonly offices = signal<readonly FederalOrganization[]>([]);
   readonly divisions = signal<readonly FederalOrganization[]>([]);
+  readonly modelingScopes = signal<readonly ModelingScope[]>([]);
   readonly ownerPersonas = signal<readonly ModelingPersona[]>([]);
   readonly deputyPersonas = signal<readonly ModelingPersona[]>([]);
   readonly businessObjects = signal<readonly BusinessObjectTerm[]>([]);
+  readonly identifierAvailability = signal<'idle' | 'checking' | 'available' | 'taken'>('idle');
+  private manualIdentifier = '';
+  private identifierSuffixEdited = false;
   readonly termdatOpen = signal(false); readonly termdatLoading = signal(false); readonly termdatSearching = signal(false); readonly termdatResults = signal<readonly TermdatEntry[]>([]); readonly termdatCount = signal<number | null>(null); readonly termdatQuery = signal(''); readonly termdatFeedback = signal<string | null>(null);
   readonly termdatSelection = signal<{ entry: TermdatEntry; targets: readonly ('title' | 'definition')[] } | null>(null);
   readonly termdatAdoption = viewChild<ElementRef<HTMLElement>>('termdatAdoption');
@@ -156,7 +166,7 @@ export class LogicalModelEditorComponent {
   readonly assistanceProvenance = signal<readonly LogicalModelAssistanceProvenance[]>([]);
   readonly translationSuggestions = signal<readonly { field: string; label: string; current: string; suggestion: string; provenance: LogicalModelAssistanceProvenance }[]>([]);
   readonly form = this.fb.group({
-    dataset: this.fb.nonNullable.group({ titleDe: ['', [Validators.required, Validators.pattern(/\S/), Validators.maxLength(500)]], descriptionDe: ['', [Validators.required, Validators.pattern(/\S/), Validators.maxLength(8000)]], titleFr: ['', Validators.maxLength(500)], descriptionFr: ['', Validators.maxLength(8000)], titleIt: ['', Validators.maxLength(500)], descriptionIt: ['', Validators.maxLength(8000)], titleEn: ['', Validators.maxLength(500)], descriptionEn: ['', Validators.maxLength(8000)], titleRm: ['', Validators.maxLength(500)], descriptionRm: ['', Validators.maxLength(8000)], identifiers: ['', [Validators.required, Validators.pattern(/\S/)]], department: ['vbs', Validators.required], office: ['vbs-armasuisse', Validators.required], division: 'vbs-armasuisse-immobilien', dataDomainId: ['', Validators.required], dataOwnerId: ['', Validators.required], deputyDataOwnerId: '', creatorType: this.fb.nonNullable.control<CreatorType>('application'), creatorName: ['', [Validators.required, Validators.pattern(/\S/), Validators.maxLength(255)]], creatorIdentifier: ['', Validators.maxLength(100)], creatorPersonName: ['', Validators.maxLength(255)], classification: this.fb.nonNullable.control<DataClassification>('unclassified'), dateCreated: [new Date().toISOString().slice(0,10), Validators.required] }),
+    dataset: this.fb.nonNullable.group({ titleDe: ['', [Validators.required, Validators.pattern(/\S/), Validators.maxLength(500)]], descriptionDe: ['', [Validators.required, Validators.pattern(/\S/), Validators.maxLength(8000)]], titleFr: ['', Validators.maxLength(500)], descriptionFr: ['', Validators.maxLength(8000)], titleIt: ['', Validators.maxLength(500)], descriptionIt: ['', Validators.maxLength(8000)], titleEn: ['', Validators.maxLength(500)], descriptionEn: ['', Validators.maxLength(8000)], titleRm: ['', Validators.maxLength(500)], descriptionRm: ['', Validators.maxLength(8000)], identifiers: ['', [Validators.required, Validators.pattern(LOGICAL_IDENTIFIER_PATTERN)]], identifierMode: false, department: ['vbs', Validators.required], office: 'vbs-armasuisse', division: 'vbs-armasuisse-immobilien', dataDomainId: ['', Validators.required], dataOwnerId: ['', Validators.required], deputyDataOwnerId: '', creatorType: this.fb.nonNullable.control<CreatorType | ''>(''), creatorName: ['', [Validators.pattern(/\S/), Validators.maxLength(255)]], creatorIdentifier: ['', Validators.maxLength(100)], creatorPersonName: ['', Validators.maxLength(255)], classification: this.fb.nonNullable.control<DataClassification>('unclassified'), dateCreated: [new Date().toISOString().slice(0,10), Validators.required] }),
     fields: this.fb.array([this.createField(1)]),
   });
   readonly organizationStewards = computed(() => this.identity.users()
@@ -166,6 +176,15 @@ export class LogicalModelEditorComponent {
   get fields(): FormArray<ReturnType<LogicalModelEditorComponent['createField']>> { return this.form.controls.fields; }
 
   selectedDomain() { return this.catalogApi.domains().find((domain) => domain.id === this.form.controls.dataset.controls.dataDomainId.value) ?? null; }
+
+  canNavigateOrganization(organization: FederalOrganization): boolean {
+    const breadcrumb = organization.breadcrumb.map((item) => item.id);
+    return this.modelingScopes().some((scope) =>
+      scope.organizationId === organization.id
+      || breadcrumb.includes(scope.organizationId)
+      || scope.breadcrumb.some((item) => item.id === organization.id),
+    );
+  }
 
   validationIssues(): LogicalModelValidationIssue[] {
     const issues: LogicalModelValidationIssue[] = [];
@@ -183,13 +202,13 @@ export class LogicalModelEditorComponent {
       ['Beschreibung (Rätoromanisch)', dataset.descriptionRm],
       ['Identifier', dataset.identifiers],
       ['Departement', dataset.department],
-      ['Amt / Verwaltungseinheit', dataset.office],
       ['DaCa-Domäne', dataset.dataDomainId],
-      [this.creatorNameLabel(), dataset.creatorName],
-      ['Person des Erstellers', dataset.creatorPersonName],
       ['Fachliches Erstelldatum', dataset.dateCreated],
     ];
     for (const [field, control] of datasetFields) this.addControlIssue(issues, field, control);
+    if (dataset.creatorType.value && !dataset.creatorName.value.trim()) {
+      issues.push({ field: this.creatorNameLabel(), message: 'Dieses Pflichtfeld ist leer.' });
+    }
     if (dataset.creatorType.value === 'internal_organisation' && !dataset.creatorIdentifier.value.trim()) {
       issues.push({ field: 'Organisations-ID', message: 'Dieses Pflichtfeld ist leer.' });
     } else {
@@ -229,6 +248,7 @@ export class LogicalModelEditorComponent {
     this.assistance.businessObjects().subscribe({ next: (value) => this.businessObjects.set(value.items), error: () => undefined });
     this.assistance.myScopes().subscribe({
       next: (scopes) => {
+        this.modelingScopes.set(scopes);
         if (this.id()) return;
         const scope = scopes.find((item) => item.role === 'data_steward') ?? scopes[0];
         if (!scope) { this.scopeChanged(); return; }
@@ -244,8 +264,20 @@ export class LogicalModelEditorComponent {
     });
     effect(() => { const id = this.id(); if (id) this.load(id); });
     effect(() => { this.catalogApi.domains(); this.domainChanged(false); });
+    effect(() => {
+      if (!this.model()) return;
+      if (this.canEditCurrentModel()) this.form.enable({ emitEvent: false });
+      else this.form.disable({ emitEvent: false });
+    });
     this.form.valueChanges.subscribe(() => {
       if (this.validationAttempted()) this.refreshCrossFieldErrors();
+    });
+    this.form.controls.dataset.controls.identifiers.valueChanges.pipe(debounceTime(250), distinctUntilChanged()).subscribe(() => this.checkIdentifierAvailability());
+    this.form.controls.dataset.controls.titleDe.valueChanges.subscribe((title) => {
+      if (this.form.controls.dataset.controls.identifierMode.value && !this.identifierSuffixEdited) {
+        this.form.controls.dataset.controls.identifiers.setValue(this.identifierSuggestion(title), { emitEvent: false });
+        this.checkIdentifierAvailability();
+      }
     });
   }
 
@@ -275,6 +307,62 @@ export class LogicalModelEditorComponent {
     if (!scope) return;
     this.assistance.personas('data_owner', scope).subscribe({ next: (items) => this.ownerPersonas.set(items), error: () => this.ownerPersonas.set([]) });
     this.ownerChanged();
+  }
+  identifierModeChanged(): void {
+    const controls = this.form.controls.dataset.controls;
+    if (controls.identifierMode.value) {
+      this.manualIdentifier = controls.identifiers.value;
+      this.identifierSuffixEdited = false;
+      controls.identifiers.setValue(this.identifierSuggestion(controls.titleDe.value));
+    } else {
+      controls.identifiers.setValue(this.manualIdentifier);
+      this.identifierSuffixEdited = false;
+    }
+    controls.identifiers.markAsDirty();
+    this.checkIdentifierAvailability();
+  }
+  identifierChanged(): void {
+    if (this.form.controls.dataset.controls.identifierMode.value) this.identifierSuffixEdited = true;
+  }
+  organizationIdentifierPrefix(): string {
+    const controls = this.form.controls.dataset.controls;
+    const department = this.departments().find((item) => item.id === controls.department.value);
+    const office = this.offices().find((item) => item.id === controls.office.value);
+    const division = this.divisions().find((item) => item.id === controls.division.value);
+    const parts = [department?.departmentCode?.toLocaleLowerCase('de-CH') || controls.department.value.toLocaleLowerCase('de-CH')]
+      .concat(office ? [this.organizationIdentifierPart(office)] : [])
+      .concat(division ? [this.organizationIdentifierPart(division)] : [])
+      .filter(Boolean);
+    return parts.length ? `${parts.join('_')}_` : '';
+  }
+  private organizationIdentifierPart(organization: FederalOrganization): string {
+    const code = (organization.officeCode || organization.displayName).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const parts = code.toLocaleLowerCase('de-CH').split(/[^a-z0-9]+/).filter(Boolean);
+    return parts.length > 1 ? parts.map((part) => part[0]).join('') : (parts[0] || '').slice(0, 2);
+  }
+  private identifierSuggestion(title: string): string {
+    return title.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('de-CH').trim().replace(/\s+/g, '_').replace(/[^\w.-]/g, '');
+  }
+  private effectiveIdentifier(): string {
+    const controls = this.form.controls.dataset.controls;
+    return `${controls.identifierMode.value ? this.organizationIdentifierPrefix() : ''}${controls.identifiers.value.trim()}`;
+  }
+  private checkIdentifierAvailability(): void {
+    const identifier = this.effectiveIdentifier();
+    if (!LOGICAL_IDENTIFIER_PATTERN.test(identifier)) { this.identifierAvailability.set('idle'); return; }
+    const check = (this.api as unknown as { checkLogicalModelIdentifier?: (value: string, excludeModelId?: string) => import('rxjs').Observable<{ available: boolean }> }).checkLogicalModelIdentifier;
+    if (!check) { this.identifierAvailability.set('idle'); return; }
+    this.identifierAvailability.set('checking');
+    check.call(this.api, identifier, this.model()?.id).subscribe({
+      next: (result) => {
+        this.identifierAvailability.set(result.available ? 'available' : 'taken');
+        // The live check is an early hint only. PostgreSQL owns the atomic decision, including
+        // simultaneous saves, and returns the structured duplicate error that the user can pass
+        // to support if a reservation is actually rejected.
+        this.setControlError(this.form.controls.dataset.controls.identifiers, 'duplicateIdentifier', false);
+      },
+      error: () => this.identifierAvailability.set('idle'),
+    });
   }
   ownerChanged(): void {
     const owner = this.form.controls.dataset.controls.dataOwnerId.value;
@@ -373,6 +461,9 @@ export class LogicalModelEditorComponent {
   linkedConceptIds(field:ReturnType<LogicalModelEditorComponent['createField']>):string[]{return normalizeFieldConceptSelection(field.controls.conceptIds.value,field.controls.primaryConceptId.value,field.controls.valueListConceptId.value).conceptIds;}
   selectConcepts(index:number,conceptIds:string[]):void{const field=this.fields.at(index);const selection=normalizeFieldConceptSelection(conceptIds,field.controls.primaryConceptId.value,field.controls.valueListConceptId.value);field.controls.conceptIds.setValue(selection.conceptIds);field.controls.primaryConceptId.setValue(selection.primaryConceptId??'');for(const conceptId of selection.conceptIds)this.loadCachedConcept(conceptId);field.markAsDirty();}
   selectConcept(index: number, conceptId: string, valueList: boolean): void { if (!conceptId) return; const concept = this.concepts().find((item) => item.id === conceptId); if (valueList && concept?.conceptType !== 'CodeList') return; const field=this.fields.at(index);if(valueList){const selection=normalizeFieldConceptSelection(field.controls.conceptIds.value,field.controls.primaryConceptId.value,conceptId);field.controls.conceptIds.setValue(selection.conceptIds);field.controls.primaryConceptId.setValue(selection.primaryConceptId??'');}this.loadCachedConcept(conceptId);field.markAsDirty(); }
+  resetConceptLinks(index:number):void{const field=this.fields.at(index);field.controls.conceptIds.setValue([]);field.controls.primaryConceptId.setValue('');field.controls.valueListConceptId.setValue('');field.markAsDirty();}
+  resetPrimaryConcept(index:number):void{const field=this.fields.at(index);field.controls.primaryConceptId.setValue('');field.markAsDirty();}
+  resetValueList(index:number):void{const field=this.fields.at(index);const valueList=field.controls.valueListConceptId.value;field.controls.valueListConceptId.setValue('');if(valueList){field.controls.conceptIds.setValue(field.controls.conceptIds.value.filter((id)=>id!==valueList));if(field.controls.primaryConceptId.value===valueList)field.controls.primaryConceptId.setValue('');}field.markAsDirty();}
   downloadExport(model:LogicalModel,representation:LogicalModelExportRepresentation):void{if(this.exporting())return;this.exporting.set(representation);this.error.set(null);this.api.downloadLogicalModelExport(model.id,model.versionId,representation).pipe(finalize(()=>this.exporting.set(null))).subscribe({next:(file)=>this.saveExport(file),error:(error:Error)=>this.error.set(error.message)});}
 
   load(id: string): void { this.loading.set(true); this.error.set(null); this.api.loadLogicalModel(id).pipe(finalize(() => this.loading.set(false))).subscribe({ next: ({ body }) => { this.model.set(body); this.etag.set(logicalModelVersionEtag(body)); this.patch(body); }, error: (error: Error) => this.error.set(error.message) }); }
@@ -383,6 +474,10 @@ export class LogicalModelEditorComponent {
     this.form.markAllAsTouched();
     this.validationAttempted.set(true);
     this.saveError.set(null);
+    this.saveProblem.set(null);
+    this.errorCopied.set(false);
+    // The availability lookup is advisory. PostgreSQL remains the atomic authority for duplicate
+    // identifiers and supplies the actionable, support-safe problem on a rejected save.
     if (this.validationIssues().length) return;
     this.saving.set(true);
     this.error.set(null);
@@ -408,10 +503,16 @@ export class LogicalModelEditorComponent {
   submitForReview(): void { const current = this.model(); if (!current || !this.canSubmitForReview()) return; this.saving.set(true);this.error.set(null);this.saveError.set(null); this.api.submitLogicalModel(current.id, current.versionId, this.etag()).pipe(finalize(() => this.saving.set(false))).subscribe({ next: ({ body, etag }) => { this.model.set(body); this.etag.set(etag);this.patch(body);this.form.markAsPristine();this.catalogApi.refreshWorkflowTasks(); this.notice.set(`Der Prüfauftrag wurde an ${this.selectedDomain()?.ownerName ?? 'den primären Domain Owner'} übermittelt.`); }, error: (error: Error) => this.error.set(error.message) }); }
   retire(): void { const current = this.model(); if (!current || current.status !== 'published' || !this.canPublishCurrentModel() || !window.confirm(`«${current.title.de || current.identifiers[0]}» stilllegen? Die Versionshistorie bleibt erhalten.`)) return; this.saving.set(true); this.error.set(null); this.api.retireLogicalModel(current.id, current.versionId, this.etag()).pipe(finalize(() => this.saving.set(false))).subscribe({ next: ({ body, etag }) => { this.model.set(body); this.etag.set(etag); this.notice.set('Das Modell wurde stillgelegt; die Versionshistorie bleibt erhalten.'); }, error: (error: Error) => this.error.set(error.message) }); }
   private patch(model: LogicalModel): void {
+    const persistedIdentifier = model.identifiers[0] ?? '';
+    const knownPrefix = model.office === 'vbs-armasuisse-immobilien' ? 'vbs_ar_ai_' : model.office === 'vbs-armasuisse' ? 'vbs_ar_' : `${model.department.toLocaleLowerCase('de-CH')}_`;
+    const identifierSuffix = model.identifierMode === 'organization_derived' && persistedIdentifier.startsWith(knownPrefix)
+      ? persistedIdentifier.slice(knownPrefix.length) : persistedIdentifier;
+    this.manualIdentifier = persistedIdentifier;
+    this.identifierSuffixEdited = false;
     this.form.controls.dataset.patchValue({
       titleDe:model.title.de,descriptionDe:model.description.de,titleFr:model.title.fr,descriptionFr:model.description.fr,titleIt:model.title.it,descriptionIt:model.description.it,titleEn:model.title.en,descriptionEn:model.description.en,titleRm:model.title.rm??'',descriptionRm:model.description.rm??'',
-      identifiers:model.identifiers.join(', '),department:model.office.startsWith('vbs-armasuisse')?'vbs':model.department,office:model.office==='vbs-armasuisse-immobilien'?'vbs-armasuisse':model.office,division:model.office==='vbs-armasuisse-immobilien'?model.office:'',dataDomainId:model.dataDomain.id,dataOwnerId:model.dataOwner.id,deputyDataOwnerId:model.deputyDataOwner?.id??'',
-      creatorType:model.creator.type,...this.creatorFormValue(model.creator),classification:model.classification,dateCreated:model.dateCreated,
+      identifiers:identifierSuffix,identifierMode:model.identifierMode==='organization_derived',department:model.office.startsWith('vbs-armasuisse')?'vbs':model.department,office:model.office==='vbs-armasuisse-immobilien'?'vbs-armasuisse':model.office,division:model.office==='vbs-armasuisse-immobilien'?model.office:'',dataDomainId:model.dataDomain.id,dataOwnerId:model.dataOwner.id,deputyDataOwnerId:model.deputyDataOwner?.id??'',
+      creatorType:model.creator?.type??'',...this.creatorFormValue(model.creator),classification:model.classification,dateCreated:model.dateCreated,
     });
     this.fields.clear();
     if (model.entities.length) {
@@ -476,7 +577,8 @@ export class LogicalModelEditorComponent {
     return {
       title: { de: dataset.titleDe, fr: dataset.titleFr, it: dataset.titleIt, en: dataset.titleEn, rm: dataset.titleRm || null },
       description: { de: dataset.descriptionDe, fr: dataset.descriptionFr, it: dataset.descriptionIt, en: dataset.descriptionEn, rm: dataset.descriptionRm || null },
-      identifiers: dataset.identifiers.split(',').map((item) => item.trim()).filter(Boolean),
+      identifiers: [this.effectiveIdentifier()],
+      identifierMode: dataset.identifierMode ? 'organization_derived' : 'manual',
       department: dataset.department,
       office: dataset.office,
       organizationUnitId: this.selectedOrganizationId(),
@@ -527,13 +629,10 @@ export class LogicalModelEditorComponent {
       case 'internal_organisation': return 'Englischer Name';
       case 'internal_person': return 'User-ID';
       case 'external_organisation_or_person': return 'Organisationsname';
+      default: return 'Ersteller';
     }
   }
   private refreshCrossFieldErrors(): void {
-    const identifiers = this.form.controls.dataset.controls.identifiers;
-    const identifierValues = identifiers.value.split(',').map((item) => item.trim()).filter(Boolean);
-    this.setControlError(identifiers, 'duplicateIdentifier', identifierValues.length !== new Set(identifierValues).size);
-
     const namesByEntity = new Map<string, Array<ReturnType<LogicalModelEditorComponent['createField']>>>();
     for (const field of this.fields.controls) {
       const controls = field.controls;
@@ -566,7 +665,10 @@ export class LogicalModelEditorComponent {
 
   private handleSaveError(error: Error): void {
     this.saveError.set(error.message);
-    if (!(error instanceof ModelingApiError) || error.kind !== 'validation') return;
+    if (!(error instanceof ModelingApiError)) return;
+    this.saveProblem.set(error);
+    this.errorCopied.set(false);
+    if (!error.issues.length) return;
     this.validationAttempted.set(true);
     for (const issue of error.issues) {
       const control = this.controlForServerLocation(issue.location);
@@ -578,7 +680,7 @@ export class LogicalModelEditorComponent {
   }
 
   private controlForServerLocation(location: string): AbstractControl | null {
-    const normalized = location.replace(/^body\./, '');
+    const normalized = location.replace(/^body\./, '').replace(/^identifiers\.\d+$/, 'identifiers');
     const dataset = this.form.controls.dataset.controls;
     const direct: Record<string, AbstractControl> = {
       identifiers: dataset.identifiers,
@@ -625,10 +727,70 @@ export class LogicalModelEditorComponent {
     else if (errors['pattern']) issues.push({ field, message: patternMessage ?? 'Der Wert darf nicht leer sein oder nur aus Leerzeichen bestehen.' });
     else issues.push({ field, message: 'Der Wert ist ungültig.' });
   }
+  saveProblemTitle(problem: ModelingApiError): string {
+    if (problem.kind === 'validation') return 'Bitte Eingaben korrigieren';
+    if (problem.status === 412 || problem.status === 428) return 'Aktualisierte Version vorhanden';
+    if (problem.errorCode === 'DACA-LM-IDENTIFIER-DUPLICATE') return 'Identifier bereits vergeben';
+    return 'Speichern nicht möglich';
+  }
+  supportErrorCode(problem: ModelingApiError): string { return problem.errorCode || (problem.kind === 'validation' ? 'DACA-LM-CLIENT-VALIDATION' : 'DACA-LM-UNCLASSIFIED'); }
+  focusIssue(issue?: LogicalModelValidationIssue): void {
+    const datasetControl: Record<string, string> = {
+      'Titel (Deutsch)': 'titleDe', 'Beschreibung (Deutsch)': 'descriptionDe',
+      'Titel (Französisch)': 'titleFr', 'Beschreibung (Französisch)': 'descriptionFr',
+      'Titel (Italienisch)': 'titleIt', 'Beschreibung (Italienisch)': 'descriptionIt',
+      'Titel (Englisch)': 'titleEn', 'Beschreibung (Englisch)': 'descriptionEn',
+      'Titel (Rätoromanisch)': 'titleRm', 'Beschreibung (Rätoromanisch)': 'descriptionRm',
+      'Identifier': 'identifiers', 'Departement': 'department', 'DaCa-Domäne': 'dataDomainId',
+      'Fachliches Erstelldatum': 'dateCreated', 'Applikationsname': 'creatorName',
+      'Englischer Name': 'creatorName', 'User-ID': 'creatorName', 'Organisationsname': 'creatorName',
+      'Organisations-ID': 'creatorIdentifier',
+    };
+    const fieldControl: Record<string, string> = {
+      'Entität': 'entityName', 'Geschäftsobjekt der Entität': 'entityBusinessObjectVersionId',
+      'Entitätskommentar': 'entityComment', 'Feldname': 'name', 'Geschäftsobjekt': 'businessObjectVersionId',
+      'Datentyp': 'dataType', 'Länge': 'length', 'Precision': 'precision',
+      'Dezimalstellen / Scale': 'decimalPlaces', 'Reihenfolge': 'order', 'minCount': 'minCount',
+      'maxCount': 'maxCount', 'System': 'sourceSystem', 'Kurzbeschreibung': 'shortDescription', 'Kommentar': 'comment',
+    };
+    const fieldMatch = /^Feld (\d+) [^A-Za-z0-9]+ (.+)$/.exec(issue?.field ?? '');
+    const selector = issue && datasetControl[issue.field]
+      ? `[formcontrolname="${datasetControl[issue.field]}"]`
+      : fieldMatch && fieldControl[fieldMatch[2]]
+        ? `.field-list fieldset:nth-of-type(${fieldMatch[1]}) [formcontrolname="${fieldControl[fieldMatch[2]]}"]`
+        : '.model-editor-form .ng-invalid';
+    const target = document.querySelector<HTMLElement>(selector);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target?.focus({ preventScroll: true });
+  }
+  async copyErrorMessage(problem: ModelingApiError): Promise<void> {
+    const technical = problem.technicalDetails;
+    const message = [
+      `Fehlercode: ${this.supportErrorCode(problem)}`,
+      `HTTP-Status: ${problem.status}`,
+      `Request-ID: ${problem.requestId || 'nicht verfügbar'}`,
+      `Meldung: ${problem.message}`,
+      problem.suggestedAction ? `Empfohlene Aktion: ${problem.suggestedAction}` : '',
+      technical ? `Technik: ${technical.category}; SQLSTATE=${technical.sqlState}; Constraint=${technical.constraint}; Zeitpunkt=${technical.timestamp}` : '',
+    ].filter(Boolean).join('\n');
+    try {
+      await navigator.clipboard?.writeText(message);
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = message;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.append(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+    this.errorCopied.set(true);
+  }
   private localizedValue(target: 'title' | 'description', language: string): string { const key = `${target}${language[0].toUpperCase()}${language.slice(1)}`; const c=this.form.controls.dataset.controls; switch(key){case'titleFr':return c.titleFr.value;case'titleIt':return c.titleIt.value;case'titleEn':return c.titleEn.value;case'titleRm':return c.titleRm.value;case'descriptionFr':return c.descriptionFr.value;case'descriptionIt':return c.descriptionIt.value;case'descriptionEn':return c.descriptionEn.value;case'descriptionRm':return c.descriptionRm.value;default:return'';} }
   private setLocalizedValue(field: string, value: string): void { const c=this.form.controls.dataset.controls; switch(field){case'titleFr':c.titleFr.setValue(value);c.titleFr.markAsDirty();break;case'titleIt':c.titleIt.setValue(value);c.titleIt.markAsDirty();break;case'titleEn':c.titleEn.setValue(value);c.titleEn.markAsDirty();break;case'titleRm':c.titleRm.setValue(value);c.titleRm.markAsDirty();break;case'descriptionFr':c.descriptionFr.setValue(value);c.descriptionFr.markAsDirty();break;case'descriptionIt':c.descriptionIt.setValue(value);c.descriptionIt.markAsDirty();break;case'descriptionEn':c.descriptionEn.setValue(value);c.descriptionEn.markAsDirty();break;case'descriptionRm':c.descriptionRm.setValue(value);c.descriptionRm.markAsDirty();break;} }
   private loadCachedConcept(conceptId:string):void{this.conceptsApi.load(conceptId).subscribe({next:(detail)=>this.concepts.update((items)=>items.some((item)=>item.id===detail.id)?items.map((item)=>item.id===detail.id?detail:item):[...items,detail]),error:()=>undefined});}
   private saveExport(file:LogicalModelExportFile):void{const objectUrl=URL.createObjectURL(file.blob);const anchor=document.createElement('a');anchor.href=objectUrl;anchor.download=file.filename;anchor.hidden=true;document.body.append(anchor);try{anchor.click();this.notice.set(`${file.filename} wurde heruntergeladen.`);}finally{anchor.remove();URL.revokeObjectURL(objectUrl);}}
-  private creatorFormValue(creator:LogicalModelCreator):{creatorName:string;creatorIdentifier:string;creatorPersonName:string}{switch(creator.type){case'application':return{creatorName:creator.applicationName,creatorIdentifier:'',creatorPersonName:''};case'internal_organisation':return{creatorName:creator.englishName,creatorIdentifier:creator.organizationId,creatorPersonName:''};case'internal_person':return{creatorName:creator.userId,creatorIdentifier:'',creatorPersonName:''};case'external_organisation_or_person':return{creatorName:creator.organizationName,creatorIdentifier:'',creatorPersonName:creator.personName??''};}}
-  private creatorValue(type:CreatorType,name:string,identifier:string,personName:string):LogicalModelCreator{switch(type){case'application':return{type,applicationName:name.trim()};case'internal_organisation':return{type,organizationId:identifier.trim(),englishName:name.trim()};case'internal_person':return{type,userId:name.trim()};case'external_organisation_or_person':return{type,organizationName:name.trim(),personName:personName.trim()||null};}}
+  private creatorFormValue(creator:LogicalModelCreator|null):{creatorName:string;creatorIdentifier:string;creatorPersonName:string}{if(!creator)return{creatorName:'',creatorIdentifier:'',creatorPersonName:''};switch(creator.type){case'application':return{creatorName:creator.applicationName,creatorIdentifier:'',creatorPersonName:''};case'internal_organisation':return{creatorName:creator.englishName,creatorIdentifier:creator.organizationId,creatorPersonName:''};case'internal_person':return{creatorName:creator.userId,creatorIdentifier:'',creatorPersonName:''};case'external_organisation_or_person':return{creatorName:creator.organizationName,creatorIdentifier:'',creatorPersonName:creator.personName??''};}}
+  private creatorValue(type:CreatorType|'',name:string,identifier:string,personName:string):LogicalModelCreator|null{switch(type){case'application':return{type,applicationName:name.trim()};case'internal_organisation':return{type,organizationId:identifier.trim(),englishName:name.trim()};case'internal_person':return{type,userId:name.trim()};case'external_organisation_or_person':return{type,organizationName:name.trim(),personName:personName.trim()||null};default:return null;}}
 }

@@ -41,7 +41,7 @@ export const DACA_FEATURE_RELEASE = {
         features: [
           {
             title: 'Logische Datenmodelle verständlich erfassen',
-            description: 'Data Stewards speichern mehrere unabhängige, mehrsprachige Modelle als Entwurf in PostgreSQL. Feldhilfen erklären die Semantik in Deutsch, Französisch oder Italienisch; konkrete Fehlerlisten und rote Feldmarkierungen unterstützen die Korrektur. I14Y-Concepts bleiben optional.',
+            description: 'Data Stewards speichern mehrere unabhängige, mehrsprachige Modelle als Entwurf in PostgreSQL. Kontextuelle Feldhilfen erklären die Semantik in Deutsch, Französisch oder Italienisch; eindeutige Identifier, konkrete Fehlerlisten und rote Feldmarkierungen unterstützen die Korrektur. I14Y-Concepts bleiben optional.',
           },
           {
             title: 'Entwürfe gezielt zur Domänenfreigabe einreichen',
@@ -116,7 +116,7 @@ export const DACA_FEATURE_RELEASE = {
         features: [
           {
             title: 'Capture logical data models with clear guidance',
-            description: 'Data stewards persist multiple independent multilingual models as PostgreSQL drafts. Field help explains semantics in German, French or Italian, while concrete error lists and red field highlights guide corrections. I14Y Concepts remain optional.',
+            description: 'Data stewards persist multiple independent multilingual models as PostgreSQL drafts. Contextual field help explains semantics in German, French or Italian; unique identifiers, concrete error lists and red field highlights guide corrections. I14Y Concepts remain optional.',
           },
           {
             title: 'Submit drafts deliberately for domain approval',

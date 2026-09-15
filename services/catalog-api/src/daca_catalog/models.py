@@ -1959,6 +1959,30 @@ class LogicalModel(Base):
     retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class LogicalModelIdentifierReservation(Base):
+    """Catalog-wide identifier reservation retained for the life of a model root."""
+
+    __tablename__ = "logical_model_identifier_reservations"
+    __table_args__ = (
+        CheckConstraint(
+            "length(normalized_identifier) >= 1",
+            name="ck_logical_model_identifier_normalized",
+        ),
+        UniqueConstraint(
+            "normalized_identifier", name="uq_logical_model_identifier_normalized"
+        ),
+    )
+
+    logical_model_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("logical_models.id", ondelete="CASCADE"), primary_key=True
+    )
+    identifier: Mapped[str] = mapped_column(String(500), nullable=False)
+    normalized_identifier: Mapped[str] = mapped_column(String(500), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
 class LogicalModelVersion(Base):
     __tablename__ = "logical_model_versions"
     __table_args__ = (
@@ -1986,6 +2010,7 @@ class LogicalModelVersion(Base):
     revision: Mapped[int] = mapped_column(Integer, nullable=False)
     lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    identifier_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="manual")
     comment: Mapped[str | None] = mapped_column(Text)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     created_by_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)

@@ -71,3 +71,16 @@ the same change. Run `npm run docs:data-model` after a persistence change and
 manually; add durable explanations outside those markers or update the generator descriptions.
 DAAIF is an external system: document only the publication and workflow evidence persisted by
 DaCa, not an inferred DAAIF data model.
+
+## Continuity documentation and UI-regression gate
+
+Every agent changing a user-facing capability must update the relevant durable documentation in
+the same change: `README.md`, `docs/current-status.md`, the directly affected design document
+(for logical modelling: `docs/logical-models-i14y-mapping.md`), and the version-overlay feature
+list in `packages/design-system/src/lib/feature-list.ts`. Do not leave implementation knowledge
+only in a chat, a commit message, or generated test output.
+
+Before every commit, run `npm run test:ui-regression`. The versioned `.githooks/pre-commit` hook
+runs the same command; install it with `npm run setup:git-hooks` (also invoked by `npm install`).
+Do not bypass this gate. The matching pull-request workflow stores browser evidence only on a
+failure and retains it for three days.

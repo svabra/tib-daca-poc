@@ -31,6 +31,7 @@ export class DatasetSummaryComponent {
   creatorLabel(): string {
     const labels = { application: 'Applikation', internal_organisation: 'Verwaltungseinheit', internal_person: 'Person', external_organisation_or_person: 'Externe Stelle/Person' } as const;
     const creator = this.model().creator;
+    if (!creator) return 'Nicht zugewiesen';
     const value = (() => {
       switch (creator.type) {
         case 'application': return creator.applicationName;

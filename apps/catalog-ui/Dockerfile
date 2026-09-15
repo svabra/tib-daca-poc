@@ -8,6 +8,7 @@ COPY package.json package-lock.json ./
 COPY packages/design-system/package.json ./packages/design-system/package.json
 COPY apps/catalog-ui/package.json ./apps/catalog-ui/package.json
 COPY apps/control-plane-ui/package.json ./apps/control-plane-ui/package.json
+COPY scripts/install-git-hooks.mjs ./scripts/install-git-hooks.mjs
 RUN npm ci
 COPY packages/design-system ./packages/design-system
 COPY apps/catalog-ui ./apps/catalog-ui

@@ -35,6 +35,13 @@ export interface ModelingValidationIssue {
   type: string;
 }
 
+export interface ModelingTechnicalDetails {
+  category: string;
+  sqlState: string;
+  constraint: string;
+  timestamp: string;
+}
+
 export interface LogicalModelExportFile {
   blob: Blob;
   filename: string;
@@ -46,6 +53,10 @@ export class ModelingApiError extends Error {
     readonly status: number,
     message: string,
     readonly issues: readonly ModelingValidationIssue[] = [],
+    readonly errorCode: string | null = null,
+    readonly suggestedAction: string | null = null,
+    readonly requestId: string | null = null,
+    readonly technicalDetails: ModelingTechnicalDetails | null = null,
   ) {
     super(message);
     this.name = 'ModelingApiError';
@@ -155,6 +166,14 @@ export class DataModelsApiService {
     return this.identitySafeResponse(this.http.post<unknown>('/api/v1/logical-models', this.toLogicalModelPayload(value), {
       headers: this.identity.headers(), observe: 'response',
     })).pipe(map((result) => ({ ...result, body: this.normalizeLogicalModel(result.body) })));
+  }
+
+  checkLogicalModelIdentifier(identifier: string, excludeModelId?: string): Observable<{ available: boolean }> {
+    let params = new HttpParams().set('identifier', identifier);
+    if (excludeModelId) params = params.set('excludeModelId', excludeModelId);
+    return this.identitySafe(this.http.get<{ available: boolean }>('/api/v1/logical-model-identifiers/availability', {
+      headers: this.identity.headers(), params,
+    }));
   }
 
   updateLogicalModel(id: string, versionId: string, value: LogicalModelWrite, etag: string): Observable<ApiResult<LogicalModel>> {
@@ -334,14 +353,14 @@ export class DataModelsApiService {
 
   private toLogicalModelPayload(value: LogicalModelWrite): Record<string, unknown> {
     const actor = this.identity.user();
-    const creator = (() => {
+    const creator = value.creator ? (() => {
       switch (value.creator.type) {
         case 'application': return { type: 'Application', applicationName: value.creator.applicationName };
         case 'internal_organisation': return { type: 'InternalOrganisation', organizationId: value.creator.organizationId, englishName: value.creator.englishName };
         case 'internal_person': return { type: 'InternalPerson', userId: value.creator.userId };
         case 'external_organisation_or_person': return { type: 'ExternalOrganisationOrPerson', organizationName: value.creator.organizationName, personName: value.creator.personName ?? null };
       }
-    })();
+    })() : null;
     const defaultPublisherName = actor.organization || value.office;
     const sourceContactPoints: DcatContactPoint[] = value.contactPoints?.length
       ? value.contactPoints
@@ -368,6 +387,7 @@ export class DataModelsApiService {
     const entities = value.entities?.length ? value.entities : fallbackEntities;
     return {
       identifiers: value.identifiers,
+      identifierMode: value.identifierMode ?? 'manual',
       localizations: (['de', 'fr', 'it', 'en', 'rm'] as const)
         .filter((language) => language === 'de' || Boolean(value.title[language]?.trim() && value.description[language]?.trim()))
         .map((language) => ({
@@ -509,7 +529,7 @@ export class DataModelsApiService {
     const deputyId = nullableText(root['deputyOwnerUserId'] ?? asRecord(root['deputyDataOwner'])['id']);
     const stewardId = nullableText(root['stewardUserId'] ?? asRecord(root['steward'])['id']);
     const creator = asRecord(root['creator']);
-    const normalizedCreator: LogicalModel['creator'] = (() => {
+    const normalizedCreator: LogicalModel['creator'] = !root['creator'] ? null : (() => {
       switch (textValue(creator['type'])) {
         case 'InternalOrganisation': return {
           type: 'internal_organisation', organizationId: textValue(creator['organizationId']), englishName: textValue(creator['englishName']),
@@ -532,6 +552,7 @@ export class DataModelsApiService {
       title: localized('title'),
       description: localized('description'),
       identifiers: stringArray(root['identifiers']),
+      identifierMode: textValue(root['identifierMode']) === 'organization_derived' ? 'organization_derived' : 'manual',
       department: textValue(root['departmentCode'], 'VBS'),
       office: textValue(root['organizationUnitId'] ?? root['organizationId'], 'vbs-verteidigung'),
       dataDomain: namedReference(root['dataDomain'], textValue(root['dataDomainId']), textValue(root['dataDomainLabel'], textValue(root['dataDomainId']))),
@@ -776,6 +797,13 @@ export class DataModelsApiService {
     if (error.status === 404) return new ModelingApiError('not_found', 404, 'Das Modell oder Asset ist nicht mehr verfügbar.');
     const problem = asRecord(error.error);
     const detail = textValue(problem['detail']);
+    const errorCode = nullableText(problem['errorCode']);
+    const suggestedAction = nullableText(problem['suggestedAction']);
+    const requestId = nullableText(problem['requestId']) ?? nullableText(error.headers?.get('x-request-id'));
+    const technical = asRecord(problem['technicalDetails']);
+    const technicalDetails = technical['category'] && technical['sqlState'] && technical['constraint'] && technical['timestamp']
+      ? { category: textValue(technical['category']), sqlState: textValue(technical['sqlState']), constraint: textValue(technical['constraint']), timestamp: textValue(technical['timestamp']) }
+      : null;
     const issues = asArray(problem['errors']).map((item) => {
       const issue = asRecord(item);
       return {
@@ -784,9 +812,10 @@ export class DataModelsApiService {
         type: textValue(issue['type'], 'validation'),
       };
     }).filter((issue) => issue.location);
-    if (error.status === 412 || error.status === 428) return new ModelingApiError('conflict', error.status, 'Der Stand wurde zwischenzeitlich geändert. Bitte neu laden und die Änderungen erneut prüfen.');
-    if (error.status === 409) return new ModelingApiError('conflict', 409, detail || 'Die Änderung steht im Konflikt mit einem bestehenden Katalogeintrag.');
-    if (error.status === 422) return new ModelingApiError('validation', 422, detail || 'Die Angaben sind unvollständig oder widersprüchlich. Bitte prüfen Sie die markierten Felder.', issues);
+    if (error.status === 412) return new ModelingApiError('conflict', 412, detail || 'Eine neuere Version dieses Entwurfs liegt bereits vor.', issues, errorCode ?? 'DACA-LM-ETAG-CONFLICT', suggestedAction ?? 'Laden Sie den Entwurf neu und prüfen Sie Ihre Änderungen, bevor Sie erneut speichern.', requestId, technicalDetails);
+    if (error.status === 428) return new ModelingApiError('conflict', 428, detail || 'Die Aktion enthält keinen gültigen Speicherstand der Modellversion.', issues, errorCode ?? 'DACA-LM-ETAG-REQUIRED', suggestedAction ?? 'Öffnen Sie den Entwurf erneut und versuchen Sie die Aktion nochmals.', requestId, technicalDetails);
+    if (error.status === 409) return new ModelingApiError('conflict', 409, errorCode && detail ? detail : 'Die Änderung steht im Konflikt mit einem bestehenden Katalogeintrag.', issues, errorCode, suggestedAction ?? 'Prüfen Sie die Angaben und speichern Sie danach erneut.', requestId, technicalDetails);
+    if (error.status === 422) return new ModelingApiError('validation', 422, errorCode && detail ? detail : 'Die Angaben sind unvollständig oder widersprüchlich. Bitte prüfen Sie die markierten Felder.', issues, errorCode, suggestedAction ?? 'Prüfen Sie die markierten Angaben und speichern Sie danach erneut.', requestId, technicalDetails);
     if (error.status === 0 || error.status === 503 || error.status === 504) return new ModelingApiError('unavailable', error.status, 'Die Katalog-API ist derzeit nicht erreichbar. Es wurde nichts gespeichert.');
     return new ModelingApiError('unknown', error.status, 'Die Aktion ist fehlgeschlagen. Es wurde nichts gespeichert.');
   }

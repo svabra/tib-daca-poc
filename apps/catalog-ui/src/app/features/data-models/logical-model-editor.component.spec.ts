@@ -1,11 +1,11 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService, DemoUser } from '../../core/demo-identity.service';
 import { I14yConceptsApiService } from '../domains/i14y-concepts-api.service';
-import { DataModelsApiService, LogicalModelExportFile } from './data-models-api.service';
+import { DataModelsApiService, LogicalModelExportFile, ModelingApiError } from './data-models-api.service';
 import { I14yConceptReference, LogicalField, LogicalModelWrite } from './data-models.models';
 import { LogicalModelEditorComponent, logicalModelVersionEtag, normalizeFieldConceptSelection } from './logical-model-editor.component';
 import { logicalModelHelpLocale } from './logical-model-field-help.directive';
@@ -66,11 +66,17 @@ describe('LogicalModelEditorComponent contracts',()=>{
     const trigger=host.querySelector<HTMLButtonElement>('.daca-field-help-trigger')!;
     const tooltip=document.getElementById(trigger.getAttribute('aria-describedby')!)!;
     expect(tooltip.getAttribute('role')).toBe('tooltip');
+    expect(trigger.hidden).toBe(true);
     host.dispatchEvent(new MouseEvent('mouseenter'));fixture.detectChanges();
+    expect(trigger.hidden).toBe(false);
+    expect(tooltip.classList.contains('is-visible')).toBe(false);
+    trigger.dispatchEvent(new MouseEvent('mouseenter'));fixture.detectChanges();
     expect(tooltip.classList.contains('is-visible')).toBe(true);
     expect(tooltip.textContent).toContain('Name des beschriebenen Datensatzes');
-    host.dispatchEvent(new MouseEvent('mouseleave'));trigger.focus();fixture.detectChanges();
+    trigger.dispatchEvent(new MouseEvent('mouseleave'));host.dispatchEvent(new MouseEvent('mouseleave'));trigger.focus();fixture.detectChanges();
     expect(tooltip.classList.contains('is-visible')).toBe(true);
+    trigger.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));fixture.detectChanges();
+    expect(tooltip.classList.contains('is-visible')).toBe(false);
   });
 
   it('keeps save actionable and lists every insufficient field directly below it',()=>{
@@ -123,6 +129,71 @@ describe('LogicalModelEditorComponent contracts',()=>{
     expect(write.fields[0].conceptIds).toEqual([]);
     expect(write.fields[0].primaryConceptId).toBeNull();
     expect(write.fields[0].valueListConceptId).toBeNull();
+  });
+
+  it('shows a clear duplicate-identifier problem, focuses the field, and retains safe support details',async()=>{
+    createLogicalModel.mockReturnValue(throwError(()=>new ModelingApiError(
+      'conflict',409,'Dieser Identifier wird bereits von einem anderen logischen Modell verwendet.',
+      [{location:'body.identifiers.0',message:'Dieser Identifier ist bereits vergeben.',type:'unique'}],
+      'DACA-LM-IDENTIFIER-DUPLICATE','Wählen Sie einen anderen Identifier.','request-duplicate-1',
+      {category:'PostgreSQL integrity constraint',sqlState:'23505',constraint:'uq_logical_model_identifier_normalized',timestamp:'2026-09-15T10:00:00Z'},
+    )));
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);const component=fixture.componentInstance;
+    component.form.controls.dataset.patchValue({
+      titleDe:'Duplikat-Test',descriptionDe:'Prüft eine verständliche Speicherfehlermeldung.',identifiers:'DUPLICATE-ID',
+      dataDomainId:'11111111-1111-4111-8111-111111111111',dataOwnerId:'christian.spider',
+    });
+    component.fields.at(0).patchValue({
+      entityName:'duplikat',entityBusinessObjectVersionId:'22222222-2222-4222-8222-222222222222',name:'id',
+      businessObjectVersionId:'33333333-3333-4333-8333-333333333333',shortDescription:'Eindeutiger Testwert.',
+    });
+    fixture.detectChanges();component.save();fixture.detectChanges();
+
+    const root=fixture.nativeElement as HTMLElement;
+    const panel=root.querySelector<HTMLElement>('.save-problem')!;
+    expect(panel.textContent).toContain('Identifier bereits vergeben');
+    expect(panel.textContent).toContain('Wählen Sie einen anderen Identifier.');
+    expect(panel.textContent).toContain('DACA-LM-IDENTIFIER-DUPLICATE');
+    expect(panel.textContent).toContain('request-duplicate-1');
+    expect(panel.textContent).not.toContain('The requested change conflicts');
+    const identifier=root.querySelector<HTMLInputElement>('input[formControlName="identifiers"]')!;
+    expect(identifier.classList.contains('ng-invalid')).toBe(true);
+    panel.querySelector<HTMLButtonElement>('li button')?.click();
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(document.activeElement).toBe(identifier);
+    const writeText=vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator,'clipboard',{configurable:true,value:{writeText}});
+    await component.copyErrorMessage(component.saveProblem()!);fixture.detectChanges();
+    expect(writeText).toHaveBeenCalledOnce();
+    expect(writeText.mock.calls[0][0]).toContain('DACA-LM-IDENTIFIER-DUPLICATE');
+    expect(writeText.mock.calls[0][0]).toContain('request-duplicate-1');
+    expect(writeText.mock.calls[0][0]).not.toContain('DUPLICATE-ID');
+    expect(panel.textContent).toContain('Kopiert');
+    component.form.controls.dataset.controls.identifiers.setValue('FREIE-ID');fixture.detectChanges();
+    expect(identifier.classList.contains('ng-invalid')).toBe(false);
+  });
+
+  it('keeps classification secret visible but unavailable for new selections',()=>{
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);fixture.detectChanges();
+    const classification=(fixture.nativeElement as HTMLElement).querySelector<HTMLSelectElement>('.classification-hero select')!;
+    const secret=[...classification.options].find((option)=>option.value==='secret');
+    expect(secret?.disabled).toBe(true);
+    expect([...classification.options].filter((option)=>!option.disabled).map((option)=>option.value)).toEqual(['unclassified','internal','confidential']);
+  });
+
+  it('clears optional I14Y links, primary concept, and value list independently',()=>{
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);const component=fixture.componentInstance;
+    const field=component.fields.at(0);
+    field.patchValue({conceptIds:['concept-one','concept-two'],primaryConceptId:'concept-one',valueListConceptId:'concept-two'});
+    component.resetPrimaryConcept(0);
+    expect(field.controls.primaryConceptId.value).toBe('');
+    expect(field.controls.conceptIds.value).toEqual(['concept-one','concept-two']);
+    component.resetValueList(0);
+    expect(field.controls.valueListConceptId.value).toBe('');
+    expect(field.controls.conceptIds.value).toEqual(['concept-one']);
+    component.resetConceptLinks(0);
+    expect(field.controls.conceptIds.value).toEqual([]);
+    expect(field.controls.primaryConceptId.value).toBe('');
   });
 
   it('searches TERMDAT on title blur and exposes a prominent hit action',()=>{

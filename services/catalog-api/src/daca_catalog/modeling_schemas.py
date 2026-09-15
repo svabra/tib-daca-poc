@@ -145,8 +145,6 @@ class LogicalFieldWrite(ApiModel):
             self.concept_ids.append(self.value_list_concept_id)
         if self.primary_concept_id and self.primary_concept_id not in self.concept_ids:
             self.concept_ids.append(self.primary_concept_id)
-        if len(self.concept_ids) > 1 and self.primary_concept_id is None:
-            raise ValueError("primaryConceptId is required when a field has multiple concepts")
         return self
 
 
@@ -229,7 +227,8 @@ class LogicalModelWrite(ApiModel):
     localizations: list[LogicalLocalization] = Field(min_length=1)
     data_owner_user_id: str = Field(min_length=1, max_length=200)
     deputy_owner_user_id: str | None = Field(default=None, max_length=200)
-    creator: CreatorReference
+    creator: CreatorReference | None = None
+    identifier_mode: Literal["manual", "organization_derived"] = "manual"
     data_domain_id: uuid.UUID
     organization_unit_id: str | None = Field(default=None, min_length=1, max_length=100)
     department_code: str | None = Field(default=None, min_length=1, max_length=20)
@@ -251,10 +250,12 @@ class LogicalModelWrite(ApiModel):
     @field_validator("identifiers")
     @classmethod
     def unique_identifiers(cls, value: list[str]) -> list[str]:
-        normalized = [item.strip() for item in value if item.strip()]
-        if not normalized or len(normalized) != len(set(normalized)):
-            raise ValueError("identifiers must contain unique non-empty values")
-        return normalized
+        if len(value) != 1:
+            raise ValueError("Exactly one identifier is required")
+        identifier = value[0].strip()
+        if not identifier or any(character.isspace() for character in identifier):
+            raise ValueError("The identifier must be a non-empty string without whitespace")
+        return [identifier]
 
     @field_validator("concept_ids")
     @classmethod
@@ -347,6 +348,7 @@ class LogicalModelSummary(ApiModel):
     data_classification: Classification
     has_physical_mapping: bool
     identifiers: list[str]
+    identifier_mode: Literal["manual", "organization_derived"] = "manual"
     date_created: date
     field_count: int = Field(ge=0)
     created_at: datetime
@@ -357,7 +359,7 @@ class LogicalModelResponse(LogicalModelSummary):
     review_id: uuid.UUID | None = None
     identifiers: list[str]
     localizations: list[LogicalLocalization]
-    creator: CreatorReference
+    creator: CreatorReference | None = None
     date_created: date
     contact_points: list[DcatContactPoint]
     publisher: DcatPublisher

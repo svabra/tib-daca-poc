@@ -81,6 +81,7 @@ from .models import (
     LogicalEntityVersion,
     LogicalFieldVersion,
     LogicalModel,
+    LogicalModelIdentifierReservation,
     LogicalModelReview,
     LogicalModelVersion,
     PhysicalColumn,
@@ -187,7 +188,7 @@ def _require_scope(
             assignment
             for assignment in _assignments(session, actor)
             if assignment.department_code == department_code
-            and assignment.organization_id == organization_id
+            and organization_id in _descendant_ids(session, assignment.organization_id)
             and (roles is None or assignment.role in roles)
         ),
         None,
@@ -254,27 +255,29 @@ def _require_publish_right(session: Session, actor: str, version: LogicalModelVe
 
 
 def _validate_owner_assignments(session: Session, body: LogicalModelWrite) -> None:
-    owner = session.scalar(
-        select(DataModelRoleAssignment).where(
-            DataModelRoleAssignment.user_id == body.data_owner_user_id,
-            DataModelRoleAssignment.department_code == body.department_code,
-            DataModelRoleAssignment.organization_id == body.organization_id,
-            DataModelRoleAssignment.role == "data_owner",
-            DataModelRoleAssignment.active.is_(True),
-        )
+    owner = next(
+        (
+            assignment
+            for assignment in _assignments(session, body.data_owner_user_id)
+            if assignment.department_code == body.department_code
+            and assignment.role == "data_owner"
+            and body.organization_id in _descendant_ids(session, assignment.organization_id)
+        ),
+        None,
     )
     if owner is None:
         raise HTTPException(422, "dataOwnerUserId must be an active owner in the selected scope")
     if body.deputy_owner_user_id:
-        deputy = session.scalar(
-            select(DataModelRoleAssignment).where(
-                DataModelRoleAssignment.user_id == body.deputy_owner_user_id,
-                DataModelRoleAssignment.department_code == body.department_code,
-                DataModelRoleAssignment.organization_id == body.organization_id,
-                DataModelRoleAssignment.role == "deputy_data_owner",
-                DataModelRoleAssignment.delegated_owner_user_id == body.data_owner_user_id,
-                DataModelRoleAssignment.active.is_(True),
-            )
+        deputy = next(
+            (
+                assignment
+                for assignment in _assignments(session, body.deputy_owner_user_id)
+                if assignment.department_code == body.department_code
+                and assignment.role == "deputy_data_owner"
+                and assignment.delegated_owner_user_id == body.data_owner_user_id
+                and body.organization_id in _descendant_ids(session, assignment.organization_id)
+            ),
+            None,
         )
         if deputy is None:
             raise HTTPException(
@@ -508,6 +511,7 @@ def create_modeling_router() -> APIRouter:
                 "organizationId": row.organization_id,
                 "delegatedOwnerUserId": row.delegated_owner_user_id,
                 "breadcrumb": _organization_breadcrumb(session, row.organization_id),
+                "descendantOrganizationIds": sorted(_descendant_ids(session, row.organization_id)),
             }
             for row in _assignments(session, actor)
         ]
@@ -582,16 +586,14 @@ def create_modeling_router() -> APIRouter:
         status: str | None = None,
         owner_user_id: Annotated[str | None, Query(alias="ownerUserId")] = None,
     ) -> dict[str, Any]:
-        assignments = _require_any_assignment(session, actor)
-        scopes = {(item.department_code, item.organization_id) for item in assignments}
+        # Logical-model metadata is catalog-wide readable for every active
+        # identity.  Scoped role assignments are enforced only for mutations.
+        del actor
         items: list[dict[str, Any]] = []
         for model in session.scalars(
             select(LogicalModel).where(LogicalModel.lifecycle == "active").order_by(LogicalModel.updated_at.desc())
         ):
             version = get_logical_version(session, model.id)
-            dataset = _dataset_version(session, version)
-            if (dataset.department_code, dataset.organization_id) not in scopes:
-                continue
             payload = logical_version_payload(session, model, version)
             if status and payload["status"] != status:
                 continue
@@ -620,13 +622,31 @@ def create_modeling_router() -> APIRouter:
         response.headers["ETag"] = _etag(version.lock_version)
         return logical_version_payload(session, model, version)
 
+    @router.get("/logical-model-identifiers/availability")
+    def logical_model_identifier_availability(
+        identifier: Annotated[str, Query(min_length=1, max_length=500)],
+        session: SessionDep,
+        actor: ActorDep,
+        exclude_model_id: Annotated[uuid.UUID | None, Query(alias="excludeModelId")] = None,
+    ) -> dict[str, bool]:
+        del actor
+        normalized = identifier.strip().casefold()
+        if not normalized or any(character.isspace() for character in identifier):
+            return {"available": False}
+        existing = session.scalar(
+            select(LogicalModelIdentifierReservation).where(
+                LogicalModelIdentifierReservation.normalized_identifier == normalized
+            )
+        )
+        return {"available": existing is None or existing.logical_model_id == exclude_model_id}
+
     @router.get("/logical-models/{model_id}", response_model=LogicalModelResponse)
     def read_logical_model(
         model_id: uuid.UUID, response: Response, session: SessionDep, actor: ActorDep
     ) -> dict[str, Any]:
         model = get_logical_model(session, model_id)
         version = get_logical_version(session, model.id)
-        _require_version_scope(session, actor, version)
+        del actor
         response.headers["ETag"] = _etag(version.lock_version)
         return logical_version_payload(session, model, version)
 
@@ -644,8 +664,7 @@ def create_modeling_router() -> APIRouter:
                 .order_by(LogicalModelVersion.revision.desc())
             )
         )
-        if rows:
-            _require_version_scope(session, actor, rows[0])
+        del actor
         items = [logical_version_payload(session, model, item) for item in rows]
         return {"items": items, "total": len(items)}
 
@@ -765,7 +784,7 @@ def create_modeling_router() -> APIRouter:
             raise HTTPException(404, "Unsupported RDF export")
         model = get_logical_model(session, model_id)
         version = get_logical_version(session, model.id, version_id)
-        _require_version_scope(session, actor, version)
+        del actor
         try:
             content = (
                 export_logical_dcat(session, model, version, rdf_format)
@@ -1140,7 +1159,10 @@ def create_modeling_router() -> APIRouter:
         physical_columns = {column.id: column for column in columns}
         logical_body = LogicalModelWrite.model_validate(
             {
-                "identifiers": [f"derived:{table.stable_key}"],
+                # A snapshot is immutable. Including it keeps repeated physical
+                # derivations catalog-wide unique while retaining a traceable,
+                # stable source/table prefix for the generated logical model.
+                "identifiers": [f"derived:{table.stable_key}:{snapshot.id}"],
                 "localizations": [
                     {"language": "de", "title": body.title, "description": body.description}
                 ],

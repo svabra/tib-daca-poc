@@ -43,4 +43,15 @@ def default_session_factory(settings: Settings) -> sessionmaker[Session]:
 def get_session(request: Request) -> Iterator[Session]:
     session_factory: sessionmaker[Session] = request.app.state.session_factory
     with session_factory() as session:
-        yield session
+        # Exception handlers need to roll back failed flushes before returning a
+        # RFC-7807 response.  Keep the request-scoped session discoverable for
+        # that narrow purpose only.
+        request.state.db_session = session
+        try:
+            yield session
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            if getattr(request.state, "db_session", None) is session:
+                del request.state.db_session

@@ -16,6 +16,7 @@ export interface BusinessObjectTerm {
 export interface ModelingScope {
   role: ModelingRole; organizationId: string; delegatedOwnerUserId: string | null;
   breadcrumb: { id: string; label: string }[];
+  descendantOrganizationIds: string[];
 }
 export interface TermdatEntry {
   entryId: string; uri: string; preferredTerm: string; definition: string; descriptionType: 'definition'|'note'|'context'|'none';

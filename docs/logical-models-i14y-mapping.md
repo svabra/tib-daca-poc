@@ -75,6 +75,15 @@ discriminated `Application`, `InternalOrganisation`, `InternalPerson`, or
 publication timestamp maps to `dcterms:issued`.  A media type is emitted only from a real
 distribution.  DaCa domains and I14Y themes are deliberately separate.
 
+A logical-model identifier is one non-empty, whitespace-free string. PostgreSQL reserves its
+case-folded value in `logical_model_identifier_reservations`, atomically and catalog-wide, for the
+logical-model root. A root changing its identifier releases its old reservation; current and
+retired roots retain their current reservation. The organisation-derived editor mode stores its
+mode on the logical-model version, while the final identifier is still the reserved value. Older
+duplicate identifiers can remain unchanged for backward compatibility, but no new reservation
+may claim an already reserved identifier. Physical derivations include their immutable source
+snapshot in the generated identifier, so repeated derivations remain distinct.
+
 Exports target the approved [DCAT-AP-CH 3.0.1 / eCH-0200
 3.0.1](https://www.ech.ch/de/ech/ech-0200/3.0.1).  Drafts can be serialized for review, while final
 publication requires title, description, identifier, publisher, and contact point.  The stricter
@@ -92,6 +101,13 @@ The SHACL export uses `sh:NodeShape`, `sh:PropertyShape`, `sh:path`, `sh:datatyp
 `register.ld.admin.ch/i14y/dataset/` namespace.  Several Concepts may be associated internally,
 but only one version-pinned primary link is emitted as `dcterms:conformsTo`, matching I14Y's
 documented `0..1` cardinality.
+
+Concept links, their primary Concept, and the I14Y CodeList are all optional and initially empty.
+The form provides independent reset actions; resetting Concept links also clears the dependent
+primary Concept and CodeList. Validation and database-integrity responses use a safe RFC-7807
+problem shape with a user action, field paths, error code, request ID, and normalised support
+details. SQL statements, database values, and stack traces are neither returned to the browser
+nor included in the copyable support text.
 
 ### RDF namespaces
 
@@ -183,6 +199,13 @@ submission creates an immutable review snapshot and personal task for Daniel, wh
 to the review workspace. Acceptance creates the published successor and
 sets `dct:issued`; rejection requires a comment and returns a `changes_requested` successor to the
 submitting steward.
+
+Logical-model reads are catalog-wide. Writes use the existing PostgreSQL-backed organisational
+hierarchy: a user's assigned department, office, or division permits the corresponding subtree;
+otherwise a model remains readable but is disabled in the editor. The selected DaCa domain is the
+authoritative server-side source for the primary owner and visible deputy. Saving a draft never
+creates a task; explicit submission creates exactly one immutable review snapshot and one task for
+the primary owner. The deputy has no decision right.
 
 ## Language and terminology assistance
 

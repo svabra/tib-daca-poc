@@ -95,7 +95,7 @@ describe('DataModelsApiService', () => {
         department: 'VBS', office: 'vbs-verteidigung', dataDomainId: 'domain-personal', dataOwnerId: 'christian.spider', deputyDataOwnerId: null,
         creator: variant.ui, classification: 'internal', dateCreated: '2026-09-07', entityName: 'CreatorTest', conceptIds: [], fields: [],
       };
-      let normalized: LogicalModelCreator | undefined;
+      let normalized: LogicalModelCreator | null | undefined;
       api.createLogicalModel(value).subscribe(({ body }) => { normalized = body.creator; });
       const request = http.expectOne('/api/v1/logical-models');
       expect(request.request.body.creator).toEqual(variant.api);
@@ -158,11 +158,12 @@ describe('DataModelsApiService', () => {
     expect(downloaded?.filename).toBe('modell-shape.jsonld');
   });
 
-  it('preserves semantic conflict details instead of presenting every 409 as a stale edit', () => {
+  it('turns an unstructured conflict into a user-facing action instead of a stale-edit notice', () => {
     let received:ModelingApiError|undefined;
     api.listLogicalModels().subscribe({error:(error:ModelingApiError)=>{received=error;}});
     http.expectOne('/api/v1/logical-models').flush({type:'urn:daca:problem:conflict',detail:'The requested identifier already exists'},{status:409,statusText:'Conflict'});
-    expect(received?.message).toBe('The requested identifier already exists');
+    expect(received?.message).toBe('Die Änderung steht im Konflikt mit einem bestehenden Katalogeintrag.');
+    expect(received?.suggestedAction).toContain('Prüfen Sie die Angaben');
     expect(received?.status).toBe(409);
   });
 
@@ -172,5 +173,22 @@ describe('DataModelsApiService', () => {
     http.expectOne('/api/v1/logical-models').flush({type:'urn:daca:problem:validation',detail:'Request invalid',errors:[{location:'body.identifiers',message:'Field required',type:'missing'}]},{status:422,statusText:'Unprocessable Entity'});
     expect(received?.kind).toBe('validation');
     expect(received?.issues).toEqual([{location:'body.identifiers',message:'Field required',type:'missing'}]);
+  });
+
+  it('keeps safe support details with a structured duplicate identifier problem', () => {
+    let received:ModelingApiError|undefined;
+    api.listLogicalModels().subscribe({error:(error:ModelingApiError)=>{received=error;}});
+    http.expectOne('/api/v1/logical-models').flush({
+      type:'urn:daca:problem:logical-model:identifier-conflict', title:'Identifier bereits vergeben',
+      detail:'Dieser Identifier wird bereits von einem anderen logischen Modell verwendet.',
+      errorCode:'DACA-LM-IDENTIFIER-DUPLICATE', suggestedAction:'Wählen Sie einen anderen Identifier.', requestId:'req-123',
+      errors:[{location:'body.identifiers.0',message:'Dieser Identifier ist bereits vergeben.',type:'unique'}],
+      technicalDetails:{category:'PostgreSQL integrity constraint',sqlState:'23505',constraint:'uq_logical_model_identifier_normalized',timestamp:'2026-09-15T10:00:00Z'},
+    },{status:409,statusText:'Conflict'});
+    expect(received?.message).toContain('bereits von einem anderen');
+    expect(received?.suggestedAction).toBe('Wählen Sie einen anderen Identifier.');
+    expect(received?.issues[0]?.location).toBe('body.identifiers.0');
+    expect(received?.requestId).toBe('req-123');
+    expect(received?.technicalDetails?.constraint).toBe('uq_logical_model_identifier_normalized');
   });
 });

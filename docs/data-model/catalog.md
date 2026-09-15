@@ -22,10 +22,10 @@ DAAIF is an external source system and its internal data model is outside this r
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
-- Alembic head: `0023_physical_models_s3`
-- Schema fingerprint: `787b2c0838a6eb08`
-- Migration fingerprint: `59d9542270a48ee1`
-- Tables: `86`
+- Alembic head: `0024_model_identifier`
+- Schema fingerprint: `ffaec3230f3d3a7c`
+- Migration fingerprint: `8de8bcb9e62e94b9`
+- Tables: `87`
 
 ## Domain status vocabulary
 
@@ -714,6 +714,12 @@ erDiagram
         string payload_hash
         string origin
     }
+    logical_model_identifier_reservations {
+        uuid logical_model_id PK,FK
+        string identifier
+        string normalized_identifier UK
+        datetime updated_at
+    }
     logical_model_reviews {
         uuid id PK
         uuid logical_model_id FK
@@ -736,6 +742,7 @@ erDiagram
         integer revision
         integer lock_version
         string status
+        string identifier_mode
         text comment
         string content_hash
         string created_by_user_id FK
@@ -1234,6 +1241,7 @@ erDiagram
     i14y_concepts o|--o{ logical_field_versions : "value_list_concept_id"
     logical_entities ||--o{ logical_fields : "logical_entity_id"
     logical_model_versions ||--o{ logical_model_assistance_provenance : "logical_model_version_id"
+    logical_models ||--o| logical_model_identifier_reservations : "logical_model_id"
     logical_models ||--o{ logical_model_reviews : "logical_model_id"
     logical_model_versions ||--o| logical_model_reviews : "submitted_version_id"
     domains ||--o{ logical_model_reviews : "domain_id"
@@ -2666,6 +2674,23 @@ Constraints and indexes:
 
 - Foreign key `logical_model_version_id` → `logical_model_versions.id`; on delete `CASCADE`
 
+### `logical_model_identifier_reservations`
+
+Case-folded catalog-wide logical-model identifier reservations, atomically owned by one logical-model root.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `logical_model_id` | `CHAR(32)` | no | PK, FK | — |
+| `identifier` | `VARCHAR(500)` | no | — | — |
+| `normalized_identifier` | `VARCHAR(500)` | no | UK | — |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Check `ck_logical_model_identifier_normalized`: `length(normalized_identifier) >= 1`
+- Unique `uq_logical_model_identifier_normalized`: `normalized_identifier`
+- Foreign key `logical_model_id` → `logical_models.id`; on delete `CASCADE`
+
 ### `logical_model_reviews`
 
 Immutable domain-owner review snapshots, decisions and successor-version references for submitted logical models.
@@ -2709,6 +2734,7 @@ Immutable structural and workflow revisions pinned to one authoritative DCAT dat
 | `revision` | `INTEGER` | no | — | — |
 | `lock_version` | `INTEGER` | no | — | `1` |
 | `status` | `VARCHAR(32)` | no | — | `draft` |
+| `identifier_mode` | `VARCHAR(32)` | no | — | `manual` |
 | `comment` | `TEXT` | yes | — | — |
 | `content_hash` | `VARCHAR(64)` | no | — | — |
 | `created_by_user_id` | `VARCHAR(200)` | no | FK | — |

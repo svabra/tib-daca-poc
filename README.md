@@ -210,6 +210,30 @@ of the `Immobilienmanagement VBS` domain) and Eliane Rossi (delegated deputy). S
 an immutable review snapshot and owner task; acceptance publishes immediately, while rejection
 requires a comment and creates a `changes_requested` successor for the submitting steward.
 
+### Logical-model form, identifiers, and save errors
+
+Every field label has a compact semantic-help icon. The icon appears only while the field or its
+description has pointer or keyboard focus; its tooltip opens from the icon and follows the primary
+browser language (`de`, `fr`, `it`, otherwise German). The DaCa-domain link opens the domain
+register in a new tab. Department is mandatory; office, division, application name, and creator
+type are optional. `Geheim` stays visible but disabled for new top-level classifications, so older
+`secret` records remain readable.
+
+An identifier is exactly one whitespace-free string and is reserved case-insensitively across the
+catalog in PostgreSQL. The optional organisation-derived mode exposes a fixed organisation prefix
+and an editable suffix; turning it off restores the manual value. A live availability check gives
+early feedback, while the database reservation remains the atomic authority. A changed identifier
+releases the previous value; active and retired roots retain their current reservation. Physical
+derivations use their immutable source snapshot in the generated identifier so repeatable
+derivations do not collide.
+
+Saving shows actionable German feedback directly under **Als Entwurf speichern**. Invalid controls
+are transparent red and every linked error entry focuses its control. A real ETag conflict alone
+asks for a reload. Database-integrity errors contain a safe RFC-7807 code, suggested action,
+field paths, request ID, SQLSTATE category/constraint, timestamp, and **Copy Error Message**;
+they never expose SQL, values, or stack traces. I14Y links, primary Concept, and CodeList are
+initially empty, optional, and each has its own **Zurücksetzen** action.
+
 I14Y Concepts are a read-only cached reference source. A full refresh is never triggered on UI
 startup; run it explicitly as a scoped modelling persona:
 
@@ -243,10 +267,15 @@ existing-to-existing workflows, including role switching, keyboard-only drift re
 reload persistence, the 390×844 matrix layout, and optional evidence captures:
 
 ```powershell
-npm run test:e2e:modeling:edge -- `
-  --base-url http://127.0.0.1:4200 `
-  --screenshot-dir docs/mockups/edge-qa
+npm run test:ui-regression -- `
+  --base-url http://127.0.0.1:8080 `
+  --screenshot-dir output/ui-regression
 ```
+
+`npm install` configures the versioned `.githooks/pre-commit` hook; run `npm run setup:git-hooks`
+to configure it again explicitly. The hook runs `npm run test:ui-regression` before every commit.
+The GitHub **UI regression** pull-request check runs the same command against Compose. It uploads
+screenshots only on failure and retains them for three days.
 
 ## Exercise the control plane
 
