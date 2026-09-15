@@ -173,6 +173,17 @@ describe('LogicalModelEditorComponent contracts',()=>{
     expect(identifier.classList.contains('ng-invalid')).toBe(false);
   });
 
+  it('uses an accessible switch for the organisation-derived identifier mode',()=>{
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);const component=fixture.componentInstance;
+    fixture.detectChanges();
+    const toggle=fixture.nativeElement.querySelector('.identifier-mode-switch') as HTMLButtonElement;
+    expect(toggle.getAttribute('role')).toBe('switch');
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    toggle.click();fixture.detectChanges();
+    expect(component.form.controls.dataset.controls.identifierMode.value).toBe(true);
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+  });
+
   it('keeps classification secret visible but unavailable for new selections',()=>{
     const fixture=TestBed.createComponent(LogicalModelEditorComponent);fixture.detectChanges();
     const classification=(fixture.nativeElement as HTMLElement).querySelector<HTMLSelectElement>('.classification-hero select')!;

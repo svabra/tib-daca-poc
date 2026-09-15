@@ -575,8 +575,15 @@
 .daca-field-help-trigger[hidden] { display: none; }
 .daca-field-help-tooltip { position: fixed; z-index: 1000; max-width: min(34rem, calc(100vw - 1.5rem)); padding: .72rem .85rem; border-radius: .2rem; background: #183247; color: #fff; box-shadow: 0 .5rem 1.4rem rgba(21, 41, 61, .3); font-size: .8rem; line-height: 1.45; }
 
-.identifier-field .identifier-toggle { display: inline-flex; align-items: center; gap: .35rem; color: var(--daca-muted); font-size: .7rem; font-weight: 650; }
-.identifier-field .identifier-toggle input { width: auto; min-height: auto; }
+.identifier-field .identifier-mode-control { display: inline-flex; align-items: center; gap: .5rem; color: var(--daca-muted); font-size: .7rem; font-weight: 650; line-height: 1.25; }
+.identifier-mode-switch { display: inline-flex; flex: 0 0 auto; align-items: center; width: 2.45rem; height: 1.35rem; border: 1px solid #778692; border-radius: 999px; padding: .1rem; background: #667784; cursor: pointer; transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease; }
+.identifier-mode-switch[aria-checked="true"] { border-color: var(--daca-blue); background: var(--daca-blue); }
+.identifier-mode-switch:hover { border-color: #315f88; background: #506976; }
+.identifier-mode-switch[aria-checked="true"]:hover { background: #063f70; }
+.identifier-mode-switch:focus-visible { outline: 3px solid rgba(0, 103, 170, .35); outline-offset: 3px; }
+.identifier-mode-switch-thumb { display: block; width: .95rem; height: .95rem; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .28); transform: translateX(0); transition: transform .16s ease; }
+.identifier-mode-switch[aria-checked="true"] .identifier-mode-switch-thumb { transform: translateX(1.05rem); }
+@media (prefers-reduced-motion: reduce) { .identifier-mode-switch, .identifier-mode-switch-thumb { transition: none; } }
 .identifier-input { display: flex; width: 100%; border: 1px solid var(--daca-border-strong); background: #fff; }
 .identifier-input input { border: 0 !important; }
 .identifier-prefix { display: inline-flex; align-items: center; padding: .55rem .15rem .55rem .65rem; background: #f0f2f4; color: #65717a; font: 700 .82rem/1.2 monospace; white-space: nowrap; }
