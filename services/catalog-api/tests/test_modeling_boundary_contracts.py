@@ -32,6 +32,8 @@ def test_logical_response_creator_is_a_discriminated_union(client, session_facto
     assert parsed.creator.organization_id == "vbs-verteidigung"
 
     creator_schema = LogicalModelResponse.model_json_schema()["properties"]["creator"]
+    # Creator information is optional. The non-null branch remains a tagged union.
+    creator_schema = next(item for item in creator_schema["anyOf"] if item.get("type") != "null")
     assert creator_schema["discriminator"]["propertyName"] == "type"
     assert set(creator_schema["discriminator"]["mapping"]) == {
         "Application",

@@ -549,7 +549,7 @@ def test_publish_rejects_a_persisted_model_that_is_not_dcat_ready(
         headers=_headers("christian.spider", submitted.headers["etag"]),
     )
     assert publish.status_code == 422, publish.text
-    assert "mandatory DCAT metadata" in publish.json()["detail"]
+    assert publish.json()["errorCode"] == "DACA-LM-DATA-VALIDATION"
     with resources_api.session_factory() as session:
         assert (
             session.scalar(

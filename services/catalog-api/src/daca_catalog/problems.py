@@ -130,6 +130,16 @@ def integrity_problem(exc: IntegrityError) -> CatalogProblem:
     )
 
 
+def _is_logical_model_request(request: Request) -> bool:
+    """Return whether the editor-specific logical-model error contract applies.
+
+    Other catalog APIs have independently established RFC-7807 details.  They
+    must retain their existing contract rather than receiving editor guidance.
+    """
+
+    return "/logical-model" in request.url.path
+
+
 def install_problem_handlers(app: FastAPI) -> None:
     @app.exception_handler(CatalogProblem)
     async def catalog_problem_handler(request: Request, exc: CatalogProblem) -> JSONResponse:
@@ -147,7 +157,8 @@ def install_problem_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-        if exc.status_code == 412:
+        is_logical_model_request = _is_logical_model_request(request)
+        if is_logical_model_request and exc.status_code == 412:
             return problem_response(
                 request,
                 412,
@@ -157,7 +168,7 @@ def install_problem_handlers(app: FastAPI) -> None:
                 error_code="DACA-LM-ETAG-CONFLICT",
                 suggested_action="Laden Sie den Entwurf neu und prüfen Sie Ihre Änderungen, bevor Sie erneut speichern.",
             )
-        if exc.status_code == 428:
+        if is_logical_model_request and exc.status_code == 428:
             return problem_response(
                 request,
                 428,
@@ -167,7 +178,7 @@ def install_problem_handlers(app: FastAPI) -> None:
                 error_code="DACA-LM-ETAG-REQUIRED",
                 suggested_action="Öffnen Sie den Entwurf erneut und versuchen Sie die Aktion nochmals.",
             )
-        if exc.status_code == 409:
+        if is_logical_model_request and exc.status_code == 409:
             return problem_response(
                 request,
                 409,
@@ -177,7 +188,7 @@ def install_problem_handlers(app: FastAPI) -> None:
                 error_code="DACA-LM-RESOURCE-CONFLICT",
                 suggested_action="Prüfen Sie die markierten Angaben und versuchen Sie das Speichern erneut.",
             )
-        if exc.status_code == 422:
+        if is_logical_model_request and exc.status_code == 422:
             return problem_response(
                 request,
                 422,
@@ -210,6 +221,15 @@ def install_problem_handlers(app: FastAPI) -> None:
                     "message": issue["msg"],
                     "type": issue["type"],
                 }
+            )
+        if not _is_logical_model_request(request):
+            return problem_response(
+                request,
+                422,
+                "Validation failed",
+                "The request body or parameters are invalid",
+                problem_type="urn:daca:problem:validation",
+                errors=errors,
             )
         return problem_response(
             request,
