@@ -141,6 +141,7 @@ SAMPLE_PRODUCT_TABLES = {
     "policy_deployments": "Latest policy revision projected into the protected PostgreSQL database.",
     "policy_entitlements": "Time-bounded person or machine grants used by forced RLS.",
     "tax_statistics": "Synthetic aggregate ESTV records protected by the HTTP PEP and PostgreSQL RLS.",
+    "VIBDBU": "Synthetic SAP building master used for physical metadata browsing and logical-model derivation.",
 }
 
 CONTEXTS = (

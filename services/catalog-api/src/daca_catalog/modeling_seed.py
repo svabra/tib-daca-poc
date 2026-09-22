@@ -15,6 +15,7 @@ from .federal_organization_import import (
 from .modeling_core import (
     FixturePhysicalMetadataAdapter,
     FixtureS3PhysicalMetadataAdapter,
+    VibdbuPhysicalMetadataAdapter,
     canonical_hash,
     stable_uuid,
 )
@@ -54,11 +55,13 @@ VEHICLE_MODEL_ID = stable_uuid("logical-model:fahrzeugbestand")
 ORGANIZATION_MODEL_ID = stable_uuid("logical-model:organisationseinheiten")
 PHYSICAL_SOURCE_ID = stable_uuid("physical-source:vbs-postgresql-fixture")
 S3_PHYSICAL_SOURCE_ID = stable_uuid("physical-source:daaif-s3-parquet")
+VIBDBU_PHYSICAL_SOURCE_ID = stable_uuid("physical-source:vibdbu-postgresql")
 GENDER_CONCEPT_ID = uuid.UUID("86365acd-3ad1-40a3-a76a-447653a4da6f")
 VEHICLE_TYPE_CONCEPT_ID = uuid.UUID("08dad447-fdc0-073a-b3f5-b70f4b876faf")
 LEGAL_FORM_CONCEPT_ID = uuid.UUID("89bc55cc-3858-4c13-a5c8-7dc935dff29b")
 _NOW = datetime(2026, 9, 7, 8, 0, tzinfo=UTC)
 REAL_ESTATE_ORGANIZATION_ID = "vbs-armasuisse-immobilien"
+ARMASUISSE_ORGANIZATION_ID = "vbs-armasuisse"
 REAL_ESTATE_DOMAIN_ID = stable_uuid("domain:immobilienmanagement-vbs")
 _PEOPLE = (
     ("christian.spider", "Christian Spider", "christian.spider@vtg.admin.ch", ("data_consumer",)),
@@ -75,6 +78,35 @@ def _seed_federal_hierarchy(session: Session) -> None:
         return
     payload, digest = load_and_validate_snapshot(DEFAULT_SNAPSHOT)
     apply_snapshot(session, payload, digest)
+
+
+def _seed_armasuisse_personas(session: Session) -> None:
+    people = (
+        ("giuseppe.starwars", "Giuseppe Starwars", "giuseppe.starwars@ar.admin.ch", "data_owner"),
+        ("thomas.wikinger", "Thomas Wikinger", "thomas.wikinger@ar.admin.ch", "data_steward"),
+    )
+    for user_id, display_name, email, role in people:
+        user = session.get(DemoUser, user_id)
+        if user is None:
+            session.add(DemoUser(
+                id=user_id, display_name=display_name, organization="armasuisse",
+                email=email, roles=["data_consumer"], selectable=True, active=True, created_at=_NOW,
+            ))
+        session.flush()
+        membership_id = stable_uuid(f"federal-membership:{user_id}:{ARMASUISSE_ORGANIZATION_ID}")
+        if session.get(FederalPersonMembership, membership_id) is None:
+            session.add(FederalPersonMembership(
+                id=membership_id, user_id=user_id, organization_id=ARMASUISSE_ORGANIZATION_ID,
+                is_primary=True, valid_from=date(2026, 1, 1), created_at=_NOW,
+            ))
+        role_id = stable_uuid(f"role:{ARMASUISSE_ORGANIZATION_ID}:{user_id}:{role}")
+        if session.get(DataModelRoleAssignment, role_id) is None:
+            session.add(DataModelRoleAssignment(
+                id=role_id, user_id=user_id, department_code="VBS",
+                organization_id=ARMASUISSE_ORGANIZATION_ID, role=role,
+                delegated_owner_user_id=None, active=True, created_at=_NOW,
+            ))
+    session.flush()
 
 
 def _seed_real_estate_journey(session: Session) -> None:
@@ -522,6 +554,62 @@ def _seed_scenarios(session: Session) -> None:
             "christian.man",
             variant="baseline",
         )
+    vibdbu_source = session.get(PhysicalSource, VIBDBU_PHYSICAL_SOURCE_ID)
+    if vibdbu_source is None:
+        vibdbu_payload = {
+            "name": "SAP VIBDBU Gebäudebestand",
+            "adapterType": "postgresql",
+            "configRef": "sample-data-product.vibdbu",
+            "scope": ["VBS", REAL_ESTATE_ORGANIZATION_ID],
+        }
+        vibdbu_source = PhysicalSource(
+            id=VIBDBU_PHYSICAL_SOURCE_ID,
+            urn=f"urn:daca:physical-source:{VIBDBU_PHYSICAL_SOURCE_ID}",
+            origin_catalog_id="urn:daca:catalog:bit-poc",
+            name=vibdbu_payload["name"],
+            description=(
+                "Metadatenquelle für den synthetischen SAP-Gebäudebestand VIBDBU "
+                "mit 1'000 plausiblen Datensätzen."
+            ),
+            adapter_type="postgresql",
+            config_ref=vibdbu_payload["configRef"],
+            department_code="VBS",
+            organization_id=REAL_ESTATE_ORGANIZATION_ID,
+            revision=1,
+            content_hash=canonical_hash(vibdbu_payload),
+            lifecycle="active",
+            created_by_user_id="mirjam.keller",
+            created_at=_NOW,
+            updated_at=_NOW,
+        )
+        session.add(vibdbu_source)
+        session.flush()
+    elif vibdbu_source.lifecycle != "active":
+        # This is the durable browser demo source. Re-enable it on every seed run so a prior
+        # lifecycle test or an accidental retirement cannot hide the VIBDBU modelling journey.
+        vibdbu_source.lifecycle = "active"
+        vibdbu_source.retired_at = None
+        vibdbu_source.revision += 1
+        vibdbu_source.updated_at = _NOW
+
+    vibdbu_snapshot = session.scalar(
+        select(PhysicalSchemaSnapshot)
+        .where(PhysicalSchemaSnapshot.source_id == vibdbu_source.id)
+        .order_by(PhysicalSchemaSnapshot.sequence.desc())
+        .limit(1)
+    )
+    if vibdbu_snapshot is None:
+        # The matching sample-data-product migration owns the data rows. The catalog seed stores
+        # only the immutable, credential-free structural snapshot so this demo source is
+        # immediately browseable without granting the catalog service row access.
+        persist_physical_import(
+            session,
+            vibdbu_source,
+            VibdbuPhysicalMetadataAdapter(),
+            "mirjam.keller",
+            variant="baseline",
+        )
+
     vehicle_table = _physical_table(
         session, snapshot.id, "logistics_db", "logistics", "vehicle_inventory"
     )
@@ -613,11 +701,37 @@ def _seed_scenarios(session: Session) -> None:
             model_id=ORGANIZATION_MODEL_ID,
         )
 
+def _retire_duplicate_source_instances(session: Session) -> None:
+    """Keep one active source per opaque connection configuration and organization scope.
+
+    A config reference identifies a server-side connection, never a credential. Repeated fixture
+    registrations of the same reference therefore represent one physical system, not many sources.
+    Historical snapshots and mappings remain attached to their retired registrations.
+    """
+    groups: dict[tuple[str, str, str, str], list[PhysicalSource]] = {}
+    for source in session.scalars(select(PhysicalSource).where(PhysicalSource.lifecycle == "active")):
+        if not source.config_ref:
+            continue
+        key = (source.adapter_type, source.config_ref, source.department_code, source.organization_id)
+        groups.setdefault(key, []).append(source)
+    for sources in groups.values():
+        if len(sources) < 2:
+            continue
+        keep = min(sources, key=lambda source: (source.created_at, str(source.id)))
+        for source in sources:
+            if source.id == keep.id:
+                continue
+            source.lifecycle = "retired"
+            source.retired_at = _NOW
+            source.revision += 1
+            source.updated_at = _NOW
+
 
 def seed_modeling_catalog(session: Session) -> None:
     """Seed six VBS personas, real I14Y references, and three modeling scenarios."""
     _seed_federal_hierarchy(session)
     _seed_people_and_roles(session)
+    _seed_armasuisse_personas(session)
     _seed_real_estate_journey(session)
     _seed_personnel_domain(session)
     _seed_i14y_cache(session)
@@ -626,6 +740,7 @@ def seed_modeling_catalog(session: Session) -> None:
     # the marker but removes the scenarios.  Keep the individually guarded
     # scenario seed self-healing so downgrade/re-upgrade/seed remains idempotent.
     _seed_scenarios(session)
+    _retire_duplicate_source_instances(session)
     if session.get(SeedMarker, MODELING_SEED_NAME) is None:
         session.add(SeedMarker(name=MODELING_SEED_NAME, applied_at=_NOW))
     session.commit()

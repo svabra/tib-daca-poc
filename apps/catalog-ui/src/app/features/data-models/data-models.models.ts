@@ -166,6 +166,7 @@ export interface LogicalFieldWrite {
   valueListConceptId: string | null;
   conceptIds: string[];
   primaryConceptId: string | null;
+  conceptMatchExplicitlyNone?: boolean;
 }
 
 export interface LogicalEntityWrite {
@@ -251,6 +252,7 @@ export interface PhysicalColumn {
 
 export interface PhysicalTable {
   id: string;
+  stableKey: string;
   schemaName: string;
   name: string;
   kind: 'table' | 'view' | 'materialized_view' | 'parquet';
@@ -260,6 +262,7 @@ export interface PhysicalTable {
   sizeBytes: number | null;
   schemaConfidence: 'declared' | 'embedded' | 'inferred' | null;
   partitionKeys: string[];
+  comment: string | null;
   columns: PhysicalColumn[];
 }
 
@@ -267,6 +270,8 @@ export interface PhysicalSnapshot {
   id: string;
   sourceId: string;
   sourceName: string;
+  dataOwnerName: string | null;
+  catalogPath: string;
   sourceType: 'postgresql' | 's3' | 'fixture';
   systemName: string;
   databaseName: string;
@@ -283,12 +288,17 @@ export interface PhysicalSource {
   id: string;
   revision: number;
   name: string;
-  connectorType: 'postgresql' | 's3' | 'fixture';
+  description?: string | null;
+  connectorType: 'postgresql' | 's3' | 'oracle' | 'fixture';
   systemName: string;
   databaseName: string;
   department: string;
   office: string;
+  latestSnapshotId: string | null;
+  latestSnapshotSequence: number | null;
   latestSnapshot: PhysicalSnapshot | null;
+  catalogPath: string;
+  ownerName: string;
   updatedAt: string;
 }
 
@@ -321,6 +331,17 @@ export interface LogicalDerivationContext {
   dataDomainId: string;
   dataOwnerUserId: string;
   deputyOwnerUserId?: string | null;
+}
+
+export interface DerivedFieldBinding {
+  physicalColumnId: string;
+  entityName: string;
+  logicalFieldName: string;
+}
+
+export interface DerivedLogicalModelWrite {
+  logicalModel: LogicalModelWrite;
+  fieldMappings: DerivedFieldBinding[];
 }
 
 export interface LogicalModelReadiness {

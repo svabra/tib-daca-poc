@@ -24,6 +24,9 @@ def stable_uuid(value: str) -> uuid.UUID:
 
 def normalize_postgresql_type(raw_type: str) -> str:
     normalized = raw_type.strip().casefold()
+    normalized = normalized.removeprefix("xsd:")
+    if normalized in {"datetime", "date-time"}:
+        return "datetime"
     if normalized in {
         "character varying", "varchar", "character", "char", "text", "citext", "string",
         "large_string", "string_view",
@@ -163,6 +166,140 @@ def fixture_metadata(variant: str | None = None) -> dict[str, Any]:
 class FixturePhysicalMetadataAdapter:
     def inspect(self, *, variant: str | None = None) -> dict[str, Any]:
         return fixture_metadata(variant)
+
+
+_VIBDBU_COLUMN_SPECS: tuple[tuple[str, int, str], ...] = (
+    ("SGENR", 8, "Gebäude"),
+    ("SWENR", 8, "Wirtschaftseinheit"),
+    ("AUTHGRP", 40, "Berechtigungsgruppe"),
+    ("BUKRS", 4, "Buchungskreis"),
+    ("GEMEINDE", 8, "Gemeindeschlüssel"),
+    ("RGEBART", 2, "Gebäudeart"),
+    ("RGEBZUST", 2, "Gebäudezustand"),
+    ("VALIDFROM", 10, "Gültig ab"),
+    ("VALIDTO", 10, "Gültig bis"),
+    ("XGETXT", 60, "Bezeichnung des GE"),
+    ("YBAUJAHR", 10, "Baujahr"),
+    ("ZZACTANOVA_ID", 36, "ID Acta Nova"),
+    ("ZZAGFA_NR", 25, "AGFA Nummer"),
+    ("ZZBASISJAHR", 4, "Basisjahr"),
+    ("ZZBAUWERKSICH", 1, "Bauwerksicherheit"),
+    ("ZZBIC_NUMMER", 20, "BIC-Nummer (alt)"),
+    ("ZZBRANDSCHUTZ_AUDIT_DAT", 10, "Datum Brandschutzaudit"),
+    ("ZZBRANDSCHUTZ_KATEGORIE", 2, "Brandschutzkategorie"),
+    ("ZZBRANDSCHUTZ_ZUSTAND", 1, "Brandschutzzustand"),
+    ("ZZDATENBANK", 1, "Datenbank"),
+    ("ZZDB_MUTIERT_AM", 10, "mutiert am"),
+    ("ZZEGID", 100, "EGID"),
+    ("ZZEIGENTUMSART", 1, "Eigentumsart"),
+    ("ZZGEBZUST_ERFASST_AM", 8, "Erfasst am"),
+    ("ZZINDEXREIHE", 5, "Indexreihe"),
+    ("ZZKOMZ", 1, "Fachd. KOMZ Wasser"),
+    ("ZZKOORDX", 7, "Koordinate X (Nord)"),
+    ("ZZKOORDX_ZUSATZ", 7, "Zusatz-Koordinate X (Nord)"),
+    ("ZZKOORDY", 7, "Koordinate Y (Ost)"),
+    ("ZZKOORDY_ZUSATZ", 7, "Zusatz-Koordinate Y (Ost)"),
+    ("ZZKOORDZ", 4, "Koordinate Z (Höhe)"),
+    ("ZZKOORDZ_ZUSATZ", 4, "Zusatz-Koordinate Z (Höhe)"),
+    ("ZZKUEND_AKZEPT_DATUM", 10, "Akzeptiert am"),
+    ("ZZKUEND_DATUM", 10, "Kündigung per"),
+    ("ZZKUEND_PROZESS_JAHR", 4, "Kündigungsprozess Jahr"),
+    ("ZZKUEND_REFERENZ_ID", 10, "Referenz Identifikation"),
+    ("ZZKUEND_RUECKN_DATUM", 10, "Rücknahme am"),
+    ("ZZLANDERWERB", 50, "Landerwerbsnummer"),
+    ("ZZLUFTREIN", 1, "Luftreinhaltung"),
+    ("ZZMULTIEGID", 1, "mehrere EGID-Nr. vorhanden"),
+    ("ZZOBJ_ART", 10, "Objektart"),
+    ("ZZOBJ_SUBART", 8, "Objektsubart"),
+    ("ZZSCHUTZRAUMTECH", 1, "Schutzraumtechnik"),
+    ("ZZSCHUTZRAUMTECHDAT", 10, "geprüft am"),
+    ("ZZSCHUTZZONE", 2, "Schutzzone"),
+    ("ZZZERTIFIKAT", 2, "Zertifikat / Label / Energie-Standard"),
+    ("ZZZERTIFIKATDAT", 10, "Datum Zertifizierung"),
+)
+_VIBDBU_DATE_COLUMNS = frozenset(
+    {
+        "VALIDFROM",
+        "VALIDTO",
+        "YBAUJAHR",
+        "ZZBRANDSCHUTZ_AUDIT_DAT",
+        "ZZDB_MUTIERT_AM",
+        "ZZGEBZUST_ERFASST_AM",
+        "ZZKUEND_AKZEPT_DATUM",
+        "ZZKUEND_DATUM",
+        "ZZKUEND_RUECKN_DATUM",
+        "ZZSCHUTZRAUMTECHDAT",
+        "ZZZERTIFIKATDAT",
+    }
+)
+_VIBDBU_NUMERIC_COLUMNS = {
+    "ZZBASISJAHR": 4,
+    "ZZKOORDX": 7,
+    "ZZKOORDX_ZUSATZ": 7,
+    "ZZKOORDY": 7,
+    "ZZKOORDY_ZUSATZ": 7,
+    "ZZKOORDZ": 4,
+    "ZZKOORDZ_ZUSATZ": 4,
+    "ZZKUEND_PROZESS_JAHR": 4,
+}
+_VIBDBU_REQUIRED_COLUMNS = frozenset(
+    {"SGENR", "SWENR", "BUKRS", "GEMEINDE", "RGEBART", "RGEBZUST", "VALIDFROM", "XGETXT"}
+)
+
+
+def vibdbu_postgresql_metadata(variant: str | None = None) -> dict[str, Any]:
+    """Return the released VIBDBU structure without accessing data rows.
+
+    The matching sample-data-product migration owns the 1'000 records; the catalog keeps only
+    their schema and column comments available for the physical-first modelling journey.
+    """
+
+    del variant
+    columns: list[dict[str, Any]] = []
+    for ordinal, (name, length, comment) in enumerate(_VIBDBU_COLUMN_SPECS, start=1):
+        numeric_precision = _VIBDBU_NUMERIC_COLUMNS.get(name)
+        is_date = name in _VIBDBU_DATE_COLUMNS
+        columns.append(
+            {
+                "name": name,
+                "dataType": "date" if is_date else "numeric" if numeric_precision else "character varying",
+                "characterLength": None if is_date or numeric_precision else length,
+                "numericPrecision": numeric_precision,
+                "numericScale": 0 if numeric_precision else None,
+                "nullable": name not in _VIBDBU_REQUIRED_COLUMNS,
+                "ordinalPosition": ordinal,
+                "comment": comment,
+            }
+        )
+    return {
+        "databases": [
+            {
+                "name": "daca_sample",
+                "schemas": [
+                    {
+                        "name": "public",
+                        "tables": [
+                            {
+                                "name": "VIBDBU",
+                                "kind": "table",
+                                "comment": (
+                                    "Synthetischer SAP-Gebäudebestand nach der VIBDBU-Struktur; "
+                                    "ausschliesslich für den DaCa-Modellierungs-Use-Case."
+                                ),
+                                "schemaConfidence": "declared",
+                                "columns": columns,
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+
+class VibdbuPhysicalMetadataAdapter:
+    def inspect(self, *, variant: str | None = None) -> dict[str, Any]:
+        return vibdbu_postgresql_metadata(variant)
 
 
 def fixture_s3_parquet_metadata(variant: str | None = None) -> dict[str, Any]:
@@ -335,16 +472,66 @@ class PostgreSQLPhysicalMetadataAdapter:
                 rows = connection.execute(
                     text(
                         """
-                        SELECT c.table_schema, c.table_name, t.table_type, c.column_name,
-                               c.data_type, c.character_maximum_length, c.numeric_precision,
-                               c.numeric_scale, c.is_nullable, c.ordinal_position
-                          FROM information_schema.columns AS c
-                          JOIN information_schema.tables AS t
-                            ON t.table_catalog = c.table_catalog
-                           AND t.table_schema = c.table_schema
-                           AND t.table_name = c.table_name
-                         WHERE c.table_schema NOT IN ('pg_catalog', 'information_schema')
-                         ORDER BY c.table_schema, c.table_name, c.ordinal_position
+                        SELECT namespace.nspname AS table_schema,
+                               relation.relname AS table_name,
+                               CASE relation.relkind
+                                 WHEN 'v' THEN 'VIEW'
+                                 WHEN 'm' THEN 'MATERIALIZED VIEW'
+                                 ELSE 'BASE TABLE'
+                               END AS table_type,
+                               attribute.attname AS column_name,
+                               CASE attribute_type.typname
+                                 WHEN 'bpchar' THEN 'character'
+                                 WHEN 'varchar' THEN 'character varying'
+                                 WHEN 'int2' THEN 'smallint'
+                                 WHEN 'int4' THEN 'integer'
+                                 WHEN 'int8' THEN 'bigint'
+                                 WHEN 'float4' THEN 'real'
+                                 WHEN 'float8' THEN 'double precision'
+                                 WHEN 'bool' THEN 'boolean'
+                                 WHEN 'timestamptz' THEN 'timestamp with time zone'
+                                 WHEN 'timetz' THEN 'time with time zone'
+                                 ELSE pg_catalog.format_type(attribute.atttypid, NULL)
+                               END AS data_type,
+                               CASE
+                                 WHEN attribute_type.typname IN ('bpchar', 'varchar')
+                                      AND attribute.atttypmod > 4
+                                   THEN attribute.atttypmod - 4
+                                 ELSE NULL
+                               END AS character_maximum_length,
+                               CASE
+                                 WHEN attribute_type.typname = 'numeric'
+                                      AND attribute.atttypmod > 4
+                                   THEN ((attribute.atttypmod - 4) >> 16) & 65535
+                                 WHEN attribute_type.typname = 'int2' THEN 16
+                                 WHEN attribute_type.typname = 'int4' THEN 32
+                                 WHEN attribute_type.typname = 'int8' THEN 64
+                                 ELSE NULL
+                               END AS numeric_precision,
+                               CASE
+                                 WHEN attribute_type.typname = 'numeric'
+                                      AND attribute.atttypmod > 4
+                                   THEN (attribute.atttypmod - 4) & 65535
+                                 WHEN attribute_type.typname IN ('int2', 'int4', 'int8') THEN 0
+                                 ELSE NULL
+                               END AS numeric_scale,
+                               NOT attribute.attnotnull AS is_nullable,
+                               attribute.attnum AS ordinal_position,
+                               pg_catalog.obj_description(relation.oid, 'pg_class') AS table_comment,
+                               pg_catalog.col_description(relation.oid, attribute.attnum) AS column_comment
+                          FROM pg_catalog.pg_class AS relation
+                          JOIN pg_catalog.pg_namespace AS namespace
+                            ON namespace.oid = relation.relnamespace
+                          JOIN pg_catalog.pg_attribute AS attribute
+                            ON attribute.attrelid = relation.oid
+                          JOIN pg_catalog.pg_type AS attribute_type
+                            ON attribute_type.oid = attribute.atttypid
+                         WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+                           AND relation.relkind IN ('r', 'p', 'v', 'm')
+                           AND pg_catalog.has_table_privilege(relation.oid, 'SELECT')
+                           AND attribute.attnum > 0
+                           AND NOT attribute.attisdropped
+                         ORDER BY namespace.nspname, relation.relname, attribute.attnum
                         """
                     )
                 ).mappings()
@@ -355,7 +542,15 @@ class PostgreSQLPhysicalMetadataAdapter:
                         str(row["table_name"]),
                         {
                             "name": str(row["table_name"]),
-                            "kind": "view" if str(row["table_type"]).upper() == "VIEW" else "table",
+                            "kind": (
+                                "materialized_view"
+                                if str(row["table_type"]).upper() == "MATERIALIZED VIEW"
+                                else "view"
+                                if str(row["table_type"]).upper() == "VIEW"
+                                else "table"
+                            ),
+                            "comment": row["table_comment"],
+                            "schemaConfidence": "declared",
                             "columns": [],
                         },
                     )
@@ -366,8 +561,9 @@ class PostgreSQLPhysicalMetadataAdapter:
                             "characterLength": row["character_maximum_length"],
                             "numericPrecision": row["numeric_precision"],
                             "numericScale": row["numeric_scale"],
-                            "nullable": str(row["is_nullable"]).upper() == "YES",
+                            "nullable": bool(row["is_nullable"]),
                             "ordinalPosition": int(row["ordinal_position"]),
+                            "comment": row["column_comment"],
                         }
                     )
                 return {

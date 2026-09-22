@@ -4,7 +4,7 @@
   "appData": {
     "schemaVersion": 1,
     "appId": "control-plane-ui",
-    "releaseVersion": "0.1.25"
+    "releaseVersion": "0.1.26"
   },
   "assetGroups": [
     {

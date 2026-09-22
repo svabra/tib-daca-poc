@@ -83,8 +83,10 @@ export class MappingDraftFacade {
     this.mappingsState.set(mappings);
     this.driftState.set(drift);
     this.dirtyIdsState.set(new Set());
-    this.selectedLogicalFieldId.set(model.fields[0]?.id ?? null);
-    this.selectedMappingId.set(mappings[0]?.id ?? null);
+    const firstFieldId = model.fields[0]?.id ?? null;
+    const firstFieldMapping = firstFieldId ? mappings.find((mapping) => mapping.logicalFieldVersionIds.includes(firstFieldId)) : undefined;
+    this.selectedLogicalFieldId.set(firstFieldId ?? firstFieldMapping?.logicalFieldVersionIds[0] ?? null);
+    this.selectedMappingId.set(firstFieldMapping?.id ?? null);
     this.pendingLogicalFieldId.set(null);
   }
 

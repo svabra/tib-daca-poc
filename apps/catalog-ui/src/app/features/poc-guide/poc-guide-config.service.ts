@@ -28,10 +28,12 @@ export class PocGuideConfigService {
 
   externalHref(target: PocGuideActionTarget): string | null {
     const base = this.state().daaifUiUrl;
-    if (!base || (target !== 'daaif-notebook' && target !== 'daaif-loader')) return null;
+    if (!base || (target !== 'daaif-notebook' && target !== 'daaif-loader' && target !== 'daaif-source-explorer')) return null;
     const suffix = target === 'daaif-notebook'
       ? '/notebooks/data-analysts-journey-cantonal-business-tax'
-      : '/loader-workbench';
+      : target === 'daaif-loader'
+        ? '/loader-workbench'
+        : '/catalog/sources/bit-shared-pg/explorer';
     try {
       const url = new URL(base);
       url.pathname = `${url.pathname.replace(/\/$/, '')}${suffix}`;

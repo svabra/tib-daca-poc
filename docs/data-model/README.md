@@ -20,7 +20,7 @@ Update generated sections with `npm run docs:data-model`. Validate them with
 |---|---|---:|---|---|
 | [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 87 | `0024_model_identifier` | `8de8bcb9e62e94b9` |
 | [Control-plane data model](control-plane.md) | PostgreSQL (`daca_control_plane`) | 6 | `20260803_0001` | `ff3a5ea9ca863788` |
-| [Sample data-product model](sample-data-product.md) | PostgreSQL (`daca_sample`) | 3 | `0003_weekly_availability` | `938d480b00000576` |
+| [Sample data-product model](sample-data-product.md) | PostgreSQL (`daca_sample`) | 4 | `0004_vibdbu_buildings` | `62c6765d78832f77` |
 
 ## Cross-service data flow
 
@@ -133,6 +133,7 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `control-plane.health_observations`
 - `control-plane.sync_configurations`
 - `control-plane.trust_grants`
+- `sample-data-product.VIBDBU`
 - `sample-data-product.policy_deployments`
 - `sample-data-product.policy_entitlements`
 - `sample-data-product.tax_statistics`

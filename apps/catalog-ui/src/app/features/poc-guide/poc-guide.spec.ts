@@ -104,6 +104,7 @@ describe('PoC guide public configuration', () => {
 
     expect(service.externalHref('daaif-notebook')).toBe('https://daaif.example.test/base/notebooks/data-analysts-journey-cantonal-business-tax');
     expect(service.externalHref('daaif-loader')).toBe('https://daaif.example.test/base/loader-workbench');
+    expect(service.externalHref('daaif-source-explorer')).toBe('https://daaif.example.test/base/catalog/sources/bit-shared-pg/explorer');
     expect(service.externalHref('internal')).toBeNull();
     http.verify();
   });
@@ -129,7 +130,8 @@ describe('PoC guide detail', () => {
         if (!daaifUiUrl) return null;
         return target === 'daaif-notebook'
           ? `${daaifUiUrl}/notebooks/data-analysts-journey-cantonal-business-tax`
-          : target === 'daaif-loader' ? `${daaifUiUrl}/loader-workbench` : null;
+          : target === 'daaif-loader' ? `${daaifUiUrl}/loader-workbench`
+            : target === 'daaif-source-explorer' ? `${daaifUiUrl}/catalog/sources/bit-shared-pg/explorer` : null;
       },
     };
     const identity = { select: vi.fn() };
@@ -153,9 +155,10 @@ describe('PoC guide detail', () => {
 
     expect(root.querySelector('h1')?.textContent).toContain('A Data Analyst’s Journey');
     expect(root.textContent).toContain('Joel Ruod');
-    expect(root.querySelectorAll('[data-poc-guide-step]').length).toBe(10);
+    expect(root.querySelectorAll('[data-poc-guide-step]').length).toBe(11);
     const external = root.querySelector('a[href^="https://daaif.test"]') as HTMLAnchorElement | null;
     expect(external?.rel).toContain('noopener');
+    expect(root.querySelector('a[href="https://daaif.test/catalog/sources/bit-shared-pg/explorer"]')).not.toBeNull();
     const screenshotButton = root.querySelector('.poc-guide-screenshot-list button') as HTMLButtonElement;
     expect(screenshotButton.getAttribute('aria-label')).toContain('Screenshot vergrössern');
 
@@ -178,7 +181,7 @@ describe('PoC guide detail', () => {
     const { fixture } = await render('data-analysts-journey', '');
     const root = fixture.nativeElement as HTMLElement;
 
-    expect(root.querySelectorAll('.poc-guide-external-unavailable').length).toBe(2);
+    expect(root.querySelectorAll('.poc-guide-external-unavailable').length).toBe(3);
     expect(root.textContent).toContain('DAAIF-Link ist in dieser Umgebung nicht konfiguriert.');
     expect(root.querySelector('a[href*="data-analysts-journey-cantonal-business-tax"]')).toBeNull();
   });

@@ -38,6 +38,7 @@ export class App {
   readonly navigation: readonly DacaNavigationItem[] = [
     { label: 'Startseite', path: '/', exact: true },
     { label: 'Meine Datenprodukte', path: '/products' },
+    { label: 'Datenquellen', path: '/physical-models' },
     { label: 'Datenmodelle', path: '/models' },
     { label: 'Domäne und Terminology', path: '/domains' },
     { label: 'Aufgaben', path: '/tasks' },

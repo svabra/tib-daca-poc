@@ -249,6 +249,16 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
         checkpoint: 'Der Loader-Job ist abgeschlossen und meldet 25 Dateien sowie 1’500 PostgreSQL-Zeilen.',
       },
       {
+        title: 'Technische Struktur und fachliche Bedeutung trennen',
+        description: 'Öffnen Sie den DAAIF-Quellen-Explorer. Er zeigt ausschliesslich sichere Strukturmetadaten. Eine fachliche Zuordnung wird danach im DaCa über eine konkrete Modell- und Mappingrevision geprüft; Datenzeilen bleiben in beiden Schritten ausgeschlossen.',
+        status: 'implemented',
+        actions: [
+          { label: 'DAAIF Quellen-Explorer öffnen', target: 'daaif-source-explorer' },
+          { label: 'Bestehende Datenquellen in DaCa öffnen', target: 'internal', path: '/physical-models', demoUserId: 'joel.ruod' },
+        ],
+        checkpoint: 'Technische Objektkennung, DaCa-URN und Mappingrevision werden getrennt behandelt; nur ein validiertes Mapping darf Analysekontext begründen.',
+      },
+      {
         title: 'Aargau bewusst als Plain CSV einlesen',
         description: 'Laden Sie die bereitgestellte Datei herunter. Im Ingestion Workbench bleibt das Format «Plain CSV». Ziel: Bucket «data-analysts-journey», Prefix «manual/aargau», unveränderter Dateiname.',
         status: 'implemented',

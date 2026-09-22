@@ -31,15 +31,15 @@ export const FALLBACK_LOGICAL_MODEL: LogicalModel = {
 };
 
 export const FALLBACK_PHYSICAL_SNAPSHOT: PhysicalSnapshot = {
-  id: 'fallback-hr-snapshot-2', sourceId: 'fallback-hr-core', sourceName: 'HR-PROD', sourceType: 'postgresql', systemName: 'PostgreSQL', databaseName: 'hr_core', revision: 2,
+  id: 'fallback-hr-snapshot-2', sourceId: 'fallback-hr-core', sourceName: 'HR-PROD', dataOwnerName: 'Christian Spider', catalogPath: 'postgresql://hr_core/', sourceType: 'postgresql', systemName: 'PostgreSQL', databaseName: 'hr_core', revision: 2,
   contentHash: 'sha256:fallback', importedAt: '2026-09-05T07:20:00Z', importedBy: { id: 'cinthya.thor', displayName: 'Cinthya Thor' }, previousSnapshotId: 'fallback-hr-snapshot-1', driftCount: 1,
-  tables: [{ id: 'table-org-unit', schemaName: 'public', name: 'org_unit', kind: 'table', storageLocation: null, mediaType: null, objectCount: null, sizeBytes: null, schemaConfidence: 'declared', partitionKeys: [], columns: [
+  tables: [{ id: 'table-org-unit', stableKey: 'hr_core.public.org_unit', schemaName: 'public', name: 'org_unit', kind: 'table', storageLocation: null, mediaType: null, objectCount: null, sizeBytes: null, schemaConfidence: 'declared', partitionKeys: [], comment: null, columns: [
     { id: 'column-org-id', name: 'org_unit_id', ordinalPosition: 1, dataType: 'uuid', length: null, precision: null, scale: null, nullable: false, comment: null },
     { id: 'column-org-name', name: 'name', ordinalPosition: 2, dataType: 'varchar', length: 180, precision: null, scale: null, nullable: false, comment: null },
     { id: 'column-parent-id', name: 'parent_org_unit_id', ordinalPosition: 3, dataType: 'uuid', length: null, precision: null, scale: null, nullable: true, comment: null },
     { id: 'column-type', name: 'unit_type', ordinalPosition: 4, dataType: 'varchar', length: 40, precision: null, scale: null, nullable: false, comment: null },
     { id: 'column-valid', name: 'valid_from', ordinalPosition: 5, dataType: 'date', length: null, precision: null, scale: null, nullable: false, comment: null },
-  ] }, { id: 'table-employee', schemaName: 'public', name: 'employee', kind: 'table', storageLocation: null, mediaType: null, objectCount: null, sizeBytes: null, schemaConfidence: 'declared', partitionKeys: [], columns: [
+  ] }, { id: 'table-employee', stableKey: 'hr_core.public.employee', schemaName: 'public', name: 'employee', kind: 'table', storageLocation: null, mediaType: null, objectCount: null, sizeBytes: null, schemaConfidence: 'declared', partitionKeys: [], comment: null, columns: [
     { id: 'column-employee-org-id', name: 'org_unit_id', ordinalPosition: 1, dataType: 'uuid', length: null, precision: null, scale: null, nullable: false, comment: null },
     { id: 'column-employee-org-name', name: 'org_unit_name', ordinalPosition: 2, dataType: 'varchar', length: 120, precision: null, scale: null, nullable: true, comment: null },
   ] }],

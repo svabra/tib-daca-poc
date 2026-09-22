@@ -30,5 +30,8 @@ describe('mapping workspace snapshot contract', () => {
     expect(mappingsForSnapshotWorkspace([current, broken, unrelated], FALLBACK_PHYSICAL_SNAPSHOT, drift).map((mapping) => mapping.id)).toEqual([
       current.id, broken.id,
     ]);
+    expect(mappingsForSnapshotWorkspace(
+      [current, broken, unrelated], FALLBACK_PHYSICAL_SNAPSHOT, drift, FALLBACK_PHYSICAL_SNAPSHOT.tables[0].id,
+    ).map((mapping) => mapping.id)).toEqual([current.id, broken.id]);
   });
 });

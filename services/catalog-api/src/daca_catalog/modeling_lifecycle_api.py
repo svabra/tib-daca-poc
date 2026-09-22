@@ -46,7 +46,9 @@ from .models import (
     DcatDataset,
     DcatDatasetVersion,
     DcatDistribution,
+    DemoUser,
     LogicalModelVersion,
+    PhysicalDatabase,
     PhysicalDriftChange,
     PhysicalDriftReport,
     PhysicalSchemaSnapshot,
@@ -105,6 +107,17 @@ def _physical_source_payload(
         .order_by(PhysicalSchemaSnapshot.sequence.desc())
         .limit(1)
     )
+    database_name = (
+        session.scalar(
+            select(PhysicalDatabase.name)
+            .where(PhysicalDatabase.snapshot_id == latest.id)
+            .order_by(PhysicalDatabase.position)
+            .limit(1)
+        )
+        if latest is not None
+        else None
+    )
+    owner = session.get(DemoUser, source.created_by_user_id)
     return {
         "id": source.id,
         "urn": source.urn,
@@ -117,6 +130,16 @@ def _physical_source_payload(
         "lifecycle": source.lifecycle,
         "latestSnapshotId": latest.id if latest else None,
         "latestSnapshotSequence": latest.sequence if latest else None,
+        "catalogPath": (
+            f"s3://{database_name}/"
+            if source.adapter_type == "s3" and database_name
+            else f"postgresql://{database_name}/"
+            if database_name
+            else source.config_ref or f"urn:daca:physical-source:{source.id}"
+        ),
+        "systemName": "S3 Object Storage" if source.adapter_type == "s3" else "PostgreSQL",
+        "databaseName": database_name,
+        "ownerName": owner.display_name if owner is not None else source.created_by_user_id,
         "updatedAt": source.updated_at,
     }
 
@@ -344,6 +367,20 @@ def create_modeling_lifecycle_router() -> APIRouter:
             body.organization_id,
             roles={"data_owner", "deputy_data_owner", "data_steward"},
         )
+        existing = session.scalar(
+            select(PhysicalSource).where(
+                PhysicalSource.lifecycle == "active",
+                PhysicalSource.adapter_type == body.adapter_type,
+                PhysicalSource.config_ref == body.config_ref,
+                PhysicalSource.department_code == body.department_code,
+                PhysicalSource.organization_id == body.organization_id,
+            )
+        )
+        if existing is not None:
+            raise HTTPException(
+                409,
+                "Für diesen Katalogpfad besteht bereits eine aktive Systeminstanz.",
+            )
         source_id = uuid.uuid4()
         now = utc_now()
         serialized = body.model_dump(mode="json", by_alias=True)
@@ -399,6 +436,21 @@ def create_modeling_lifecycle_router() -> APIRouter:
             source.organization_id,
         ):
             raise HTTPException(422, "A physical source cannot move to another organization scope")
+        duplicate = session.scalar(
+            select(PhysicalSource).where(
+                PhysicalSource.id != source.id,
+                PhysicalSource.lifecycle == "active",
+                PhysicalSource.adapter_type == body.adapter_type,
+                PhysicalSource.config_ref == body.config_ref,
+                PhysicalSource.department_code == body.department_code,
+                PhysicalSource.organization_id == body.organization_id,
+            )
+        )
+        if duplicate is not None:
+            raise HTTPException(
+                409,
+                "Für diesen Katalogpfad besteht bereits eine aktive Systeminstanz.",
+            )
         before = _source_audit_payload(source)
         source.name = body.name
         source.description = body.description

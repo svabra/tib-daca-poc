@@ -9,6 +9,7 @@ import {
   CollectionResponse,
   DataClassification,
   DcatContactPoint,
+  DerivedLogicalModelWrite,
   DriftReport,
   LogicalEntity,
   LogicalEntityWrite,
@@ -243,14 +244,25 @@ export class DataModelsApiService {
     }));
   }
 
-  deriveLogicalModel(tableId: string, value: LogicalDerivationContext & { fields: LogicalDerivationPreview['fields'] }): Observable<ApiResult<LogicalModel>> {
-    return this.identitySafeResponse(this.http.post<unknown>(`/api/v1/physical-tables/${encodeURIComponent(tableId)}/derive-logical-model`, value, {
+  deriveLogicalModel(tableId: string, value: DerivedLogicalModelWrite): Observable<ApiResult<LogicalModel>> {
+    const payload = {
+      logicalModel: this.toLogicalModelPayload(value.logicalModel),
+      fieldMappings: value.fieldMappings,
+    };
+    return this.identitySafeResponse(this.http.post<unknown>(`/api/v1/physical-tables/${encodeURIComponent(tableId)}/derive-logical-model`, payload, {
       headers: this.identity.headers(), observe: 'response',
     }))
       .pipe(map((result) => {
         const response = asRecord(result.body);
         return { ...result, body: this.normalizeLogicalModel(response['logicalModel'] ?? response['model'] ?? result.body) };
       }));
+  }
+
+  quickDeriveLogicalModel(tableId: string): Observable<ApiResult<LogicalModel>> {
+    return this.identitySafeResponse(this.http.post<unknown>(
+      `/api/v1/physical-tables/${encodeURIComponent(tableId)}/quick-derive-logical-model`, {},
+      { headers: this.identity.headers(), observe: 'response' },
+    )).pipe(map((result) => ({ ...result, body: this.normalizeLogicalModel(result.body) })));
   }
 
   exportUrl(modelId: string, versionId: string, representation: LogicalModelExportRepresentation): string {
@@ -436,6 +448,7 @@ export class DataModelsApiService {
           maxCount: field.maxCount,
           position: field.order,
           conceptIds: field.conceptIds,
+          conceptMatchExplicitlyNone: field.conceptMatchExplicitlyNone ?? false,
         })),
       })),
       distributions: value.distributions ?? [],
@@ -676,12 +689,13 @@ export class DataModelsApiService {
           const table = asRecord(tableValue);
           const kind = textValue(table['kind'], 'table');
           return {
-            id: textValue(table['id']), schemaName: textValue(schema['name']), name: textValue(table['name']),
+            id: textValue(table['id']), stableKey: textValue(table['stableKey']), schemaName: textValue(schema['name']), name: textValue(table['name']),
             kind: (['table', 'view', 'materialized_view', 'parquet'].includes(kind) ? kind : 'table') as PhysicalTable['kind'],
             storageLocation: nullableText(table['storageLocation']), mediaType: nullableText(table['mediaType']),
             objectCount: nullableNumber(table['objectCount']), sizeBytes: nullableNumber(table['sizeBytes']),
             schemaConfidence: (['declared', 'embedded', 'inferred'].includes(textValue(table['schemaConfidence'])) ? textValue(table['schemaConfidence']) : null) as PhysicalTable['schemaConfidence'],
             partitionKeys: stringArray(table['partitionKeys']),
+            comment: nullableText(table['comment']),
             columns: asArray(table['columns']).map((columnValue, index) => {
               const column = asRecord(columnValue);
               return {
@@ -701,6 +715,8 @@ export class DataModelsApiService {
     const sourceType = textValue(snapshot['sourceAdapterType'], 'fixture') as PhysicalSnapshot['sourceType'];
     return {
       id: textValue(snapshot['id']), sourceId: textValue(snapshot['sourceId']), sourceName: textValue(snapshot['sourceName'], textValue(snapshot['sourceId'])), sourceType,
+      dataOwnerName: nullableText(snapshot['dataOwnerName']),
+      catalogPath: textValue(snapshot['catalogPath'], firstDatabase['name'] ? `${sourceType === 's3' ? 's3' : 'postgresql'}://${textValue(firstDatabase['name'])}/` : ''),
       systemName: sourceType === 's3' ? 'S3 Object Storage' : 'PostgreSQL', databaseName: textValue(firstDatabase['name'], textValue(root['databaseName'])),
       revision: numberValue(snapshot['sequence'], numberValue(snapshot['revision'], 1)), contentHash: textValue(snapshot['fingerprint'] ?? snapshot['contentHash']),
       importedAt: textValue(snapshot['importedAt']), importedBy: namedReference(snapshot['importedBy'], textValue(snapshot['importedByUserId']), textValue(snapshot['importedByUserId'])),
@@ -712,13 +728,17 @@ export class DataModelsApiService {
   private normalizePhysicalSource(value: unknown): PhysicalSource {
     const item = asRecord(value);
     const connector = textValue(item['connectorType'] ?? item['adapterType'] ?? item['adapterKind']);
-    const connectorType = (['fixture', 'postgresql', 's3'].includes(connector) ? connector : 'postgresql') as PhysicalSource['connectorType'];
+    const connectorType = (['fixture', 'postgresql', 's3', 'oracle'].includes(connector) ? connector : 'postgresql') as PhysicalSource['connectorType'];
     return {
       id: textValue(item['id']), revision: numberValue(item['revision'], 1), name: textValue(item['name'], textValue(item['displayName'], 'PostgreSQL-Quelle')),
+      description: nullableText(item['description']),
       connectorType,
       systemName: textValue(item['systemName'], connectorType === 's3' ? 'S3 Object Storage' : 'PostgreSQL'), databaseName: textValue(item['databaseName']),
       department: textValue(item['departmentCode'], 'VBS'), office: textValue(item['organizationId'], 'vbs-verteidigung'),
+      latestSnapshotId: nullableText(item['latestSnapshotId']), latestSnapshotSequence: nullableNumber(item['latestSnapshotSequence']),
       latestSnapshot: item['latestSnapshot'] ? this.normalizePhysicalSnapshot(item['latestSnapshot']) : null,
+      catalogPath: textValue(item['catalogPath'], item['databaseName'] ? `${connectorType === 's3' ? 's3' : 'postgresql'}://${textValue(item['databaseName'])}/` : textValue(item['configRef'])),
+      ownerName: textValue(item['ownerName'], textValue(item['organizationId'])),
       updatedAt: textValue(item['updatedAt']),
     };
   }

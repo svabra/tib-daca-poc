@@ -10,6 +10,7 @@ from daca_catalog.modeling_core import (
     fixture_metadata,
     normalize_postgresql_type,
     normalized_physical_metadata,
+    vibdbu_postgresql_metadata,
 )
 from daca_catalog.settings import Settings
 from pydantic import SecretStr, ValidationError
@@ -49,8 +50,25 @@ def test_physical_normalization_is_deterministic_and_type_aware() -> None:
 
     assert canonical_hash(first) == canonical_hash(second)
     assert normalize_postgresql_type("character varying") == "string"
+    assert normalize_postgresql_type("xsd:string") == "string"
     assert normalize_postgresql_type("numeric") == "decimal"
+    assert normalize_postgresql_type("xsd:dateTime") == "datetime"
     assert normalize_postgresql_type("timestamp with time zone") == "datetime"
+
+
+def test_vibdbu_seed_snapshot_matches_the_released_physical_structure() -> None:
+    metadata = normalized_physical_metadata(vibdbu_postgresql_metadata())
+    table = metadata["databases"][0]["schemas"][0]["tables"][0]
+
+    assert table["name"] == "VIBDBU"
+    assert table["kind"] == "table"
+    assert len(table["columns"]) == 47
+    assert table["columns"][0]["name"] == "SGENR"
+    assert table["columns"][0]["normalizedDataType"] == "string"
+    assert table["columns"][7]["name"] == "VALIDFROM"
+    assert table["columns"][7]["normalizedDataType"] == "date"
+    assert table["columns"][13]["name"] == "ZZBASISJAHR"
+    assert table["columns"][13]["numericPrecision"] == 4
 
 
 def test_postgresql_adapter_representation_never_exposes_dsn() -> None:

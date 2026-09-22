@@ -139,6 +139,26 @@ async function captureScreenshot(filename) {
   await writeFile(path.join(targetDirectory, filename), Buffer.from(result.data, 'base64'));
 }
 
+async function capturePageSegmentScreenshot(selector, filename, width = 1440, height = 900) {
+  if (!screenshotDirectory) return;
+  const targetDirectory = path.resolve(screenshotDirectory);
+  await mkdir(targetDirectory, { recursive: true });
+  const rect = await evaluate(`(() => {
+    const element = document.querySelector(${JSON.stringify(selector)});
+    if (!element) return null;
+    const bounds = element.getBoundingClientRect();
+    return { x: 0, y: bounds.top + window.scrollY, width: ${width}, height: ${height} };
+  })()`);
+  invariant(rect, `Screenshot target ${selector} was unavailable`);
+  const result = await cdp.call('Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    captureBeyondViewport: true,
+    clip: { ...rect, scale: 1 },
+  }, sessionId);
+  await writeFile(path.join(targetDirectory, filename), Buffer.from(result.data, 'base64'));
+}
+
 async function captureWorkspaceScreenshot(filename) {
   if (!screenshotDirectory) return;
   const targetScroll = await evaluate(`(() => {
@@ -272,12 +292,12 @@ async function logicalFirstFlow() {
   );
   const tooltipOpened = await evaluate(`(() => {
     const host = document.querySelector('[dacaFieldHelp="titleDe"]');
-    host?.dispatchEvent(new MouseEvent('mouseenter', {bubbles: true}));
-    const trigger = host?.querySelector('.daca-field-help-trigger');
+    const trigger = host?.querySelector('.daca-field-help-title');
     trigger?.dispatchEvent(new MouseEvent('mouseenter', {bubbles: true}));
-    return Boolean(trigger && !trigger.hidden && document.querySelector('[role="tooltip"].is-visible'));
+    const tooltip = document.querySelector('[role="tooltip"].is-visible');
+    return Boolean(trigger && tooltip?.textContent.includes('Titel (Deutsch)') && !host?.querySelector('.daca-field-help-trigger'));
   })()`);
-  invariant(tooltipOpened, 'semantic field help icon or tooltip did not open on hover');
+  invariant(tooltipOpened, 'semantic field help tooltip did not open from the field title on hover');
   const reference = expectStatus(
     await api('cinthya.thor', '/api/v1/logical-models/70d964d8-334c-50bc-9177-88e3dbfba28f'),
     200,
@@ -308,6 +328,19 @@ async function logicalFirstFlow() {
     return selects.length === 2;
   })()`);
   invariant(businessObjectsSelected, 'Versioned business objects were not available in the editor');
+  if (screenshotDirectory) {
+    await evaluate(`(() => {
+      const form = document.querySelector('.model-editor-form');
+      if (!form) return false;
+      const top = Math.max(0, form.getBoundingClientRect().top + window.scrollY - 8);
+      window.scrollTo(0, top);
+      document.documentElement.scrollTop = top;
+      document.body.scrollTop = top;
+      return true;
+    })()`);
+    await sleep(150);
+    await captureScreenshot('logical-model-field-table-1440x900.png');
+  }
   await clickText('button[type="submit"]', 'Als Entwurf speichern');
   await waitFor(
     `location.pathname.match(/^\\/models\\/[0-9a-f-]+$/) && document.body.innerText.includes(${JSON.stringify(title)})`,
@@ -350,8 +383,15 @@ async function logicalFirstFlow() {
   invariant(duplicateObjectsSelected, 'duplicate-identifier test has no versioned business objects');
   await clickText('button[type="submit"]', 'Als Entwurf speichern');
   await waitFor(
-    "document.querySelector('.save-problem')?.textContent.includes('Identifier bereits vergeben') && document.querySelector('.save-problem')?.textContent.includes('DACA-LM-IDENTIFIER-DUPLICATE') && !document.querySelector('.save-problem')?.textContent.includes('The requested change conflicts')",
-    'duplicate identifier did not display a structured, user-facing error',
+    "document.querySelector('.save-problem, .save-validation') !== null",
+    'duplicate identifier did not display save feedback',
+  );
+  const duplicateFeedback = await evaluate("document.querySelector('.save-problem, .save-validation')?.textContent ?? ''");
+  invariant(
+    duplicateFeedback.includes('Identifier bereits vergeben')
+      && duplicateFeedback.includes('DACA-LM-IDENTIFIER-DUPLICATE')
+      && !duplicateFeedback.includes('The requested change conflicts'),
+    `duplicate identifier did not display a structured, user-facing error: ${duplicateFeedback}`,
   );
   await waitFor(
     "document.querySelector('input[formcontrolname=\"identifiers\"]')?.classList.contains('ng-invalid')",
@@ -468,7 +508,7 @@ async function dataModelJourneyTen() {
   return {modelId: model.id};
 }
 
-async function physicalFirstFlow() {
+async function legacyPhysicalFirstFlow() {
   const sourceName = `Edge Fixture ${Date.now()}`;
   const createdSource = expectStatus(await api('christian.man', '/api/v1/physical-sources', {
     method: 'POST',
@@ -585,6 +625,178 @@ async function physicalFirstFlow() {
   return { sourceId: createdSource.id, sourceName, snapshotId, modelId };
 }
 
+async function physicalFirstFlow() {
+  const requestedSourceName = `Edge Fixture ${Date.now()}`;
+  const createResponse = await api('christian.man', '/api/v1/physical-sources', {
+    method: 'POST',
+    body: {
+      name: requestedSourceName,
+      description: 'Ephemere E2E-Quelle mit ausschliesslich technischen Fixture-Metadaten.',
+      adapterType: 'fixture',
+      configRef: 'fixture.edge-e2e',
+      departmentCode: 'VBS',
+      organizationId: 'vbs-verteidigung',
+    },
+  });
+  let createdSource;
+  if (createResponse.status === 201) {
+    createdSource = createResponse.body;
+  } else {
+    invariant(createResponse.status === 409, `create physical-first fixture source: expected HTTP 201 or 409, received ${createResponse.status}: ${JSON.stringify(createResponse.body)}`);
+    const activeSources = expectStatus(
+      await api('christian.man', '/api/v1/physical-sources'),
+      200,
+      'list existing physical-first system instances',
+    ).body.items;
+    createdSource = activeSources.find((source) => (
+      source.adapterType === 'fixture' && source.name.startsWith('Edge Fixture ')
+    ));
+    invariant(createdSource, 'existing Edge fixture system instance was not returned after duplicate rejection');
+  }
+  const sourceName = createdSource.name;
+  expectStatus(await api('christian.man', `/api/v1/physical-sources/${createdSource.id}/imports`, {
+    method: 'POST',
+    etag: `"${createdSource.revision}"`,
+    body: { fixtureVariant: 'baseline' },
+  }), 200, 'reset the single physical-first fixture instance to baseline');
+
+  await navigate('/models', 'christian.man');
+  await clickText('.models-actions button', 'Neues logisches Modell');
+  await waitFor("document.querySelector('.creation-dialog[open]') !== null", 'model creation chooser did not open');
+  await clickText('.creation-card', 'Aus bestehender Datenquelle ableiten');
+  await waitFor(
+    `location.pathname === '/physical-models' && document.body.innerText.includes(${JSON.stringify(sourceName)})`,
+    'physical-first chooser did not open the source explorer',
+  );
+  const openedSource = await evaluate(`(() => {
+    const row = [...document.querySelectorAll('.source-card')]
+      .find((item) => item.textContent.includes(${JSON.stringify(sourceName)}));
+    const link = [...(row?.querySelectorAll('a') ?? [])]
+      .find((item) => item.textContent.includes('Quelle öffnen'));
+    link?.click();
+    return Boolean(link);
+  })()`);
+  invariant(openedSource, 'physical source could not be opened from the source register');
+  await waitFor(
+    "location.pathname.startsWith('/physical-models/') && document.querySelector('.object-tree') !== null",
+    'physical source explorer did not open',
+  );
+  const snapshots = expectStatus(
+    await api('christian.man', `/api/v1/physical-snapshots?sourceId=${createdSource.id}`),
+    200,
+    'list imported physical snapshots',
+  ).body.items;
+  invariant(snapshots.length >= 1, 'physical-first system instance has no baseline snapshot');
+  const snapshotId = snapshots.reduce((latest, snapshot) => snapshot.sequence > latest.sequence ? snapshot : latest).id;
+  const snapshot = expectStatus(
+    await api('christian.man', `/api/v1/physical-snapshots/${snapshotId}`),
+    200,
+    'read physical-first snapshot',
+  ).body;
+  const vehicleTable = snapshot.databases
+    .flatMap((database) => database.schemas)
+    .flatMap((schema) => schema.tables)
+    .find((table) => table.name === 'vehicle_inventory');
+  invariant(vehicleTable, 'Fixture snapshot is missing logistics.vehicle_inventory');
+
+  await waitFor(
+    "[...document.querySelectorAll('.object-tree button')].some((item) => item.textContent.includes('vehicle_inventory'))",
+    'vehicle_inventory did not appear in the object hierarchy',
+  );
+  const selectedObject = await evaluate(`(() => {
+    const object = [...document.querySelectorAll('.object-tree button')]
+      .find((item) => item.textContent.includes('vehicle_inventory'));
+    object?.click();
+    return Boolean(object);
+  })()`);
+  invariant(selectedObject, 'vehicle_inventory could not be selected in the source explorer');
+  await waitFor(
+    "document.querySelector('.object-detail h2')?.textContent.includes('vehicle_inventory')",
+    'selected physical object detail did not render',
+  );
+  await capturePageSegmentScreenshot('.explorer-layout', 'physical-explorer-1440x900.png');
+  const openedMenu = await evaluate(`(() => {
+    const row = [...document.querySelectorAll('.table-row')]
+      .find((item) => item.textContent.includes('vehicle_inventory'));
+    row?.querySelector('.table-actions-button')?.click();
+    return Boolean(row);
+  })()`);
+  invariant(openedMenu, 'table context menu could not be opened');
+  await capturePageSegmentScreenshot('.explorer-layout', 'physical-table-menu-1440x900.png');
+  await clickText('.context-menu button', 'Logisches Modell ableiten');
+  await waitFor(
+    "location.pathname.match(/^\\/models\\/[0-9a-f-]+\\/mappings$/) && document.body.innerText.includes('Vehicle Inventory')",
+    'direct physical-first derivation did not open the mapping workspace',
+  );
+  const modelId = await evaluate("location.pathname.split('/')[2]");
+  let mappings = expectStatus(
+    await api('christian.man', `/api/v1/asset-mappings?logicalModelId=${modelId}`),
+    200,
+    'list initial physical-first mapping drafts',
+  ).body.items;
+  invariant(mappings.length === vehicleTable.columns.length, 'Initial mapping drafts do not cover every derived field');
+  invariant(mappings.every((mapping) => mapping.status === 'draft'), 'Derived mappings must start as drafts');
+
+  await waitFor(
+    "[...document.querySelectorAll('.representation-panel a')].some((item) => item.textContent.includes('Bestehende Datenquelle hinzufügen'))",
+    'mapping workspace representation action did not finish rendering',
+  );
+
+  await waitFor(
+    "document.querySelector('.mapping-side .field-panel-form')?.textContent.includes('Feldmerkmale') && document.querySelector('.mapping-side input[formcontrolname=\"name\"]')?.value.length > 0 && document.querySelector('.mapping-side select[formcontrolname=\"dataType\"]')",
+    'shared editable field characteristics panel did not open beside the mapping',
+  );
+  await capturePageSegmentScreenshot('.mapping-shell', 'physical-derived-form-1440x900.png');
+
+  await clickText('.representation-panel a', 'Bestehende Datenquelle hinzufügen');
+  await waitFor("location.pathname === '/physical-models'", 'add-representation did not reopen the source explorer');
+  await waitFor(
+    "[...document.querySelectorAll('.source-card')].some((item) => item.textContent.includes('DAAIF S3 Parquet'))",
+    'second physical source did not finish loading',
+  );
+  const browsedSecond = await evaluate(`(() => {
+    const row = [...document.querySelectorAll('.source-card')]
+      .find((item) => item.textContent.includes('DAAIF S3 Parquet'));
+    const browse = [...(row?.querySelectorAll('a') ?? [])]
+      .find((item) => item.textContent.includes('Quelle öffnen'));
+    browse?.click();
+    return Boolean(browse);
+  })()`);
+  invariant(browsedSecond, 'second physical source could not be opened');
+  await waitFor(
+    "[...document.querySelectorAll('.object-tree button')].some((item) => item.textContent.includes('vehicle_inventory.parquet'))",
+    'second physical object did not appear in the hierarchy',
+  );
+  const selectedSecond = await evaluate(`(() => {
+    const object = [...document.querySelectorAll('.object-tree button')]
+      .find((item) => item.textContent.includes('vehicle_inventory.parquet'));
+    object?.click();
+    return Boolean(object);
+  })()`);
+  invariant(selectedSecond, 'second physical representation could not be selected');
+  await clickText('.object-detail button.daca-button', 'Mit Modell verbinden');
+  await waitFor(
+    "location.pathname.match(/^\\/models\\/[0-9a-f-]+\\/mappings$/) && document.querySelector('.suggestion-review') !== null",
+    'exact-match review did not open for the second representation',
+  );
+  const suggestionCount = await evaluate("document.querySelectorAll('.suggestion-review tbody tr').length");
+  invariant(suggestionCount > 0, 'second representation did not produce any exact 1:1 suggestions');
+  invariant(await evaluate("document.querySelector('.suggestion-review').textContent.includes('keine Fuzzy-Matches')"), 'suggestion review did not explain its strict matching rule');
+  await clickText('.suggestion-review button', 'als Entwurf übernehmen');
+  await waitFor("document.querySelector('.toolbar-actions button:last-child')?.disabled === false", 'accepted suggestions were not local drafts');
+  await clickText('.toolbar-actions button', 'Entwurf speichern');
+  await waitFor("document.body.innerText.includes('Alle Mapping-Entwürfe wurden versioniert gespeichert')", 'second representation mappings were not persisted');
+  mappings = expectStatus(
+    await api('christian.man', `/api/v1/asset-mappings?logicalModelId=${modelId}`),
+    200,
+    'list mappings across both physical representations',
+  ).body.items;
+  invariant(new Set(mappings.map((mapping) => mapping.physicalSnapshotId)).size === 2, 'logical model is not linked to two physical representations');
+  invariant(await evaluate("document.querySelectorAll('.representation-list > button').length >= 2"), 'mapping workspace does not list both physical representations');
+  await captureScreenshot('mapping-multiple-representations-1440x900.png');
+  return { sourceId: createdSource.id, sourceName, snapshotId, modelId };
+}
+
 async function existingToExistingFlow(physical) {
   const organizationModelId = 'be6eb7a4-6bf3-5387-8aaa-86c01a46290b';
   const logicalModel = expectStatus(
@@ -649,17 +861,24 @@ async function existingToExistingFlow(physical) {
     'mapping did not survive an Edge reload',
   );
 
+  const snapshotSequenceBeforeDrift = Math.max(...expectStatus(
+    await api('christian.man', `/api/v1/physical-snapshots?sourceId=${physical.sourceId}`),
+    200,
+    'read physical snapshot sequence before drift import',
+  ).body.items.map((snapshot) => snapshot.sequence));
   await navigate('/physical-models', 'christian.man');
   await waitFor(`(() => {
     const card = [...document.querySelectorAll('.source-card')]
       .find((item) => item.textContent.includes(${JSON.stringify(physical.sourceName)}));
-    const button = card?.querySelector('button');
+    const button = [...(card?.querySelectorAll('button') ?? [])]
+      .find((item) => item.textContent.includes('Neu importieren'));
     return Boolean(button) && !button.disabled;
   })()`, 'drift source did not become ready for a follow-up import');
   const driftImportStarted = await evaluate(`(() => {
     const card = [...document.querySelectorAll('.source-card')]
       .find((item) => item.textContent.includes(${JSON.stringify(physical.sourceName)}));
-    const button = card?.querySelector('button');
+    const button = [...(card?.querySelectorAll('button') ?? [])]
+      .find((item) => item.textContent.includes('Neu importieren'));
     if (!button || button.disabled) return false;
     button.click();
     return true;
@@ -673,16 +892,17 @@ async function existingToExistingFlow(physical) {
       200,
       'list snapshots after drift',
     ).body.items;
-    if (snapshots.length >= 2) break;
+    if (snapshots.some((snapshot) => snapshot.sequence > snapshotSequenceBeforeDrift)) break;
     await sleep(120);
   }
-  invariant(snapshots.length >= 2, 'fixture drift import did not append its immutable snapshot');
-  await waitFor(`(() => {
-    const card = [...document.querySelectorAll('.source-card')]
-      .find((item) => item.textContent.includes(${JSON.stringify(physical.sourceName)}));
-    return Boolean(card) && !card.textContent.includes('Import läuft');
-  })()`, 'fixture drift import remained busy in Edge');
-  const currentSnapshotId = snapshots[0].id;
+  invariant(snapshots.some((snapshot) => snapshot.sequence > snapshotSequenceBeforeDrift), 'fixture drift import did not append its immutable snapshot');
+  await waitFor(
+    "!document.body.innerText.includes('Import läuft')",
+    'fixture drift import remained busy in Edge',
+  );
+  const currentSnapshotId = snapshots.reduce((latest, snapshot) => (
+    snapshot.sequence > latest.sequence ? snapshot : latest
+  )).id;
   invariant(currentSnapshotId !== physical.snapshotId, 'Drift import did not append a new snapshot');
   const broken = expectStatus(
     await api('cinthya.thor', `/api/v1/asset-mappings?logicalModelId=${organizationModelId}`),

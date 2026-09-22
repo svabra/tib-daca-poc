@@ -148,6 +148,28 @@ The production adapter reads only PostgreSQL `information_schema` and `pg_catalo
 transaction.  Its DSN is a server-side secret and is never accepted by an API payload.  The
 deterministic fixture adapter implements the same port and is the default for the PoC.
 
+The source register treats one catalog path as one technical system instance. Active duplicate
+registrations of that path are consolidated without merging their historical snapshots or mappings;
+separate instances of the same connector type remain separate. Users can search the register by
+instance name, catalog path or owner and filter it by PostgreSQL, S3/Parquet, or Oracle type and
+owner. Oracle is a discoverability filter until an Oracle adapter is configured.
+
+The source explorer presents only the newest snapshot as the primary tree while retaining older
+snapshots in history. After source selection it separates database/schema/object navigation from
+the active object's details. Field details include normalized and unknown technical datatypes,
+length, precision/scale, nullability, and PostgreSQL comments. `Logisches Datenmodell ableiten`
+appears only for a selected table, view, materialized view, or Parquet object.
+In the mapping graph, the snapshot card renders the matching source-type icon, the source scope's
+Data Owner, and the complete canonical catalog path with the immutable revision, so the selected
+representation remains unambiguous without reopening the explorer.
+Edges are derived from the rendered source and target connector centres rather than a fixed card
+height, preserving their attachment when representation metadata changes the layout.
+
+The released PostgreSQL example `daca_sample.public.VIBDBU` has exactly the 47 columns declared by
+`tests/VIBDBU.csv` and 1'000 deterministic, plausible building records in every deployed
+environment. Its matching credential-free structural snapshot is seeded in the catalog, so the
+source is immediately browseable; DaCa never copies a data row into the catalog.
+
 Every import creates an immutable snapshot and compares it with its predecessor.  Drift covers
 additions, removals, datatype, length, precision, scale, and nullability.  Rename similarity is an
 explicit review candidate and is never silently accepted.
@@ -158,6 +180,18 @@ An asset mapping pins one logical model/field revision and one physical snapshot
 sides are many-to-many so one business field can have several representations and derived targets
 can consume several source fields.  Supported mapping types are `Direct`, `Renamed`, `Derived`,
 `Lookup`, and `Transformed`; rules are stored and validated but never executed.
+
+Physical-first starts with one object and reuses the complete logical-model editor. Its save calls
+`POST /api/v1/physical-tables/{tableId}/derive-logical-model` with a `logicalModel` write aggregate
+and transient `{physicalColumnId, entityName, logicalFieldName}` bindings. The model and all
+initial mappings are committed once. An unchanged field name produces `Direct`; an edited name
+produces `Renamed`. Deleting a derived field deletes only that unsaved candidate.
+
+Additional physical representations are selected from the same explorer in model context. The
+workspace lists every representation already linked through mappings and constrains graph/matrix
+to one active representation. It proposes only unique, case-insensitive exact-name pairs whose
+normalized types agree. Type conflicts, ambiguity, missing names, fuzzy candidates, M:N mappings,
+and transformations remain explicitly manual.
 
 Mapping versions move through `draft`, `review_pending`, `validated`, `broken`, and `superseded`.
 Schema drift appends a system-authored `broken` successor while preserving the previously
@@ -177,6 +211,8 @@ legacy data-product permissions.
 | Lawrence Hill | Data Owner | Owner of the vehicle-inventory model |
 | Hong An Captain | Deputy Data Owner | Visible vehicle-model deputy |
 | Christian Man | Data Steward | PostgreSQL import and derivation |
+| Giuseppe Starwars | Data Owner | armasuisse owner persona |
+| Thomas Wikinger | Data Steward | armasuisse steward persona |
 
 Data Owners and deputies may view and edit models in scope. The primary Domain Owner alone receives
 and decides a logical-model review task in this PoC. Data Stewards may
@@ -245,11 +281,41 @@ The three deterministic journeys are:
 
 1. **Logical first:** create and reopen `Mitarbeitende` without product, distribution, physical
    asset, or mapping; associate cached Concepts and export DCAT/SHACL.
-2. **Physical first:** import `logistics.vehicle_inventory`, derive the editable
-   `Fahrzeugbestand` draft, document concept decisions, and save proposed mappings.
+2. **Physical first:** open `Bestehende Datenquellen`, enter the PostgreSQL source and inspect
+   `logistics.vehicle_inventory` or `daca_sample.public.VIBDBU`. The table actions menu derives a
+   technical logical draft and all exact 1:1 mappings atomically, then opens the mapping workspace.
+   The source scope must already resolve to one governed domain; DaCa never guesses one from table
+   names. The edge reads `1:1 · wird repräsentiert durch` from logical to physical and
+   `abgeleitet aus` in reverse. Then add another representation, review exact 1:1 proposals, and
+   verify both representations on the same model.
 3. **Existing to existing:** connect `Organisationseinheiten` to
    `hr_core.public.org_unit` in graphical and keyboard/table modes, then inspect drift after the
    second fixture import.
+
+`Datenquellen` is exposed in the main navigation between `Meine Datenprodukte` and
+`Domäne und Terminology`. Its hierarchy deliberately reuses DAAIF's visual vocabulary for server,
+PostgreSQL provider, database, schema, table and view nodes.
+Any table with a persisted mapping to a logical model shows a model icon before its compact `…`
+context-menu control. Its hover/focus tooltip reports that link independently of mapping status.
+The tooltip closes immediately when the pointer leaves the icon. Its `Referenziertes logisches
+Modell öffnen` menu action is enabled and opens the linked model's mapping workspace with the
+physical snapshot and table preselected.
+The model overview records the `Geändert` timestamp with date and local time.
+
+After a physical-first derivation the mapping workspace keeps the graph or matrix visible and opens
+the selected logical field in a persistent editor on the right. `/models/new` and
+`/models/:id/edit` use the same extracted Angular field-characteristics component. Their structure
+area is a selectable field table with add/remove actions and a `Tabelle`/`Relation` switch; only the
+selected field's controls are rendered. The shared editor covers the complete field contract:
+business-object decisions, editable name and type, length, precision, scale, order, nullability,
+`minCount`/`maxCount`, classification, source system, description, comment and I14Y links. Values
+justified by the selected immutable snapshot are prefilled; business meaning is never guessed.
+Removing or renaming a field therefore remains an explicit model edit without duplicating a second
+editor implementation or taking the user out of mapping context. `Model Merkmale` remains a
+separate model-level section. Contextual help is opened
+from the field title on hover or keyboard focus, is positioned above it where space permits,
+repeats the title hidden underneath, and closes as the pointer leaves the title; no standalone
+information icon is rendered. At most one field-help tooltip is visible at a time.
 
 ## I14Y Public API contract and cache
 
@@ -306,6 +372,21 @@ curl.exe -X POST -H "X-DaCa-User: cinthya.thor" `
 curl.exe -X POST -H "X-DaCa-User: cinthya.thor" `
   "http://localhost:8001/api/v1/i14y/concepts/$conceptId/code-list-entries/sync"
 ```
+
+## DAAIF physical-object reference contract
+
+DAAIF is the technical workbench for acquired sources; DaCa owns the logical-model, field,
+physical-snapshot, mapping and drift records. A cross-system reference is deliberately not a
+database foreign key. Once a Data Owner or Steward has validated an asset mapping, DAAIF may hold
+only: its physical object ID/path, the DaCa logical-model URN, the exact model and mapping
+revision, the mapping status and a DaCa deep link. It must not copy the logical schema, data rows,
+credentials, S3 content or view definition.
+
+`draft`, `broken` and `superseded` mappings do not establish business context in DAAIF. A new
+validated mapping revision is required after physical drift. DaCa Journey 02 links to DAAIF's
+metadata-only source explorer; DAAIF's **Education & Documentation → User Journeys** links back
+to DaCa's model and mapping views. This gives analysts a two-way navigable journey while keeping
+both PostgreSQL persistence models independent.
 
 ## External DAAIF user step
 

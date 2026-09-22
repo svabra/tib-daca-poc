@@ -19,6 +19,15 @@ DAAIF is an external source system and its internal data model is outside this r
 - `control_person_user_id` is the independent four-eyes reviewer and remains separate from deputy ownership.
 - `supervisor_user_id` belongs to the demo identity directory and is only a supervisor/default-assignment hint; it is not a product deputy relation.
 
+## Physical-source instance semantics
+
+`physical_sources.config_ref` identifies the server-side connection configuration. Active source
+registrations that share the same adapter, configuration reference, and organizational scope are
+one technical system instance in the source register; seed maintenance retires duplicate active
+registrations rather than merging or deleting their snapshots and mappings. The displayed catalog
+path is derived from that protected configuration and is metadata only: it never exposes a DSN,
+host credential, table rows, or connector secret.
+
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)

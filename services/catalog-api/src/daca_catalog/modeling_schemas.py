@@ -401,6 +401,10 @@ class PhysicalSourceResponse(ApiModel):
     lifecycle: Literal["active", "retired"]
     latest_snapshot_id: uuid.UUID | None
     latest_snapshot_sequence: int | None
+    catalog_path: str
+    system_name: str
+    database_name: str | None
+    owner_name: str
     updated_at: datetime
 
 
@@ -469,6 +473,8 @@ class PhysicalSnapshotSummary(ApiModel):
     origin_catalog_id: str
     source_id: uuid.UUID
     source_name: str
+    data_owner_name: str | None = None
+    catalog_path: str
     source_adapter_type: Literal["fixture", "postgresql", "s3"]
     sequence: int
     predecessor_snapshot_id: uuid.UUID | None
@@ -599,6 +605,33 @@ class DeriveLogicalModelRequest(ApiModel):
             raise ValueError("physicalColumnId values must be unique")
         if not any(item.selected for item in value):
             raise ValueError("At least one derivation field must be selected")
+        return value
+
+
+class DerivedFieldBinding(ApiModel):
+    physical_column_id: uuid.UUID
+    entity_name: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_.-]{0,254}$")
+    logical_field_name: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_.-]{0,254}$")
+
+
+class DerivedLogicalModelRequest(ApiModel):
+    logical_model: LogicalModelWrite
+    field_mappings: list[DerivedFieldBinding] = Field(min_length=1)
+
+    @field_validator("field_mappings")
+    @classmethod
+    def unique_bindings(
+        cls, value: list[DerivedFieldBinding]
+    ) -> list[DerivedFieldBinding]:
+        physical_ids = [item.physical_column_id for item in value]
+        logical_refs = [
+            (item.entity_name.casefold(), item.logical_field_name.casefold())
+            for item in value
+        ]
+        if len(physical_ids) != len(set(physical_ids)):
+            raise ValueError("physicalColumnId values must be unique")
+        if len(logical_refs) != len(set(logical_refs)):
+            raise ValueError("Logical field bindings must be unique")
         return value
 
 

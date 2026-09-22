@@ -29,6 +29,7 @@ from .models import (
     AssetMappingPhysicalColumn,
     AssetMappingVersion,
     AuditEvent,
+    DataModelRoleAssignment,
     DcatCatalog,
     DcatCatalogVersion,
     DcatDataService,
@@ -38,6 +39,7 @@ from .models import (
     DcatDatasetVersionLocalization,
     DcatDistribution,
     DcatDistributionVersion,
+    DemoUser,
     Domain,
     I14yConcept,
     LogicalConceptLink,
@@ -1340,6 +1342,30 @@ def snapshot_tree(session: Session, snapshot: PhysicalSchemaSnapshot) -> dict[st
                 "schemas": schemas,
             }
         )
+    database_name = databases[0]["name"] if databases else None
+    data_owner_name = (
+        session.scalar(
+            select(DemoUser.display_name)
+            .join(DataModelRoleAssignment, DataModelRoleAssignment.user_id == DemoUser.id)
+            .where(
+                DataModelRoleAssignment.department_code == source.department_code,
+                DataModelRoleAssignment.organization_id == source.organization_id,
+                DataModelRoleAssignment.role == "data_owner",
+                DataModelRoleAssignment.active.is_(True),
+            )
+            .order_by(DemoUser.display_name)
+            .limit(1)
+        )
+        if source is not None
+        else None
+    )
+    catalog_path = (
+        f"s3://{database_name}/"
+        if source is not None and source.adapter_type == "s3" and database_name
+        else f"postgresql://{database_name}/"
+        if database_name
+        else source.config_ref if source is not None and source.config_ref else f"urn:daca:physical-source:{snapshot.source_id}"
+    )
     return {
         "snapshot": {
             "id": snapshot.id,
@@ -1347,6 +1373,8 @@ def snapshot_tree(session: Session, snapshot: PhysicalSchemaSnapshot) -> dict[st
             "originCatalogId": snapshot.origin_catalog_id,
             "sourceId": snapshot.source_id,
             "sourceName": source.name if source else "Unknown source",
+            "dataOwnerName": data_owner_name,
+            "catalogPath": catalog_path,
             "sourceAdapterType": source.adapter_type if source else "fixture",
             "sequence": snapshot.sequence,
             "predecessorSnapshotId": snapshot.predecessor_snapshot_id,

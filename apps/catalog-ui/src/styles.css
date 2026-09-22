@@ -568,12 +568,13 @@
 .product-owner-deputy-tooltip small { color: #dfe9f2; font-size: .59rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
 .product-owner-deputy-tooltip strong { color: #fff; font-size: .69rem; line-height: 1.35; overflow-wrap: anywhere; }
 
-/* Logical-model field help is deliberately quiet until the field itself is
-   inspected.  The icon aligns with the explanatory label, not with inputs. */
-.daca-field-help { position: relative; }
-.daca-field-help-trigger { display: inline-grid; place-items: center; width: 1.05em; height: 1.05em; margin-left: .28rem; border: 1px solid currentColor; border-radius: 50%; padding: 0; background: #fff; color: var(--daca-blue); font: 700 .68rem/1 sans-serif; vertical-align: .08em; cursor: help; }
-.daca-field-help-trigger[hidden] { display: none; }
-.daca-field-help-tooltip { position: fixed; z-index: 1000; max-width: min(34rem, calc(100vw - 1.5rem)); padding: .72rem .85rem; border-radius: .2rem; background: #183247; color: #fff; box-shadow: 0 .5rem 1.4rem rgba(21, 41, 61, .3); font-size: .8rem; line-height: 1.45; }
+/* The field title itself owns the explanation; no separate info icon or tab stop. */
+.daca-field-help { position: relative; padding-right: 0; }
+.daca-field-help-title { cursor: help; }
+.model-editor-form.is-embedded .editor-actions { position: static; }
+.daca-field-help-tooltip { position: fixed; z-index: 1000; display: grid; gap: .2rem; max-width: min(34rem, calc(100vw - 1.5rem)); padding: .72rem .85rem; border-radius: .2rem; pointer-events: none; background: #183247; color: #fff; box-shadow: 0 .5rem 1.4rem rgba(21, 41, 61, .3); font-size: .8rem; line-height: 1.45; }
+.daca-field-help-tooltip[hidden] { display: none !important; }
+.daca-field-help-tooltip strong { color: #fff; font-size: .78rem; }
 
 .identifier-field .identifier-mode-control { display: inline-flex; align-items: center; gap: .5rem; color: var(--daca-muted); font-size: .7rem; font-weight: 650; line-height: 1.25; }
 .identifier-mode-switch { display: inline-flex; flex: 0 0 auto; align-items: center; width: 2.45rem; height: 1.35rem; border: 1px solid #778692; border-radius: 999px; padding: .1rem; background: #667784; cursor: pointer; transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease; }
@@ -589,7 +590,7 @@
 .identifier-prefix { display: inline-flex; align-items: center; padding: .55rem .15rem .55rem .65rem; background: #f0f2f4; color: #65717a; font: 700 .82rem/1.2 monospace; white-space: nowrap; }
 .identifier-field .new-domain-link { margin-left: .3rem; color: var(--daca-blue); font-size: .7rem; font-weight: 700; }
 .new-domain-link { color: var(--daca-blue); font-size: .7rem; font-weight: 700; text-decoration: underline; }
-.i14y-reset { justify-self: start; min-height: 0; border: 0; padding: 0; background: transparent; color: var(--daca-blue); font-size: .67rem; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.i14y-reset { display: inline-flex; align-items: center; justify-self: start; min-height: 40px; border: 0; padding: 0; background: transparent; color: var(--daca-blue); font-size: .67rem; font-weight: 700; text-decoration: underline; cursor: pointer; }
 .product-table-relationships { display: flex; flex-wrap: wrap; gap: 4px; max-width: 210px; }
 .product-table-relationships > span, .product-table-relationships > button { display: grid; gap: 1px; border: 0; border-left: 3px solid var(--daca-blue); padding: 4px 6px; background: var(--daca-blue-soft); color: #294a67; font: inherit; font-size: .61rem; font-weight: 700; text-align: left; }
 .product-table-relationships > button { border-left-color: var(--daca-blue); background: var(--daca-blue-soft); cursor: pointer; }

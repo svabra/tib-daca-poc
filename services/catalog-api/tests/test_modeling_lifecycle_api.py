@@ -254,6 +254,13 @@ def test_physical_source_create_update_retire_is_scoped_versioned_and_has_no_dsn
     assert rejected.status_code == 422
 
     source = _create_source(lifecycle_api)
+    duplicate = lifecycle_api.client.post(
+        "/api/v1/physical-sources",
+        headers=_headers(STEWARD),
+        json=_source_body(name="Duplicate lifecycle fixture"),
+    )
+    assert duplicate.status_code == 409
+    assert "Katalogpfad" in duplicate.json()["detail"]
     path = f"/api/v1/physical-sources/{source['id']}"
     assert lifecycle_api.client.put(path, headers=_headers(STEWARD), json=_source_body()).status_code == 428
     assert lifecycle_api.client.put(

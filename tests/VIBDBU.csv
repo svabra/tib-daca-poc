@@ -1,0 +1,48 @@
+Datenobjekt;Tabelle;Feldname;Datentyp;Länge;Kurzbeschreibung;Kommentar;System;Klassifizierung;Dezimalstellen;Werteliste
+Gebäude;VIBDBU;SGENR;CHAR;8;Gebäude;;SAP;;;
+Gebäude;VIBDBU;SWENR;CHAR;8;Wirtschaftseinheit;;SAP;;;
+Gebäude;VIBDBU;AUTHGRP;CHAR;40;Berechtigungsgruppe;;SAP;;;
+Gebäude;VIBDBU;BUKRS;CHAR;4;Buchungskreis;;SAP;;;
+Gebäude;VIBDBU;GEMEINDE;CHAR;8;Gemeindeschlüssel;;SAP;;;
+Gebäude;VIBDBU;RGEBART;NUMC;2;Gebäudeart;;SAP;;;Gebaudeart
+Gebäude;VIBDBU;RGEBZUST;NUMC;2;Gebäudezustand;;SAP;;;
+Gebäude;VIBDBU;VALIDFROM;DATS;10;Gültig ab;;SAP;;;
+Gebäude;VIBDBU;VALIDTO;DATS;10;Gültig bis;;SAP;;;
+Gebäude;VIBDBU;XGETXT;CHAR;60;Bezeichnung des GE;;SAP;;;
+Gebäude;VIBDBU;YBAUJAHR;DATS;10;Baujahr;;SAP;;;
+Gebäude;VIBDBU;ZZACTANOVA_ID;CHAR;36;ID Acta Nova;;SAP;;;
+Gebäude;VIBDBU;ZZAGFA_NR;CHAR;25;AGFA Nummer;;SAP;;;
+Gebäude;VIBDBU;ZZBASISJAHR;NUMC;4;Basisjahr;;SAP;;;
+Gebäude;VIBDBU;ZZBAUWERKSICH;CHAR;1;Bauwerksicherheit;;SAP;;;
+Gebäude;VIBDBU;ZZBIC_NUMMER;CHAR;20;BIC-Nummer (alt);;SAP;;;
+Gebäude;VIBDBU;ZZBRANDSCHUTZ_AUDIT_DAT;DATS;10;Datum Brandschutzaudit;;SAP;;;
+Gebäude;VIBDBU;ZZBRANDSCHUTZ_KATEGORIE;CHAR;2;Brandschutzkategorie;;SAP;;;
+Gebäude;VIBDBU;ZZBRANDSCHUTZ_ZUSTAND;CHAR;1;Brandschutzzustand;;SAP;;;
+Gebäude;VIBDBU;ZZDATENBANK;CHAR;1;Datenbank;;SAP;;;
+Gebäude;VIBDBU;ZZDB_MUTIERT_AM;DATS;10;mutiert am;;SAP;;;
+Gebäude;VIBDBU;ZZEGID;CHAR;100;EGID;;SAP;;;
+Gebäude;VIBDBU;ZZEIGENTUMSART;CHAR;1;Eigentumsart;;SAP;;;
+Gebäude;VIBDBU;ZZGEBZUST_ERFASST_AM;DATS;8;Erfasst am;;SAP;;;
+Gebäude;VIBDBU;ZZINDEXREIHE;CHAR;5;Indexreihe;;SAP;;;
+Gebäude;VIBDBU;ZZKOMZ;CHAR;1;Fachd. KOMZ Wasser;;SAP;;;
+Gebäude;VIBDBU;ZZKOORDX;NUMC;7;Koordinate X (Nord);;SAP;;;
+Gebäude;VIBDBU;ZZKOORDX_ZUSATZ;NUMC;7;Zusatz-Koordinate X (Nord);;SAP;;;
+Gebäude;VIBDBU;ZZKOORDY;NUMC;7;Koordinate Y (Ost);;SAP;;;
+Gebäude;VIBDBU;ZZKOORDY_ZUSATZ;NUMC;7;Zusatz-Koordinate Y (Ost);;SAP;;;
+Gebäude;VIBDBU;ZZKOORDZ;NUMC;4;Koordinate Z (Höhe);;SAP;;;
+Gebäude;VIBDBU;ZZKOORDZ_ZUSATZ;NUMC;4;Zusatz-Koordinate Z (Höhe);;SAP;;;
+Gebäude;VIBDBU;ZZKUEND_AKZEPT_DATUM;DATS;10;Akzeptiert am;;SAP;;;
+Gebäude;VIBDBU;ZZKUEND_DATUM;DATS;10;Kündigung per;;SAP;;;
+Gebäude;VIBDBU;ZZKUEND_PROZESS_JAHR;NUMC;4;Kündigungsprozess Jahr;;SAP;;;
+Gebäude;VIBDBU;ZZKUEND_REFERENZ_ID;CHAR;10;Referenz Identifikation;;SAP;;;
+Gebäude;VIBDBU;ZZKUEND_RUECKN_DATUM;DATS;10;Rücknahme am;;SAP;;;
+Gebäude;VIBDBU;ZZLANDERWERB;CHAR;50;Landerwerbsnummer;;SAP;;;
+Gebäude;VIBDBU;ZZLUFTREIN;CHAR;1;Luftreinhaltung;;SAP;;;
+Gebäude;VIBDBU;ZZMULTIEGID;CHAR;1;mehrere EGID-Nr. vorhanden;;SAP;;;
+Gebäude;VIBDBU;ZZOBJ_ART;CHAR;10;Objektart;;SAP;;;Objektart
+Gebäude;VIBDBU;ZZOBJ_SUBART;CHAR;8;Objektsubart;;SAP;;;Objektart
+Gebäude;VIBDBU;ZZSCHUTZRAUMTECH;CHAR;1;Schutzraumtechnik;;SAP;;;
+Gebäude;VIBDBU;ZZSCHUTZRAUMTECHDAT;DATS;10;geprüft am;;SAP;;;
+Gebäude;VIBDBU;ZZSCHUTZZONE;CHAR;2;Schutzzone;;SAP;;;Schutzzonen
+Gebäude;VIBDBU;ZZZERTIFIKAT;CHAR;2;Zertifikat / Label / Energie-Standard;;SAP;;;
+Gebäude;VIBDBU;ZZZERTIFIKATDAT;DATS;10;Datum Zertifizierung;;SAP;;;

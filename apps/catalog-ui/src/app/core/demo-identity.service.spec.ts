@@ -26,6 +26,8 @@ const ADDITIONAL_POC_USER_IDS = [
   'lawrence.hill',
   'hong.an.captain',
   'christian.man',
+  'giuseppe.starwars',
+  'thomas.wikinger',
 ] as const;
 
 function flushPersonas(http: HttpTestingController, personas: unknown[] = []): void {
@@ -151,12 +153,14 @@ describe('DemoIdentityService', () => {
     flushPersonas(http);
 
     const users = service.users();
-    expect(users).toHaveLength(21);
-    const modelingIds = ['christian.spider', 'sibilla.micheli', 'cinthya.thor', 'lawrence.hill', 'hong.an.captain', 'christian.man', 'mirjam.keller', 'daniel.wenger', 'eliane.rossi'];
+    expect(users).toHaveLength(23);
+    const modelingIds = ['christian.spider', 'sibilla.micheli', 'cinthya.thor', 'lawrence.hill', 'hong.an.captain', 'christian.man', 'mirjam.keller', 'daniel.wenger', 'eliane.rossi', 'giuseppe.starwars', 'thomas.wikinger'];
     expect(users.filter((user) => !modelingIds.includes(user.id)).every((user) => Boolean(user.avatarUrl))).toBe(true);
-    expect(users.filter((user) => modelingIds.includes(user.id))).toHaveLength(9);
+    expect(users.filter((user) => modelingIds.includes(user.id))).toHaveLength(11);
     expect(users.filter((user) => modelingIds.includes(user.id)).every((user) => user.department === 'VBS')).toBe(true);
     expect(users.find((user) => user.id === 'sibilla.micheli')).toEqual(expect.objectContaining({ organization: 'Verteidigung', avatarUrl: null, roles: expect.arrayContaining(['domain_register_owner']), modelingRoles: ['deputy_data_owner'] }));
+    expect(users.find((user) => user.id === 'giuseppe.starwars')).toEqual(expect.objectContaining({ organization: 'armasuisse', office: 'vbs-armasuisse', modelingRoles: ['data_owner'] }));
+    expect(users.find((user) => user.id === 'thomas.wikinger')).toEqual(expect.objectContaining({ organization: 'armasuisse', office: 'vbs-armasuisse', modelingRoles: ['data_steward'] }));
     expect(users.map((user) => user.id)).toEqual(expect.arrayContaining([
       'joel.ruod',
       'lucien.morel',

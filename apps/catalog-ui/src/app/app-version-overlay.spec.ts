@@ -44,7 +44,7 @@ describe('Catalog runtime version overlay', () => {
     expect(dialog?.textContent).toContain('Entwürfe gezielt zur Domänenfreigabe einreichen');
     expect(dialog?.textContent).toContain('I14Y-Concepts bleiben optional');
     expect(dialog?.textContent).toContain('unveränderlichem Snapshot');
-    expect(dialog?.textContent).toContain('Physische Modelle aus PostgreSQL und S3 verstehen');
+    expect(dialog?.textContent).toContain('Bestehende Datenquellen wie in DAAIF erkunden');
     expect(dialog?.textContent).toContain('Logische und physische Modelle verbinden');
     expect(dialog?.textContent).toContain('Domänen und Terminology gemeinsam steuern');
     expect(dialog?.textContent).toContain('TERMDAT-Suche');
@@ -59,7 +59,7 @@ describe('Catalog runtime version overlay', () => {
     expect(dialog?.textContent).toContain('Zugriff gezielt freigeben und verlängern');
     expect(dialog?.textContent).toContain('Oracle-Datenquellen kontrolliert erschliessen');
     expect(dialog?.textContent).toContain('aktuellen PoC-Stand');
-    expect(features.length).toBe(17);
+    expect(features.length).toBe(19);
     expect(trigger?.getAttribute('aria-expanded')).toBe('true');
 
     const close = fixture.nativeElement.querySelector('.daca-feature-dialog-close') as HTMLButtonElement | null;

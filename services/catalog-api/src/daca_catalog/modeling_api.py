@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import UTC, date, datetime
 from typing import Annotated, Any
@@ -28,6 +29,7 @@ from .modeling_schemas import (
     AssetMappingWrite,
     DataModelRoleResponse,
     DerivationPreviewResponse,
+    DerivedLogicalModelRequest,
     DeriveLogicalModelRequest,
     DriftReportResponse,
     I14yCodeListEntryResponse,
@@ -811,6 +813,25 @@ def create_modeling_router() -> APIRouter:
                 .order_by(PhysicalSchemaSnapshot.sequence.desc())
                 .limit(1)
             )
+            database_name = (
+                session.scalar(
+                    select(PhysicalDatabase.name)
+                    .where(PhysicalDatabase.snapshot_id == latest.id)
+                    .order_by(PhysicalDatabase.position)
+                    .limit(1)
+                )
+                if latest is not None
+                else None
+            )
+            system_name = "S3 Object Storage" if source.adapter_type == "s3" else "PostgreSQL"
+            catalog_path = (
+                f"s3://{database_name}/"
+                if source.adapter_type == "s3" and database_name
+                else f"postgresql://{database_name}/"
+                if database_name
+                else source.config_ref or f"urn:daca:physical-source:{source.id}"
+            )
+            owner = session.get(DemoUser, source.created_by_user_id)
             items.append(
                 {
                     "id": source.id,
@@ -824,6 +845,10 @@ def create_modeling_router() -> APIRouter:
                     "lifecycle": source.lifecycle,
                     "latestSnapshotId": latest.id if latest else None,
                     "latestSnapshotSequence": latest.sequence if latest else None,
+                    "catalogPath": catalog_path,
+                    "systemName": system_name,
+                    "databaseName": database_name,
+                    "ownerName": owner.display_name if owner is not None else source.created_by_user_id,
                     "updatedAt": source.updated_at,
                 }
             )
@@ -1147,11 +1172,134 @@ def create_modeling_router() -> APIRouter:
     )
     def derive_logical_model(
         table_id: uuid.UUID,
-        body: DeriveLogicalModelRequest,
+        body: DeriveLogicalModelRequest | DerivedLogicalModelRequest,
         response: Response,
         session: SessionDep,
         actor: ActorDep,
     ) -> dict[str, Any]:
+        if isinstance(body, DerivedLogicalModelRequest):
+            row = session.execute(
+                select(
+                    PhysicalTable,
+                    PhysicalSchemaSnapshot,
+                    PhysicalSource,
+                )
+                .join(PhysicalSchema, PhysicalSchema.id == PhysicalTable.physical_schema_id)
+                .join(PhysicalDatabase, PhysicalDatabase.id == PhysicalSchema.physical_database_id)
+                .join(
+                    PhysicalSchemaSnapshot,
+                    PhysicalSchemaSnapshot.id == PhysicalDatabase.snapshot_id,
+                )
+                .join(PhysicalSource, PhysicalSource.id == PhysicalSchemaSnapshot.source_id)
+                .where(PhysicalTable.id == table_id)
+            ).one_or_none()
+            if row is None:
+                raise HTTPException(404, "Physical table not found")
+            table, snapshot, source = row
+            _require_scope(
+                session,
+                actor,
+                source.department_code,
+                source.organization_id,
+                roles={"data_owner", "deputy_data_owner", "data_steward"},
+            )
+
+            logical_body = body.logical_model
+            _normalize_logical_write_scope(session, logical_body)
+            if (
+                logical_body.department_code,
+                logical_body.organization_id,
+            ) != (source.department_code, source.organization_id):
+                raise HTTPException(
+                    422,
+                    "Logical model and physical representation must share one organization scope",
+                )
+            _validate_owner_assignments(session, logical_body)
+
+            columns = list(
+                session.scalars(
+                    select(PhysicalColumn).where(
+                        PhysicalColumn.physical_table_id == table.id
+                    )
+                )
+            )
+            physical_columns = {column.id: column for column in columns}
+            unknown_columns = {
+                binding.physical_column_id
+                for binding in body.field_mappings
+                if binding.physical_column_id not in physical_columns
+            }
+            if unknown_columns:
+                raise HTTPException(
+                    422, "Every physicalColumnId must belong to the selected table"
+                )
+
+            requested_fields = {
+                (entity.name.casefold(), field.name.casefold())
+                for entity in logical_body.entities
+                for field in entity.fields
+            }
+            unknown_fields = {
+                (binding.entity_name, binding.logical_field_name)
+                for binding in body.field_mappings
+                if (
+                    binding.entity_name.casefold(),
+                    binding.logical_field_name.casefold(),
+                )
+                not in requested_fields
+            }
+            if unknown_fields:
+                raise HTTPException(
+                    422,
+                    "Every fieldMapping must identify a field in logicalModel.entities",
+                )
+
+            model, version = create_logical_model(session, logical_body, actor)
+            persisted_fields = session.execute(
+                select(LogicalEntityVersion.name, LogicalFieldVersion)
+                .join(
+                    LogicalFieldVersion,
+                    LogicalFieldVersion.logical_entity_version_id
+                    == LogicalEntityVersion.id,
+                )
+                .where(LogicalEntityVersion.logical_model_version_id == version.id)
+            ).all()
+            logical_fields = {
+                (entity_name.casefold(), logical_field.name.casefold()): logical_field
+                for entity_name, logical_field in persisted_fields
+            }
+            for binding in body.field_mappings:
+                logical_field = logical_fields[
+                    (
+                        binding.entity_name.casefold(),
+                        binding.logical_field_name.casefold(),
+                    )
+                ]
+                physical_column = physical_columns[binding.physical_column_id]
+                mapping_body = AssetMappingWrite.model_validate(
+                    {
+                        "logicalModelVersionId": version.id,
+                        "physicalSnapshotId": snapshot.id,
+                        "mappingType": (
+                            "Direct"
+                            if logical_field.name.casefold()
+                            == physical_column.name.casefold()
+                            else "Renamed"
+                        ),
+                        "classification": logical_field.classification,
+                        "comment": "Created with the physical-first logical-model derivation",
+                        "responsibleUserId": actor,
+                        "validFrom": datetime.now(UTC).date(),
+                        "logicalFieldVersionIds": [logical_field.id],
+                        "physicalColumnIds": [physical_column.id],
+                    }
+                )
+                _validate_mapping_scope(session, actor, mapping_body)
+                create_asset_mapping(session, mapping_body, actor)
+            session.commit()
+            response.headers["ETag"] = _etag(version.lock_version)
+            return logical_version_payload(session, model, version)
+
         table, snapshot, source, owner, columns, proposed_fields = derivation_context(
             table_id, body, session, actor
         )
@@ -1253,6 +1401,228 @@ def create_modeling_router() -> APIRouter:
         session.commit()
         response.headers["ETag"] = _etag(version.lock_version)
         return logical_version_payload(session, model, version)
+
+    @router.post(
+        "/physical-tables/{table_id}/quick-derive-logical-model",
+        response_model=LogicalModelResponse,
+        status_code=201,
+    )
+    def quick_derive_logical_model(
+        table_id: uuid.UUID,
+        response: Response,
+        session: SessionDep,
+        actor: ActorDep,
+    ) -> dict[str, Any]:
+        """Create a technical logical draft and exact 1:1 mappings in one transaction.
+
+        The shortcut deliberately reuses only an unambiguous, already governed domain in
+        the source scope. It never invents a business domain from technical metadata.
+        """
+        row = session.execute(
+            select(PhysicalTable, PhysicalSchemaSnapshot, PhysicalSource, PhysicalSchema)
+            .join(PhysicalSchema, PhysicalSchema.id == PhysicalTable.physical_schema_id)
+            .join(PhysicalDatabase, PhysicalDatabase.id == PhysicalSchema.physical_database_id)
+            .join(
+                PhysicalSchemaSnapshot,
+                PhysicalSchemaSnapshot.id == PhysicalDatabase.snapshot_id,
+            )
+            .join(PhysicalSource, PhysicalSource.id == PhysicalSchemaSnapshot.source_id)
+            .where(PhysicalTable.id == table_id)
+        ).one_or_none()
+        if row is None:
+            raise HTTPException(404, "Physical table not found")
+        table, snapshot, source, physical_schema = row
+        _require_scope(
+            session,
+            actor,
+            source.department_code,
+            source.organization_id,
+            roles={"data_owner", "deputy_data_owner", "data_steward"},
+        )
+        columns = list(
+            session.scalars(
+                select(PhysicalColumn)
+                .where(PhysicalColumn.physical_table_id == table.id)
+                .order_by(PhysicalColumn.ordinal_position)
+            )
+        )
+        if not columns:
+            raise HTTPException(422, "The selected physical object has no columns")
+
+        # Prefer an exact, already governed logical structure in this organization. This
+        # keeps the demo fixture deterministic without treating a table name as a domain.
+        physical_names = {column.name.casefold() for column in columns}
+        matched_domain_ids: set[uuid.UUID] = set()
+        seen_models: set[uuid.UUID] = set()
+        scoped_owner_ids = set(
+            session.scalars(
+                select(DataModelRoleAssignment.user_id).where(
+                    DataModelRoleAssignment.department_code == source.department_code,
+                    DataModelRoleAssignment.organization_id == source.organization_id,
+                    DataModelRoleAssignment.role == "data_owner",
+                    DataModelRoleAssignment.active.is_(True),
+                )
+            )
+        )
+        version_rows = session.execute(
+            select(LogicalModelVersion, DcatDatasetVersion)
+            .join(
+                DcatDatasetVersion,
+                DcatDatasetVersion.id == LogicalModelVersion.dataset_version_id,
+            )
+            .where(DcatDatasetVersion.organization_id == source.organization_id)
+            .order_by(LogicalModelVersion.revision.desc())
+        ).all()
+        for logical_version, dataset_version in version_rows:
+            if logical_version.logical_model_id in seen_models:
+                continue
+            seen_models.add(logical_version.logical_model_id)
+            field_names = {
+                name.casefold()
+                for name in session.scalars(
+                    select(LogicalFieldVersion.name)
+                    .join(
+                        LogicalEntityVersion,
+                        LogicalEntityVersion.id
+                        == LogicalFieldVersion.logical_entity_version_id,
+                    )
+                    .where(
+                        LogicalEntityVersion.logical_model_version_id
+                        == logical_version.id
+                    )
+                )
+            }
+            matched_domain = session.get(Domain, dataset_version.data_domain_id)
+            if (
+                field_names == physical_names
+                and matched_domain is not None
+                and matched_domain.owner_user_id in scoped_owner_ids
+            ):
+                matched_domain_ids.add(dataset_version.data_domain_id)
+
+        if len(matched_domain_ids) == 1:
+            domain = session.get(Domain, next(iter(matched_domain_ids)))
+        else:
+            domains = list(
+                session.scalars(
+                    select(Domain).where(
+                        Domain.owner_user_id.in_(scoped_owner_ids),
+                        Domain.lifecycle == "active",
+                    )
+                )
+            ) if scoped_owner_ids else []
+            domain = domains[0] if len(domains) == 1 else None
+        if domain is None:
+            raise HTTPException(
+                409,
+                "Für diese Quelle ist keine eindeutige fachliche Domäne hinterlegt. "
+                "Verwenden Sie das vollständige Modellformular.",
+            )
+
+        organization = session.get(AdministrativeOrganization, source.organization_id)
+        owner = session.get(DemoUser, domain.owner_user_id)
+        if organization is None or owner is None:
+            raise HTTPException(422, "The governed source scope is incomplete")
+
+        safe_entity_name = re.sub(r"[^A-Za-z0-9_.-]", "_", table.name)
+        if not safe_entity_name or not re.match(r"^[A-Za-z_]", safe_entity_name):
+            safe_entity_name = f"table_{safe_entity_name}"
+        title = table.name.replace("_", " ").strip().title()
+        qualified_name = f"{physical_schema.name}.{table.name}"
+        derived_identifier = f"derived:{table.stable_key}:{snapshot.id}"
+        existing_reservation = session.scalar(
+            select(LogicalModelIdentifierReservation).where(
+                LogicalModelIdentifierReservation.normalized_identifier
+                == derived_identifier.casefold()
+            )
+        )
+        if existing_reservation is not None:
+            existing_model = get_logical_model(
+                session, existing_reservation.logical_model_id
+            )
+            existing_version = get_logical_version(session, existing_model.id)
+            _require_version_scope(session, actor, existing_version)
+            response.headers["ETag"] = _etag(existing_version.lock_version)
+            return logical_version_payload(session, existing_model, existing_version)
+        logical_body = LogicalModelWrite.model_validate(
+            {
+                "identifiers": [derived_identifier],
+                "localizations": [
+                    {
+                        "language": "de",
+                        "title": title,
+                        "description": (
+                            f"Technischer Entwurf aus {source.name}, Objekt {qualified_name}, "
+                            f"Snapshot {snapshot.sequence}. Fachliche Angaben sind vor der "
+                            "Publikation zu prüfen."
+                        ),
+                    }
+                ],
+                "dataOwnerUserId": domain.owner_user_id,
+                "deputyOwnerUserId": domain.deputy_owner_user_id,
+                "creator": {
+                    "type": "InternalOrganisation",
+                    "organizationId": organization.id,
+                    "englishName": organization.display_name,
+                },
+                "dataDomainId": domain.id,
+                "departmentCode": source.department_code,
+                "organizationId": source.organization_id,
+                "dataClassification": "internal",
+                "dateCreated": datetime.now(UTC).date(),
+                "contactPoints": [{"name": owner.display_name, "email": owner.email}],
+                "publisher": {
+                    "name": organization.display_name,
+                    "identifier": organization.id,
+                    "uri": f"urn:daca:organization:{organization.id}",
+                },
+                "accessRights": "urn:daca:access-rights:internal",
+                "comment": (
+                    f"Direkt aus {source.name} / {qualified_name} / Snapshot "
+                    f"{snapshot.sequence} abgeleitet."
+                ),
+                "entities": [
+                    {
+                        "name": safe_entity_name,
+                        "businessObject": title,
+                        "comment": table.comment,
+                        "position": 0,
+                        "fields": [
+                            {
+                                "name": column.name,
+                                "dataType": column.normalized_data_type,
+                                "length": column.character_length,
+                                "precision": column.numeric_precision,
+                                "decimalPlaces": column.numeric_scale,
+                                "nullable": column.nullable,
+                                "minCount": 0 if column.nullable else 1,
+                                "maxCount": 1,
+                                "position": position,
+                                "sourceSystem": source.name,
+                                "classification": "internal",
+                                "comment": column.comment,
+                                "conceptMatchExplicitlyNone": True,
+                            }
+                            for position, column in enumerate(columns)
+                        ],
+                    }
+                ],
+            }
+        )
+        request_body = DerivedLogicalModelRequest.model_validate(
+            {
+                "logicalModel": logical_body.model_dump(mode="json", by_alias=True),
+                "fieldMappings": [
+                    {
+                        "physicalColumnId": column.id,
+                        "entityName": safe_entity_name,
+                        "logicalFieldName": column.name,
+                    }
+                    for column in columns
+                ],
+            }
+        )
+        return derive_logical_model(table_id, request_body, response, session, actor)
 
     @router.get("/asset-mappings", response_model=AssetMappingCollection)
     def list_asset_mappings(

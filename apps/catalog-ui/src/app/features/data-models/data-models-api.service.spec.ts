@@ -28,6 +28,18 @@ describe('DataModelsApiService', () => {
     request.flush({ id:'model-1',urn:'urn:daca:logical-model:model-1',revision:1,identifiers:['VBS-HR-1'],localizations:[{language:'de',title:'Mitarbeitende',description:'Fachliches Modell'}],departmentCode:'VBS',organizationId:'vbs-verteidigung',dataOwnerUserId:'christian.spider',dataDomainId:'domain-personal',dataClassification:'internal',dateCreated:'2026-09-07',creator:{type:'Application',applicationName:'HR-Core'},versionId:'version-1',lockVersion:1,status:'draft',contactPoints:[{name:'Cinthya Thor',email:'cinthya.thor@vtg.admin.ch'}],publisher:{name:'Verteidigung'},accessRights:'urn:daca:access-rights:internal',entities:[] }, { headers: { ETag:'"1"' } });
   });
 
+  it('sends the complete logical form and transient physical bindings for an atomic derivation', () => {
+    const value:LogicalModelWrite={title:{de:'Gebäude',fr:'',it:'',en:''},description:{de:'Aus VIBDBU abgeleitet',fr:'',it:'',en:''},identifiers:['derived:vibdbu:snapshot-1'],department:'VBS',office:'vbs-armasuisse-immobilien',dataDomainId:'domain-real-estate',dataOwnerId:'daniel.wenger',deputyDataOwnerId:'eliane.rossi',creator:{type:'internal_organisation',organizationId:'vbs-armasuisse-immobilien',englishName:'armasuisse Real Estate'},classification:'internal',dateCreated:'2026-09-22',entityName:'vibdbu',conceptIds:[],fields:[{businessObject:'Gebäude',entityName:'vibdbu',name:'sgenr',dataType:'string',length:8,shortDescription:'Gebäude',comment:'Technischer Kommentar',sourceSystem:'SAP VIBDBU',classification:'internal',precision:null,decimalPlaces:null,nullable:false,minCount:1,maxCount:1,order:1,valueListConceptId:null,conceptIds:[],primaryConceptId:null,conceptMatchExplicitlyNone:true}]};
+    api.deriveLogicalModel('table/vibdbu',{logicalModel:value,fieldMappings:[{physicalColumnId:'column-sgenr',entityName:'vibdbu',logicalFieldName:'sgenr'}]}).subscribe();
+
+    const request=http.expectOne('/api/v1/physical-tables/table%2Fvibdbu/derive-logical-model');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body.logicalModel).toEqual(expect.objectContaining({organizationUnitId:'vbs-armasuisse-immobilien',dataOwnerUserId:'daniel.wenger'}));
+    expect(request.request.body.logicalModel.entities[0].fields[0]).toEqual(expect.objectContaining({name:'sgenr',conceptMatchExplicitlyNone:true}));
+    expect(request.request.body.fieldMappings).toEqual([{physicalColumnId:'column-sgenr',entityName:'vibdbu',logicalFieldName:'sgenr'}]);
+    request.flush({id:'model-vibdbu',revision:1,versionId:'version-vibdbu',lockVersion:1,status:'draft',identifiers:value.identifiers,localizations:[{language:'de',title:'Gebäude',description:'Aus VIBDBU abgeleitet'}],departmentCode:'VBS',organizationId:'vbs-armasuisse-immobilien',dataDomainId:value.dataDomainId,dataOwnerUserId:value.dataOwnerId,dataClassification:'internal',dateCreated:value.dateCreated,creator:{type:'InternalOrganisation',organizationId:'vbs-armasuisse-immobilien',englishName:'armasuisse Real Estate'},entities:[]},{headers:{ETag:'"1"'}});
+  });
+
   it('round-trips Romansh localizations and separate entity roots', () => {
     const field=(entityName:string,name:string)=>({businessObject:entityName,entityName,name,dataType:'xsd:string',length:null,shortDescription:name,comment:null,sourceSystem:null,classification:'internal' as const,precision:null,decimalPlaces:null,nullable:false,minCount:1,maxCount:1,order:1,valueListConceptId:null,conceptIds:[],primaryConceptId:null});
     const peopleField=field('Mitarbeitende','personalnummer');const addressField=field('Adressen','strasse');

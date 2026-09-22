@@ -1,5 +1,5 @@
 export type PocGuideStatus = 'implemented' | 'simulation' | 'out-of-scope';
-export type PocGuideActionTarget = 'internal' | 'daaif-notebook' | 'daaif-loader';
+export type PocGuideActionTarget = 'internal' | 'daaif-notebook' | 'daaif-loader' | 'daaif-source-explorer';
 
 export interface PocGuideRole {
   readonly name: string;

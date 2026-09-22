@@ -9,8 +9,8 @@ const help = (de: string, fr: string, it: string): HelpText => ({ de, fr, it });
 
 export const LOGICAL_MODEL_FIELD_HELP: Record<string, HelpText> = {
   classification: help('Schutzbedarf des gesamten Modells. Die höchste Feldklassifizierung sollte nicht überschritten werden.', 'Niveau de protection du modèle entier. Il ne devrait pas être inférieur à la classification de champ la plus élevée.', 'Livello di protezione dell’intero modello. Non dovrebbe essere inferiore alla classificazione di campo più elevata.'),
-  titleDe: help('Verbindlicher deutscher Name des beschriebenen Datensatzes.', 'Nom allemand obligatoire du jeu de données décrit.', 'Nome tedesco obbligatorio del set di dati descritto.'),
-  descriptionDe: help('Fachliche deutsche Beschreibung von Inhalt, Zweck und Abgrenzung des Datensatzes.', 'Description métier allemande du contenu, de la finalité et du périmètre du jeu de données.', 'Descrizione specialistica in tedesco del contenuto, dello scopo e dell’ambito del set di dati.'),
+  titleDe: help('Verbindlicher deutscher Name des beschriebenen Modells.', 'Nom allemand obligatoire du modèle décrit.', 'Nome tedesco obbligatorio del modello descritto.'),
+  descriptionDe: help('Fachliche deutsche Beschreibung von Inhalt, Zweck und Abgrenzung des Modells.', 'Description métier allemande du contenu, de la finalité et du périmètre du modèle.', 'Descrizione specialistica in tedesco del contenuto, dello scopo e dell’ambito del modello.'),
   titleFr: help('Französische Übersetzung des Datensatztitels.', 'Traduction française du titre du jeu de données.', 'Traduzione francese del titolo del set di dati.'),
   descriptionFr: help('Französische Übersetzung der fachlichen Datensatzbeschreibung.', 'Traduction française de la description métier du jeu de données.', 'Traduzione francese della descrizione specialistica del set di dati.'),
   titleIt: help('Italienische Übersetzung des Datensatztitels.', 'Traduction italienne du titre du jeu de données.', 'Traduzione italiana del titolo del set di dati.'),
@@ -63,8 +63,11 @@ export class LogicalModelFieldHelpDirective implements AfterViewInit, OnDestroy 
 
   private readonly tooltipId = `logical-model-field-help-${++tooltipSequence}`;
   private tooltip: HTMLDivElement | null = null;
-  private trigger: HTMLButtonElement | null = null;
+  private trigger: HTMLElement | null = null;
   private describedControl: HTMLElement | null = null;
+  private readonly closeOutsideTitle = (event: MouseEvent): void => {
+    if (!this.tooltip || this.tooltip.hidden || !this.trigger?.contains(event.target as Node)) this.close();
+  };
 
   constructor(
     private readonly element: ElementRef<HTMLElement>,
@@ -79,23 +82,33 @@ export class LogicalModelFieldHelpDirective implements AfterViewInit, OnDestroy 
     tooltip.id = this.tooltipId;
     tooltip.className = 'daca-glossary-tooltip daca-field-help-tooltip';
     tooltip.setAttribute('role', 'tooltip');
-    tooltip.textContent = text[locale];
+    const title = this.fieldTitle();
+    const heading = this.document.createElement('strong');
+    heading.textContent = title;
+    const description = this.document.createElement('span');
+    description.textContent = text[locale];
+    tooltip.append(heading, description);
     tooltip.hidden = true;
     this.document.body.append(tooltip);
     this.tooltip = tooltip;
 
-    const trigger = this.document.createElement('button');
-    trigger.type = 'button';
-    trigger.className = 'daca-field-help-trigger';
-    trigger.textContent = 'i';
-    trigger.hidden = true;
-    trigger.setAttribute('aria-label', locale === 'fr' ? 'Afficher la description du champ' : locale === 'it' ? 'Mostra la descrizione del campo' : 'Feldbeschreibung anzeigen');
+    const label = this.element.nativeElement.matches('label')
+      ? this.element.nativeElement
+      : this.element.nativeElement.querySelector<HTMLElement>('label') ?? this.element.nativeElement;
+    const titleNode = [...label.childNodes].find((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+    const trigger = titleNode ? this.document.createElement('span') : label;
+    if (titleNode) {
+      trigger.textContent = titleNode.textContent;
+      label.replaceChild(trigger, titleNode);
+    }
+    trigger.classList.add('daca-field-help-title');
+    if (!trigger.matches('input, select, textarea, button, a')) trigger.tabIndex = 0;
     trigger.setAttribute('aria-describedby', this.tooltipId);
-    trigger.addEventListener('click', (event) => this.toggleFromTrigger(event));
     trigger.addEventListener('mouseenter', () => this.open());
+    trigger.addEventListener('mouseleave', () => this.close());
     trigger.addEventListener('focus', () => this.open());
     trigger.addEventListener('blur', () => this.close());
-    this.element.nativeElement.append(trigger);
+    this.document.addEventListener('mousemove', this.closeOutsideTitle);
     this.element.nativeElement.classList.add('daca-field-help');
     this.trigger = trigger;
 
@@ -106,28 +119,13 @@ export class LogicalModelFieldHelpDirective implements AfterViewInit, OnDestroy 
     }
   }
 
-  @HostListener('mouseenter') reveal(): void {
-    this.trigger?.removeAttribute('hidden');
-    this.element.nativeElement.classList.add('is-field-help-revealed');
-  }
-
-  @HostListener('focusin') onFocusIn(): void {
-    this.reveal();
-  }
-
-  @HostListener('mouseleave') onMouseLeave(): void {
-    this.close();
-    this.hideTrigger();
-  }
-
-  @HostListener('focusout', ['$event']) onFocusOut(event: FocusEvent): void {
-    if (event.relatedTarget instanceof Node && this.element.nativeElement.contains(event.relatedTarget)) return;
-    this.close();
-    this.hideTrigger();
-  }
-
   open(): void {
     if (!this.tooltip || !this.trigger) return;
+    for (const candidate of this.document.querySelectorAll<HTMLElement>('.daca-field-help-tooltip.is-visible')) {
+      if (candidate === this.tooltip) continue;
+      candidate.classList.remove('is-visible');
+      candidate.hidden = true;
+    }
     this.tooltip.hidden = false;
     this.tooltip.classList.add('is-visible');
     this.positionTooltip();
@@ -145,18 +143,8 @@ export class LogicalModelFieldHelpDirective implements AfterViewInit, OnDestroy 
   @HostListener('window:scroll') onScroll(): void { if (this.tooltip && !this.tooltip.hidden) this.positionTooltip(); }
 
   ngOnDestroy(): void {
+    this.document.removeEventListener('mousemove', this.closeOutsideTitle);
     this.tooltip?.remove();
-  }
-
-  private toggleFromTrigger(event: Event): void {
-    event.preventDefault();
-    event.stopPropagation();
-    if (this.tooltip?.hidden) this.open(); else this.close();
-  }
-
-  private hideTrigger(): void {
-    this.trigger?.setAttribute('hidden', '');
-    this.element.nativeElement.classList.remove('is-field-help-revealed');
   }
 
   private positionTooltip(): void {
@@ -167,11 +155,17 @@ export class LogicalModelFieldHelpDirective implements AfterViewInit, OnDestroy 
     const box = this.tooltip.getBoundingClientRect();
     const margin = 12;
     const left = Math.min(Math.max(margin, anchor.left), Math.max(margin, viewport.innerWidth - box.width - margin));
-    const below = anchor.bottom + 8;
-    const top = below + box.height <= viewport.innerHeight - margin
-      ? below
-      : Math.max(margin, anchor.top - box.height - 8);
+    const above = anchor.top - box.height - 8;
+    const top = above >= margin ? above : Math.min(viewport.innerHeight - box.height - margin, anchor.bottom + 8);
     this.tooltip.style.left = `${left}px`;
     this.tooltip.style.top = `${top}px`;
+  }
+
+  private fieldTitle(): string {
+    const label = this.element.nativeElement.matches('label')
+      ? this.element.nativeElement
+      : this.element.nativeElement.querySelector('label');
+    const textNode = [...(label?.childNodes ?? [])].find((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+    return textNode?.textContent?.replace(/\s*\*\s*$/, '').trim() || this.dacaFieldHelp;
   }
 }

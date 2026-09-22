@@ -6,7 +6,7 @@ import { DemoIdentityService } from '../../core/demo-identity.service';
 import { DataModelsApiService } from './data-models-api.service';
 import { ApiResult, AssetMapping, DriftReport, LogicalModel, LogicalModelSummary, PhysicalSnapshot } from './data-models.models';
 import { FALLBACK_LOGICAL_MODEL, FALLBACK_PHYSICAL_SNAPSHOT } from './mapping-fallback';
-import { MappingWorkspaceComponent } from './mapping-workspace.component';
+import { exactMappingSuggestions, MappingWorkspaceComponent } from './mapping-workspace.component';
 
 vi.mock('@bit-daca/design-system',async()=>{
   const {Component}=await import('@angular/core');
@@ -24,6 +24,26 @@ interface SelectionRequests {
 
 function selectionRequests():SelectionRequests{return{model:new Subject(),snapshot:new Subject(),mappings:new Subject(),drift:new Subject()};}
 function finish<T>(request:Subject<T>,value:T):void{request.next(value);request.complete();}
+
+describe('exact mapping suggestions',()=>{
+  it('suggests only exact, type-compatible 1:1 pairs and reports manual cases',()=>{
+    const base=FALLBACK_LOGICAL_MODEL.fields[0];
+    const fields=[
+      {...base,id:'logical-name',versionId:'logical-name',name:'name',dataType:'xsd:string'},
+      {...base,id:'logical-id',versionId:'logical-id',name:'org_unit_id',dataType:'xsd:integer'},
+      {...base,id:'logical-missing',versionId:'logical-missing',name:'unit_label',dataType:'xsd:string'},
+      {...base,id:'logical-ambiguous-a',versionId:'logical-ambiguous-a',name:'unit_type',dataType:'xsd:string'},
+      {...base,id:'logical-ambiguous-b',versionId:'logical-ambiguous-b',name:'unit_type',dataType:'xsd:string'},
+    ];
+    const review=exactMappingSuggestions(fields,FALLBACK_PHYSICAL_SNAPSHOT.tables[0]);
+
+    expect(review.suggestions.map((item)=>[item.logicalField.name,item.physicalColumn.name])).toEqual([['name','name']]);
+    expect(review.typeConflicts).toEqual(['org_unit_id: xsd:integer ↔ uuid']);
+    expect(review.unmatched).toEqual(['unit_label']);
+    expect(review.ambiguous).toEqual(['unit_type']);
+    expect(review.suggestions.some((item)=>item.logicalField.name==='unit_label')).toBe(false);
+  });
+});
 
 describe('MappingWorkspaceComponent request ordering',()=>{
   afterEach(()=>TestBed.resetTestingModule());

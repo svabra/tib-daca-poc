@@ -7,6 +7,7 @@ from daca_catalog.modeling_seed import (
     ORGANIZATION_MODEL_ID,
     PERSONNEL_MODEL_ID,
     VEHICLE_MODEL_ID,
+    VIBDBU_PHYSICAL_SOURCE_ID,
     seed_modeling_catalog,
 )
 from daca_catalog.models import (
@@ -17,7 +18,12 @@ from daca_catalog.models import (
     I14yConcept,
     LogicalModel,
     LogicalModelVersion,
+    PhysicalColumn,
+    PhysicalDatabase,
+    PhysicalSchema,
     PhysicalSchemaSnapshot,
+    PhysicalSource,
+    PhysicalTable,
 )
 from sqlalchemy import func, select
 
@@ -93,10 +99,47 @@ def test_modeling_seed_is_idempotent_and_preserves_legacy_persona_roles(session_
             ),
         )
 
-        assert first_counts == second_counts == (6, 3, 3, 2, 5)
+        assert first_counts == second_counts == (6, 3, 3, 3, 5)
         assert session.get(DemoUser, "sibilla.micheli").roles == legacy_roles
+        assert session.get(DemoUser, "giuseppe.starwars").organization == "armasuisse"
+        assert session.get(DemoUser, "thomas.wikinger").organization == "armasuisse"
+        assert {
+            (assignment.user_id, assignment.role)
+            for assignment in session.scalars(
+                select(DataModelRoleAssignment).where(
+                    DataModelRoleAssignment.organization_id == "vbs-armasuisse"
+                )
+            )
+        } == {
+            ("giuseppe.starwars", "data_owner"),
+            ("thomas.wikinger", "data_steward"),
+        }
         assert _model_title(session, PERSONNEL_MODEL_ID) == "Mitarbeitende"
         assert _model_title(session, VEHICLE_MODEL_ID) == "Fahrzeugbestand"
+        vibdbu_source = session.get(PhysicalSource, VIBDBU_PHYSICAL_SOURCE_ID)
+        assert vibdbu_source is not None
+        assert vibdbu_source.adapter_type == "postgresql"
+        assert vibdbu_source.config_ref == "sample-data-product.vibdbu"
+        assert vibdbu_source.organization_id == "vbs-armasuisse-immobilien"
+        vibdbu_table = session.scalar(
+            select(PhysicalTable)
+            .join(PhysicalSchema, PhysicalTable.physical_schema_id == PhysicalSchema.id)
+            .join(PhysicalDatabase, PhysicalSchema.physical_database_id == PhysicalDatabase.id)
+            .where(
+                PhysicalDatabase.snapshot_id == session.scalar(
+                    select(PhysicalSchemaSnapshot.id).where(
+                        PhysicalSchemaSnapshot.source_id == VIBDBU_PHYSICAL_SOURCE_ID
+                    )
+                ),
+                PhysicalTable.name == "VIBDBU",
+            )
+        )
+        assert vibdbu_table is not None
+        assert session.scalar(
+            select(func.count()).select_from(PhysicalColumn).where(
+                PhysicalColumn.physical_table_id == vibdbu_table.id
+            )
+        ) == 47
 
 
 def test_modeling_seed_checks_scenarios_when_the_foundational_marker_survives(

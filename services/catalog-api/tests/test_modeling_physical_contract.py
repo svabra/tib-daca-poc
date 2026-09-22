@@ -65,7 +65,7 @@ class _FakeConnection:
     def execute(self, statement):
         sql = str(statement)
         self.commands.append(sql)
-        if "information_schema.columns" not in sql:
+        if "pg_catalog.pg_class" not in sql:
             return _FakeRows([])
         return _FakeRows(
             [
@@ -78,8 +78,10 @@ class _FakeConnection:
                     "character_maximum_length": None,
                     "numeric_precision": None,
                     "numeric_scale": None,
-                    "is_nullable": "NO",
+                    "is_nullable": False,
                     "ordinal_position": 1,
+                    "table_comment": None,
+                    "column_comment": None,
                 }
             ]
         )
@@ -132,6 +134,7 @@ def test_postgresql_adapter_is_read_only_catalog_only_and_disposes_engine(monkey
             "numericScale": None,
             "nullable": False,
             "ordinalPosition": 1,
+            "comment": None,
         }
     ]
     assert engine.disposed is True
@@ -261,6 +264,8 @@ def test_identical_import_still_creates_a_new_hashed_snapshot(client, session_fa
     assert imported.status_code == 200, imported.text
     snapshot = imported.json()["snapshot"]
     assert snapshot["sequence"] == 2
+    assert snapshot["dataOwnerName"] == "Christian Spider"
+    assert snapshot["catalogPath"] == "postgresql://hr_core/"
     assert snapshot["predecessorSnapshotId"] == str(baseline_id)
     assert snapshot["fingerprint"] == baseline_fingerprint
     drift = client.get(

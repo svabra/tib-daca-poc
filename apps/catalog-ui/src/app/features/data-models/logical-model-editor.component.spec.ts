@@ -9,7 +9,7 @@ import { DataModelsApiService, LogicalModelExportFile, ModelingApiError } from '
 import { I14yConceptReference, LogicalField, LogicalModelWrite } from './data-models.models';
 import { LogicalModelEditorComponent, logicalModelVersionEtag, normalizeFieldConceptSelection } from './logical-model-editor.component';
 import { logicalModelHelpLocale } from './logical-model-field-help.directive';
-import { FALLBACK_LOGICAL_MODEL } from './mapping-fallback';
+import { FALLBACK_LOGICAL_MODEL, FALLBACK_PHYSICAL_SNAPSHOT } from './mapping-fallback';
 import { ModelingAssistanceService, TermdatEntry } from './modeling-assistance.service';
 
 const REFERENCES:I14yConceptReference[]=[
@@ -22,6 +22,7 @@ describe('LogicalModelEditorComponent contracts',()=>{
   let download:ReturnType<typeof vi.fn>;
   let retire:ReturnType<typeof vi.fn>;
   let createLogicalModel:ReturnType<typeof vi.fn>;
+  let deriveLogicalModel:ReturnType<typeof vi.fn>;
   let searchTermdat:ReturnType<typeof vi.fn>;
   let scrollIntoView:ReturnType<typeof vi.fn>;
   let canPublish:ReturnType<typeof signal<boolean>>;
@@ -30,6 +31,7 @@ describe('LogicalModelEditorComponent contracts',()=>{
     download=vi.fn();
     retire=vi.fn();
     createLogicalModel=vi.fn(()=>of({body:FALLBACK_LOGICAL_MODEL,etag:'"1"'}));
+    deriveLogicalModel=vi.fn(()=>of({body:FALLBACK_LOGICAL_MODEL,etag:'"1"'}));
     searchTermdat=vi.fn(()=>of({items:[],total:0}));
     scrollIntoView=vi.fn();
     Object.defineProperty(HTMLElement.prototype,'scrollIntoView',{configurable:true,value:scrollIntoView});
@@ -42,7 +44,7 @@ describe('LogicalModelEditorComponent contracts',()=>{
         {provide:CatalogApiService,useValue:{domains:signal([{id:'11111111-1111-4111-8111-111111111111',urn:'urn:daca:domain:personal',originCatalogId:'catalog',revision:1,status:'active',preferredLabel:'Personal',definition:'',labels:[],ownerUserId:'christian.spider',ownerName:'Christian Spider',ownerOrganization:'Verteidigung',deputyOwnerUserId:'sibilla.micheli',deputyOwnerName:'Sibilla Micheli',deputyOwnerOrganization:'Verteidigung',productCount:0,termCount:0,updatedAt:''}]).asReadonly(),loadDomains:()=>of([]),refreshWorkflowTasks:vi.fn()}},
         {provide:I14yConceptsApiService,useValue:{search:()=>of({items:[],total:0}),load:vi.fn()}},
         {provide:ModelingAssistanceService,useValue:{organizations:()=>of([]),myScopes:()=>of([]),personas:()=>of([]),businessObjects:()=>of({items:[],total:0}),translate:()=>of({sourceTextHash:'source-hash',translations:{},retrievedAt:'2026-09-08T10:00:00Z',payloadHash:'payload-hash'}),searchTermdat}},
-        {provide:DataModelsApiService,useValue:{createLogicalModel,downloadLogicalModelExport:download,retireLogicalModel:retire,listLogicalModelVersions:()=>of([FALLBACK_LOGICAL_MODEL]),loadLogicalModelReadiness:()=>of({logicalModelId:FALLBACK_LOGICAL_MODEL.id,logicalModelVersionId:FALLBACK_LOGICAL_MODEL.versionId,datasetId:'dataset-1',dcatReady:true,i14yReady:false,dcatIssues:[],i14yIssues:['I14Y readiness requires a distribution or data service']})}},
+        {provide:DataModelsApiService,useValue:{createLogicalModel,deriveLogicalModel,listPhysicalSources:()=>of([{id:FALLBACK_PHYSICAL_SNAPSHOT.sourceId,revision:1,name:'HR PostgreSQL',connectorType:'postgresql',systemName:'PostgreSQL',databaseName:'hr_core',department:'VBS',office:'vbs-verteidigung',latestSnapshotId:FALLBACK_PHYSICAL_SNAPSHOT.id,latestSnapshotSequence:FALLBACK_PHYSICAL_SNAPSHOT.revision,latestSnapshot:null,catalogPath:'postgresql://hr_core/',ownerName:'Christian Man',updatedAt:'2026-09-05T07:20:00Z'}]),loadPhysicalSnapshot:()=>of(FALLBACK_PHYSICAL_SNAPSHOT),downloadLogicalModelExport:download,retireLogicalModel:retire,listLogicalModelVersions:()=>of([FALLBACK_LOGICAL_MODEL]),loadLogicalModelReadiness:()=>of({logicalModelId:FALLBACK_LOGICAL_MODEL.id,logicalModelVersionId:FALLBACK_LOGICAL_MODEL.versionId,datasetId:'dataset-1',dcatReady:true,i14yReady:false,dcatIssues:[],i14yIssues:['I14Y readiness requires a distribution or data service']})}},
       ],
     });
   });
@@ -63,20 +65,81 @@ describe('LogicalModelEditorComponent contracts',()=>{
   it('shows accessible semantic help on hover and keyboard focus',()=>{
     const fixture=TestBed.createComponent(LogicalModelEditorComponent);fixture.detectChanges();
     const host=(fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.termdat-title-field')!;
-    const trigger=host.querySelector<HTMLButtonElement>('.daca-field-help-trigger')!;
+    const trigger=host.querySelector<HTMLElement>('.daca-field-help-title')!;
     const tooltip=document.getElementById(trigger.getAttribute('aria-describedby')!)!;
     expect(tooltip.getAttribute('role')).toBe('tooltip');
-    expect(trigger.hidden).toBe(true);
-    host.dispatchEvent(new MouseEvent('mouseenter'));fixture.detectChanges();
-    expect(trigger.hidden).toBe(false);
     expect(tooltip.classList.contains('is-visible')).toBe(false);
     trigger.dispatchEvent(new MouseEvent('mouseenter'));fixture.detectChanges();
     expect(tooltip.classList.contains('is-visible')).toBe(true);
-    expect(tooltip.textContent).toContain('Name des beschriebenen Datensatzes');
-    trigger.dispatchEvent(new MouseEvent('mouseleave'));host.dispatchEvent(new MouseEvent('mouseleave'));trigger.focus();fixture.detectChanges();
+    expect(tooltip.textContent).toContain('Titel (Deutsch)');
+    expect(tooltip.textContent).toContain('Name des beschriebenen Modells');
+    expect(host.querySelector('.daca-field-help-trigger')).toBeNull();
+    expect(trigger.querySelector('input, select, textarea')).toBeNull();
+    trigger.dispatchEvent(new MouseEvent('mouseleave'));fixture.detectChanges();
+    expect(tooltip.classList.contains('is-visible')).toBe(false);
+    expect(tooltip.hidden).toBe(true);
+    expect(getComputedStyle(tooltip).display).toBe('none');
+    trigger.focus();fixture.detectChanges();
+    expect(tooltip.classList.contains('is-visible')).toBe(true);
+    document.body.dispatchEvent(new MouseEvent('mousemove',{bubbles:true}));fixture.detectChanges();
+    expect(tooltip.classList.contains('is-visible')).toBe(false);
+    trigger.blur();trigger.focus();fixture.detectChanges();
     expect(tooltip.classList.contains('is-visible')).toBe(true);
     trigger.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));fixture.detectChanges();
     expect(tooltip.classList.contains('is-visible')).toBe(false);
+  });
+
+  it('closes the previous field tooltip when another title is hovered',()=>{
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);fixture.detectChanges();
+    const triggers=[...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.daca-field-help-title')];
+    expect(triggers.length).toBeGreaterThan(1);
+    const firstTooltip=document.getElementById(triggers[0].getAttribute('aria-describedby')!)!;
+    const secondTooltip=document.getElementById(triggers[1].getAttribute('aria-describedby')!)!;
+    triggers[0].dispatchEvent(new MouseEvent('mouseenter'));fixture.detectChanges();
+    expect(firstTooltip.hidden).toBe(false);
+    triggers[1].dispatchEvent(new MouseEvent('mouseenter'));fixture.detectChanges();
+    expect(firstTooltip.hidden).toBe(true);
+    expect(getComputedStyle(firstTooltip).display).toBe('none');
+    expect(secondTooltip.hidden).toBe(false);
+    triggers[1].dispatchEvent(new MouseEvent('mouseleave'));fixture.detectChanges();
+    expect(secondTooltip.hidden).toBe(true);
+    expect(getComputedStyle(secondTooltip).display).toBe('none');
+  });
+
+  it('reuses the complete model and field characteristics form in embedded workspaces',()=>{
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);
+    fixture.componentRef.setInput('embedded',true);
+    fixture.detectChanges();
+    const root=fixture.nativeElement as HTMLElement;
+    expect(root.textContent).toContain('Modellebene');
+    expect(root.textContent).toContain('Model Merkmale');
+    expect(root.textContent).toContain('Logische Entitäten und Felder');
+    expect(root.querySelector('.daca-page-heading')).toBeNull();
+    expect(root.querySelector('input[formControlName="titleDe"]')).not.toBeNull();
+    expect(root.querySelector('input[formControlName="precision"]')).not.toBeNull();
+    expect(root.querySelector('input[formControlName="decimalPlaces"]')).not.toBeNull();
+    expect(root.querySelector('select[formControlName="nullable"]')).not.toBeNull();
+    expect(root.querySelector('input[formControlName="minCount"]')).not.toBeNull();
+    expect(root.querySelector('input[formControlName="maxCount"]')).not.toBeNull();
+  });
+
+  it('uses one selectable field table and a shared right-hand editor for add and remove',()=>{
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);fixture.detectChanges();
+    const component=fixture.componentInstance;const root=fixture.nativeElement as HTMLElement;
+    expect(root.querySelectorAll('.field-table tbody tr')).toHaveLength(1);
+    expect(root.querySelectorAll('daca-logical-field-characteristics')).toHaveLength(1);
+
+    [...root.querySelectorAll<HTMLButtonElement>('.structure-actions button')].find((button)=>button.textContent?.includes('Feld hinzufügen'))?.click();
+    fixture.detectChanges();
+    expect(component.fields.length).toBe(2);
+    expect(component.selectedFieldIndex()).toBe(1);
+    expect(root.querySelectorAll('.field-table tbody tr')).toHaveLength(2);
+
+    root.querySelectorAll<HTMLButtonElement>('.field-select')[0].click();fixture.detectChanges();
+    expect(component.selectedFieldIndex()).toBe(0);
+    root.querySelectorAll<HTMLButtonElement>('.remove-field')[1].click();fixture.detectChanges();
+    expect(component.fields.length).toBe(1);
+    expect(root.querySelectorAll('.field-table tbody tr')).toHaveLength(1);
   });
 
   it('keeps save actionable and lists every insufficient field directly below it',()=>{
@@ -129,6 +192,43 @@ describe('LogicalModelEditorComponent contracts',()=>{
     expect(write.fields[0].conceptIds).toEqual([]);
     expect(write.fields[0].primaryConceptId).toBeNull();
     expect(write.fields[0].valueListConceptId).toBeNull();
+  });
+
+  it('reloads a physical deep link into the full editor and preserves bindings across rename and removal',()=>{
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);
+    fixture.componentRef.setInput('physicalSnapshotId',FALLBACK_PHYSICAL_SNAPSHOT.id);
+    fixture.componentRef.setInput('physicalTableId',FALLBACK_PHYSICAL_SNAPSHOT.tables[0].id);
+    const router=TestBed.inject(Router);vi.spyOn(router,'navigate').mockResolvedValue(true);
+    fixture.detectChanges();TestBed.tick();fixture.detectChanges();
+    const component=fixture.componentInstance;
+
+    expect(component.derivedOrigin()?.table.id).toBe(FALLBACK_PHYSICAL_SNAPSHOT.tables[0].id);
+    expect(component.fields.length).toBe(FALLBACK_PHYSICAL_SNAPSHOT.tables[0].columns.length);
+    expect(component.fields.at(0).getRawValue()).toEqual(expect.objectContaining({
+      name:'org_unit_id',dataType:'uuid',nullable:false,minCount:1,maxCount:1,
+      physicalColumnId:'column-org-id',physicalColumnName:'org_unit_id',conceptMode:'unresolved',
+    }));
+    expect(component.validationIssues().some((issue)=>issue.field.includes('I14Y-Entscheid'))).toBe(true);
+
+    const removedColumnId=component.fields.at(1).controls.physicalColumnId.value;
+    component.removeField(1);
+    component.fields.at(0).controls.name.setValue('organisationseinheit_id');
+    component.form.controls.dataset.patchValue({
+      dataDomainId:'11111111-1111-4111-8111-111111111111',dataOwnerId:'christian.spider',creatorName:'HR-Core',
+    });
+    for(const field of component.fields.controls){
+      field.patchValue({entityBusinessObjectVersionId:'22222222-2222-4222-8222-222222222222',businessObjectVersionId:'33333333-3333-4333-8333-333333333333'});
+      component.setDerivedConceptMode(component.fields.controls.indexOf(field),'none');
+    }
+    component.save();
+
+    expect(deriveLogicalModel).toHaveBeenCalledOnce();
+    const request=deriveLogicalModel.mock.calls[0][1];
+    expect(request.fieldMappings).toHaveLength(FALLBACK_PHYSICAL_SNAPSHOT.tables[0].columns.length-1);
+    expect(request.fieldMappings[0]).toEqual({physicalColumnId:'column-org-id',entityName:'org_unit',logicalFieldName:'organisationseinheit_id'});
+    expect(request.fieldMappings.some((binding:{physicalColumnId:string})=>binding.physicalColumnId===removedColumnId)).toBe(false);
+    expect(request.logicalModel.fields.every((field:{conceptMatchExplicitlyNone?:boolean})=>field.conceptMatchExplicitlyNone)).toBe(true);
+    expect(router.navigate).toHaveBeenCalledWith(['/models',FALLBACK_LOGICAL_MODEL.id,'mappings'],{queryParams:{physicalSnapshotId:FALLBACK_PHYSICAL_SNAPSHOT.id,physicalTableId:FALLBACK_PHYSICAL_SNAPSHOT.tables[0].id}});
   });
 
   it('shows a clear duplicate-identifier problem, focuses the field, and retains safe support details',async()=>{

@@ -16,10 +16,10 @@ The catalog policy revision is projected into this database by product ID and re
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/sample-data-product/app/models.py`](../../services/sample-data-product/app/models.py)
-- Alembic head: `0003_weekly_availability`
-- Schema fingerprint: `67830d4b629f4cae`
-- Migration fingerprint: `938d480b00000576`
-- Tables: `3`
+- Alembic head: `0004_vibdbu_buildings`
+- Schema fingerprint: `3800af603f66e702`
+- Migration fingerprint: `62c6765d78832f77`
+- Tables: `4`
 
 ## Domain status vocabulary
 
@@ -35,6 +35,55 @@ The catalog policy revision is projected into this database by product ID and re
 
 ```mermaid
 erDiagram
+    VIBDBU {
+        string SGENR PK
+        string SWENR
+        string AUTHGRP
+        string BUKRS
+        string GEMEINDE
+        string RGEBART
+        string RGEBZUST
+        date VALIDFROM
+        date VALIDTO
+        string XGETXT
+        date YBAUJAHR
+        string ZZACTANOVA_ID
+        string ZZAGFA_NR
+        numeric ZZBASISJAHR
+        string ZZBAUWERKSICH
+        string ZZBIC_NUMMER
+        date ZZBRANDSCHUTZ_AUDIT_DAT
+        string ZZBRANDSCHUTZ_KATEGORIE
+        string ZZBRANDSCHUTZ_ZUSTAND
+        string ZZDATENBANK
+        date ZZDB_MUTIERT_AM
+        string ZZEGID
+        string ZZEIGENTUMSART
+        date ZZGEBZUST_ERFASST_AM
+        string ZZINDEXREIHE
+        string ZZKOMZ
+        numeric ZZKOORDX
+        numeric ZZKOORDX_ZUSATZ
+        numeric ZZKOORDY
+        numeric ZZKOORDY_ZUSATZ
+        numeric ZZKOORDZ
+        numeric ZZKOORDZ_ZUSATZ
+        date ZZKUEND_AKZEPT_DATUM
+        date ZZKUEND_DATUM
+        numeric ZZKUEND_PROZESS_JAHR
+        string ZZKUEND_REFERENZ_ID
+        date ZZKUEND_RUECKN_DATUM
+        string ZZLANDERWERB
+        string ZZLUFTREIN
+        string ZZMULTIEGID
+        string ZZOBJ_ART
+        string ZZOBJ_SUBART
+        string ZZSCHUTZRAUMTECH
+        date ZZSCHUTZRAUMTECHDAT
+        string ZZSCHUTZZONE
+        string ZZZERTIFIKAT
+        date ZZZERTIFIKATDAT
+    }
     policy_deployments {
         uuid product_id PK
         bigint revision
@@ -70,6 +119,64 @@ erDiagram
 Relationships in this diagram are physical foreign keys inside this database only.
 
 ## Table reference
+
+### `VIBDBU`
+
+Synthetic SAP building master used for physical metadata browsing and logical-model derivation.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `SGENR` | `VARCHAR(8)` | no | PK | — |
+| `SWENR` | `VARCHAR(8)` | no | — | — |
+| `AUTHGRP` | `VARCHAR(40)` | yes | — | — |
+| `BUKRS` | `VARCHAR(4)` | no | — | — |
+| `GEMEINDE` | `VARCHAR(8)` | no | — | — |
+| `RGEBART` | `VARCHAR(2)` | no | — | — |
+| `RGEBZUST` | `VARCHAR(2)` | no | — | — |
+| `VALIDFROM` | `DATE` | no | — | — |
+| `VALIDTO` | `DATE` | yes | — | — |
+| `XGETXT` | `VARCHAR(60)` | no | — | — |
+| `YBAUJAHR` | `DATE` | yes | — | — |
+| `ZZACTANOVA_ID` | `VARCHAR(36)` | yes | — | — |
+| `ZZAGFA_NR` | `VARCHAR(25)` | yes | — | — |
+| `ZZBASISJAHR` | `NUMERIC(4, 0)` | yes | — | — |
+| `ZZBAUWERKSICH` | `VARCHAR(1)` | yes | — | — |
+| `ZZBIC_NUMMER` | `VARCHAR(20)` | yes | — | — |
+| `ZZBRANDSCHUTZ_AUDIT_DAT` | `DATE` | yes | — | — |
+| `ZZBRANDSCHUTZ_KATEGORIE` | `VARCHAR(2)` | yes | — | — |
+| `ZZBRANDSCHUTZ_ZUSTAND` | `VARCHAR(1)` | yes | — | — |
+| `ZZDATENBANK` | `VARCHAR(1)` | yes | — | — |
+| `ZZDB_MUTIERT_AM` | `DATE` | yes | — | — |
+| `ZZEGID` | `VARCHAR(100)` | yes | — | — |
+| `ZZEIGENTUMSART` | `VARCHAR(1)` | yes | — | — |
+| `ZZGEBZUST_ERFASST_AM` | `DATE` | yes | — | — |
+| `ZZINDEXREIHE` | `VARCHAR(5)` | yes | — | — |
+| `ZZKOMZ` | `VARCHAR(1)` | yes | — | — |
+| `ZZKOORDX` | `NUMERIC(7, 0)` | yes | — | — |
+| `ZZKOORDX_ZUSATZ` | `NUMERIC(7, 0)` | yes | — | — |
+| `ZZKOORDY` | `NUMERIC(7, 0)` | yes | — | — |
+| `ZZKOORDY_ZUSATZ` | `NUMERIC(7, 0)` | yes | — | — |
+| `ZZKOORDZ` | `NUMERIC(4, 0)` | yes | — | — |
+| `ZZKOORDZ_ZUSATZ` | `NUMERIC(4, 0)` | yes | — | — |
+| `ZZKUEND_AKZEPT_DATUM` | `DATE` | yes | — | — |
+| `ZZKUEND_DATUM` | `DATE` | yes | — | — |
+| `ZZKUEND_PROZESS_JAHR` | `NUMERIC(4, 0)` | yes | — | — |
+| `ZZKUEND_REFERENZ_ID` | `VARCHAR(10)` | yes | — | — |
+| `ZZKUEND_RUECKN_DATUM` | `DATE` | yes | — | — |
+| `ZZLANDERWERB` | `VARCHAR(50)` | yes | — | — |
+| `ZZLUFTREIN` | `VARCHAR(1)` | yes | — | — |
+| `ZZMULTIEGID` | `VARCHAR(1)` | yes | — | — |
+| `ZZOBJ_ART` | `VARCHAR(10)` | yes | — | — |
+| `ZZOBJ_SUBART` | `VARCHAR(8)` | yes | — | — |
+| `ZZSCHUTZRAUMTECH` | `VARCHAR(1)` | yes | — | — |
+| `ZZSCHUTZRAUMTECHDAT` | `DATE` | yes | — | — |
+| `ZZSCHUTZZONE` | `VARCHAR(2)` | yes | — | — |
+| `ZZZERTIFIKAT` | `VARCHAR(2)` | yes | — | — |
+| `ZZZERTIFIKATDAT` | `DATE` | yes | — | — |
+
+Constraints and indexes:
+
+- No additional constraints or explicit indexes.
 
 ### `policy_deployments`
 

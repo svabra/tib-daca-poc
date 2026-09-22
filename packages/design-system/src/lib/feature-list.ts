@@ -40,20 +40,24 @@ export const DACA_FEATURE_RELEASE = {
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
           {
+            title: 'Rollen im Demo-Benutzerkontext erleben',
+            description: 'Der Demo-Benutzerwechsel umfasst auch Giuseppe Starwars als Data Owner und Thomas Wikinger als Data Steward von armasuisse. Damit lassen sich die beiden Rollen im VBS-Modellierungsscope sichtbar nachvollziehen.',
+          },
+          {
             title: 'Logische Datenmodelle verständlich erfassen',
-            description: 'Data Stewards speichern mehrere unabhängige, mehrsprachige Modelle als Entwurf in PostgreSQL. Kontextuelle Feldhilfen erklären die Semantik in Deutsch, Französisch oder Italienisch; eindeutige Identifier, konkrete Fehlerlisten und rote Feldmarkierungen unterstützen die Korrektur. I14Y-Concepts bleiben optional.',
+            description: 'Data Stewards speichern mehrere unabhängige, mehrsprachige Modelle als Entwurf in PostgreSQL. Die Modellübersicht zeigt den Änderungszeitpunkt mit Datum und Uhrzeit. Felder werden in einer kompakten Tabelle hinzugefügt, entfernt und ausgewählt; sämtliche Merkmale erscheinen im gemeinsamen Editor rechts. Derselbe Editor bleibt neben Graph oder Mapping-Tabelle sichtbar. Kontextuelle Hilfe erscheint ohne Info-Icon direkt über dem fokussierten oder berührten Feldtitel, schliesst beim Verlassen und ist immer nur einmal sichtbar. I14Y-Concepts bleiben optional.',
           },
           {
             title: 'Entwürfe gezielt zur Domänenfreigabe einreichen',
             description: 'Speichern und Einreichen sind bewusst getrennt. Die gewählte Domäne bestimmt den primären Domain Owner und die sichtbare Stellvertretung. Erst das Einreichen erzeugt einen persönlichen Prüfauftrag mit unveränderlichem Snapshot; nur der primäre Owner kann publizieren oder mit Begründung Änderungen verlangen.',
           },
           {
-            title: 'Physische Modelle aus PostgreSQL und S3 verstehen',
-            description: 'Durchsuchbare Metadaten-Snapshots zeigen PostgreSQL-Tabellen und -Views sowie Parquet-Strukturen aus S3, ohne Dateninhalte oder Zugangsdaten offenzulegen. Neue Snapshots machen technische Änderungen und mögliche Umbenennungen als Drift sichtbar.',
+            title: 'Bestehende Datenquellen wie in DAAIF erkunden',
+            description: '«Datenquellen» ist ein eigener Hauptmenüpunkt. Jede aktive Verbindungskarte steht für genau eine Systeminstanz pro Katalogpfad; mehrere PostgreSQL-, S3- oder künftige Oracle-Instanzen bleiben getrennt. Freitext, Typ und Owner filtern das Register; die aktive VIBDBU-Demoquelle kann erneut importiert werden. Die Karten führen in den Datenbank-/Schema-/Tabellenbaum mit denselben Server-, PostgreSQL-, Datenbank-, Schema-, Tabellen- und View-Icons wie DAAIF. Ein Modell-Icon vor dem «…»-Kontextmenü markiert Tabellen mit einer logischen Verknüpfung und erklärt sie per Tooltip unabhängig vom Status; beim Verlassen des Icons schliesst der Tooltip sofort. Bei einer Verknüpfung öffnet «Referenziertes logisches Modell öffnen» den Mapping-Arbeitsplatz mit Tabelle und Snapshot vorausgewählt. Das Kontextmenü einer Tabelle leitet ein vollständig editierbares logisches Modell direkt ab; die VIBDBU-Demoquelle liefert dafür 47 kommentierte Felder.',
           },
           {
             title: 'Logische und physische Modelle verbinden',
-            description: 'Der Mapping-Arbeitsplatz verbindet logische Felder mit konkreten PostgreSQL- oder S3-/Parquet-Strukturen. Graph und Matrix teilen denselben Entwurf; Validierung, Mehrfachzuordnungen, Driftbruch und die Auflösung gegen einen neuen Snapshot bleiben versioniert nachvollziehbar.',
+            description: 'Logical-first und Physical-first bleiben getrennte Einstiege. Die direkte Tabellenableitung erzeugt Modell und exakte 1:1-Mapping-Entwürfe atomar und öffnet sofort den Mapping-Arbeitsplatz; weitere versionierte Repräsentationen werden dort ergänzt. Die Snapshot-Karte im Graphen zeigt das Datenquellen-Icon, Data Ownerin, vollständigen Katalogpfad und gepinnte Revision. Die Kanten messen die gerenderten Anschlussknoten und bleiben bei variabler Kartenhöhe verbunden. Die Kante liest sich logisch zu physisch als «wird repräsentiert durch».',
           },
           {
             title: 'Domänen und Terminology gemeinsam steuern',
@@ -62,6 +66,10 @@ export const DACA_FEATURE_RELEASE = {
           {
             title: 'Oracle-Datenquellen kontrolliert erschliessen',
             description: 'Ein auffindbarer Quellenkatalog, vertrauenswürdige Gruppen, unveränderliche Gruppensnapshots und direkte Owner-Entscheide steuern den neuen DAAIF-Sourcing-PoC.',
+          },
+          {
+            title: 'DAAIF-Quellen fachlich einordnen',
+            description: 'Die Data-Analyst-Journey trennt DAAIF-Strukturmetadaten und DaCa-Semantik konsequent. Nur ein validiertes, nicht durch Drift gebrochenes Mapping darf Analysekontext begründen.',
           },
           {
             title: 'Neue Versionen ohne F5 übernehmen',
@@ -115,6 +123,10 @@ export const DACA_FEATURE_RELEASE = {
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
           {
+            title: 'Explore roles in the demo-user context',
+            description: 'The demo-user selector includes Giuseppe Starwars as the armasuisse Data Owner and Thomas Wikinger as its Data Steward, making both roles visible in the VBS modelling scope.',
+          },
+          {
             title: 'Capture logical data models with clear guidance',
             description: 'Data stewards persist multiple independent multilingual models as PostgreSQL drafts. Contextual field help explains semantics in German, French or Italian; unique identifiers, concrete error lists and red field highlights guide corrections. I14Y Concepts remain optional.',
           },
@@ -123,12 +135,12 @@ export const DACA_FEATURE_RELEASE = {
             description: 'Saving and submission are deliberately separate. The selected domain determines the primary domain owner and visible deputy. Only submission creates a personal review task with an immutable snapshot; only the primary owner can publish or request changes with a reason.',
           },
           {
-            title: 'Understand physical models from PostgreSQL and S3',
-            description: 'Searchable metadata snapshots expose PostgreSQL tables and views as well as Parquet structures from S3 without revealing data contents or credentials. New snapshots make technical changes and possible renames visible as drift.',
+            title: 'Explore existing data sources like DAAIF',
+            description: 'Active connection cards lead into the DAAIF-style database/schema/table tree. A table context menu derives a logical model directly; the VIBDBU demo exposes 47 commented fields while its 1,000 synthetic building rows and credentials never leave PostgreSQL.',
           },
           {
             title: 'Connect logical and physical models',
-            description: 'The mapping workspace connects logical fields to specific PostgreSQL or S3/Parquet structures. Graph and matrix share one draft; validation, multi-mappings, drift breakage and resolution against a new snapshot remain versioned and traceable.',
+            description: 'Logical-first and physical-first remain separate entry points. Direct table derivation atomically creates the model and exact 1:1 mapping drafts, then opens the mapping workspace; further versioned representations are added there. The logical-to-physical edge reads “is represented by”.',
           },
           {
             title: 'Govern domains and terminology together',
@@ -137,6 +149,10 @@ export const DACA_FEATURE_RELEASE = {
           {
             title: 'Govern access to Oracle data sources',
             description: 'A discoverable source catalog, trusted groups, immutable group snapshots and direct owner decisions govern the new DAAIF sourcing proof of concept.',
+          },
+          {
+            title: 'Put DAAIF sources into business context',
+            description: 'The Data Analyst journey keeps DAAIF structural metadata and DaCa semantics separate. Only a validated, non-drifted mapping may establish analytical business context.',
           },
           {
             title: 'Apply new versions without F5',

@@ -168,22 +168,84 @@ container logs and a SHA-qualified result summary, then removes every journey co
 volume. Run it locally with `npm run journey:data-analyst`; the official GitHub workflow is a
 manual `workflow_dispatch` on `main` only.
 
+## DAAIF physical objects and DaCa logical models
+
+DAAIF remains the technical workbench for acquired sources and exposes only metadata that is safe
+to browse. DaCa remains the system of record for logical models, field revisions, physical
+snapshots, mappings, drift and their governance. The shared Data Analyst journey therefore passes
+only a version-pinned reference: DAAIF physical object ID/path, DaCa logical-model URN, model and
+mapping revision, status, and a UI deep link. No cross-database foreign key, source credential,
+table row, object content or view definition crosses the boundary. A `draft`, `broken` or
+`superseded` mapping must not establish analytical business context.
+
+The existing DaCa Journey 02 links to DAAIF's closed-by-default source explorer; DAAIF's
+**Education & Documentation → User Journeys** links back to the DaCa model and mapping workspace.
+
 ## Work with logical models and I14Y Concepts
 
-`Datenmodelle` is independent of `Meine Datenprodukte`. It supports logical-first authoring,
-PostgreSQL- and S3/Parquet-metadata-first derivation, versioned logical-to-physical mappings, and
-schema drift. A physical model is a mapping-capable table/view or Parquet structure imported from
-a data source. The deterministic fixture source contains
+`Datenmodelle` is independent of `Meine Datenprodukte`. `Neues logisches Modell` asks whether to
+start with an empty logical form or from an existing data source; the adjacent action is therefore
+named `Bestehende Datenquellen`. The DAAIF-aligned first level presents active connection cards.
+One card represents one technical system instance: active registrations with the same catalog path
+are consolidated, while distinct PostgreSQL, S3, or future Oracle instances remain separate.
+The register can be narrowed by free text across instance name, catalog path and owner, or by
+source type and owner. The VIBDBU PostgreSQL demo source is seeded active and can be imported
+again whenever a fresh structural snapshot is required.
+Opening a source reveals its database/schema/table tree, complete field metadata and a table
+context menu. `Logisches Modell ableiten` creates the technical draft and its pinned exact 1:1
+mappings atomically and opens the mapping workspace directly. When a table is already referenced,
+`Referenziertes logisches Modell öffnen` is enabled and opens that model's mapping workspace with
+the precise snapshot and table selected. Product publication and DAAIF investigation remain visibly
+disabled.
+Tables with an existing logical-model mapping show a dedicated model icon before the compact `…`
+action control; its tooltip confirms the link independently of its mapping status.
+It closes immediately when the pointer leaves the icon.
+The model overview displays each change timestamp with both date and local time.
+The physical snapshot card in the mapping graph identifies the scope's Data Owner, displays its
+data-source-type icon, and shows the full canonical catalog path alongside its pinned revision.
+Mapping edges are measured from the rendered connector centres, so they remain attached when the
+snapshot card grows with additional metadata.
+`Datenquellen` is a first-level navigation item between `Meine Datenprodukte` and
+`Domäne und Terminology`; the explorer uses the same server, PostgreSQL, database, schema, table
+and view icons as the DAAIF source tree.
+
+The direct physical-first action uses an unambiguous, already governed domain in the source scope;
+it never infers a domain from technical names. Its fields record an explicit provisional no-match
+for I14Y and remain editable before review. A model can subsequently link any number of versioned physical representations from
+the mapping workspace. Exact name-and-type pairs are reviewable suggestions, while conflicts,
+ambiguities, fuzzy matches, M:N mappings, and transformations remain manual. A physical model is
+a mapping-capable table/view or Parquet structure imported from a data source. The deterministic fixture source contains
 `logistics.vehicle_inventory` and `hr_core.public.org_unit`; a real connector reads only
 `information_schema` and `pg_catalog` when its server-side secret is configured. No database
 credentials or data rows are accepted by the browser or modelling APIs.
+
+The conventional editor and the mapping workspace share one Angular field-characteristics
+component. Logical-first presents the fields as a compact selectable table with add/remove actions;
+the alternative `Relation` view contrasts each logical field with its physical binding. Selecting
+a row opens every field characteristic in the persistent editor on the right. The mapping workspace
+uses the same editor beside its graph or mapping table, so editing type, length, cardinality,
+classification, descriptions and I14Y links no longer interrupts mapping work. Physical-first
+prefills every technically justified value from the pinned snapshot while business semantics remain
+explicit user decisions. The model-level section remains `Model Merkmale` on `Modellebene`. Context help has no separate information icon:
+hovering or focusing the field title opens the tooltip above it and repeats the covered title; it
+closes as soon as the pointer leaves that title. Opening another field help first closes the
+previous tooltip, so contextual explanations never accumulate over the mapping workspace.
+
+The sample PostgreSQL database contains quoted table `VIBDBU`: all 47 fields from
+`tests/VIBDBU.csv`, column comments, and exactly 1'000 deterministic, semantically plausible Swiss
+building records. Its released migration creates those rows in every environment. The catalog seed
+also persists the matching credential-free structural snapshot, so `SAP VIBDBU Gebäudebestand` is
+immediately browseable after a deployment: open it as Mirjam Keller, select
+`daca_sample.public.VIBDBU`, open the table context menu and derive the logical model directly into
+the mapping workspace. Only structure and comments are copied into the catalog snapshot; rows
+remain in the sample database.
 
 The S3 adapter lists configured objects and reads only embedded Parquet schemas. It can point at
 the same S3-compatible store as DAAIF without making DAAIF a runtime dependency. Configure
 `DACA_PHYSICAL_S3_ENDPOINT_URL`, `DACA_PHYSICAL_S3_BUCKET`, `DACA_PHYSICAL_S3_PREFIX`,
 `DACA_PHYSICAL_S3_ACCESS_KEY_ID`, and `DACA_PHYSICAL_S3_SECRET_ACCESS_KEY` on the Catalog API.
 For the local MinIO fixture, write the deterministic Parquet object with
-`uv run --project services/catalog-api daca-s3-fixture-seed`. Searches under **Physische Modelle**
+`uv run --project services/catalog-api daca-s3-fixture-seed`. Searches under **Bestehende Datenquellen**
 run solely against the already imported catalog metadata in PostgreSQL.
 
 The federal modeling scope is imported from a checked, hashed Staatskalender snapshot. The
@@ -209,6 +271,8 @@ Journey 10 uses Mirjam Keller (Data Steward, armasuisse Immobilien), Daniel Weng
 of the `Immobilienmanagement VBS` domain) and Eliane Rossi (delegated deputy). Submission creates
 an immutable review snapshot and owner task; acceptance publishes immediately, while rejection
 requires a comment and creates a `changes_requested` successor for the submitting steward.
+The demo-user selector also includes Giuseppe Starwars (Data Owner) and Thomas Wikinger (Data
+Steward) in the parent organization armasuisse.
 
 ### Logical-model form, identifiers, and save errors
 

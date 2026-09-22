@@ -1,19 +1,20 @@
-import { afterNextRender, ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, Injector, input, signal, viewChild } from '@angular/core';
+import { afterNextRender, ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, Injector, input, output, signal, viewChild } from '@angular/core';
 import { AbstractControl, FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { debounceTime, distinctUntilChanged, finalize, take } from 'rxjs';
+import { debounceTime, distinctUntilChanged, finalize, forkJoin, take } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService, ModelingPersona } from '../../core/demo-identity.service';
 import { I14yConceptsApiService } from '../domains/i14y-concepts-api.service';
 import { I14yConcept } from '../domains/i14y-concepts.models';
 import { DataModelWorkspaceNavComponent } from './data-model-workspace-nav.component';
 import { DataModelsApiService, LogicalModelExportFile, LogicalModelExportRepresentation, ModelingApiError } from './data-models-api.service';
-import { CreatorType, DataClassification, LogicalEntity, LogicalEntityWrite, LogicalField, LogicalFieldWrite, LogicalModel, LogicalModelAssistanceProvenance, LogicalModelCreator, LogicalModelWrite } from './data-models.models';
+import { CreatorType, DataClassification, LogicalEntity, LogicalEntityWrite, LogicalField, LogicalFieldWrite, LogicalModel, LogicalModelAssistanceProvenance, LogicalModelCreator, LogicalModelWrite, PhysicalSnapshot, PhysicalSource, PhysicalTable } from './data-models.models';
 import { DatasetSummaryComponent } from './dataset-summary.component';
 import { LogicalModelGovernanceComponent } from './logical-model-governance.component';
 import { BusinessObjectTerm, FederalOrganization, ModelingAssistanceService, ModelingScope, TermdatEntry } from './modeling-assistance.service';
 import { WorkContextComponent } from './work-context.component';
 import { LogicalModelFieldHelpDirective } from './logical-model-field-help.directive';
+import { LogicalFieldCharacteristicsComponent } from './logical-field-characteristics.component';
 
 export interface FieldConceptSelection {
   conceptIds: string[];
@@ -46,25 +47,40 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
 
 @Component({
   selector: 'daca-logical-model-editor', standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, DataModelWorkspaceNavComponent, DatasetSummaryComponent, LogicalModelGovernanceComponent, WorkContextComponent, LogicalModelFieldHelpDirective],
+  imports: [ReactiveFormsModule, RouterLink, DataModelWorkspaceNavComponent, DatasetSummaryComponent, LogicalModelGovernanceComponent, WorkContextComponent, LogicalModelFieldHelpDirective, LogicalFieldCharacteristicsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (!embedded()) {
     @if (model(); as current) { <daca-data-model-workspace-nav [modelId]="current.id" [modelTitle]="current.title.de" activeSection="model" /> }
     <section class="daca-page-heading model-editor-heading">
-      <div><p class="daca-eyebrow">{{ model() ? 'Logisches Datenmodell' : 'Neues logisches Datenmodell' }}</p><h1>{{ model()?.title?.de || 'Modell erfassen' }}</h1><p>Datensatzattribute und SHACL-Feldattribute bleiben getrennt. Eine physische Quelle ist nicht erforderlich.</p></div>
+      <div><p class="daca-eyebrow">{{ model() ? 'Logisches Datenmodell' : 'Neues logisches Datenmodell' }}</p><h1>{{ model()?.title?.de || 'Modell erfassen' }}</h1><p>Modellmerkmale und SHACL-Feldmerkmale bleiben getrennt. Eine physische Quelle ist nicht erforderlich.</p></div>
       <div class="heading-tools"><label class="classification-hero" dacaFieldHelp="classification">Klassifizierung<select [formControl]="form.controls.dataset.controls.classification"><option value="unclassified">Nicht klassifiziert</option><option value="internal">Intern</option><option value="confidential">Vertraulich</option><option value="secret" disabled>Geheim</option></select></label><daca-work-context [user]="identity.user()" /></div>
     </section>
-    @if (sourceSnapshotId()) { <p class="daca-alert">Dieser Entwurf wurde aus dem physischen Snapshot <code>{{ sourceSnapshotId() }}</code> vorbereitet. Alle Vorschlagswerte bleiben editierbar.</p> }
+    @if (derivedOrigin(); as origin) {
+      <aside class="daca-card derived-origin" aria-label="Herkunft der Ableitung">
+        <div><p class="daca-eyebrow">Physical-first</p><h2>Aus physischer Repräsentation vorbereitet</h2><p>Alle fachlichen Angaben bleiben editierbar. Umbenannte Felder behalten ihre physische Bindung; entfernte Felder werden nicht gemappt.</p></div>
+        <dl><div><dt>Quelle</dt><dd>{{ origin.source.name }}</dd></div><div><dt>Objekt</dt><dd><code>{{ origin.snapshot.databaseName }}.{{ origin.table.schemaName }}.{{ origin.table.name }}</code></dd></div><div><dt>Snapshot</dt><dd>{{ origin.snapshot.revision }} · <code>{{ origin.snapshot.id }}</code></dd></div></dl>
+      </aside>
+    } @else if (sourceSnapshotId()) { <p class="daca-alert">Dieser Entwurf wurde aus dem physischen Snapshot <code>{{ sourceSnapshotId() }}</code> vorbereitet. Alle Vorschlagswerte bleiben editierbar.</p> }
     @if (model(); as current) { <daca-dataset-summary [model]="current" /><daca-logical-model-governance [model]="current" /> }
+    }
     @if (notice()) { <p class="daca-alert is-success" role="status">{{ notice() }}</p> }
     @if (error()) { <p class="daca-alert is-error" role="alert">{{ error() }}</p> }
     @if (assistanceNotice()) { <p class="assistance-notice" role="status">{{ assistanceNotice() }}</p> }
     @if (termdatOpen()) { <div class="modal-backdrop" (click)="closeTermdat()"><section class="termdat-modal" role="dialog" aria-modal="true" aria-labelledby="termdat-title" (click)="$event.stopPropagation()"><header><div><p class="daca-eyebrow">Bundeskanzlei</p><h2 id="termdat-title">In TERMDAT suchen</h2></div><button type="button" aria-label="Dialog schliessen" (click)="closeTermdat()">×</button></header><p>Treffer für «{{ form.controls.dataset.controls.titleDe.value }}»</p>@if(termdatLoading()){<p class="termdat-loading"><span class="termdat-spinner" aria-hidden="true"></span><span>TERMDAT wird abgefragt …</span></p>}@else{<ul>@for(entry of termdatResults();track entry.entryId){<li><div><strong>{{ entry.preferredTerm }}</strong><span>{{ entry.definition || 'Keine Beschreibung verfügbar' }}</span><small>{{ descriptionLabel(entry) }} · {{ entry.collection }} · {{ entry.status }} · {{ entry.reliability }}</small></div><div class="termdat-result-actions"><button class="daca-button" type="button" [disabled]="!entry.definition" (click)="useTermdat(entry,'both')">Titel und Beschreibung übernehmen</button><button class="daca-button is-secondary" type="button" (click)="useTermdat(entry,'title')">Nur Titel übernehmen</button><button class="daca-button is-secondary" type="button" [disabled]="!entry.definition" (click)="useTermdat(entry,'definition')">{{ entry.definition ? 'Nur Beschreibung übernehmen' : 'Keine Beschreibung verfügbar' }}</button></div></li>}@empty{<li>Keine öffentlich publizierten TERMDAT-Einträge gefunden.</li>}</ul>}@if(termdatSelection();as selection){<aside #termdatAdoption class="termdat-adoption" tabindex="-1" aria-labelledby="termdat-adoption-title"><p class="daca-eyebrow">Übernahme prüfen</p><h3 id="termdat-adoption-title">Welche Angaben werden geändert?</h3>@if(termdatSelectionReplacesExisting(selection)){<p class="termdat-overwrite-warning" role="alert"><strong>Bestehende Inhalte vorhanden.</strong> Die bestätigten Felder werden durch die TERMDAT-Werte überschrieben.</p>}@for(target of selection.targets;track target){<div class="termdat-adoption-row"><strong>{{ termdatTargetLabel(target) }}</strong><span><small>Aktuell</small>{{ termdatCurrentValue(target) || 'Noch nicht erfasst' }}</span><span><small>Aus TERMDAT</small>{{ termdatIncomingValue(selection.entry,target) }}</span><em>{{ termdatCurrentValue(target) ? 'Wird überschrieben' : 'Wird ergänzt' }}</em></div>}<div class="termdat-adoption-actions"><button class="daca-button is-secondary" type="button" (click)="cancelTermdatSelection()">Abbrechen</button><button class="daca-button" type="button" (click)="confirmTermdatSelection()">{{ termdatSelectionReplacesExisting(selection) ? 'Bestehende Werte überschreiben' : 'Werte übernehmen' }}</button></div></aside>}<footer><button class="daca-button is-secondary" type="button" (click)="closeTermdat()">Schliessen</button></footer></section></div>}
     @if (loading()) { <div class="daca-card editor-state" aria-live="polite">Modell wird geladen …</div> }
     @if (!loading()) {
-      <form [formGroup]="form" (ngSubmit)="save()" class="model-editor-form" [class.validation-attempted]="validationAttempted()">
+      @if (fieldPanelOnly()) {
+        <form [formGroup]="form" (ngSubmit)="save(true)" class="field-panel-form" [class.validation-attempted]="validationAttempted()">
+          @if (fields.at(selectedFieldIndex()); as selectedField) {
+            <daca-logical-field-characteristics [field]="selectedField" [businessObjects]="businessObjects()" [concepts]="concepts()" [conceptReferences]="fieldConceptReferences()" [compact]="true" />
+          }
+          <footer class="field-panel-actions"><span>{{ form.dirty ? 'Ungespeicherte Änderungen' : 'Alle Änderungen gespeichert' }}</span><button class="daca-button" type="submit" [disabled]="saving() || !form.dirty || !canEditCurrentModel()">{{ saving() ? 'Wird gespeichert …' : 'Feldmerkmale speichern' }}</button></footer>
+        </form>
+      } @else {
+      <form [formGroup]="form" (ngSubmit)="save()" class="model-editor-form" [class.is-embedded]="embedded()" [class.validation-attempted]="validationAttempted()">
         <section class="daca-card editor-section" formGroupName="dataset">
-          <header><div><span>01</span><div><p class="daca-eyebrow">Datensatzebene</p><h2>Datensatz- und Tabellenattribute</h2></div></div><small>DCAT-AP-CH und organisatorischer Kontext</small></header>
+          <header><div><span>02</span><div><p class="daca-eyebrow">Modellebene</p><h2>Model Merkmale</h2></div></div><small>DCAT-AP-CH und organisatorischer Kontext</small></header>
           <div class="editor-grid">
             <div class="is-wide termdat-title-field" dacaFieldHelp="titleDe"><label for="logical-model-title-de">Titel (Deutsch) *</label><div class="termdat-input-group"><input id="logical-model-title-de" formControlName="titleDe" (input)="resetTermdatSearch()" (blur)="assistTitle()"><button type="button" (click)="openTermdat()">In TERMDAT suchen</button></div></div>
             @if(termdatSearching() || termdatCount() !== null || termdatFeedback()){<div class="termdat-feedback is-wide" [class.has-hits]="(termdatCount() ?? 0) > 0" role="status" aria-live="polite">@if(termdatSearching()){<span class="termdat-loading"><span class="termdat-spinner" aria-hidden="true"></span><span>TERMDAT wird nach Verlassen des Titelfelds automatisch durchsucht …</span></span>}@else if((termdatCount() ?? 0) > 0){<strong>{{ termdatCount() }} öffentlich publizierte TERMDAT-Treffer gefunden.</strong><button type="button" (click)="openTermdat()">Treffer anzeigen</button>}@else{<span>{{ termdatFeedback() || 'Keine öffentlich publizierten TERMDAT-Treffer gefunden.' }}</span>}</div>}
@@ -76,6 +92,7 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
             <label dacaFieldHelp="division">Abteilung / Bereich<select formControlName="division" (change)="scopeChanged()"><option value="">Keine</option>@for(org of divisions();track org.id){<option [value]="org.id" [disabled]="!canNavigateOrganization(org)">{{ org.displayName }}</option>}</select></label>
             <label class="is-wide identifier-field" dacaFieldHelp="identifiers">Identifier *<span class="identifier-mode-control"><button type="button" class="identifier-mode-switch" role="switch" [attr.aria-checked]="form.controls.dataset.controls.identifierMode.value" aria-label="Organisations-abgeleiteten Identifier umschalten" (click)="toggleIdentifierMode()"><span class="identifier-mode-switch-thumb" aria-hidden="true"></span></button><span>Organisations-abgeleiteter Identifier</span></span><span class="identifier-input" [class.is-derived]="form.controls.dataset.controls.identifierMode.value">@if(form.controls.dataset.controls.identifierMode.value){<span class="identifier-prefix">{{ organizationIdentifierPrefix() }}</span>}<input formControlName="identifiers" (input)="identifierChanged()" placeholder="Eindeutiger Identifier ohne Leerzeichen"></span><small>@if(identifierAvailability()==='checking'){Identifier wird geprüft …}@else if(identifierAvailability()==='available'){Identifier ist katalogweit verfügbar.}@else if(identifierAvailability()==='taken'){Dieser Identifier ist bereits vergeben.}@else{Ein Identifier ist genau ein String ohne Leerzeichen.}</small></label>
             <label dacaFieldHelp="dataDomainId">DaCa-Domäne * <a class="new-domain-link" routerLink="/domains" target="_blank" title="Öffnet die Domain-Registrierung in einem neuen Tab">Neue Domäne erstellen</a><select formControlName="dataDomainId" (change)="domainChanged()"><option value="">Bitte wählen</option>@for(domain of catalogApi.domains();track domain.id){<option [value]="domain.id">{{ domain.preferredLabel }}</option>}</select></label>
+            <label dacaFieldHelp="classification">Klassifizierung<select formControlName="classification"><option value="unclassified">Nicht klassifiziert</option><option value="internal">Intern</option><option value="confidential">Vertraulich</option><option value="secret">Geheim</option></select></label>
             <div class="role-assignment"><strong>Data Steward (Organisation)</strong><span>{{ organizationStewards() || 'Nicht zugewiesen' }}</span><small>Diese Rolle gilt organisationsweit und wird nicht am einzelnen Modell gespeichert.</small></div>
             <label dacaFieldHelp="creatorType">Ersteller-Typ<select formControlName="creatorType"><option value="">Nicht erfasst</option><option value="application">Applikation</option><option value="internal_organisation">Interne Verwaltungseinheit</option><option value="internal_person">Interne Person</option><option value="external_organisation_or_person">Externe Organisation/Person</option></select></label>
             @switch(form.controls.dataset.controls.creatorType.value){
@@ -89,33 +106,27 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
           </div>
         </section>
 
-        <section class="daca-card editor-section">
-          <header><div><span>02</span><div><p class="daca-eyebrow">SHACL-Strukturebene</p><h2>Logische Entitäten und Felder</h2></div></div><div class="structure-actions"><button class="daca-button is-secondary" type="button" (click)="addEntity()">Entität hinzufügen</button><button class="daca-button is-secondary" type="button" (click)="addField()">Feld hinzufügen</button></div></header>
-          <div class="field-list" formArrayName="fields">
-            @for (field of fields.controls; track field; let index = $index) {
-              <fieldset [formGroupName]="index"><legend>Feld {{ index + 1 }} · {{ field.controls.name.value || 'Unbenannt' }}</legend><button class="remove-field" type="button" [disabled]="fields.length === 1" (click)="removeField(index)">Feld entfernen</button>
-                <div class="editor-grid">
-                  <label dacaFieldHelp="entityName">Entität *<input formControlName="entityName" placeholder="z. B. Mitarbeitende"></label><label dacaFieldHelp="entityBusinessObject">Geschäftsobjekt der Entität *<select formControlName="entityBusinessObjectVersionId"><option value="">Bitte wählen</option>@for(term of businessObjects();track term.versionId){<option [value]="term.versionId">{{ businessObjectLabel(term) }} · v{{ term.revision }}</option>}</select></label><label dacaFieldHelp="fieldName">Feldname *<input formControlName="name"></label><label dacaFieldHelp="fieldBusinessObject">Geschäftsobjekt des Felds *<select formControlName="businessObjectVersionId"><option value="">Bitte wählen</option>@for(term of businessObjects();track term.versionId){<option [value]="term.versionId">{{ businessObjectLabel(term) }} · v{{ term.revision }}</option>}</select></label>
-                  <label dacaFieldHelp="dataType">Datentyp *<select formControlName="dataType"><option value="xsd:string">Text (xsd:string)</option><option value="xsd:integer">Ganzzahl</option><option value="xsd:decimal">Dezimalzahl</option><option value="xsd:date">Datum</option><option value="xsd:dateTime">Datum/Zeit</option><option value="xsd:boolean">Ja/Nein</option></select></label>
-                  <label dacaFieldHelp="length">Länge<input type="number" min="1" formControlName="length"></label><label dacaFieldHelp="precision">Precision<input type="number" min="0" formControlName="precision"></label><label dacaFieldHelp="scale">Dezimalstellen / Scale<input type="number" min="0" formControlName="decimalPlaces"></label><label dacaFieldHelp="order">Reihenfolge *<input type="number" min="1" formControlName="order"></label>
-                  <label dacaFieldHelp="nullable">Nullability<select formControlName="nullable"><option [ngValue]="true">Null erlaubt</option><option [ngValue]="false">Pflichtfeld</option></select></label><label dacaFieldHelp="minCount">minCount<input type="number" min="0" formControlName="minCount"></label><label dacaFieldHelp="maxCount">maxCount<input type="number" min="1" formControlName="maxCount"></label>
-                  <label dacaFieldHelp="fieldClassification">Klassifizierung<select formControlName="classification"><option value="unclassified">Nicht klassifiziert</option><option value="internal">Intern</option><option value="confidential">Vertraulich</option><option value="secret">Geheim</option></select></label><label dacaFieldHelp="sourceSystem">System<input formControlName="sourceSystem"></label>
-                  <label class="is-wide" dacaFieldHelp="shortDescription">Kurzbeschreibung *<textarea rows="2" formControlName="shortDescription"></textarea></label><label class="is-wide" dacaFieldHelp="comment">Kommentar<textarea rows="2" formControlName="comment"></textarea></label>
-                  <label class="is-wide" dacaFieldHelp="conceptIds">I14Y-Concept-Links (optional)<button type="button" class="i14y-reset" (click)="resetConceptLinks(index)">Zurücksetzen</button><select class="concept-multi" multiple size="5" formControlName="conceptIds" (change)="selectConcepts(index, selectValues($event))">@for(concept of concepts();track concept.id){<option [value]="concept.id" [attr.data-concept-id]="concept.id">{{ conceptName(concept) }} · {{ concept.conceptType }} · v{{ concept.version }}</option>}@for(conceptId of missingConceptIds(field);track conceptId){<option [value]="conceptId" [attr.data-concept-id]="conceptId">{{ conceptLabel(conceptId) }}</option>}</select><small>Keine Auswahl ist erforderlich. Mehrere Concepts können mit Strg/⌘ oder Umschalt ausgewählt werden.</small></label>
-                  <label class="is-wide" dacaFieldHelp="primaryConceptId">Primär für I14Y (optional)<button type="button" class="i14y-reset" (click)="resetPrimaryConcept(index)">Zurücksetzen</button><select formControlName="primaryConceptId"><option value="">Kein primäres Concept</option>@for(conceptId of linkedConceptIds(field);track conceptId){<option [value]="conceptId">{{ conceptLabel(conceptId) }}</option>}</select><small>Nur bei einer gewählten primären Verknüpfung wird dieses Concept als <code>dcterms:conformsTo</code> exportiert.</small></label>
-                  <label class="is-wide" dacaFieldHelp="valueListConceptId">Werteliste (I14Y CodeList, optional)<button type="button" class="i14y-reset" (click)="resetValueList(index)">Zurücksetzen</button><select formControlName="valueListConceptId" (change)="selectConcept(index, selectValue($event), true)"><option value="">Keine Werteliste</option>@for(concept of codeLists();track concept.id){<option [value]="concept.id">{{ conceptName(concept) }} · {{ concept.identifiers[0] }}</option>}</select></label>
-                </div>
-              </fieldset>
-            }
+        <section class="daca-card editor-section structure-section">
+          <header><div><span>01</span><div><p class="daca-eyebrow">SHACL-Strukturebene</p><h2>Logische Entitäten und Felder</h2></div></div><div class="structure-actions"><button class="daca-button is-secondary" type="button" (click)="addEntity()">Entität hinzufügen</button><button class="daca-button" type="button" (click)="addField()">Feld hinzufügen</button></div></header>
+          <div class="field-workbench field-list" formArrayName="fields">
+            <section class="field-browser" aria-labelledby="field-browser-title">
+              <header><div><p class="daca-eyebrow">Struktur</p><h3 id="field-browser-title">{{ fields.length }} Felder</h3></div><nav aria-label="Darstellung der Modellstruktur"><button type="button" [class.is-active]="structureView()==='table'" [attr.aria-pressed]="structureView()==='table'" (click)="structureView.set('table')">Tabelle</button><button type="button" [class.is-active]="structureView()==='relation'" [attr.aria-pressed]="structureView()==='relation'" (click)="structureView.set('relation')">Relation</button></nav></header>
+              @if(structureView()==='table'){
+                <div class="field-table-wrap"><table class="field-table"><thead><tr><th>Feld</th><th>Entität</th><th>Datentyp</th><th>Kardinalität</th><th><span class="visually-hidden">Aktionen</span></th></tr></thead><tbody>@for(field of fields.controls;track field;let index=$index){<tr [class.is-selected]="selectedFieldIndex()===index"><td><button class="field-select" type="button" (click)="selectField(index)"><strong>{{ field.controls.name.value || 'Unbenannt' }}</strong><small>Position {{ field.controls.order.value }}</small></button></td><td>{{ field.controls.entityName.value }}</td><td>{{ field.controls.dataType.value }}@if(field.controls.length.value){ · L {{ field.controls.length.value }}}</td><td>{{ field.controls.minCount.value }}..{{ field.controls.maxCount.value ?? '*' }}</td><td><button class="remove-field" type="button" [disabled]="fields.length===1" [attr.aria-label]="(field.controls.name.value || 'Feld') + ' entfernen'" (click)="removeField(index)">Entfernen</button></td></tr>}</tbody></table></div>
+              } @else {
+                <div class="relation-list">@for(field of fields.controls;track field;let index=$index){<button type="button" [class.is-selected]="selectedFieldIndex()===index" (click)="selectField(index)"><span><small>Logisch</small><strong>{{ field.controls.entityName.value }}.{{ field.controls.name.value || 'Unbenannt' }}</strong></span><span><small>Physisch</small><strong>{{ field.controls.physicalColumnName.value || 'Keine Repräsentation' }}</strong></span></button>}</div>
+              }
+            </section>
+            @if(fields.at(selectedFieldIndex());as selectedField){<daca-logical-field-characteristics [field]="selectedField" [businessObjects]="businessObjects()" [concepts]="concepts()" [conceptReferences]="fieldConceptReferences()" />}
           </div>
         </section>
 
-        @if (model(); as current) {
+        @if (!embedded() && model(); as current) {
           <section class="daca-card export-section"><div><p class="daca-eyebrow">Repräsentationen</p><h2>DCAT-AP-CH und SHACL</h2><p>Der Datensatz und seine logische Struktur bleiben getrennte, verlinkte Exporte.</p></div><div><button class="daca-button is-secondary" type="button" [disabled]="exporting()!==null" (click)="downloadExport(current,'dcat-ttl')">DCAT TTL herunterladen</button><button class="daca-button is-secondary" type="button" [disabled]="exporting()!==null" (click)="downloadExport(current,'dcat-jsonld')">DCAT JSON-LD herunterladen</button><button class="daca-button is-secondary" type="button" [disabled]="exporting()!==null" (click)="downloadExport(current,'shacl-ttl')">SHACL TTL herunterladen</button><button class="daca-button is-secondary" type="button" [disabled]="exporting()!==null" (click)="downloadExport(current,'shacl-jsonld')">SHACL JSON-LD herunterladen</button></div></section>
         }
 
         <footer class="editor-actions">
-          <div class="editor-footer-context"><a class="daca-button is-secondary" routerLink="/models">Zur Übersicht</a><span>{{ form.dirty ? 'Ungespeicherte Änderungen' : 'Alle Änderungen gespeichert' }}</span></div>
+          <div class="editor-footer-context">@if(!embedded()){<a class="daca-button is-secondary" routerLink="/models">Zur Übersicht</a>}<span>{{ form.dirty ? 'Ungespeicherte Änderungen' : 'Alle Änderungen gespeichert' }}</span></div>
           <aside class="review-owner-info" aria-live="polite">
             @if(selectedDomain();as domain){<strong>Prüfung: {{ domain.ownerName }}</strong><span>{{ domain.preferredLabel }} · Stv. {{ domain.deputyOwnerName }}</span><small>Erst «Zur Domänenfreigabe einreichen» erzeugt den persönlichen Prüfauftrag beim primären Domain Owner.</small>}
             @else{<strong>Prüfung noch nicht zugewiesen</strong><span>Wählen Sie eine DaCa-Domäne.</span>}
@@ -128,18 +139,27 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
         </footer>
         @if (model()?.status === 'review_pending') { <p class="publish-note">Die Aufgabe liegt beim primären Domain Owner der gewählten Domäne. Der Entscheid erfolgt über den persönlichen Prüfauftrag.</p> }
       </form>
+      }
     }
   `,
   styles: [`
-    .model-editor-heading{align-items:center}.editor-state{padding:2rem;box-shadow:none}.model-editor-form{display:grid;gap:1.25rem}.editor-section{box-shadow:none}.editor-section>header{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.1rem 1.25rem;border-bottom:1px solid var(--daca-border)}.editor-section>header>div{display:flex;align-items:center;gap:1rem}.editor-section>header>div>span{display:grid;place-items:center;width:38px;height:38px;background:var(--daca-federal-blue);color:#fff;font-weight:800}.editor-section h2{margin:0;font-size:1.12rem}.editor-section header small{color:var(--daca-muted)}.structure-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.5rem}.editor-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;padding:1.25rem}.editor-grid label{display:grid;align-content:start;gap:.4rem;color:#30363b;font-size:.72rem;font-weight:750}.editor-grid input,.editor-grid select,.editor-grid textarea{width:100%;min-height:42px;border:1px solid var(--daca-border-strong);border-radius:0;padding:.55rem .65rem;background:#fff;color:var(--daca-ink)}.validation-attempted .editor-grid input.ng-invalid,.validation-attempted .editor-grid select.ng-invalid,.validation-attempted .editor-grid textarea.ng-invalid{border-color:#b3162b;background:rgba(179,22,43,.10)}.editor-grid textarea{resize:vertical}.editor-grid select.concept-multi{min-height:8rem}.editor-grid label>small{color:var(--daca-muted);font-size:.64rem;font-weight:500}.editor-grid .is-wide{grid-column:1/-1}.termdat-feedback{display:flex;min-height:44px;align-items:center;justify-content:space-between;gap:.8rem;border-left:4px solid var(--daca-border-strong);padding:.7rem .85rem;background:#f4f6f7;color:var(--daca-muted);font-size:.72rem}.termdat-feedback.has-hits{border-left-color:#167347;background:#edf7f0;color:#174c32}.termdat-feedback button{min-height:40px;border:1px solid currentColor;padding:.45rem .75rem;background:#fff;color:inherit;font-weight:750;cursor:pointer}.termdat-loading{display:flex;align-items:center;gap:.65rem}.termdat-spinner{display:block;box-sizing:border-box;width:20px;height:20px;flex:0 0 20px;border:3px solid rgba(31,111,139,.34);border-top-color:#176783;border-radius:999px;animation:termdat-spinner-rotate .8s linear infinite;transform-origin:center}@keyframes termdat-spinner-rotate{to{transform:rotate(360deg)}}.termdat-modal{width:min(1040px,100%)}.termdat-modal li{grid-template-columns:minmax(0,1fr) minmax(390px,1.15fr);align-items:start}.termdat-result-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;gap:.55rem;width:100%}.termdat-result-actions .daca-button{width:100%;min-height:48px;padding:.65rem .85rem;font-weight:800;line-height:1.25;text-align:center;white-space:normal}.termdat-result-actions .daca-button:first-child{grid-column:1/-1}.termdat-result-actions .daca-button:disabled{font-weight:800}.termdat-adoption{display:grid;scroll-margin-block:1rem;gap:.75rem;margin:1rem 0;border-left:4px solid var(--daca-federal-blue);padding:1rem;background:#eef5f8}.termdat-adoption h3,.termdat-adoption p{margin:0}.termdat-overwrite-warning{border-left:4px solid #b26a00;padding:.65rem .8rem;background:#fff1c7;color:#4f3d00}.termdat-adoption-row{display:grid;grid-template-columns:minmax(8rem,.7fr) 1fr 1fr auto;align-items:start;gap:.7rem;border-top:1px solid var(--daca-border);padding-top:.7rem}.termdat-adoption-row>span{display:grid;gap:.2rem;white-space:pre-wrap}.termdat-adoption-row small{color:var(--daca-muted);font-weight:700;text-transform:uppercase}.termdat-adoption-row em{padding:.2rem .4rem;background:#fff1c7;color:#634c00;font-size:.67rem;font-style:normal;font-weight:750}.termdat-adoption-actions{display:flex;justify-content:flex-end;gap:.5rem}.termdat-adoption-actions .daca-button{min-width:190px;font-weight:800}.role-assignment{display:grid;align-content:start;gap:.25rem;border-left:4px solid var(--daca-blue);padding:.65rem .8rem;background:var(--daca-blue-soft);font-size:.7rem}.role-assignment small{color:var(--daca-muted);font-size:.62rem}.language-details{border:1px solid var(--daca-border);padding:.85rem}.language-details summary{cursor:pointer;font-weight:750}.language-details>div{display:grid;grid-template-columns:1fr 2fr;gap:.8rem;margin-top:1rem}.media-hint{display:grid;gap:.25rem;border-left:4px solid var(--daca-blue);padding:.8rem 1rem;background:var(--daca-blue-soft);font-size:.72rem}.media-hint span{color:var(--daca-muted)}.field-list{display:grid;gap:1rem;padding:1.25rem}.field-list fieldset{position:relative;margin:0;border:1px solid var(--daca-border);padding:0}.field-list legend{margin-left:1rem;padding:.35rem .65rem;background:#f2f5f7;font-size:.76rem;font-weight:800}.remove-field{position:absolute;top:.35rem;right:.7rem;min-height:32px;border:0;background:transparent;color:var(--daca-red-dark);font-size:.68rem;font-weight:750;cursor:pointer}.export-section{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.25rem;border-top:4px solid var(--daca-red);box-shadow:none}.export-section h2,.export-section p{margin:.25rem 0}.export-section>div:last-child{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.5rem}.editor-actions{position:sticky;z-index:5;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:1rem;border:1px solid var(--daca-border);border-top:4px solid var(--daca-red);padding:.9rem 1rem;background:#fff;box-shadow:0 -8px 20px #15293d18}.editor-actions>div{display:flex;align-items:center;flex-wrap:wrap;gap:.6rem}.editor-actions .editor-primary-actions{align-items:flex-start;justify-content:flex-end}.save-action{display:grid;justify-items:stretch;gap:.45rem;min-width:250px}.save-validation,.save-problem{max-width:430px;margin:0;border-left:4px solid var(--daca-red);padding:.6rem .75rem;background:#fff0f0;color:var(--daca-red-dark);font-size:.7rem;text-align:left}.save-problem{display:grid;gap:.45rem}.save-problem p{margin:0}.save-problem-action{font-weight:700}.save-validation ul,.save-problem ul{display:grid;gap:.25rem;margin:.4rem 0 0;padding-left:1.1rem}.save-validation li span,.save-problem li span{color:inherit;font-size:inherit;font-weight:800}.save-validation li button,.save-problem li button{border:0;padding:0;background:transparent;color:inherit;text-align:left;cursor:pointer;text-decoration:underline}.save-problem-technical{display:flex;align-items:center;justify-content:space-between;gap:.5rem;border-top:1px solid #b3162b55;padding-top:.45rem;color:#5f6970}.save-problem-technical small{font-size:.58rem;overflow-wrap:anywhere}.save-problem-technical .daca-button{min-height:30px;padding:.25rem .45rem;font-size:.62rem;white-space:nowrap}.editor-actions span,.publish-note{color:var(--daca-muted);font-size:.7rem}.publish-note{margin:-.75rem 0 0;text-align:right}@media(prefers-reduced-motion:reduce){.termdat-spinner{animation:none}}@media(max-width:980px){.editor-grid{grid-template-columns:1fr 1fr}.termdat-modal li{grid-template-columns:minmax(0,1fr) minmax(340px,1fr)}.termdat-adoption-row{grid-template-columns:1fr 1fr}.termdat-adoption-row>strong,.termdat-adoption-row>em{grid-column:1/-1}.export-section,.editor-actions{align-items:flex-start;flex-direction:column}.export-section>div:last-child{justify-content:flex-start}.editor-actions>div:last-child{width:100%}.save-action{width:100%}}@media(max-width:820px){.model-editor-heading{align-items:flex-start;flex-direction:column}.editor-grid,.language-details>div,.termdat-adoption-row,.termdat-modal li{grid-template-columns:1fr}.termdat-result-actions,.termdat-adoption-actions{width:100%}.termdat-adoption-actions .daca-button{min-width:0}.termdat-feedback{align-items:stretch;flex-direction:column}.editor-actions{position:static}.editor-actions>div,.editor-actions .daca-button{width:100%}.editor-section>header{align-items:flex-start;flex-direction:column}.structure-actions,.structure-actions .daca-button{width:100%}}@media(max-width:560px){.termdat-result-actions{grid-template-columns:1fr}.termdat-result-actions .daca-button:first-child{grid-column:auto}.termdat-result-actions .daca-button{min-height:44px}.termdat-adoption-actions{display:grid;grid-template-columns:1fr}.termdat-adoption-actions .daca-button{width:100%}}
+    .model-editor-heading{align-items:center}.editor-state{padding:2rem;box-shadow:none}.model-editor-form{display:grid;gap:1.25rem}.editor-section{box-shadow:none}.editor-section>header{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.1rem 1.25rem;border-bottom:1px solid var(--daca-border)}.editor-section>header>div{display:flex;align-items:center;gap:1rem}.editor-section>header>div>span{display:grid;place-items:center;width:38px;height:38px;background:var(--daca-federal-blue);color:#fff;font-weight:800}.editor-section h2{margin:0;font-size:1.12rem}.editor-section header small{color:var(--daca-muted)}.structure-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.5rem}.editor-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;padding:1.25rem}.editor-grid label{display:grid;align-content:start;gap:.4rem;color:#30363b;font-size:.72rem;font-weight:750}.editor-grid input,.editor-grid select,.editor-grid textarea{width:100%;min-height:42px;border:1px solid var(--daca-border-strong);border-radius:0;padding:.55rem .65rem;background:#fff;color:var(--daca-ink)}.validation-attempted input.ng-invalid,.validation-attempted select.ng-invalid,.validation-attempted textarea.ng-invalid{border-color:#b3162b!important;background:rgba(179,22,43,.10)!important}.editor-grid textarea{resize:vertical}.editor-grid label>small{color:var(--daca-muted);font-size:.64rem;font-weight:500}.editor-grid .is-wide{grid-column:1/-1}.termdat-feedback{display:flex;min-height:44px;align-items:center;justify-content:space-between;gap:.8rem;border-left:4px solid var(--daca-border-strong);padding:.7rem .85rem;background:#f4f6f7;color:var(--daca-muted);font-size:.72rem}.termdat-feedback.has-hits{border-left-color:#167347;background:#edf7f0;color:#174c32}.termdat-feedback button{min-height:40px;border:1px solid currentColor;padding:.45rem .75rem;background:#fff;color:inherit;font-weight:750;cursor:pointer}.termdat-loading{display:flex;align-items:center;gap:.65rem}.termdat-spinner{display:block;box-sizing:border-box;width:20px;height:20px;flex:0 0 20px;border:3px solid rgba(31,111,139,.34);border-top-color:#176783;border-radius:999px;animation:termdat-spinner-rotate .8s linear infinite;transform-origin:center}@keyframes termdat-spinner-rotate{to{transform:rotate(360deg)}}.termdat-modal{width:min(1040px,100%)}.termdat-modal li{grid-template-columns:minmax(0,1fr) minmax(390px,1.15fr);align-items:start}.termdat-result-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;gap:.55rem;width:100%}.termdat-result-actions .daca-button{width:100%;min-height:48px;padding:.65rem .85rem;font-weight:800;line-height:1.25;text-align:center;white-space:normal}.termdat-result-actions .daca-button:first-child{grid-column:1/-1}.termdat-result-actions .daca-button:disabled{font-weight:800}.termdat-adoption{display:grid;scroll-margin-block:1rem;gap:.75rem;margin:1rem 0;border-left:4px solid var(--daca-federal-blue);padding:1rem;background:#eef5f8}.termdat-adoption h3,.termdat-adoption p{margin:0}.termdat-overwrite-warning{border-left:4px solid #b26a00;padding:.65rem .8rem;background:#fff1c7;color:#4f3d00}.termdat-adoption-row{display:grid;grid-template-columns:minmax(8rem,.7fr) 1fr 1fr auto;align-items:start;gap:.7rem;border-top:1px solid var(--daca-border);padding-top:.7rem}.termdat-adoption-row>span{display:grid;gap:.2rem;white-space:pre-wrap}.termdat-adoption-row small{color:var(--daca-muted);font-weight:700;text-transform:uppercase}.termdat-adoption-row em{padding:.2rem .4rem;background:#fff1c7;color:#634c00;font-size:.67rem;font-style:normal;font-weight:750}.termdat-adoption-actions{display:flex;justify-content:flex-end;gap:.5rem}.termdat-adoption-actions .daca-button{min-width:190px;font-weight:800}.role-assignment{display:grid;align-content:start;gap:.25rem;border-left:4px solid var(--daca-blue);padding:.65rem .8rem;background:var(--daca-blue-soft);font-size:.7rem}.role-assignment small{color:var(--daca-muted);font-size:.62rem}.language-details{border:1px solid var(--daca-border);padding:.85rem}.language-details summary{cursor:pointer;font-weight:750}.language-details>div{display:grid;grid-template-columns:1fr 2fr;gap:.8rem;margin-top:1rem}.media-hint{display:grid;gap:.25rem;border-left:4px solid var(--daca-blue);padding:.8rem 1rem;background:var(--daca-blue-soft);font-size:.72rem}.media-hint span{color:var(--daca-muted)}.field-workbench{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(360px,.75fr);align-items:start;gap:.9rem;padding:.9rem;background:#f6f8f9}.field-browser{min-width:0;border:1px solid var(--daca-border);background:#fff}.field-browser>header{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.7rem .8rem;border-bottom:1px solid var(--daca-border)}.field-browser h3,.field-browser p{margin:.1rem 0}.field-browser h3{font-size:.95rem}.field-browser nav{display:flex}.field-browser nav button{min-height:36px;border:0;border-bottom:3px solid transparent;padding:.35rem .65rem;background:#fff;font-weight:750;cursor:pointer}.field-browser nav button.is-active{border-color:var(--daca-red);color:var(--daca-red-dark)}.field-table-wrap{overflow:auto}.field-table{width:100%;border-collapse:collapse;font-size:.67rem}.field-table th{padding:.55rem .65rem;background:#f2f5f7;color:var(--daca-muted);font-size:.57rem;text-align:left;text-transform:uppercase}.field-table td{border-top:1px solid var(--daca-border);padding:.48rem .65rem;vertical-align:middle}.field-table tr.is-selected{background:var(--daca-blue-soft);box-shadow:inset 4px 0 var(--daca-blue)}.field-select{display:grid;gap:.12rem;width:100%;border:0;padding:0;background:transparent;color:inherit;text-align:left;cursor:pointer}.field-select small{color:var(--daca-muted);font-size:.58rem}.remove-field{border:0;padding:.25rem;background:transparent;color:var(--daca-red-dark);font-size:.61rem;font-weight:750;cursor:pointer}.remove-field:disabled{color:var(--daca-muted);cursor:not-allowed}.relation-list{display:grid;padding:.55rem}.relation-list>button{display:grid;grid-template-columns:1fr 1fr;gap:1rem;border:0;border-bottom:1px solid var(--daca-border);padding:.65rem;background:#fff;text-align:left;cursor:pointer}.relation-list>button.is-selected{background:var(--daca-blue-soft);box-shadow:inset 4px 0 var(--daca-blue)}.relation-list span{display:grid;gap:.2rem}.relation-list small{color:var(--daca-muted);font-size:.56rem;font-weight:800;text-transform:uppercase}.relation-list strong{overflow-wrap:anywhere;font-size:.68rem}.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}.field-panel-form{display:grid;gap:.6rem}.field-panel-actions{position:sticky;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:.5rem;border:1px solid var(--daca-border);border-top:4px solid var(--daca-red);padding:.65rem;background:#fff;box-shadow:0 -6px 16px #15293d18}.field-panel-actions span{color:var(--daca-muted);font-size:.62rem}.field-panel-actions .daca-button{min-height:40px;padding:.45rem .65rem;font-size:.66rem}.export-section{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.25rem;border-top:4px solid var(--daca-red);box-shadow:none}.export-section h2,.export-section p{margin:.25rem 0}.export-section>div:last-child{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.5rem}.editor-actions{position:sticky;z-index:5;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:1rem;border:1px solid var(--daca-border);border-top:4px solid var(--daca-red);padding:.9rem 1rem;background:#fff;box-shadow:0 -8px 20px #15293d18}.editor-actions>div{display:flex;align-items:center;flex-wrap:wrap;gap:.6rem}.editor-actions .editor-primary-actions{align-items:flex-start;justify-content:flex-end}.save-action{display:grid;justify-items:stretch;gap:.45rem;min-width:250px}.save-validation,.save-problem{max-width:430px;margin:0;border-left:4px solid var(--daca-red);padding:.6rem .75rem;background:#fff0f0;color:var(--daca-red-dark);font-size:.7rem;text-align:left}.save-problem{display:grid;gap:.45rem}.save-problem p{margin:0}.save-problem-action{font-weight:700}.save-validation ul,.save-problem ul{display:grid;gap:.25rem;margin:.4rem 0 0;padding-left:1.1rem}.save-validation li span,.save-problem li span{color:inherit;font-size:inherit;font-weight:800}.save-validation li button,.save-problem li button{border:0;padding:0;background:transparent;color:inherit;text-align:left;cursor:pointer;text-decoration:underline}.save-problem-technical{display:flex;align-items:center;justify-content:space-between;gap:.5rem;border-top:1px solid #b3162b55;padding-top:.45rem;color:#5f6970}.save-problem-technical small{font-size:.58rem;overflow-wrap:anywhere}.save-problem-technical .daca-button{min-height:30px;padding:.25rem .45rem;font-size:.62rem;white-space:nowrap}.editor-actions span,.publish-note{color:var(--daca-muted);font-size:.7rem}.publish-note{margin:-.75rem 0 0;text-align:right}@media(prefers-reduced-motion:reduce){.termdat-spinner{animation:none}}@media(max-width:1100px){.field-workbench{grid-template-columns:1fr}}@media(max-width:980px){.editor-grid{grid-template-columns:1fr 1fr}.termdat-modal li{grid-template-columns:minmax(0,1fr) minmax(340px,1fr)}.termdat-adoption-row{grid-template-columns:1fr 1fr}.termdat-adoption-row>strong,.termdat-adoption-row>em{grid-column:1/-1}.export-section,.editor-actions{align-items:flex-start;flex-direction:column}.export-section>div:last-child{justify-content:flex-start}.editor-actions>div:last-child{width:100%}.save-action{width:100%}}@media(max-width:820px){.model-editor-heading{align-items:flex-start;flex-direction:column}.editor-grid,.language-details>div,.termdat-adoption-row,.termdat-modal li{grid-template-columns:1fr}.termdat-result-actions,.termdat-adoption-actions{width:100%}.termdat-adoption-actions .daca-button{min-width:0}.termdat-feedback{align-items:stretch;flex-direction:column}.editor-actions{position:static}.editor-actions>div,.editor-actions .daca-button{width:100%}.editor-section>header{align-items:flex-start;flex-direction:column}.structure-actions,.structure-actions .daca-button{width:100%}.field-workbench{padding:.55rem}.field-table{min-width:640px}.relation-list>button{grid-template-columns:1fr}.field-panel-actions{position:static;align-items:stretch;flex-direction:column}.field-panel-actions .daca-button{width:100%}}@media(max-width:560px){.termdat-result-actions{grid-template-columns:1fr}.termdat-result-actions .daca-button:first-child{grid-column:auto}.termdat-result-actions .daca-button{min-height:44px}.termdat-adoption-actions{display:grid;grid-template-columns:1fr}.termdat-adoption-actions .daca-button{width:100%}}
+  `, `
+    .structure-section{order:-1}
+    .derived-origin{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.7fr);gap:1.5rem;margin-bottom:1.25rem;border-left:5px solid var(--daca-blue);padding:1.1rem 1.25rem;box-shadow:none}
+    .derived-origin h2,.derived-origin p{margin:.2rem 0}.derived-origin>div>p:last-child{color:var(--daca-muted);font-size:.75rem}.derived-origin dl{display:grid;gap:.45rem;margin:0}.derived-origin dl div{display:grid;grid-template-columns:72px minmax(0,1fr);gap:.6rem}.derived-origin dt{color:var(--daca-muted);font-size:.62rem;font-weight:800;text-transform:uppercase}.derived-origin dd{margin:0;overflow-wrap:anywhere;font-size:.7rem}.concept-decision{border-left:4px solid var(--daca-blue);padding:.75rem;background:var(--daca-blue-soft)}.editor-grid .is-hidden{display:none}@media(max-width:820px){.derived-origin{grid-template-columns:1fr}}
   `],
 })
 export class LogicalModelEditorComponent {
   readonly id = input<string>(); readonly sourceSnapshotId = input<string>();
+  readonly physicalSnapshotId = input<string>(); readonly physicalTableId = input<string>();
+  readonly embedded = input(false); readonly fieldPanelOnly = input(false); readonly selectedFieldId = input<string>(); readonly modelSaved = output<LogicalModel>();
   readonly identity = inject(DemoIdentityService); readonly catalogApi = inject(CatalogApiService);
   private readonly api = inject(DataModelsApiService); private readonly conceptsApi = inject(I14yConceptsApiService); private readonly assistance = inject(ModelingAssistanceService); private readonly router = inject(Router); private readonly fb = inject(FormBuilder); private readonly injector = inject(Injector);
   readonly model = signal<LogicalModel | null>(null); readonly concepts = signal<readonly I14yConcept[]>([]); readonly loading = signal(false); readonly saving = signal(false); readonly exporting = signal<LogicalModelExportRepresentation | null>(null); readonly error = signal<string | null>(null); readonly saveError = signal<string | null>(null); readonly saveProblem = signal<ModelingApiError | null>(null); readonly errorCopied = signal(false); readonly notice = signal<string | null>(null); readonly etag = signal('');
   readonly validationAttempted = signal(false);
+  readonly selectedFieldIndex = signal(0);
+  readonly structureView = signal<'table' | 'relation'>('table');
   readonly canPublishCurrentModel = computed(() => this.identity.canPublishModel(this.model()));
   readonly canEditCurrentModel = computed(() => {
     const current = this.model();
@@ -156,9 +176,11 @@ export class LogicalModelEditorComponent {
   readonly ownerPersonas = signal<readonly ModelingPersona[]>([]);
   readonly deputyPersonas = signal<readonly ModelingPersona[]>([]);
   readonly businessObjects = signal<readonly BusinessObjectTerm[]>([]);
+  readonly derivedOrigin = signal<{ source: PhysicalSource; snapshot: PhysicalSnapshot; table: PhysicalTable } | null>(null);
   readonly identifierAvailability = signal<'idle' | 'checking' | 'available' | 'taken'>('idle');
   private manualIdentifier = '';
   private identifierSuffixEdited = false;
+  private derivedLoadKey = '';
   readonly termdatOpen = signal(false); readonly termdatLoading = signal(false); readonly termdatSearching = signal(false); readonly termdatResults = signal<readonly TermdatEntry[]>([]); readonly termdatCount = signal<number | null>(null); readonly termdatQuery = signal(''); readonly termdatFeedback = signal<string | null>(null);
   readonly termdatSelection = signal<{ entry: TermdatEntry; targets: readonly ('title' | 'definition')[] } | null>(null);
   readonly termdatAdoption = viewChild<ElementRef<HTMLElement>>('termdatAdoption');
@@ -176,6 +198,7 @@ export class LogicalModelEditorComponent {
   get fields(): FormArray<ReturnType<LogicalModelEditorComponent['createField']>> { return this.form.controls.fields; }
 
   selectedDomain() { return this.catalogApi.domains().find((domain) => domain.id === this.form.controls.dataset.controls.dataDomainId.value) ?? null; }
+  fieldConceptReferences() { return this.model()?.fields.flatMap((field) => field.conceptReferences) ?? []; }
 
   canNavigateOrganization(organization: FederalOrganization): boolean {
     const breadcrumb = organization.breadcrumb.map((item) => item.id);
@@ -237,6 +260,12 @@ export class LogicalModelEditorComponent {
         [`Feld ${number} – Primär für I14Y`, controls.primaryConceptId],
       ];
       for (const [label, control, patternMessage] of fieldControls) this.addControlIssue(issues, label, control, patternMessage);
+      if (controls.physicalColumnId.value && controls.conceptMode.value === 'unresolved') {
+        issues.push({ field: `Feld ${number} – I14Y-Entscheid`, message: 'Verknüpfen Sie ein Concept oder bestätigen Sie bewusst, dass keines passt.' });
+      }
+      if (controls.physicalColumnId.value && controls.conceptMode.value === 'linked' && !controls.conceptIds.value.length) {
+        issues.push({ field: `Feld ${number} – I14Y-Entscheid`, message: 'Wählen Sie mindestens ein I14Y-Concept aus.' });
+      }
     });
     return issues;
   }
@@ -249,7 +278,7 @@ export class LogicalModelEditorComponent {
     this.assistance.myScopes().subscribe({
       next: (scopes) => {
         this.modelingScopes.set(scopes);
-        if (this.id()) return;
+        if (this.id() || this.physicalTableId()) return;
         const scope = scopes.find((item) => item.role === 'data_steward') ?? scopes[0];
         if (!scope) { this.scopeChanged(); return; }
         const path = scope.breadcrumb.map((item) => item.id);
@@ -263,6 +292,15 @@ export class LogicalModelEditorComponent {
       error: () => this.scopeChanged(),
     });
     effect(() => { const id = this.id(); if (id) this.load(id); });
+    effect(() => {
+      const snapshotId = this.physicalSnapshotId() || this.sourceSnapshotId();
+      const tableId = this.physicalTableId();
+      if (!this.id() && snapshotId && tableId) this.loadDerivedSource(snapshotId, tableId);
+    });
+    effect(() => {
+      const fieldId = this.selectedFieldId();
+      if (fieldId) queueMicrotask(() => this.selectFieldById(fieldId));
+    });
     effect(() => { this.catalogApi.domains(); this.domainChanged(false); });
     effect(() => {
       if (!this.model()) return;
@@ -443,8 +481,9 @@ export class LogicalModelEditorComponent {
   createField(order: number, field?: LogicalField, entity?: LogicalEntity, entityName = 'Entitaet_1') {
     const selection=normalizeFieldConceptSelection(field?.conceptReferences.map((item)=>item.id)??[],field?.primaryConceptId,field?.valueListConcept?.id);
     return this.fb.group({
-      id:field?.rootId??'',entityId:entity?.rootId??'',entityName:[entity?.name??field?.entityName??entityName,[Validators.required,Validators.pattern(LOGICAL_NAME_PATTERN)]],entityBusinessObject:entity?.businessObject??field?.businessObject??'',entityBusinessObjectVersionId:[entity?.businessObjectVersionId??'',Validators.required],entityComment:[entity?.comment??'',Validators.maxLength(4000)],entityOrder:entity?.order??order,name:[field?.name??'',[Validators.required,Validators.pattern(LOGICAL_NAME_PATTERN)]],businessObject:field?.businessObject??'',businessObjectVersionId:[field?.businessObjectVersionId??'',Validators.required],dataType:[field?.dataType??'xsd:string',Validators.required],length:[field?.length??null as number|null,Validators.min(1)],precision:[field?.precision??null as number|null,Validators.min(0)],decimalPlaces:[field?.decimalPlaces??null as number|null,Validators.min(0)],order:[field?.order??order,[Validators.required,Validators.min(1)]],nullable:field?.nullable??true,minCount:[field?.minCount??0,Validators.min(0)],maxCount:[field?.maxCount??1 as number|null,Validators.min(1)],classification:this.fb.nonNullable.control<DataClassification>(field?.classification??'unclassified'),sourceSystem:[field?.sourceSystem??'',Validators.maxLength(255)],shortDescription:[field?.shortDescription??'',[Validators.required,Validators.pattern(/\S/),Validators.maxLength(4000)]],comment:[field?.comment??'',Validators.maxLength(4000)],
+      id:field?.rootId??'',versionId:field?.versionId??'',entityId:entity?.rootId??'',entityName:[entity?.name??field?.entityName??entityName,[Validators.required,Validators.pattern(LOGICAL_NAME_PATTERN)]],entityBusinessObject:entity?.businessObject??field?.businessObject??'',entityBusinessObjectVersionId:[entity?.businessObjectVersionId??'',Validators.required],entityComment:[entity?.comment??'',Validators.maxLength(4000)],entityOrder:entity?.order??order,name:[field?.name??'',[Validators.required,Validators.pattern(LOGICAL_NAME_PATTERN)]],businessObject:field?.businessObject??'',businessObjectVersionId:[field?.businessObjectVersionId??'',Validators.required],dataType:[field?.dataType??'string',Validators.required],length:[field?.length??null as number|null,Validators.min(1)],precision:[field?.precision??null as number|null,Validators.min(0)],decimalPlaces:[field?.decimalPlaces??null as number|null,Validators.min(0)],order:[field?.order??order,[Validators.required,Validators.min(1)]],nullable:field?.nullable??true,minCount:[field?.minCount??0,Validators.min(0)],maxCount:[field?.maxCount??1 as number|null,Validators.min(1)],classification:this.fb.nonNullable.control<DataClassification>(field?.classification??'unclassified'),sourceSystem:[field?.sourceSystem??'',Validators.maxLength(255)],shortDescription:[field?.shortDescription??'',[Validators.required,Validators.pattern(/\S/),Validators.maxLength(4000)]],comment:[field?.comment??'',Validators.maxLength(4000)],
       conceptIds:this.fb.nonNullable.control<string[]>(selection.conceptIds),primaryConceptId:selection.primaryConceptId??'',valueListConceptId:field?.valueListConcept?.id??'',
+      physicalColumnId:this.fb.nonNullable.control(''),physicalColumnName:this.fb.nonNullable.control(''),conceptMode:this.fb.nonNullable.control<'unresolved'|'none'|'linked'>(selection.conceptIds.length?'linked':'none'),
     });
   }
   addField(): void {
@@ -455,24 +494,101 @@ export class LogicalModelEditorComponent {
       comment: previous.controls.entityComment.value || null, order: previous.controls.entityOrder.value ?? 1, fields: [],
     } : undefined;
     this.fields.push(this.createField(this.fields.length + 1, undefined, entity));
+    this.selectedFieldIndex.set(this.fields.length - 1);
   }
-  addEntity(): void { this.fields.push(this.createField(1, undefined, undefined, `Entitaet_${new Set(this.fields.controls.map((field) => field.controls.entityName.value)).size + 1}`)); }
-  removeField(index: number): void { if (this.fields.length > 1) this.fields.removeAt(index); }
+  addEntity(): void { this.fields.push(this.createField(1, undefined, undefined, `Entitaet_${new Set(this.fields.controls.map((field) => field.controls.entityName.value)).size + 1}`)); this.selectedFieldIndex.set(this.fields.length - 1); }
+  selectField(index: number): void { if (index >= 0 && index < this.fields.length) this.selectedFieldIndex.set(index); }
+  removeField(index: number): void {
+    if (this.fields.length <= 1) return;
+    this.fields.removeAt(index);
+    this.selectedFieldIndex.set(Math.min(this.selectedFieldIndex() > index ? this.selectedFieldIndex() - 1 : this.selectedFieldIndex(), this.fields.length - 1));
+    this.form.markAsDirty();
+  }
   selectValue(event: Event): string { return (event.target as HTMLSelectElement).value; }
   selectValues(event:Event):string[]{return[...(event.target as HTMLSelectElement).selectedOptions].map((option)=>option.dataset['conceptId']??option.value);}
   conceptName(concept: I14yConcept): string { return concept.name.de || concept.name.fr || concept.identifiers[0] || concept.id; }
   conceptLabel(conceptId:string):string{const concept=this.concepts().find((item)=>item.id===conceptId);if(concept)return`${this.conceptName(concept)} · v${concept.version}`;const reference=this.model()?.fields.flatMap((field)=>field.conceptReferences).find((item)=>item.id===conceptId);return reference?`${reference.name} · v${reference.version}`:conceptId;}
   missingConceptIds(field:ReturnType<LogicalModelEditorComponent['createField']>):string[]{const available=new Set(this.concepts().map((item)=>item.id));return field.controls.conceptIds.value.filter((id)=>!available.has(id));}
   linkedConceptIds(field:ReturnType<LogicalModelEditorComponent['createField']>):string[]{return normalizeFieldConceptSelection(field.controls.conceptIds.value,field.controls.primaryConceptId.value,field.controls.valueListConceptId.value).conceptIds;}
-  selectConcepts(index:number,conceptIds:string[]):void{const field=this.fields.at(index);const selection=normalizeFieldConceptSelection(conceptIds,field.controls.primaryConceptId.value,field.controls.valueListConceptId.value);field.controls.conceptIds.setValue(selection.conceptIds);field.controls.primaryConceptId.setValue(selection.primaryConceptId??'');for(const conceptId of selection.conceptIds)this.loadCachedConcept(conceptId);field.markAsDirty();}
+  selectConcepts(index:number,conceptIds:string[]):void{const field=this.fields.at(index);const selection=normalizeFieldConceptSelection(conceptIds,field.controls.primaryConceptId.value,field.controls.valueListConceptId.value);field.controls.conceptIds.setValue(selection.conceptIds);field.controls.primaryConceptId.setValue(selection.primaryConceptId??'');if(field.controls.physicalColumnId.value&&selection.conceptIds.length)field.controls.conceptMode.setValue('linked');for(const conceptId of selection.conceptIds)this.loadCachedConcept(conceptId);field.markAsDirty();}
   selectConcept(index: number, conceptId: string, valueList: boolean): void { if (!conceptId) return; const concept = this.concepts().find((item) => item.id === conceptId); if (valueList && concept?.conceptType !== 'CodeList') return; const field=this.fields.at(index);if(valueList){const selection=normalizeFieldConceptSelection(field.controls.conceptIds.value,field.controls.primaryConceptId.value,conceptId);field.controls.conceptIds.setValue(selection.conceptIds);field.controls.primaryConceptId.setValue(selection.primaryConceptId??'');}this.loadCachedConcept(conceptId);field.markAsDirty(); }
-  resetConceptLinks(index:number):void{const field=this.fields.at(index);field.controls.conceptIds.setValue([]);field.controls.primaryConceptId.setValue('');field.controls.valueListConceptId.setValue('');field.markAsDirty();}
+  resetConceptLinks(index:number):void{const field=this.fields.at(index);field.controls.conceptIds.setValue([]);field.controls.primaryConceptId.setValue('');field.controls.valueListConceptId.setValue('');if(field.controls.physicalColumnId.value)field.controls.conceptMode.setValue('unresolved');field.markAsDirty();}
+  setDerivedConceptMode(index:number,value:string):void{const field=this.fields.at(index);const mode=value==='linked'?'linked':value==='none'?'none':'unresolved';field.controls.conceptMode.setValue(mode);if(mode!=='linked'){field.controls.conceptIds.setValue([]);field.controls.primaryConceptId.setValue('');field.controls.valueListConceptId.setValue('');}field.markAsDirty();}
   resetPrimaryConcept(index:number):void{const field=this.fields.at(index);field.controls.primaryConceptId.setValue('');field.markAsDirty();}
   resetValueList(index:number):void{const field=this.fields.at(index);const valueList=field.controls.valueListConceptId.value;field.controls.valueListConceptId.setValue('');if(valueList){field.controls.conceptIds.setValue(field.controls.conceptIds.value.filter((id)=>id!==valueList));if(field.controls.primaryConceptId.value===valueList)field.controls.primaryConceptId.setValue('');}field.markAsDirty();}
   downloadExport(model:LogicalModel,representation:LogicalModelExportRepresentation):void{if(this.exporting())return;this.exporting.set(representation);this.error.set(null);this.api.downloadLogicalModelExport(model.id,model.versionId,representation).pipe(finalize(()=>this.exporting.set(null))).subscribe({next:(file)=>this.saveExport(file),error:(error:Error)=>this.error.set(error.message)});}
 
   load(id: string): void { this.loading.set(true); this.error.set(null); this.api.loadLogicalModel(id).pipe(finalize(() => this.loading.set(false))).subscribe({ next: ({ body }) => { this.model.set(body); this.etag.set(logicalModelVersionEtag(body)); this.patch(body); }, error: (error: Error) => this.error.set(error.message) }); }
-  save(): void {
+  private loadDerivedSource(snapshotId: string, tableId: string): void {
+    const loadKey = `${snapshotId}:${tableId}`;
+    if (this.derivedLoadKey === loadKey) return;
+    this.derivedLoadKey = loadKey;
+    this.loading.set(true);
+    this.error.set(null);
+    forkJoin({ sources: this.api.listPhysicalSources(), snapshot: this.api.loadPhysicalSnapshot(snapshotId) }).pipe(
+      finalize(() => this.loading.set(false)),
+    ).subscribe({
+      next: ({ sources, snapshot }) => {
+        const table = snapshot.tables.find((item) => item.id === tableId);
+        const source = sources.find((item) => item.id === snapshot.sourceId);
+        if (!table || !source) {
+          this.error.set('Snapshot und physisches Objekt passen nicht zusammen oder sind in diesem Organisationsscope nicht verfügbar.');
+          return;
+        }
+        this.derivedOrigin.set({ source, snapshot, table });
+        const isRealEstate = source.office === 'vbs-armasuisse-immobilien';
+        this.form.controls.dataset.patchValue({
+          titleDe: this.tableTitle(table),
+          descriptionDe: table.comment || `Fachlich zu prüfender Entwurf aus ${snapshot.databaseName}.${table.schemaName}.${table.name}.`,
+          identifiers: `derived:${table.stableKey || `${snapshot.databaseName}.${table.schemaName}.${table.name}`}:${snapshot.id}`,
+          identifierMode: false,
+          department: source.office.startsWith('vbs-') ? 'vbs' : source.department.toLocaleLowerCase('de-CH'),
+          office: isRealEstate ? 'vbs-armasuisse' : source.office,
+          division: isRealEstate ? source.office : '',
+          dataDomainId: '',
+          dataOwnerId: '',
+          deputyDataOwnerId: '',
+          classification: 'internal',
+        });
+        this.manualIdentifier = this.form.controls.dataset.controls.identifiers.value;
+        this.fields.clear();
+        for (const [index, column] of table.columns.entries()) {
+          const field = this.createField(index + 1, undefined, undefined, this.logicalName(table.name));
+          field.patchValue({
+            entityName: this.logicalName(table.name),
+            entityBusinessObject: '',
+            entityBusinessObjectVersionId: '',
+            entityComment: table.comment || '',
+            entityOrder: 1,
+            name: this.logicalName(column.name),
+            businessObject: '',
+            businessObjectVersionId: '',
+            dataType: column.dataType || 'string',
+            length: column.length,
+            precision: column.precision,
+            decimalPlaces: column.scale,
+            order: column.ordinalPosition || index + 1,
+            nullable: column.nullable,
+            minCount: column.nullable ? 0 : 1,
+            maxCount: 1,
+            classification: 'internal',
+            sourceSystem: `${source.name} · ${snapshot.databaseName}.${table.schemaName}.${table.name}`,
+            shortDescription: column.comment || `Technisches Feld ${column.name} aus ${table.name}.`,
+            comment: column.comment || '',
+            physicalColumnId: column.id,
+            physicalColumnName: column.name,
+            conceptMode: 'unresolved',
+          });
+          this.fields.push(field);
+        }
+        this.selectedFieldIndex.set(0);
+        this.departmentChanged(false);
+        this.form.markAsDirty();
+      },
+      error: (error: Error) => this.error.set(error.message),
+    });
+  }
+  save(allowIncompleteDraft = false): void {
     if (this.saving()) return;
     this.clearServerErrors();
     this.refreshCrossFieldErrors();
@@ -483,13 +599,26 @@ export class LogicalModelEditorComponent {
     this.errorCopied.set(false);
     // The availability lookup is advisory. PostgreSQL remains the atomic authority for duplicate
     // identifiers and supplies the actionable, support-safe problem on a rejected save.
-    if (this.validationIssues().length) return;
+    if (allowIncompleteDraft) {
+      const controls = this.fields.at(this.selectedFieldIndex())?.controls;
+      if (!controls || [controls.entityName, controls.name, controls.dataType, controls.length, controls.precision, controls.decimalPlaces, controls.order, controls.minCount, controls.maxCount, controls.sourceSystem, controls.shortDescription, controls.comment].some((control) => control.invalid)) return;
+    } else if (this.validationIssues().length) return;
     this.saving.set(true);
     this.error.set(null);
     this.notice.set(null);
     const current = this.model();
     const value = this.value();
-    const request = current ? this.api.updateLogicalModel(current.id, current.versionId, value, this.etag()) : this.api.createLogicalModel(value);
+    const origin = this.derivedOrigin();
+    const fieldMappings = this.fields.controls.flatMap((field) => field.controls.physicalColumnId.value ? [{
+      physicalColumnId: field.controls.physicalColumnId.value,
+      entityName: field.controls.entityName.value ?? '',
+      logicalFieldName: field.controls.name.value ?? '',
+    }] : []);
+    const request = current
+      ? this.api.updateLogicalModel(current.id, current.versionId, value, this.etag())
+      : origin
+        ? this.api.deriveLogicalModel(origin.table.id, { logicalModel: value, fieldMappings })
+        : this.api.createLogicalModel(value);
     request.pipe(finalize(() => this.saving.set(false))).subscribe({
       next: ({ body, etag }) => {
         this.model.set(body);
@@ -498,7 +627,9 @@ export class LogicalModelEditorComponent {
         this.form.markAsPristine();
         this.validationAttempted.set(false);
         this.notice.set('Der unabhängige Modellentwurf wurde versioniert gespeichert.');
-        if (!current) void this.router.navigate(['/models', body.id]);
+        this.modelSaved.emit(body);
+        if (!current && origin) void this.router.navigate(['/models', body.id, 'mappings'], { queryParams: { physicalSnapshotId: origin.snapshot.id, physicalTableId: origin.table.id } });
+        else if (!current) void this.router.navigate(['/models', body.id]);
       },
       error: (error: Error) => this.handleSaveError(error),
     });
@@ -526,9 +657,15 @@ export class LogicalModelEditorComponent {
       for (const field of model.fields) this.fields.push(this.createField(field.order, field));
     }
     if (!model.fields.length) this.fields.push(this.createField(1));
+    this.selectFieldById(this.selectedFieldId());
     this.departmentChanged(false); this.scopeChanged();
     this.assistanceProvenance.set(model.assistanceProvenance ?? []);
     this.form.markAsPristine();
+  }
+  private selectFieldById(fieldId: string | undefined): void {
+    if (!fieldId) { this.selectedFieldIndex.set(Math.min(this.selectedFieldIndex(), Math.max(0, this.fields.length - 1))); return; }
+    const index = this.fields.controls.findIndex((field) => [field.controls.id.value, field.controls.versionId.value].includes(fieldId));
+    if (index >= 0) this.selectedFieldIndex.set(index);
   }
   private value(): LogicalModelWrite {
     const dataset = this.form.controls.dataset.getRawValue();
@@ -543,7 +680,7 @@ export class LogicalModelEditorComponent {
         businessObjectVersionId: field.businessObjectVersionId || null,
         entityName: field.entityName ?? 'Entitaet_1',
         name: field.name ?? '',
-        dataType: field.dataType ?? 'xsd:string',
+        dataType: field.dataType ?? 'string',
         length: field.length || null,
         shortDescription: field.shortDescription ?? '',
         comment: field.comment || null,
@@ -558,6 +695,7 @@ export class LogicalModelEditorComponent {
         valueListConceptId,
         conceptIds: selection.conceptIds,
         primaryConceptId: selection.primaryConceptId,
+        conceptMatchExplicitlyNone: Boolean(field.physicalColumnId && field.conceptMode === 'none'),
       };
       return { write, entityId: field.entityId ?? '', entityName: field.entityName ?? 'Entitaet_1', entityBusinessObject: this.businessObjectName(field.entityBusinessObjectVersionId) || field.entityBusinessObject || '', entityBusinessObjectVersionId: field.entityBusinessObjectVersionId || null, entityComment: field.entityComment ?? '', entityOrder: field.entityOrder ?? index + 1 };
     });
@@ -795,6 +933,9 @@ export class LogicalModelEditorComponent {
   private localizedValue(target: 'title' | 'description', language: string): string { const key = `${target}${language[0].toUpperCase()}${language.slice(1)}`; const c=this.form.controls.dataset.controls; switch(key){case'titleFr':return c.titleFr.value;case'titleIt':return c.titleIt.value;case'titleEn':return c.titleEn.value;case'titleRm':return c.titleRm.value;case'descriptionFr':return c.descriptionFr.value;case'descriptionIt':return c.descriptionIt.value;case'descriptionEn':return c.descriptionEn.value;case'descriptionRm':return c.descriptionRm.value;default:return'';} }
   private setLocalizedValue(field: string, value: string): void { const c=this.form.controls.dataset.controls; switch(field){case'titleFr':c.titleFr.setValue(value);c.titleFr.markAsDirty();break;case'titleIt':c.titleIt.setValue(value);c.titleIt.markAsDirty();break;case'titleEn':c.titleEn.setValue(value);c.titleEn.markAsDirty();break;case'titleRm':c.titleRm.setValue(value);c.titleRm.markAsDirty();break;case'descriptionFr':c.descriptionFr.setValue(value);c.descriptionFr.markAsDirty();break;case'descriptionIt':c.descriptionIt.setValue(value);c.descriptionIt.markAsDirty();break;case'descriptionEn':c.descriptionEn.setValue(value);c.descriptionEn.markAsDirty();break;case'descriptionRm':c.descriptionRm.setValue(value);c.descriptionRm.markAsDirty();break;} }
   private loadCachedConcept(conceptId:string):void{this.conceptsApi.load(conceptId).subscribe({next:(detail)=>this.concepts.update((items)=>items.some((item)=>item.id===detail.id)?items.map((item)=>item.id===detail.id?detail:item):[...items,detail]),error:()=>undefined});}
+  knownDataType(value:string|null):boolean{return Boolean(value&&['string','integer','decimal','date','datetime','boolean','time','uuid','json','binary','array'].includes(value));}
+  private tableTitle(table:PhysicalTable):string{return table.name.toLocaleUpperCase('de-CH')===table.name?table.name:table.name.split(/[_-]+/).map((part)=>part.charAt(0).toLocaleUpperCase('de-CH')+part.slice(1)).join(' ');}
+  private logicalName(value:string):string{const normalized=value.trim().replace(/[^A-Za-z0-9_.-]+/g,'_');return /^[A-Za-z_]/.test(normalized)?normalized:`_${normalized}`;}
   private saveExport(file:LogicalModelExportFile):void{const objectUrl=URL.createObjectURL(file.blob);const anchor=document.createElement('a');anchor.href=objectUrl;anchor.download=file.filename;anchor.hidden=true;document.body.append(anchor);try{anchor.click();this.notice.set(`${file.filename} wurde heruntergeladen.`);}finally{anchor.remove();URL.revokeObjectURL(objectUrl);}}
   private creatorFormValue(creator:LogicalModelCreator|null):{creatorName:string;creatorIdentifier:string;creatorPersonName:string}{if(!creator)return{creatorName:'',creatorIdentifier:'',creatorPersonName:''};switch(creator.type){case'application':return{creatorName:creator.applicationName,creatorIdentifier:'',creatorPersonName:''};case'internal_organisation':return{creatorName:creator.englishName,creatorIdentifier:creator.organizationId,creatorPersonName:''};case'internal_person':return{creatorName:creator.userId,creatorIdentifier:'',creatorPersonName:''};case'external_organisation_or_person':return{creatorName:creator.organizationName,creatorIdentifier:'',creatorPersonName:creator.personName??''};}}
   private creatorValue(type:CreatorType|'',name:string,identifier:string,personName:string):LogicalModelCreator|null{switch(type){case'application':return{type,applicationName:name.trim()};case'internal_organisation':return{type,organizationId:identifier.trim(),englishName:name.trim()};case'internal_person':return{type,userId:name.trim()};case'external_organisation_or_person':return{type,organizationName:name.trim(),personName:personName.trim()||null};default:return null;}}
