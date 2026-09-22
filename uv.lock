@@ -57,7 +57,7 @@ wheels = [
 
 [[package]]
 name = "bit-daca-monorepo"
-version = "0.1.26"
+version = "0.1.27"
 source = { virtual = "." }
 
 [package.dev-dependencies]
@@ -149,7 +149,7 @@ wheels = [
 
 [[package]]
 name = "daca-catalog-api"
-version = "0.1.26"
+version = "0.1.27"
 source = { editable = "services/catalog-api" }
 dependencies = [
     { name = "alembic" },
@@ -191,7 +191,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "daca-control-plane-api"
-version = "0.1.26"
+version = "0.1.27"
 source = { editable = "services/control-plane-api" }
 dependencies = [
     { name = "alembic" },
@@ -225,7 +225,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "daca-journey-runner"
-version = "0.1.26"
+version = "0.1.27"
 source = { editable = "journeys/runner" }
 dependencies = [
     { name = "httpx" },
@@ -242,7 +242,7 @@ requires-dist = [
 
 [[package]]
 name = "daca-sample-data-product"
-version = "0.1.26"
+version = "0.1.27"
 source = { editable = "services/sample-data-product" }
 dependencies = [
     { name = "alembic" },

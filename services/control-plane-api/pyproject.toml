@@ -1,6 +1,6 @@
 [project]
 name = "daca-control-plane-api"
-version = "0.1.26"
+version = "0.1.27"
 description = "BIT DaCa control-plane API"
 readme = "README.md"
 requires-python = ">=3.14"
