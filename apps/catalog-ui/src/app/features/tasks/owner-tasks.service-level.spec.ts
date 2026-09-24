@@ -111,6 +111,8 @@ describe('OwnerTasksComponent service-level workflow task', () => {
     expect(root.textContent).toContain('Aufgabenstatus unbekannt');
     expect(root.textContent).toContain('Weitere Aufgaben konnten nicht geladen werden');
     expect(root.textContent).not.toContain('0 offene Aufgaben');
+    expect(api.refreshWorkflowTasks).toHaveBeenCalledOnce();
+    api.refreshWorkflowTasks.mockClear();
     root.querySelector<HTMLButtonElement>('[data-testid="retry-workflow-tasks"]')!.click();
     expect(api.refreshWorkflowTasks).toHaveBeenCalledOnce();
   });

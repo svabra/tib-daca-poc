@@ -19,6 +19,7 @@ from .models import (
     IdentityGroup,
     IdentityGroupMembership,
     PocProductFixture,
+    RoleChangeEvent,
     SourceCatalogEntry,
     WorkflowTask,
 )
@@ -30,6 +31,15 @@ ONTOLOGY_URI = "urn:daca:ontology:tax:v1"
 
 def stable_id(value: str) -> uuid.UUID:
     return uuid.uuid5(POC_NAMESPACE, value)
+
+
+def _owner_changed_after_baseline(session: Session, product_id: uuid.UUID, role: str) -> bool:
+    return session.scalar(select(RoleChangeEvent.sequence).where(
+        RoleChangeEvent.scope_type == "data_product",
+        RoleChangeEvent.scope_id == str(product_id),
+        RoleChangeEvent.role == role,
+        RoleChangeEvent.action.in_(("changed", "removed")),
+    ).limit(1)) is not None
 
 
 # Current federal structure used by the PoC identity directory. The ordering follows
@@ -353,7 +363,7 @@ DIRECTORY_GROUPS = (
     ("estv-data-stewards", "ESTV Data Stewards", "Verantwortliche für Metadatenqualität und Governance der ESTV", "federal", ("kassandra.valdata", "ariane.keller")),
     ("bund-forschung", "Forschung Bund", "Bundesmitarbeitende mit Aufgaben in Analyse und Forschung", "federal", ("daniel.aebischer", "kassandra.valdata")),
     ("efd-efv-bundestresorerie", "EFD – EFV / Bundestresorerie", "Systemverwaltete Empfängergruppe der Eidgenössischen Finanzverwaltung", "federal", ("daniel.aebischer",)),
-    ("estv-business-intelligence", "ESTV Business Intelligence", "Vertrauenswürdige Analysegruppe der ESTV für föderierte Datenquellen", "federal", ("joel.ruod", "kassandra.valdata")),
+    ("estv-business-intelligence", "ESTV Business Intelligence", "Vertrauenswürdige Analysegruppe der ESTV für zentral katalogisierte Datenquellen", "federal", ("joel.ruod", "kassandra.valdata")),
     ("estv-advanced-analytics", "ESTV Advanced Analytics", "Data-Science- und Advanced-Analytics-Fachgruppe der ESTV", "federal", ("joel.ruod", "ariane.keller")),
     ("efd-data-community", "EFD Data Community", "Departementsweite Community für verantwortungsvolle Datennutzung", "federal", ("joel.ruod", "daniel.aebischer", "marc.gisler")),
 )
@@ -792,7 +802,7 @@ def seed_workflow_reference_data(session: Session) -> bool:
     }
     for product_id, owner_id in owner_mapping.items():
         product = session.get(DataProduct, uuid.UUID(product_id))
-        if product is not None and product.owner_user_id != owner_id:
+        if product is not None and product.owner_user_id != owner_id and not _owner_changed_after_baseline(session, product.id, "data_owner"):
             product.owner_user_id = owner_id
             product.discoverable = True
             changed = True
@@ -808,7 +818,7 @@ def seed_workflow_reference_data(session: Session) -> bool:
     }
     for product_id, deputy_id in deputy_mapping.items():
         product = session.get(DataProduct, uuid.UUID(product_id))
-        if product is not None and product.deputy_owner_user_id != deputy_id:
+        if product is not None and product.deputy_owner_user_id != deputy_id and not _owner_changed_after_baseline(session, product.id, "deputy_data_owner"):
             product.deputy_owner_user_id = deputy_id
             changed = True
 
@@ -821,7 +831,7 @@ def seed_workflow_reference_data(session: Session) -> bool:
             if product.deputy_owner_user_id
             else None
         )
-        if not is_active_deputy(owner, current_deputy):
+        if not is_active_deputy(owner, current_deputy) and not _owner_changed_after_baseline(session, product.id, "deputy_data_owner"):
             previous = product.deputy_owner_user_id
             assign_default_deputy_owner(session, product)
             if product.deputy_owner_user_id != previous:

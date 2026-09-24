@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, HostListener, inject, OnDestroy, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { CatalogApiService } from '../../core/catalog-api.service';
+import { CatalogI18nService, type CatalogTranslationKey } from '../../core/catalog-i18n.service';
 import { DataProduct, OwnedAccessConsumer } from '../../core/catalog.models';
 import { QualityMedalComponent, QualityMedalLevel } from '../../shared/quality-medal.component';
 import {
@@ -40,43 +41,39 @@ interface DeputyTooltipState {
     <section class="daca-page-heading product-index-heading">
       <div>
         <p class="daca-eyebrow">Data Owner Workspace</p>
-        <h1>Meine Datenprodukte</h1>
-        <p>Finden Sie Datenprodukte, die Sie anbieten, freigegeben oder angefragt haben – sowie Produkte, die für Sie freigegeben wurden.</p>
+        <h1>{{ i18n.t('myProducts') }}</h1>
+        <p>{{ i18n.t('myProductsIntro') }}</p>
       </div>
-      <aside class="product-index-identity" aria-label="Aktueller Arbeitskontext">
-        @if (api.identityUser().avatarUrl) { <img class="product-index-avatar" [src]="api.identityUser().avatarUrl!" alt=""> }
-        <span><small>Aktueller Arbeitskontext</small><strong>{{ api.identityUser().displayName }}</strong><small>{{ api.identityUser().organization }}</small></span>
-      </aside>
     </section>
 
     @if (api.usingFallback()) {
-      <p class="daca-alert is-warning">Vorschaudaten: Die PostgreSQL-gestützte Katalog-API ist lokal nicht erreichbar. Suche und Filter bleiben mit dem identischen ESTV-Beispielportfolio nutzbar.</p>
+      <p class="daca-alert is-warning">{{ i18n.t('previewDataWarning') }}</p>
     }
 
     <section class="daca-card product-search" aria-labelledby="product-search-title">
       <div class="product-search-main">
         <div>
-          <p class="daca-eyebrow">Katalog durchsuchen</p>
-          <h2 id="product-search-title">Welches Datenprodukt suchen Sie?</h2>
-          <p>Titel, Fachgebiet, Behörde, Kanton, Gemeinde oder Machine ID eingeben.</p>
+          <p class="daca-eyebrow">{{ i18n.t('catalogSearch') }}</p>
+          <h2 id="product-search-title">{{ i18n.t('whichProduct') }}</h2>
+          <p>{{ i18n.t('productSearchIntro') }}</p>
         </div>
         <label class="product-search-field">
-          <span>Suchbegriff</span>
+          <span>{{ i18n.t('searchTerm') }}</span>
           <span class="product-search-control">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
             <input
               type="search"
               [value]="query()"
               (input)="updateQuery($event)"
-              placeholder="z. B. Bundessteuer, Kanton oder svc-estv-…"
+              [placeholder]="i18n.t('productSearchPlaceholder')"
               autocomplete="off"
             >
-            @if (query()) { <button type="button" (click)="query.set('')">Zurücksetzen</button> }
+            @if (query()) { <button type="button" (click)="query.set('')">{{ i18n.t('clear') }}</button> }
           </span>
         </label>
       </div>
 
-      <div class="product-filter-row" aria-label="Datenprodukte nach Beziehung filtern">
+      <div class="product-filter-row" [attr.aria-label]="i18n.t('filterProductRelationship')">
         @for (item of filters; track item.value) {
           <button
             type="button"
@@ -85,7 +82,7 @@ interface DeputyTooltipState {
             aria-controls="product-results"
             (click)="filter.set(item.value)"
           >
-            <span>{{ item.label }}</span><strong>{{ filterCount(item.value) }}</strong>
+            <span>{{ i18n.t(filterKey(item.value)) }}</span><strong>{{ filterCount(item.value) }}</strong>
           </button>
         }
       </div>
@@ -94,22 +91,22 @@ interface DeputyTooltipState {
     <section class="product-results" id="product-results" aria-live="polite">
       <div class="product-results-heading">
         <div>
-          <p class="daca-eyebrow">Ergebnisse</p>
+          <p class="daca-eyebrow">{{ i18n.t('results') }}</p>
           <h2>{{ productCountLabel(filteredProducts().length) }}</h2>
         </div>
         <div class="product-results-tools">
           <p>
-            @if (api.loading()) { Katalog wird aktualisiert… }
-            @else { Für {{ api.identityUser().displayName }} · {{ api.identityUser().organization }} }
+            @if (api.loading()) { {{ i18n.t('updatingCatalog') }} }
+            @else { {{ i18n.t('forPerson', { name: api.identityUser().displayName }) }} · {{ api.identityUser().organization }} }
           </p>
-          <div class="product-view-switch" role="group" aria-label="Darstellung der Datenprodukte">
+          <div class="product-view-switch" role="group" [attr.aria-label]="i18n.t('productView')">
             <button type="button" [class.is-active]="viewMode() === 'records'" [attr.aria-pressed]="viewMode() === 'records'" (click)="setViewMode('records')">
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="6"/><rect x="3.5" y="14" width="17" height="6"/></svg>
-              <span>Records</span>
+              <span>{{ i18n.t('records') }}</span>
             </button>
             <button type="button" [class.is-active]="viewMode() === 'table'" [attr.aria-pressed]="viewMode() === 'table'" (click)="setViewMode('table')">
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16"/><path d="M3.5 9h17M9 4v16M15 4v16"/></svg>
-              <span>Tabelle</span>
+              <span>{{ i18n.t('table') }}</span>
             </button>
           </div>
         </div>
@@ -133,9 +130,9 @@ interface DeputyTooltipState {
 
       @if (filteredProducts().length === 0) {
         <div class="daca-card product-empty">
-          <strong>Keine passenden Datenprodukte gefunden.</strong>
-          <p>Ändern Sie den Suchbegriff oder wählen Sie eine andere Beziehung.</p>
-          <button class="daca-button is-secondary" type="button" (click)="resetFilters()">Alle Datenprodukte anzeigen</button>
+          <strong>{{ i18n.t('noProducts') }}</strong>
+          <p>{{ i18n.t('changeProductFilter') }}</p>
+          <button class="daca-button is-secondary" type="button" (click)="resetFilters()">{{ i18n.t('showAllProducts') }}</button>
         </div>
       } @else if (viewMode() === 'records') {
         <div class="product-list">
@@ -591,6 +588,7 @@ interface DeputyTooltipState {
 })
 export class MyDataProductsComponent implements OnDestroy {
   readonly api = inject(CatalogApiService);
+  readonly i18n = inject(CatalogI18nService);
   private readonly route = inject(ActivatedRoute);
   readonly query = signal('');
   readonly filter = signal<ProductRelationshipFilter>(DEFAULT_PRODUCT_RELATIONSHIP_FILTER);
@@ -1011,19 +1009,24 @@ export class MyDataProductsComponent implements OnDestroy {
   }
 
   classificationLabel(value: DataProduct['classification']): string {
-    return ({ public: 'Öffentlich', internal: 'Intern', confidential: 'Vertraulich', restricted: 'Eingeschränkt' })[value];
+    return this.i18n.t(({ public: 'public', internal: 'internal', confidential: 'confidential', restricted: 'restricted' } as const)[value]);
   }
 
   lifecycleLabel(value: DataProduct['lifecycle']): string {
-    return ({ draft: 'Entwurf', active: 'Aktiv', deprecated: 'Abgekündigt', retired: 'Ausser Betrieb' })[value];
+    return this.i18n.t(({ draft: 'draft', active: 'active', deprecated: 'deprecated', retired: 'retired' } as const)[value]);
   }
 
   productCountLabel(count: number): string {
-    return `${count} ${count === 1 ? 'Datenprodukt' : 'Datenprodukte'}`;
+    return this.i18n.t(count === 1 ? 'productCountSingular' : 'productCount', { count });
   }
 
   frequencyLabel(value: string): string {
-    return ({ annual: 'Jährlich', quarterly: 'Vierteljährlich', monthly: 'Monatlich' } as Record<string, string>)[value] ?? value;
+    const key = ({ annual: 'annually', quarterly: 'quarterly', monthly: 'monthly' } as Record<string, CatalogTranslationKey>)[value];
+    return key ? this.i18n.t(key) : value;
+  }
+
+  filterKey(value: ProductRelationshipFilter): CatalogTranslationKey {
+    return ({ all: 'allProducts', offered: 'offeredByMe', sharedByMe: 'sharedByMe', requestedByMe: 'requestedByMe', sharedWithMe: 'sharedWithMe' } as const)[value];
   }
 
   resetFilters(): void {

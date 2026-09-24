@@ -12,7 +12,6 @@ import { CreatorType, DataClassification, LogicalEntity, LogicalEntityWrite, Log
 import { DatasetSummaryComponent } from './dataset-summary.component';
 import { LogicalModelGovernanceComponent } from './logical-model-governance.component';
 import { BusinessObjectTerm, FederalOrganization, ModelingAssistanceService, ModelingScope, TermdatEntry } from './modeling-assistance.service';
-import { WorkContextComponent } from './work-context.component';
 import { LogicalModelFieldHelpDirective } from './logical-model-field-help.directive';
 import { LogicalFieldCharacteristicsComponent } from './logical-field-characteristics.component';
 
@@ -47,22 +46,35 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
 
 @Component({
   selector: 'daca-logical-model-editor', standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, DataModelWorkspaceNavComponent, DatasetSummaryComponent, LogicalModelGovernanceComponent, WorkContextComponent, LogicalModelFieldHelpDirective, LogicalFieldCharacteristicsComponent],
+  imports: [ReactiveFormsModule, RouterLink, DataModelWorkspaceNavComponent, DatasetSummaryComponent, LogicalModelGovernanceComponent, LogicalModelFieldHelpDirective, LogicalFieldCharacteristicsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (!embedded()) {
     @if (model(); as current) { <daca-data-model-workspace-nav [modelId]="current.id" [modelTitle]="current.title.de" activeSection="model" /> }
     <section class="daca-page-heading model-editor-heading">
-      <div><p class="daca-eyebrow">{{ model() ? 'Logisches Datenmodell' : 'Neues logisches Datenmodell' }}</p><h1>{{ model()?.title?.de || 'Modell erfassen' }}</h1><p>Modellmerkmale und SHACL-Feldmerkmale bleiben getrennt. Eine physische Quelle ist nicht erforderlich.</p></div>
-      <div class="heading-tools"><label class="classification-hero" dacaFieldHelp="classification">Klassifizierung<select [formControl]="form.controls.dataset.controls.classification"><option value="unclassified">Nicht klassifiziert</option><option value="internal">Intern</option><option value="confidential">Vertraulich</option><option value="secret" disabled>Geheim</option></select></label><daca-work-context [user]="identity.user()" /></div>
+      <div><p class="daca-eyebrow">{{ model() ? 'Logisches Datenmodell' : 'Neues logisches Datenmodell' }}</p><h1>{{ form.controls.dataset.controls.titleDe.value || model()?.title?.de || 'Modell erfassen' }}</h1><p>Modellmerkmale und SHACL-Feldmerkmale bleiben getrennt. Eine physische Quelle ist nicht erforderlich.</p></div>
+      <div class="heading-tools"><label class="classification-hero" dacaFieldHelp="classification">Klassifizierung<select [formControl]="form.controls.dataset.controls.classification"><option value="unclassified">Nicht klassifiziert</option><option value="internal">Intern</option><option value="confidential">Vertraulich</option><option value="secret" disabled>Geheim</option></select></label></div>
     </section>
+    <nav class="model-detail-tabs" role="tablist" aria-label="Bereiche des logischen Modells" (keydown)="onTabKeydown($event)">
+      <button id="model-tab-status" type="button" role="tab" aria-controls="model-panel-status" [attr.aria-selected]="activeTab()==='status'" [attr.tabindex]="activeTab()==='status' ? 0 : -1" [class.is-active]="activeTab()==='status'" (click)="selectTab('status')">Status &amp; Klassifikation</button>
+      <button id="model-tab-model" type="button" role="tab" aria-controls="model-panel-model" [attr.aria-selected]="activeTab()==='model'" [attr.tabindex]="activeTab()==='model' ? 0 : -1" [class.is-active]="activeTab()==='model'" (click)="selectTab('model')">Model Merkmale</button>
+      <button id="model-tab-fields" type="button" role="tab" aria-controls="model-panel-fields" [attr.aria-selected]="activeTab()==='fields'" [attr.tabindex]="activeTab()==='fields' ? 0 : -1" [class.is-active]="activeTab()==='fields'" (click)="selectTab('fields')">Logische Entitäten und Felder</button>
+    </nav>
     @if (derivedOrigin(); as origin) {
-      <aside class="daca-card derived-origin" aria-label="Herkunft der Ableitung">
+      <aside class="daca-card derived-origin" aria-label="Herkunft der Ableitung" [hidden]="activeTab()!=='model'">
         <div><p class="daca-eyebrow">Physical-first</p><h2>Aus physischer Repräsentation vorbereitet</h2><p>Alle fachlichen Angaben bleiben editierbar. Umbenannte Felder behalten ihre physische Bindung; entfernte Felder werden nicht gemappt.</p></div>
         <dl><div><dt>Quelle</dt><dd>{{ origin.source.name }}</dd></div><div><dt>Objekt</dt><dd><code>{{ origin.snapshot.databaseName }}.{{ origin.table.schemaName }}.{{ origin.table.name }}</code></dd></div><div><dt>Snapshot</dt><dd>{{ origin.snapshot.revision }} · <code>{{ origin.snapshot.id }}</code></dd></div></dl>
       </aside>
-    } @else if (sourceSnapshotId()) { <p class="daca-alert">Dieser Entwurf wurde aus dem physischen Snapshot <code>{{ sourceSnapshotId() }}</code> vorbereitet. Alle Vorschlagswerte bleiben editierbar.</p> }
-    @if (model(); as current) { <daca-dataset-summary [model]="current" /><daca-logical-model-governance [model]="current" /> }
+    } @else if (sourceSnapshotId()) { <p class="daca-alert" [hidden]="activeTab()!=='model'">Dieser Entwurf wurde aus dem physischen Snapshot <code>{{ sourceSnapshotId() }}</code> vorbereitet. Alle Vorschlagswerte bleiben editierbar.</p> }
+    <section id="model-panel-status" role="tabpanel" aria-labelledby="model-tab-status" [hidden]="activeTab()!=='status'">
+      @if (model(); as current) {
+        <daca-dataset-summary [model]="current" />
+        <daca-logical-model-governance [model]="current" />
+        <section class="daca-card export-section"><div><p class="daca-eyebrow">Repräsentationen</p><h2>DCAT-AP-CH und SHACL</h2><p>Der Datensatz und seine logische Struktur bleiben getrennte, verlinkte Exporte.</p></div><div><button class="daca-button is-secondary" type="button" [disabled]="exporting()!==null" (click)="downloadExport(current,'dcat-ttl')">DCAT TTL herunterladen</button><button class="daca-button is-secondary" type="button" [disabled]="exporting()!==null" (click)="downloadExport(current,'dcat-jsonld')">DCAT JSON-LD herunterladen</button><button class="daca-button is-secondary" type="button" [disabled]="exporting()!==null" (click)="downloadExport(current,'shacl-ttl')">SHACL TTL herunterladen</button><button class="daca-button is-secondary" type="button" [disabled]="exporting()!==null" (click)="downloadExport(current,'shacl-jsonld')">SHACL JSON-LD herunterladen</button></div></section>
+      } @else {
+        <div class="daca-card editor-state">Status und Versionshistorie erscheinen nach dem ersten Speichern des Modells.</div>
+      }
+    </section>
     }
     @if (notice()) { <p class="daca-alert is-success" role="status">{{ notice() }}</p> }
     @if (error()) { <p class="daca-alert is-error" role="alert">{{ error() }}</p> }
@@ -75,11 +87,12 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
           @if (fields.at(selectedFieldIndex()); as selectedField) {
             <daca-logical-field-characteristics [field]="selectedField" [businessObjects]="businessObjects()" [concepts]="concepts()" [conceptReferences]="fieldConceptReferences()" [compact]="true" />
           }
+          <button class="remove-field" type="button" [disabled]="fields.length===1 || !canEditCurrentModel()" (click)="removeSelectedField()">Logisches Feld entfernen</button>
           <footer class="field-panel-actions"><span>{{ form.dirty ? 'Ungespeicherte Änderungen' : 'Alle Änderungen gespeichert' }}</span><button class="daca-button" type="submit" [disabled]="saving() || !form.dirty || !canEditCurrentModel()">{{ saving() ? 'Wird gespeichert …' : 'Feldmerkmale speichern' }}</button></footer>
         </form>
       } @else {
       <form [formGroup]="form" (ngSubmit)="save()" class="model-editor-form" [class.is-embedded]="embedded()" [class.validation-attempted]="validationAttempted()">
-        <section class="daca-card editor-section" formGroupName="dataset">
+        <section class="daca-card editor-section" formGroupName="dataset" [hidden]="!embedded() && activeTab()!=='model'" [attr.role]="embedded() ? null : 'tabpanel'" [attr.id]="embedded() ? null : 'model-panel-model'" [attr.aria-labelledby]="embedded() ? null : 'model-tab-model'">
           <header><div><span>02</span><div><p class="daca-eyebrow">Modellebene</p><h2>Model Merkmale</h2></div></div><small>DCAT-AP-CH und organisatorischer Kontext</small></header>
           <div class="editor-grid">
             <div class="is-wide termdat-title-field" dacaFieldHelp="titleDe"><label for="logical-model-title-de">Titel (Deutsch) *</label><div class="termdat-input-group"><input id="logical-model-title-de" formControlName="titleDe" (input)="resetTermdatSearch()" (blur)="assistTitle()"><button type="button" (click)="openTermdat()">In TERMDAT suchen</button></div></div>
@@ -106,13 +119,13 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
           </div>
         </section>
 
-        <section class="daca-card editor-section structure-section">
+        <section class="daca-card editor-section structure-section" [hidden]="!embedded() && activeTab()!=='fields'" [attr.role]="embedded() ? null : 'tabpanel'" [attr.id]="embedded() ? null : 'model-panel-fields'" [attr.aria-labelledby]="embedded() ? null : 'model-tab-fields'">
           <header><div><span>01</span><div><p class="daca-eyebrow">SHACL-Strukturebene</p><h2>Logische Entitäten und Felder</h2></div></div><div class="structure-actions"><button class="daca-button is-secondary" type="button" (click)="addEntity()">Entität hinzufügen</button><button class="daca-button" type="button" (click)="addField()">Feld hinzufügen</button></div></header>
           <div class="field-workbench field-list" formArrayName="fields">
             <section class="field-browser" aria-labelledby="field-browser-title">
               <header><div><p class="daca-eyebrow">Struktur</p><h3 id="field-browser-title">{{ fields.length }} Felder</h3></div><nav aria-label="Darstellung der Modellstruktur"><button type="button" [class.is-active]="structureView()==='table'" [attr.aria-pressed]="structureView()==='table'" (click)="structureView.set('table')">Tabelle</button><button type="button" [class.is-active]="structureView()==='relation'" [attr.aria-pressed]="structureView()==='relation'" (click)="structureView.set('relation')">Relation</button></nav></header>
               @if(structureView()==='table'){
-                <div class="field-table-wrap"><table class="field-table"><thead><tr><th>Feld</th><th>Entität</th><th>Datentyp</th><th>Kardinalität</th><th><span class="visually-hidden">Aktionen</span></th></tr></thead><tbody>@for(field of fields.controls;track field;let index=$index){<tr [class.is-selected]="selectedFieldIndex()===index"><td><button class="field-select" type="button" (click)="selectField(index)"><strong>{{ field.controls.name.value || 'Unbenannt' }}</strong><small>Position {{ field.controls.order.value }}</small></button></td><td>{{ field.controls.entityName.value }}</td><td>{{ field.controls.dataType.value }}@if(field.controls.length.value){ · L {{ field.controls.length.value }}}</td><td>{{ field.controls.minCount.value }}..{{ field.controls.maxCount.value ?? '*' }}</td><td><button class="remove-field" type="button" [disabled]="fields.length===1" [attr.aria-label]="(field.controls.name.value || 'Feld') + ' entfernen'" (click)="removeField(index)">Entfernen</button></td></tr>}</tbody></table></div>
+                 <div class="field-table-wrap"><table class="field-table"><thead><tr><th>Feld</th><th>Entität</th><th>Datentyp</th><th>Kardinalität</th><th aria-label="Aktionen"></th></tr></thead><tbody>@for(field of fields.controls;track field;let index=$index){<tr [class.is-selected]="selectedFieldIndex()===index"><td><button class="field-select" type="button" (click)="selectField(index)"><strong>{{ field.controls.name.value || 'Unbenannt' }}</strong><small>Position {{ field.controls.order.value }}</small></button></td><td>{{ field.controls.entityName.value }}</td><td>{{ field.controls.dataType.value }}@if(field.controls.length.value){ · L {{ field.controls.length.value }}}</td><td>{{ field.controls.minCount.value }}..{{ field.controls.maxCount.value ?? '*' }}</td><td><button class="remove-field" type="button" [disabled]="fields.length===1" [attr.aria-label]="(field.controls.name.value || 'Feld') + ' entfernen'" (click)="removeField(index)">Entfernen</button></td></tr>}</tbody></table></div>
               } @else {
                 <div class="relation-list">@for(field of fields.controls;track field;let index=$index){<button type="button" [class.is-selected]="selectedFieldIndex()===index" (click)="selectField(index)"><span><small>Logisch</small><strong>{{ field.controls.entityName.value }}.{{ field.controls.name.value || 'Unbenannt' }}</strong></span><span><small>Physisch</small><strong>{{ field.controls.physicalColumnName.value || 'Keine Repräsentation' }}</strong></span></button>}</div>
               }
@@ -120,10 +133,6 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
             @if(fields.at(selectedFieldIndex());as selectedField){<daca-logical-field-characteristics [field]="selectedField" [businessObjects]="businessObjects()" [concepts]="concepts()" [conceptReferences]="fieldConceptReferences()" />}
           </div>
         </section>
-
-        @if (!embedded() && model(); as current) {
-          <section class="daca-card export-section"><div><p class="daca-eyebrow">Repräsentationen</p><h2>DCAT-AP-CH und SHACL</h2><p>Der Datensatz und seine logische Struktur bleiben getrennte, verlinkte Exporte.</p></div><div><button class="daca-button is-secondary" type="button" [disabled]="exporting()!==null" (click)="downloadExport(current,'dcat-ttl')">DCAT TTL herunterladen</button><button class="daca-button is-secondary" type="button" [disabled]="exporting()!==null" (click)="downloadExport(current,'dcat-jsonld')">DCAT JSON-LD herunterladen</button><button class="daca-button is-secondary" type="button" [disabled]="exporting()!==null" (click)="downloadExport(current,'shacl-ttl')">SHACL TTL herunterladen</button><button class="daca-button is-secondary" type="button" [disabled]="exporting()!==null" (click)="downloadExport(current,'shacl-jsonld')">SHACL JSON-LD herunterladen</button></div></section>
-        }
 
         <footer class="editor-actions">
           <div class="editor-footer-context">@if(!embedded()){<a class="daca-button is-secondary" routerLink="/models">Zur Übersicht</a>}<span>{{ form.dirty ? 'Ungespeicherte Änderungen' : 'Alle Änderungen gespeichert' }}</span></div>
@@ -145,7 +154,15 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
   styles: [`
     .model-editor-heading{align-items:center}.editor-state{padding:2rem;box-shadow:none}.model-editor-form{display:grid;gap:1.25rem}.editor-section{box-shadow:none}.editor-section>header{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.1rem 1.25rem;border-bottom:1px solid var(--daca-border)}.editor-section>header>div{display:flex;align-items:center;gap:1rem}.editor-section>header>div>span{display:grid;place-items:center;width:38px;height:38px;background:var(--daca-federal-blue);color:#fff;font-weight:800}.editor-section h2{margin:0;font-size:1.12rem}.editor-section header small{color:var(--daca-muted)}.structure-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.5rem}.editor-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;padding:1.25rem}.editor-grid label{display:grid;align-content:start;gap:.4rem;color:#30363b;font-size:.72rem;font-weight:750}.editor-grid input,.editor-grid select,.editor-grid textarea{width:100%;min-height:42px;border:1px solid var(--daca-border-strong);border-radius:0;padding:.55rem .65rem;background:#fff;color:var(--daca-ink)}.validation-attempted input.ng-invalid,.validation-attempted select.ng-invalid,.validation-attempted textarea.ng-invalid{border-color:#b3162b!important;background:rgba(179,22,43,.10)!important}.editor-grid textarea{resize:vertical}.editor-grid label>small{color:var(--daca-muted);font-size:.64rem;font-weight:500}.editor-grid .is-wide{grid-column:1/-1}.termdat-feedback{display:flex;min-height:44px;align-items:center;justify-content:space-between;gap:.8rem;border-left:4px solid var(--daca-border-strong);padding:.7rem .85rem;background:#f4f6f7;color:var(--daca-muted);font-size:.72rem}.termdat-feedback.has-hits{border-left-color:#167347;background:#edf7f0;color:#174c32}.termdat-feedback button{min-height:40px;border:1px solid currentColor;padding:.45rem .75rem;background:#fff;color:inherit;font-weight:750;cursor:pointer}.termdat-loading{display:flex;align-items:center;gap:.65rem}.termdat-spinner{display:block;box-sizing:border-box;width:20px;height:20px;flex:0 0 20px;border:3px solid rgba(31,111,139,.34);border-top-color:#176783;border-radius:999px;animation:termdat-spinner-rotate .8s linear infinite;transform-origin:center}@keyframes termdat-spinner-rotate{to{transform:rotate(360deg)}}.termdat-modal{width:min(1040px,100%)}.termdat-modal li{grid-template-columns:minmax(0,1fr) minmax(390px,1.15fr);align-items:start}.termdat-result-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;gap:.55rem;width:100%}.termdat-result-actions .daca-button{width:100%;min-height:48px;padding:.65rem .85rem;font-weight:800;line-height:1.25;text-align:center;white-space:normal}.termdat-result-actions .daca-button:first-child{grid-column:1/-1}.termdat-result-actions .daca-button:disabled{font-weight:800}.termdat-adoption{display:grid;scroll-margin-block:1rem;gap:.75rem;margin:1rem 0;border-left:4px solid var(--daca-federal-blue);padding:1rem;background:#eef5f8}.termdat-adoption h3,.termdat-adoption p{margin:0}.termdat-overwrite-warning{border-left:4px solid #b26a00;padding:.65rem .8rem;background:#fff1c7;color:#4f3d00}.termdat-adoption-row{display:grid;grid-template-columns:minmax(8rem,.7fr) 1fr 1fr auto;align-items:start;gap:.7rem;border-top:1px solid var(--daca-border);padding-top:.7rem}.termdat-adoption-row>span{display:grid;gap:.2rem;white-space:pre-wrap}.termdat-adoption-row small{color:var(--daca-muted);font-weight:700;text-transform:uppercase}.termdat-adoption-row em{padding:.2rem .4rem;background:#fff1c7;color:#634c00;font-size:.67rem;font-style:normal;font-weight:750}.termdat-adoption-actions{display:flex;justify-content:flex-end;gap:.5rem}.termdat-adoption-actions .daca-button{min-width:190px;font-weight:800}.role-assignment{display:grid;align-content:start;gap:.25rem;border-left:4px solid var(--daca-blue);padding:.65rem .8rem;background:var(--daca-blue-soft);font-size:.7rem}.role-assignment small{color:var(--daca-muted);font-size:.62rem}.language-details{border:1px solid var(--daca-border);padding:.85rem}.language-details summary{cursor:pointer;font-weight:750}.language-details>div{display:grid;grid-template-columns:1fr 2fr;gap:.8rem;margin-top:1rem}.media-hint{display:grid;gap:.25rem;border-left:4px solid var(--daca-blue);padding:.8rem 1rem;background:var(--daca-blue-soft);font-size:.72rem}.media-hint span{color:var(--daca-muted)}.field-workbench{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(360px,.75fr);align-items:start;gap:.9rem;padding:.9rem;background:#f6f8f9}.field-browser{min-width:0;border:1px solid var(--daca-border);background:#fff}.field-browser>header{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.7rem .8rem;border-bottom:1px solid var(--daca-border)}.field-browser h3,.field-browser p{margin:.1rem 0}.field-browser h3{font-size:.95rem}.field-browser nav{display:flex}.field-browser nav button{min-height:36px;border:0;border-bottom:3px solid transparent;padding:.35rem .65rem;background:#fff;font-weight:750;cursor:pointer}.field-browser nav button.is-active{border-color:var(--daca-red);color:var(--daca-red-dark)}.field-table-wrap{overflow:auto}.field-table{width:100%;border-collapse:collapse;font-size:.67rem}.field-table th{padding:.55rem .65rem;background:#f2f5f7;color:var(--daca-muted);font-size:.57rem;text-align:left;text-transform:uppercase}.field-table td{border-top:1px solid var(--daca-border);padding:.48rem .65rem;vertical-align:middle}.field-table tr.is-selected{background:var(--daca-blue-soft);box-shadow:inset 4px 0 var(--daca-blue)}.field-select{display:grid;gap:.12rem;width:100%;border:0;padding:0;background:transparent;color:inherit;text-align:left;cursor:pointer}.field-select small{color:var(--daca-muted);font-size:.58rem}.remove-field{border:0;padding:.25rem;background:transparent;color:var(--daca-red-dark);font-size:.61rem;font-weight:750;cursor:pointer}.remove-field:disabled{color:var(--daca-muted);cursor:not-allowed}.relation-list{display:grid;padding:.55rem}.relation-list>button{display:grid;grid-template-columns:1fr 1fr;gap:1rem;border:0;border-bottom:1px solid var(--daca-border);padding:.65rem;background:#fff;text-align:left;cursor:pointer}.relation-list>button.is-selected{background:var(--daca-blue-soft);box-shadow:inset 4px 0 var(--daca-blue)}.relation-list span{display:grid;gap:.2rem}.relation-list small{color:var(--daca-muted);font-size:.56rem;font-weight:800;text-transform:uppercase}.relation-list strong{overflow-wrap:anywhere;font-size:.68rem}.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}.field-panel-form{display:grid;gap:.6rem}.field-panel-actions{position:sticky;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:.5rem;border:1px solid var(--daca-border);border-top:4px solid var(--daca-red);padding:.65rem;background:#fff;box-shadow:0 -6px 16px #15293d18}.field-panel-actions span{color:var(--daca-muted);font-size:.62rem}.field-panel-actions .daca-button{min-height:40px;padding:.45rem .65rem;font-size:.66rem}.export-section{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.25rem;border-top:4px solid var(--daca-red);box-shadow:none}.export-section h2,.export-section p{margin:.25rem 0}.export-section>div:last-child{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.5rem}.editor-actions{position:sticky;z-index:5;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:1rem;border:1px solid var(--daca-border);border-top:4px solid var(--daca-red);padding:.9rem 1rem;background:#fff;box-shadow:0 -8px 20px #15293d18}.editor-actions>div{display:flex;align-items:center;flex-wrap:wrap;gap:.6rem}.editor-actions .editor-primary-actions{align-items:flex-start;justify-content:flex-end}.save-action{display:grid;justify-items:stretch;gap:.45rem;min-width:250px}.save-validation,.save-problem{max-width:430px;margin:0;border-left:4px solid var(--daca-red);padding:.6rem .75rem;background:#fff0f0;color:var(--daca-red-dark);font-size:.7rem;text-align:left}.save-problem{display:grid;gap:.45rem}.save-problem p{margin:0}.save-problem-action{font-weight:700}.save-validation ul,.save-problem ul{display:grid;gap:.25rem;margin:.4rem 0 0;padding-left:1.1rem}.save-validation li span,.save-problem li span{color:inherit;font-size:inherit;font-weight:800}.save-validation li button,.save-problem li button{border:0;padding:0;background:transparent;color:inherit;text-align:left;cursor:pointer;text-decoration:underline}.save-problem-technical{display:flex;align-items:center;justify-content:space-between;gap:.5rem;border-top:1px solid #b3162b55;padding-top:.45rem;color:#5f6970}.save-problem-technical small{font-size:.58rem;overflow-wrap:anywhere}.save-problem-technical .daca-button{min-height:30px;padding:.25rem .45rem;font-size:.62rem;white-space:nowrap}.editor-actions span,.publish-note{color:var(--daca-muted);font-size:.7rem}.publish-note{margin:-.75rem 0 0;text-align:right}@media(prefers-reduced-motion:reduce){.termdat-spinner{animation:none}}@media(max-width:1100px){.field-workbench{grid-template-columns:1fr}}@media(max-width:980px){.editor-grid{grid-template-columns:1fr 1fr}.termdat-modal li{grid-template-columns:minmax(0,1fr) minmax(340px,1fr)}.termdat-adoption-row{grid-template-columns:1fr 1fr}.termdat-adoption-row>strong,.termdat-adoption-row>em{grid-column:1/-1}.export-section,.editor-actions{align-items:flex-start;flex-direction:column}.export-section>div:last-child{justify-content:flex-start}.editor-actions>div:last-child{width:100%}.save-action{width:100%}}@media(max-width:820px){.model-editor-heading{align-items:flex-start;flex-direction:column}.editor-grid,.language-details>div,.termdat-adoption-row,.termdat-modal li{grid-template-columns:1fr}.termdat-result-actions,.termdat-adoption-actions{width:100%}.termdat-adoption-actions .daca-button{min-width:0}.termdat-feedback{align-items:stretch;flex-direction:column}.editor-actions{position:static}.editor-actions>div,.editor-actions .daca-button{width:100%}.editor-section>header{align-items:flex-start;flex-direction:column}.structure-actions,.structure-actions .daca-button{width:100%}.field-workbench{padding:.55rem}.field-table{min-width:640px}.relation-list>button{grid-template-columns:1fr}.field-panel-actions{position:static;align-items:stretch;flex-direction:column}.field-panel-actions .daca-button{width:100%}}@media(max-width:560px){.termdat-result-actions{grid-template-columns:1fr}.termdat-result-actions .daca-button:first-child{grid-column:auto}.termdat-result-actions .daca-button{min-height:44px}.termdat-adoption-actions{display:grid;grid-template-columns:1fr}.termdat-adoption-actions .daca-button{width:100%}}
   `, `
-    .structure-section{order:-1}
+    .model-editor-form.is-embedded .structure-section{order:-1}
+    .model-detail-tabs{display:flex;gap:0;overflow-x:auto;margin:.35rem 0 1.25rem;border-bottom:1px solid var(--daca-border)}
+    .model-detail-tabs button{flex:0 0 auto;min-height:48px;border:0;border-bottom:4px solid transparent;padding:.7rem 1.1rem;background:transparent;color:var(--daca-ink);font:inherit;font-size:.83rem;font-weight:750;cursor:pointer}
+    .model-detail-tabs button.is-active{border-bottom-color:var(--daca-red);color:var(--daca-red-dark)}
+    .model-detail-tabs button:hover{background:var(--daca-blue-soft)}
+    .model-detail-tabs button:focus-visible{outline:3px solid var(--daca-blue);outline-offset:-3px}
+    #model-panel-status{min-width:0}
+    .model-editor-form:not(.is-embedded) .editor-actions{position:static}
+    @media(max-width:700px){.model-detail-tabs button{min-height:44px;padding:.65rem .8rem;font-size:.72rem}}
     .derived-origin{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.7fr);gap:1.5rem;margin-bottom:1.25rem;border-left:5px solid var(--daca-blue);padding:1.1rem 1.25rem;box-shadow:none}
     .derived-origin h2,.derived-origin p{margin:.2rem 0}.derived-origin>div>p:last-child{color:var(--daca-muted);font-size:.75rem}.derived-origin dl{display:grid;gap:.45rem;margin:0}.derived-origin dl div{display:grid;grid-template-columns:72px minmax(0,1fr);gap:.6rem}.derived-origin dt{color:var(--daca-muted);font-size:.62rem;font-weight:800;text-transform:uppercase}.derived-origin dd{margin:0;overflow-wrap:anywhere;font-size:.7rem}.concept-decision{border-left:4px solid var(--daca-blue);padding:.75rem;background:var(--daca-blue-soft)}.editor-grid .is-hidden{display:none}@media(max-width:820px){.derived-origin{grid-template-columns:1fr}}
   `],
@@ -158,6 +175,7 @@ export class LogicalModelEditorComponent {
   private readonly api = inject(DataModelsApiService); private readonly conceptsApi = inject(I14yConceptsApiService); private readonly assistance = inject(ModelingAssistanceService); private readonly router = inject(Router); private readonly fb = inject(FormBuilder); private readonly injector = inject(Injector);
   readonly model = signal<LogicalModel | null>(null); readonly concepts = signal<readonly I14yConcept[]>([]); readonly loading = signal(false); readonly saving = signal(false); readonly exporting = signal<LogicalModelExportRepresentation | null>(null); readonly error = signal<string | null>(null); readonly saveError = signal<string | null>(null); readonly saveProblem = signal<ModelingApiError | null>(null); readonly errorCopied = signal(false); readonly notice = signal<string | null>(null); readonly etag = signal('');
   readonly validationAttempted = signal(false);
+  readonly activeTab = signal<'status' | 'model' | 'fields'>('model');
   readonly selectedFieldIndex = signal(0);
   readonly structureView = signal<'table' | 'relation'>('table');
   readonly canPublishCurrentModel = computed(() => this.identity.canPublishModel(this.model()));
@@ -291,7 +309,7 @@ export class LogicalModelEditorComponent {
       },
       error: () => this.scopeChanged(),
     });
-    effect(() => { const id = this.id(); if (id) this.load(id); });
+    effect(() => { const id = this.id(); if (id) { if (!this.embedded()) this.activeTab.set('status'); this.load(id); } });
     effect(() => {
       const snapshotId = this.physicalSnapshotId() || this.sourceSnapshotId();
       const tableId = this.physicalTableId();
@@ -504,6 +522,12 @@ export class LogicalModelEditorComponent {
     this.selectedFieldIndex.set(Math.min(this.selectedFieldIndex() > index ? this.selectedFieldIndex() - 1 : this.selectedFieldIndex(), this.fields.length - 1));
     this.form.markAsDirty();
   }
+  removeSelectedField(): void {
+    const field = this.fields.at(this.selectedFieldIndex());
+    if (!field || !this.canEditCurrentModel() || this.fields.length <= 1) return;
+    if (!window.confirm(`Logisches Feld «${field.controls.name.value}» entfernen? Die Änderung wird erst mit «Feldmerkmale speichern» wirksam.`)) return;
+    this.removeField(this.selectedFieldIndex());
+  }
   selectValue(event: Event): string { return (event.target as HTMLSelectElement).value; }
   selectValues(event:Event):string[]{return[...(event.target as HTMLSelectElement).selectedOptions].map((option)=>option.dataset['conceptId']??option.value);}
   conceptName(concept: I14yConcept): string { return concept.name.de || concept.name.fr || concept.identifiers[0] || concept.id; }
@@ -518,7 +542,20 @@ export class LogicalModelEditorComponent {
   resetValueList(index:number):void{const field=this.fields.at(index);const valueList=field.controls.valueListConceptId.value;field.controls.valueListConceptId.setValue('');if(valueList){field.controls.conceptIds.setValue(field.controls.conceptIds.value.filter((id)=>id!==valueList));if(field.controls.primaryConceptId.value===valueList)field.controls.primaryConceptId.setValue('');}field.markAsDirty();}
   downloadExport(model:LogicalModel,representation:LogicalModelExportRepresentation):void{if(this.exporting())return;this.exporting.set(representation);this.error.set(null);this.api.downloadLogicalModelExport(model.id,model.versionId,representation).pipe(finalize(()=>this.exporting.set(null))).subscribe({next:(file)=>this.saveExport(file),error:(error:Error)=>this.error.set(error.message)});}
 
-  load(id: string): void { this.loading.set(true); this.error.set(null); this.api.loadLogicalModel(id).pipe(finalize(() => this.loading.set(false))).subscribe({ next: ({ body }) => { this.model.set(body); this.etag.set(logicalModelVersionEtag(body)); this.patch(body); }, error: (error: Error) => this.error.set(error.message) }); }
+  selectTab(tab: 'status' | 'model' | 'fields'): void { this.activeTab.set(tab); }
+  onTabKeydown(event: KeyboardEvent): void {
+    const tabs: Array<'status' | 'model' | 'fields'> = ['status', 'model', 'fields'];
+    const current = tabs.indexOf(this.activeTab());
+    const next = event.key === 'ArrowRight' ? (current + 1) % tabs.length
+      : event.key === 'ArrowLeft' ? (current + tabs.length - 1) % tabs.length
+      : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    this.selectTab(tabs[next]);
+    (event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+  }
+
+  load(id: string): void { this.loading.set(true); this.error.set(null); this.api.loadLogicalModel(id).pipe(finalize(() => this.loading.set(false))).subscribe({ next: ({ body }) => { this.model.set(body); this.etag.set(logicalModelVersionEtag(body)); this.patch(body); if (!this.embedded()) this.activeTab.set('status'); }, error: (error: Error) => this.error.set(error.message) }); }
   private loadDerivedSource(snapshotId: string, tableId: string): void {
     const loadKey = `${snapshotId}:${tableId}`;
     if (this.derivedLoadKey === loadKey) return;
@@ -602,7 +639,10 @@ export class LogicalModelEditorComponent {
     if (allowIncompleteDraft) {
       const controls = this.fields.at(this.selectedFieldIndex())?.controls;
       if (!controls || [controls.entityName, controls.name, controls.dataType, controls.length, controls.precision, controls.decimalPlaces, controls.order, controls.minCount, controls.maxCount, controls.sourceSystem, controls.shortDescription, controls.comment].some((control) => control.invalid)) return;
-    } else if (this.validationIssues().length) return;
+    } else if (this.validationIssues().length) {
+      if (!this.embedded()) this.activeTab.set(this.validationIssues()[0].field.startsWith('Feld ') ? 'fields' : 'model');
+      return;
+    }
     this.saving.set(true);
     this.error.set(null);
     this.notice.set(null);
@@ -902,9 +942,18 @@ export class LogicalModelEditorComponent {
       : fieldMatch && fieldControl[fieldMatch[2]]
         ? `.field-list fieldset:nth-of-type(${fieldMatch[1]}) [formcontrolname="${fieldControl[fieldMatch[2]]}"]`
         : '.model-editor-form .ng-invalid';
-    const target = document.querySelector<HTMLElement>(selector);
-    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    target?.focus({ preventScroll: true });
+    const targetTab = fieldMatch ? 'fields' : 'model';
+    const focus = () => {
+      const target = document.querySelector<HTMLElement>(selector);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target?.focus({ preventScroll: true });
+    };
+    if (!this.embedded() && this.activeTab() !== targetTab) {
+      this.activeTab.set(targetTab);
+      afterNextRender(focus, { injector: this.injector });
+    } else {
+      focus();
+    }
   }
   async copyErrorMessage(problem: ModelingApiError): Promise<void> {
     const technical = problem.technicalDetails;

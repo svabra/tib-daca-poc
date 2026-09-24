@@ -50,6 +50,43 @@ describe('LogicalModelEditorComponent contracts',()=>{
   });
   afterEach(()=>{vi.restoreAllMocks();TestBed.resetTestingModule();});
 
+  it('keeps the title above three accessible tabs and preserves unsaved model values',()=>{
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);fixture.detectChanges();
+    const root=fixture.nativeElement as HTMLElement;
+    const tabs=[...root.querySelectorAll<HTMLButtonElement>('.model-detail-tabs [role="tab"]')];
+    expect(tabs.map((tab)=>tab.textContent?.trim())).toEqual([
+      'Status & Klassifikation','Model Merkmale','Logische Entitäten und Felder',
+    ]);
+    expect(root.querySelector('.model-editor-heading')).not.toBeNull();
+    expect(tabs[1].getAttribute('aria-selected')).toBe('true');
+    const title=root.querySelector<HTMLInputElement>('input[formControlName="titleDe"]')!;
+    title.value='Unfertiges Modell';title.dispatchEvent(new Event('input'));fixture.detectChanges();
+    tabs[2].click();fixture.detectChanges();
+    expect(root.querySelector<HTMLElement>('#model-panel-fields')?.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>('#model-panel-model')?.hidden).toBe(true);
+    tabs[1].click();fixture.detectChanges();
+    expect(title.value).toBe('Unfertiges Modell');
+  });
+
+  it('opens an existing model on status and supports keyboard tab navigation',()=>{
+    Object.assign(TestBed.inject(DataModelsApiService),{
+      loadLogicalModel:()=>of({body:FALLBACK_LOGICAL_MODEL,etag:'"1"'}),
+    });
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);
+    fixture.componentRef.setInput('id',FALLBACK_LOGICAL_MODEL.id);
+    fixture.detectChanges();TestBed.tick();fixture.detectChanges();
+    const root=fixture.nativeElement as HTMLElement;
+    const tabs=[...root.querySelectorAll<HTMLButtonElement>('.model-detail-tabs [role="tab"]')];
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true');
+    expect(root.querySelector<HTMLElement>('#model-panel-status')?.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>('#model-panel-model')?.hidden).toBe(true);
+    tabs[0].dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));fixture.detectChanges();
+    expect(tabs[1].getAttribute('aria-selected')).toBe('true');
+    tabs[2].click();fixture.detectChanges();
+    expect(root.querySelector<HTMLElement>('#model-panel-fields')?.hidden).toBe(false);
+    expect(root.querySelector('.field-table')).not.toBeNull();
+  });
+
   it('uses the latest version lock for version-specific writes after a root reload',()=>{
     const reloadedModel={...FALLBACK_LOGICAL_MODEL,revision:7,lockVersion:2};
     expect(logicalModelVersionEtag(reloadedModel)).toBe('"2"');

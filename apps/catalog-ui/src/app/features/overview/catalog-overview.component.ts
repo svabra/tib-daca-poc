@@ -11,7 +11,7 @@ import { CatalogApiService } from '../../core/catalog-api.service';
   template: `
     <section class="daca-page-heading">
       <div>
-        <p class="daca-eyebrow">Distributed Data Catalog</p>
+        <p class="daca-eyebrow">Central Data Catalog</p>
         <h1>Govern data products with confidence</h1>
         <p>Metadata, lineage, provenance, endpoints and access policy in one revisioned catalog record.</p>
       </div>
@@ -28,7 +28,7 @@ import { CatalogApiService } from '../../core/catalog-api.service';
       <article class="catalog-kpi"><span>Data products</span><strong>{{ api.products().length }}</strong><small>1 restricted</small></article>
       <article class="catalog-kpi"><span>Policy targets</span><strong>2/2</strong><small>OPA + PostgreSQL aligned</small></article>
       <article class="catalog-kpi"><span>Lineage coverage</span><strong>100%</strong><small>3 verified relations</small></article>
-      <article class="catalog-kpi"><span>Origin catalog</span><strong>ESTV</strong><small>Standalone & federation-ready</small></article>
+      <article class="catalog-kpi"><span>Catalog authority</span><strong>BIT</strong><small>Central metadata register</small></article>
     </section>
 
     <div class="catalog-overview-grid">

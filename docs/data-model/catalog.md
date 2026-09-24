@@ -1,12 +1,26 @@
 # Catalog data model
 
-The standalone catalog owns product metadata, workflows, access governance and semantic evidence.
+The central catalog owns product metadata, workflows, access governance and semantic evidence.
+Migration `0031_central_catalog_description` publishes revision 2 of the original PoC DCAT
+catalog description when revision 1 still contains the superseded seed wording.
+It preserves the earlier version as historical evidence and leaves customized catalogs untouched.
 
 **Storage:** PostgreSQL (`daca_catalog`), version 18.4 locally and version 17 in production.
 
 The RHOS presentation profile stores this model in the `daca_catalog` schema of the shared
 `evo1_oltp` database. Dedicated deployments continue to use the separate `daca_catalog`
 database and its `public` schema.
+
+## Logical-to-physical consistency decisions
+
+`logical_mapping_inconsistencies` has one current record per logical model root and logical
+field root. It is evaluated only after a model has had a physical mapping. The status is
+`open`, `accepted`, `assigned`, or `resolved`; accepting documents the owner's decision but
+does not make the model consistent. A new active mapping or removal of the logical field
+resolves the record. Removing the last mapping leaves the model in the consistency scope.
+`workflow_tasks.logical_model_id` and `logical_mapping_issue_id` connect personal owner and
+steward tasks to this record. Model and mapping revisions remain immutable; surviving mappings
+are rebased to the new field versions as draft successors when a logical model is edited.
 
 ## DAAIF boundary
 
@@ -28,13 +42,51 @@ registrations rather than merging or deleting their snapshots and mappings. The 
 path is derived from that protected configuration and is metadata only: it never exposes a DSN,
 host credential, table rows, or connector secret.
 
+The seeded VIBDBU real-estate source is a catalog-readable demonstration exception for
+modeling personas in other organizational scopes. Its structural snapshots are readable;
+source import and model writes still require the owning organizational assignment.
+
+## Personal preview preferences
+
+`demo_users.preferences` stores only the validated `language` (`de`, `fr`, `it`, `en`) and
+`theme` (`light`, `dark`) choices when a user explicitly selects profile-wide storage.
+Browser-only choices are held in per-user local storage and override the profile value on
+that device. These preferences contain no credentials or protected record payloads. The
+demo identity header is accepted only when the catalog's demo-auth setting is enabled.
+
+`demo_login_sessions` stores a SHA-256 hash of a random local preview cookie, its user,
+creation and 12-hour expiry, and optional revocation time. The raw HttpOnly cookie is never
+persisted or audited. Sign-out revokes the row and deletes the cookie. These sessions have no
+tenant relationship and are only enabled in demo-auth mode; production IAM remains external.
+
+## Responsibility and glossary projection
+
+The settings perspectives read one PostgreSQL-backed projection. Domain owner/deputy fields,
+logical-model dataset ownership, product ownership, organizational modeling role assignments,
+and versioned physical-source mappings retain their original authority. The new
+`catalog_object_responsibilities` table records additional person-to-object assignments for a
+domain, logical model, physical source or a stable table key within that source, or data product.
+Exactly one target kind is set per row. These rows describe responsibility and do **not** grant
+API authorization; write and publication checks still use their existing policies. The three
+perspectives and the person's role chips are derived from these persisted relationships.
+
+`site_glossary_terms` and `site_glossary_localizations` exclusively supply the DaCa application
+glossary, including abbreviation, localized label, short tooltip text, detailed description and
+an explicit `is_termdat` flag. The glossary is independent of the governed business terminology
+in `glossary_terms`, its localizations, domain/product links and proposal workflow. A matching
+label does not join or copy records across these stores. The site glossary is seeded with
+application concepts and is read-only to Catalog users. Its revision lets future Control Plane
+edits supersede fixture content; TERMDAT enrichment is future work, never inferred from a label.
+Migration `0030_site_glossary` removes only unreferenced legacy UI seed rows from the business
+terminology. A referenced row remains there as independently governed terminology.
+
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
-- Alembic head: `0024_model_identifier`
-- Schema fingerprint: `ffaec3230f3d3a7c`
-- Migration fingerprint: `8de8bcb9e62e94b9`
-- Tables: `87`
+- Alembic head: `0032_mapping_inconsistencies`
+- Schema fingerprint: `3cd2c147f85c7b2b`
+- Migration fingerprint: `98308219c4510ea0`
+- Tables: `94`
 
 ## Domain status vocabulary
 
@@ -201,6 +253,20 @@ erDiagram
         string version
         string title
         boolean active
+        datetime created_at
+    }
+    catalog_object_responsibilities {
+        uuid id PK
+        string user_id FK
+        string role
+        string organization_id FK
+        uuid domain_id FK
+        uuid logical_model_id FK
+        uuid physical_source_id FK
+        string physical_table_key
+        uuid data_product_id FK
+        boolean active
+        string provenance
         datetime created_at
     }
     data_model_role_assignments {
@@ -382,6 +448,13 @@ erDiagram
         datetime created_at
         datetime retired_at
     }
+    demo_login_sessions {
+        string token_hash PK
+        string user_id FK
+        datetime created_at
+        datetime expires_at
+        datetime revoked_at
+    }
     demo_users {
         string id PK
         string display_name
@@ -390,6 +463,7 @@ erDiagram
         string phone
         string avatar_url
         json roles
+        json preferences
         string supervisor_user_id FK
         boolean selectable
         boolean active
@@ -471,6 +545,8 @@ erDiagram
         string preferred_label
         json alternative_labels
         text definition
+        text short_description
+        text detailed_description
         string normalized_label
     }
     glossary_term_proposal_reviews {
@@ -516,6 +592,8 @@ erDiagram
         integer revision
         string content_hash
         string lifecycle
+        string abbreviation
+        boolean is_termdat
         datetime created_at
         datetime updated_at
         datetime retired_at
@@ -709,6 +787,18 @@ erDiagram
         datetime updated_at
         datetime retired_at
     }
+    logical_mapping_inconsistencies {
+        uuid id PK
+        uuid logical_model_id FK
+        uuid logical_field_id FK
+        string owner_user_id FK
+        string assigned_steward_user_id FK
+        string status
+        text decision_comment
+        datetime created_at
+        datetime updated_at
+        datetime resolved_at
+    }
     logical_model_assistance_provenance {
         uuid id PK
         uuid logical_model_version_id FK
@@ -827,6 +917,14 @@ erDiagram
         string urn
         string name
         integer position
+    }
+    physical_domain_assignments {
+        uuid id PK
+        uuid physical_source_id FK
+        string physical_table_key
+        uuid domain_id FK
+        string provenance
+        datetime created_at
     }
     physical_drift_changes {
         uuid id PK
@@ -986,6 +1084,19 @@ erDiagram
         json details
         datetime occurred_at
     }
+    role_change_events {
+        bigint sequence PK
+        datetime occurred_at
+        string actor_user_id
+        string action
+        string scope_type
+        string scope_id
+        string entity_id
+        string role
+        string subject_user_id
+        json before_state
+        json after_state
+    }
     seed_markers {
         string name PK
         datetime applied_at
@@ -1013,6 +1124,24 @@ erDiagram
         uuid supersedes_revision_id FK
         uuid superseded_by_revision_id FK
         date superseded_from
+        datetime created_at
+        datetime updated_at
+    }
+    site_glossary_localizations {
+        uuid term_id PK,FK
+        string language PK
+        string preferred_label
+        text short_description
+        text detailed_description
+        string normalized_label
+    }
+    site_glossary_terms {
+        uuid id PK
+        string key UK
+        string abbreviation
+        boolean is_termdat
+        string lifecycle
+        integer revision
         datetime created_at
         datetime updated_at
     }
@@ -1150,6 +1279,8 @@ erDiagram
         uuid domain_change_request_id FK
         uuid glossary_term_proposal_id FK
         uuid logical_model_review_id FK
+        uuid logical_model_id FK
+        uuid logical_mapping_issue_id FK
         string title
         text detail
         datetime created_at
@@ -1177,6 +1308,12 @@ erDiagram
     physical_sources ||--o{ asset_mappings : "physical_source_id"
     demo_users ||--o{ asset_mappings : "created_by_user_id"
     canonical_ontology_versions ||--o{ canonical_ontology_terms : "ontology_version_id"
+    demo_users ||--o{ catalog_object_responsibilities : "user_id"
+    administrative_organizations o|--o{ catalog_object_responsibilities : "organization_id"
+    domains o|--o{ catalog_object_responsibilities : "domain_id"
+    logical_models o|--o{ catalog_object_responsibilities : "logical_model_id"
+    physical_sources o|--o{ catalog_object_responsibilities : "physical_source_id"
+    data_products o|--o{ catalog_object_responsibilities : "data_product_id"
     demo_users ||--o{ data_model_role_assignments : "user_id"
     administrative_organizations ||--o{ data_model_role_assignments : "organization_id"
     demo_users o|--o{ data_model_role_assignments : "delegated_owner_user_id"
@@ -1204,6 +1341,7 @@ erDiagram
     dcat_distributions ||--o{ dcat_distribution_versions : "distribution_id"
     dcat_dataset_versions ||--o{ dcat_distribution_versions : "dataset_version_id"
     dcat_datasets ||--o{ dcat_distributions : "dataset_id"
+    demo_users ||--o{ demo_login_sessions : "user_id"
     demo_users o|--o{ demo_users : "supervisor_user_id"
     domains o|--o{ domain_change_requests : "target_domain_id"
     demo_users ||--o{ domain_change_requests : "requester_user_id"
@@ -1249,6 +1387,10 @@ erDiagram
     terminology_term_versions o|--o{ logical_field_versions : "business_object_version_id"
     i14y_concepts o|--o{ logical_field_versions : "value_list_concept_id"
     logical_entities ||--o{ logical_fields : "logical_entity_id"
+    logical_models ||--o{ logical_mapping_inconsistencies : "logical_model_id"
+    logical_fields ||--o{ logical_mapping_inconsistencies : "logical_field_id"
+    demo_users ||--o{ logical_mapping_inconsistencies : "owner_user_id"
+    demo_users o|--o{ logical_mapping_inconsistencies : "assigned_steward_user_id"
     logical_model_versions ||--o{ logical_model_assistance_provenance : "logical_model_version_id"
     logical_models ||--o| logical_model_identifier_reservations : "logical_model_id"
     logical_models ||--o{ logical_model_reviews : "logical_model_id"
@@ -1268,6 +1410,8 @@ erDiagram
     canonical_ontology_terms ||--o{ ontology_term_alignments : "term_id"
     physical_tables ||--o{ physical_columns : "physical_table_id"
     physical_schema_snapshots ||--o{ physical_databases : "snapshot_id"
+    physical_sources ||--o{ physical_domain_assignments : "physical_source_id"
+    domains ||--o{ physical_domain_assignments : "domain_id"
     physical_drift_reports ||--o{ physical_drift_changes : "drift_report_id"
     physical_sources ||--o{ physical_drift_reports : "source_id"
     physical_schema_snapshots ||--o{ physical_drift_reports : "previous_snapshot_id"
@@ -1296,6 +1440,7 @@ erDiagram
     demo_users o|--o{ service_level_revisions : "decided_by_user_id"
     service_level_revisions o|--o{ service_level_revisions : "supersedes_revision_id"
     service_level_revisions o|--o{ service_level_revisions : "superseded_by_revision_id"
+    site_glossary_terms ||--o| site_glossary_localizations : "term_id"
     source_access_requests ||--o| source_access_grants : "source_access_request_id"
     source_catalog_entries ||--o{ source_access_grants : "source_id"
     demo_users ||--o{ source_access_grants : "granted_by"
@@ -1326,6 +1471,8 @@ erDiagram
     domain_change_requests o|--o{ workflow_tasks : "domain_change_request_id"
     glossary_term_proposals o|--o{ workflow_tasks : "glossary_term_proposal_id"
     logical_model_reviews o|--o{ workflow_tasks : "logical_model_review_id"
+    logical_models o|--o{ workflow_tasks : "logical_model_id"
+    logical_mapping_inconsistencies o|--o{ workflow_tasks : "logical_mapping_issue_id"
 ```
 
 Relationships in this diagram are physical foreign keys inside this database only.
@@ -1517,7 +1664,7 @@ Constraints and indexes:
 
 ### `asset_mappings`
 
-Federation-ready aggregate roots for mappings between a logical model and a physical source.
+Versioned aggregate roots for mappings between a logical model and a physical source.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -1599,6 +1746,42 @@ Versioned canonical DaCa ontologies; one version can be active.
 Constraints and indexes:
 
 - Unique `unnamed`: `uri`
+
+### `catalog_object_responsibilities`
+
+Additional explicit person-to-domain, model, physical source/table or product responsibility links; descriptive, never an authorization grant.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `user_id` | `VARCHAR(200)` | no | FK | — |
+| `role` | `VARCHAR(32)` | no | — | — |
+| `organization_id` | `VARCHAR(100)` | yes | FK | — |
+| `domain_id` | `CHAR(32)` | yes | FK | — |
+| `logical_model_id` | `CHAR(32)` | yes | FK | — |
+| `physical_source_id` | `CHAR(32)` | yes | FK | — |
+| `physical_table_key` | `VARCHAR(1500)` | yes | — | — |
+| `data_product_id` | `CHAR(32)` | yes | FK | — |
+| `active` | `BOOLEAN` | no | — | `True` |
+| `provenance` | `VARCHAR(40)` | no | — | `explicit` |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Check `ck_catalog_object_responsibility_role`: `role IN ('data_owner', 'deputy_data_owner', 'data_steward')`
+- Check `ck_catalog_object_responsibility_table_source`: `physical_table_key IS NULL OR physical_source_id IS NOT NULL`
+- Check `ck_catalog_object_responsibility_target`: `(CASE WHEN domain_id IS NULL THEN 0 ELSE 1 END + CASE WHEN logical_model_id IS NULL THEN 0 ELSE 1 END + CASE WHEN physical_source_id IS NULL THEN 0 ELSE 1 END + CASE WHEN data_product_id IS NULL THEN 0 ELSE 1 END) = 1`
+- Foreign key `user_id` → `demo_users.id`; on delete `CASCADE`
+- Foreign key `organization_id` → `administrative_organizations.id`; on delete `RESTRICT`
+- Foreign key `domain_id` → `domains.id`; on delete `CASCADE`
+- Foreign key `logical_model_id` → `logical_models.id`; on delete `CASCADE`
+- Foreign key `physical_source_id` → `physical_sources.id`; on delete `CASCADE`
+- Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
+- Index `ix_catalog_object_responsibility_domain` on `domain_id`
+- Index `ix_catalog_object_responsibility_model` on `logical_model_id`
+- Index `ix_catalog_object_responsibility_product` on `data_product_id`
+- Index `ix_catalog_object_responsibility_source` on `physical_source_id`
+- Index `ix_catalog_object_responsibility_user` on `user_id, active`
 
 ### `data_model_role_assignments`
 
@@ -1755,7 +1938,7 @@ Constraints and indexes:
 
 ### `dcat_catalogs`
 
-Federation-ready DCAT catalog roots with stable URNs and retirement tombstones.
+Central DCAT catalog roots with stable URNs and retirement tombstones.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -1806,7 +1989,7 @@ Constraints and indexes:
 
 ### `dcat_data_services`
 
-Federation-ready DCAT Data Service roots owned by one dataset.
+Versioned DCAT Data Service roots owned by one dataset.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -1891,7 +2074,7 @@ Constraints and indexes:
 
 ### `dcat_datasets`
 
-Federation-ready DCAT dataset roots independent of products, distributions and physical assets.
+Versioned DCAT dataset roots independent of products, distributions and physical assets.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -1947,7 +2130,7 @@ Constraints and indexes:
 
 ### `dcat_distributions`
 
-Federation-ready DCAT Distribution roots owned by one dataset.
+Versioned DCAT Distribution roots owned by one dataset.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -1970,9 +2153,26 @@ Constraints and indexes:
 - Foreign key `dataset_id` → `dcat_datasets.id`; on delete `RESTRICT`
 - Index `ix_dcat_distribution_dataset` on `dataset_id, lifecycle`
 
+### `demo_login_sessions`
+
+Revocable, expiring local PoC browser sessions stored by token hash.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `token_hash` | `VARCHAR(64)` | no | PK | — |
+| `user_id` | `VARCHAR(200)` | no | FK | — |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+| `expires_at` | `DATETIME` | no | — | — |
+| `revoked_at` | `DATETIME` | yes | — | — |
+
+Constraints and indexes:
+
+- Foreign key `user_id` → `demo_users.id`; on delete `CASCADE`
+- Index `ix_demo_login_sessions_user_id` on `user_id`
+
 ### `demo_users`
 
-PoC identities available to the demo identity switcher.
+PoC identities available to the demo identity switcher, with personal display preferences.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -1983,6 +2183,7 @@ PoC identities available to the demo identity switcher.
 | `phone` | `VARCHAR(100)` | yes | — | — |
 | `avatar_url` | `VARCHAR(500)` | yes | — | — |
 | `roles` | `JSON` | no | — | `list` |
+| `preferences` | `JSON` | no | — | `dict` |
 | `supervisor_user_id` | `VARCHAR(200)` | yes | FK | — |
 | `selectable` | `BOOLEAN` | no | — | `True` |
 | `active` | `BOOLEAN` | no | — | `True` |
@@ -2046,7 +2247,7 @@ Constraints and indexes:
 
 ### `domains`
 
-Versioned, federation-ready subject domains with a primary Data Owner and deputy.
+Versioned subject domains with a primary Data Owner and deputy.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -2153,7 +2354,7 @@ Constraints and indexes:
 
 ### `glossary_term_localizations`
 
-BCP-47 preferred labels, alternative labels and definitions for glossary concepts.
+BCP-47 labels, alternatives and definitions for governed business terminology; independent of the DaCa application glossary.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -2162,6 +2363,8 @@ BCP-47 preferred labels, alternative labels and definitions for glossary concept
 | `preferred_label` | `VARCHAR(255)` | no | — | — |
 | `alternative_labels` | `JSON` | no | — | `list` |
 | `definition` | `TEXT` | no | — | — |
+| `short_description` | `TEXT` | yes | — | — |
+| `detailed_description` | `TEXT` | yes | — | — |
 | `normalized_label` | `VARCHAR(255)` | no | — | — |
 
 Constraints and indexes:
@@ -2257,7 +2460,7 @@ Constraints and indexes:
 
 ### `glossary_terms`
 
-Accepted, versioned and federation-ready multilingual business-glossary concepts.
+Accepted, versioned governed business terminology; independent of the DaCa application glossary.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -2267,6 +2470,8 @@ Accepted, versioned and federation-ready multilingual business-glossary concepts
 | `revision` | `INTEGER` | no | — | `1` |
 | `content_hash` | `VARCHAR(64)` | no | — | — |
 | `lifecycle` | `VARCHAR(32)` | no | — | `active` |
+| `abbreviation` | `VARCHAR(80)` | yes | — | — |
+| `is_termdat` | `BOOLEAN` | no | — | `False` |
 | `created_at` | `DATETIME` | no | — | `utc_now` |
 | `updated_at` | `DATETIME` | no | — | `utc_now` |
 | `retired_at` | `DATETIME` | yes | — | — |
@@ -2529,7 +2734,7 @@ Constraints and indexes:
 
 ### `logical_entities`
 
-Federation-ready nested entity roots with stable URNs, origin ownership, monotone revisions, content hashes and soft retirement.
+Versioned nested entity roots with stable URNs, origin identifiers, content hashes and soft retirement.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -2636,7 +2841,7 @@ Constraints and indexes:
 
 ### `logical_fields`
 
-Federation-ready nested field roots with stable URNs, origin ownership, monotone revisions, content hashes and soft retirement.
+Versioned nested field roots with stable URNs, origin identifiers, content hashes and soft retirement.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -2659,6 +2864,33 @@ Constraints and indexes:
 - Check `ck_logical_field_revision`: `revision >= 1`
 - Foreign key `logical_entity_id` → `logical_entities.id`; on delete `CASCADE`
 - Index `ix_logical_field_entity` on `logical_entity_id, lifecycle`
+
+### `logical_mapping_inconsistencies`
+
+Current owner decisions for logical fields without physical counterparts after a model has been physically linked; accepted findings remain quality errors until resolved.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `logical_model_id` | `CHAR(32)` | no | FK | — |
+| `logical_field_id` | `CHAR(32)` | no | FK | — |
+| `owner_user_id` | `VARCHAR(200)` | no | FK | — |
+| `assigned_steward_user_id` | `VARCHAR(200)` | yes | FK | — |
+| `status` | `VARCHAR(32)` | no | — | `open` |
+| `decision_comment` | `TEXT` | yes | — | — |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+| `resolved_at` | `DATETIME` | yes | — | — |
+
+Constraints and indexes:
+
+- Check `ck_logical_mapping_inconsistency_status`: `status IN ('open', 'accepted', 'assigned', 'resolved')`
+- Unique `uq_logical_mapping_inconsistency_field`: `logical_model_id, logical_field_id`
+- Foreign key `logical_model_id` → `logical_models.id`; on delete `CASCADE`
+- Foreign key `logical_field_id` → `logical_fields.id`; on delete `RESTRICT`
+- Foreign key `owner_user_id` → `demo_users.id`
+- Foreign key `assigned_steward_user_id` → `demo_users.id`
+- Index `ix_logical_mapping_inconsistency_owner` on `owner_user_id, status`
 
 ### `logical_model_assistance_provenance`
 
@@ -2769,7 +3001,7 @@ Constraints and indexes:
 
 ### `logical_models`
 
-Federation-ready logical model roots that can exist without products, distributions or physical assets.
+Versioned logical model roots that can exist without products, distributions or physical assets.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -2907,6 +3139,26 @@ Constraints and indexes:
 - Foreign key `snapshot_id` → `physical_schema_snapshots.id`; on delete `CASCADE`
 - Index `ix_physical_database_snapshot` on `snapshot_id, position`
 
+### `physical_domain_assignments`
+
+Explicit physical-table to domain links that remain available before any logical model mapping is created.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `physical_source_id` | `CHAR(32)` | no | FK | — |
+| `physical_table_key` | `VARCHAR(1500)` | no | — | — |
+| `domain_id` | `CHAR(32)` | no | FK | — |
+| `provenance` | `VARCHAR(40)` | no | — | `explicit` |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Unique `uq_physical_domain_assignment`: `physical_source_id, physical_table_key, domain_id`
+- Foreign key `physical_source_id` → `physical_sources.id`; on delete `CASCADE`
+- Foreign key `domain_id` → `domains.id`; on delete `RESTRICT`
+- Index `ix_physical_domain_assignment_domain` on `domain_id`
+
 ### `physical_drift_changes`
 
 Typed, impact-enriched differences between two physical snapshots, including human-reviewed rename candidates.
@@ -2956,7 +3208,7 @@ Constraints and indexes:
 
 ### `physical_schema_snapshots`
 
-Immutable, fingerprinted and federation-identifiable observations of a physical source schema.
+Immutable, fingerprinted observations of a physical source schema.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -3238,6 +3490,30 @@ Constraints and indexes:
 - Foreign key `data_product_id` → `data_products.id`; on delete `SET NULL`
 - Index `ix_provenance_product` on `data_product_id`
 
+### `role_change_events`
+
+Append-only, sequential audit of organization roles, direct object responsibilities and domain/model/product owner changes; includes a migration baseline.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `sequence` | `BIGINT` | no | PK | — |
+| `occurred_at` | `DATETIME` | no | — | server: `CURRENT_TIMESTAMP` |
+| `actor_user_id` | `VARCHAR(200)` | no | — | — |
+| `action` | `VARCHAR(20)` | no | — | — |
+| `scope_type` | `VARCHAR(40)` | no | — | — |
+| `scope_id` | `VARCHAR(200)` | no | — | — |
+| `entity_id` | `VARCHAR(200)` | no | — | — |
+| `role` | `VARCHAR(32)` | no | — | — |
+| `subject_user_id` | `VARCHAR(200)` | no | — | — |
+| `before_state` | `JSON` | yes | — | — |
+| `after_state` | `JSON` | yes | — | — |
+
+Constraints and indexes:
+
+- Check `ck_role_change_action`: `action IN ('baseline', 'assigned', 'changed', 'removed')`
+- Index `ix_role_change_scope` on `scope_type, scope_id, sequence`
+- Index `ix_role_change_subject` on `subject_user_id, sequence`
+
 ### `seed_markers`
 
 Idempotency markers for deterministic PoC seed operations.
@@ -3299,6 +3575,45 @@ Constraints and indexes:
 - Index `ix_service_level_controller` on `control_person_user_id, status`
 - Index `ix_service_level_product` on `data_product_id, revision`
 - Index `uq_service_level_single_open_workflow` on `data_product_id` unique
+
+### `site_glossary_localizations`
+
+Localized labels, tooltip summaries and detailed explanations for DaCa application concepts only.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `term_id` | `CHAR(32)` | no | PK, FK | — |
+| `language` | `VARCHAR(35)` | no | PK | — |
+| `preferred_label` | `VARCHAR(255)` | no | — | — |
+| `short_description` | `TEXT` | no | — | — |
+| `detailed_description` | `TEXT` | no | — | — |
+| `normalized_label` | `VARCHAR(255)` | no | — | — |
+
+Constraints and indexes:
+
+- Foreign key `term_id` → `site_glossary_terms.id`; on delete `CASCADE`
+- Index `ix_site_glossary_label` on `language, normalized_label`
+
+### `site_glossary_terms`
+
+DaCa-specific application concepts, separately revisioned for future Control Plane management and TERMDAT enrichment.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `key` | `VARCHAR(100)` | no | UK | — |
+| `abbreviation` | `VARCHAR(80)` | yes | — | — |
+| `is_termdat` | `BOOLEAN` | no | — | `False` |
+| `lifecycle` | `VARCHAR(32)` | no | — | `active` |
+| `revision` | `INTEGER` | no | — | `1` |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Unique `unnamed`: `key`
+- Check `ck_site_glossary_lifecycle`: `lifecycle IN ('active', 'retired')`
+- Check `ck_site_glossary_revision`: `revision >= 1`
 
 ### `source_access_grants`
 
@@ -3518,7 +3833,7 @@ Constraints and indexes:
 
 ### `terminology_terms`
 
-Federation-ready terminology aggregate roots with stable URNs, hashes and retirement state.
+Versioned terminology aggregate roots with stable URNs, hashes and retirement state.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -3560,6 +3875,8 @@ Owner and approver work items for quality, access governance, SLA review and req
 | `domain_change_request_id` | `CHAR(32)` | yes | FK | — |
 | `glossary_term_proposal_id` | `CHAR(32)` | yes | FK | — |
 | `logical_model_review_id` | `CHAR(32)` | yes | FK | — |
+| `logical_model_id` | `CHAR(32)` | yes | FK | — |
+| `logical_mapping_issue_id` | `CHAR(32)` | yes | FK | — |
 | `title` | `VARCHAR(255)` | no | — | — |
 | `detail` | `TEXT` | no | — | — |
 | `created_at` | `DATETIME` | no | — | `utc_now` |
@@ -3580,6 +3897,8 @@ Constraints and indexes:
 - Foreign key `domain_change_request_id` → `domain_change_requests.id`; on delete `SET NULL`
 - Foreign key `glossary_term_proposal_id` → `glossary_term_proposals.id`; on delete `SET NULL`
 - Foreign key `logical_model_review_id` → `logical_model_reviews.id`; on delete `SET NULL`
+- Foreign key `logical_model_id` → `logical_models.id`; on delete `SET NULL`
+- Foreign key `logical_mapping_issue_id` → `logical_mapping_inconsistencies.id`; on delete `SET NULL`
 - Index `ix_workflow_task_assignee` on `assignee_user_id, status`
 - Index `ix_workflow_task_domain_request` on `domain_change_request_id`
 - Index `ix_workflow_task_glossary_proposal` on `glossary_term_proposal_id`

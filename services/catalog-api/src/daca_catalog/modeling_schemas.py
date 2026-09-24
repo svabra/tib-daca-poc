@@ -347,6 +347,7 @@ class LogicalModelSummary(ApiModel):
     data_domain_id: uuid.UUID
     data_classification: Classification
     has_physical_mapping: bool
+    mapping_inconsistency_count: int = Field(default=0, ge=0)
     identifiers: list[str]
     identifier_mode: Literal["manual", "organization_derived"] = "manual"
     date_created: date

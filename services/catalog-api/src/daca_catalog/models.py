@@ -359,6 +359,7 @@ class DemoUser(Base):
     phone: Mapped[str | None] = mapped_column(String(100))
     avatar_url: Mapped[str | None] = mapped_column(String(500))
     roles: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    preferences: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False, default=dict)
     supervisor_user_id: Mapped[str | None] = mapped_column(
         ForeignKey("demo_users.id", ondelete="SET NULL")
     )
@@ -1115,6 +1116,46 @@ class DomainChangeRequest(Base):
     )
 
 
+class SiteGlossaryTerm(Base):
+    """DaCa interface vocabulary, independent of governed business terminology."""
+
+    __tablename__ = "site_glossary_terms"
+    __table_args__ = (
+        CheckConstraint("lifecycle IN ('active', 'retired')", name="ck_site_glossary_lifecycle"),
+        CheckConstraint("revision >= 1", name="ck_site_glossary_revision"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    abbreviation: Mapped[str | None] = mapped_column(String(80))
+    is_termdat: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    lifecycle: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+    localizations: Mapped[list[SiteGlossaryLocalization]] = relationship(
+        back_populates="term", cascade="all, delete-orphan"
+    )
+
+
+class SiteGlossaryLocalization(Base):
+    __tablename__ = "site_glossary_localizations"
+    __table_args__ = (Index("ix_site_glossary_label", "language", "normalized_label"),)
+
+    term_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("site_glossary_terms.id", ondelete="CASCADE"), primary_key=True
+    )
+    language: Mapped[str] = mapped_column(String(35), primary_key=True)
+    preferred_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    short_description: Mapped[str] = mapped_column(Text, nullable=False)
+    detailed_description: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_label: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    term: Mapped[SiteGlossaryTerm] = relationship(back_populates="localizations")
+
+
 class GlossaryTerm(Base):
     __tablename__ = "glossary_terms"
     __table_args__ = (
@@ -1134,6 +1175,8 @@ class GlossaryTerm(Base):
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     lifecycle: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    abbreviation: Mapped[str | None] = mapped_column(String(80))
+    is_termdat: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
@@ -1169,6 +1212,8 @@ class GlossaryTermLocalization(Base):
     preferred_label: Mapped[str] = mapped_column(String(255), nullable=False)
     alternative_labels: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     definition: Mapped[str] = mapped_column(Text, nullable=False)
+    short_description: Mapped[str | None] = mapped_column(Text)
+    detailed_description: Mapped[str | None] = mapped_column(Text)
     normalized_label: Mapped[str] = mapped_column(String(255), nullable=False)
 
     term: Mapped[GlossaryTerm] = relationship(back_populates="localizations")
@@ -1383,6 +1428,12 @@ class WorkflowTask(Base):
     logical_model_review_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("logical_model_reviews.id", ondelete="SET NULL")
     )
+    logical_model_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("logical_models.id", ondelete="SET NULL")
+    )
+    logical_mapping_issue_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("logical_mapping_inconsistencies.id", ondelete="SET NULL")
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     detail: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -1430,6 +1481,16 @@ class PocSimulationEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
+
+
+class DemoLoginSession(Base):
+    __tablename__ = "demo_login_sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 # Independent modeling aggregates. These deliberately do not reuse
@@ -1587,6 +1648,101 @@ class DataModelRoleAssignment(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
+
+
+class CatalogObjectResponsibility(Base):
+    """Additional object-scoped responsibility; it does not grant authorization."""
+
+    __tablename__ = "catalog_object_responsibilities"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('data_owner', 'deputy_data_owner', 'data_steward')",
+            name="ck_catalog_object_responsibility_role",
+        ),
+        CheckConstraint(
+            "(CASE WHEN domain_id IS NULL THEN 0 ELSE 1 END + "
+            "CASE WHEN logical_model_id IS NULL THEN 0 ELSE 1 END + "
+            "CASE WHEN physical_source_id IS NULL THEN 0 ELSE 1 END + "
+            "CASE WHEN data_product_id IS NULL THEN 0 ELSE 1 END) = 1",
+            name="ck_catalog_object_responsibility_target",
+        ),
+        CheckConstraint(
+            "physical_table_key IS NULL OR physical_source_id IS NOT NULL",
+            name="ck_catalog_object_responsibility_table_source",
+        ),
+        Index("ix_catalog_object_responsibility_user", "user_id", "active"),
+        Index("ix_catalog_object_responsibility_domain", "domain_id"),
+        Index("ix_catalog_object_responsibility_model", "logical_model_id"),
+        Index("ix_catalog_object_responsibility_source", "physical_source_id"),
+        Index("ix_catalog_object_responsibility_product", "data_product_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id", ondelete="CASCADE"), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    organization_id: Mapped[str | None] = mapped_column(
+        ForeignKey("administrative_organizations.id", ondelete="RESTRICT")
+    )
+    domain_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("domains.id", ondelete="CASCADE"))
+    logical_model_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("logical_models.id", ondelete="CASCADE")
+    )
+    physical_source_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("physical_sources.id", ondelete="CASCADE")
+    )
+    physical_table_key: Mapped[str | None] = mapped_column(String(1500))
+    data_product_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("data_products.id", ondelete="CASCADE")
+    )
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    provenance: Mapped[str] = mapped_column(String(40), nullable=False, default="explicit")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class PhysicalDomainAssignment(Base):
+    """Explicit physical-table to domain relationship, independent of a model mapping."""
+
+    __tablename__ = "physical_domain_assignments"
+    __table_args__ = (
+        UniqueConstraint("physical_source_id", "physical_table_key", "domain_id", name="uq_physical_domain_assignment"),
+        Index("ix_physical_domain_assignment_domain", "domain_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    physical_source_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("physical_sources.id", ondelete="CASCADE"), nullable=False
+    )
+    physical_table_key: Mapped[str] = mapped_column(String(1500), nullable=False)
+    domain_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("domains.id", ondelete="RESTRICT"), nullable=False)
+    provenance: Mapped[str] = mapped_column(String(40), nullable=False, default="explicit")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class RoleChangeEvent(Base):
+    """Immutable, database-captured sequence of role and responsibility changes."""
+
+    __tablename__ = "role_change_events"
+    __table_args__ = (
+        CheckConstraint("action IN ('baseline', 'assigned', 'changed', 'removed')", name="ck_role_change_action"),
+        Index("ix_role_change_scope", "scope_type", "scope_id", "sequence"),
+        Index("ix_role_change_subject", "subject_user_id", "sequence"),
+    )
+
+    sequence: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")
+    )
+    actor_user_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    action: Mapped[str] = mapped_column(String(20), nullable=False)
+    scope_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    scope_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    subject_user_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    before_state: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    after_state: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
 
 class I14yConcept(Base):
@@ -2023,6 +2179,28 @@ class LogicalModelVersion(Base):
     )
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LogicalMappingInconsistency(Base):
+    """Current decision for a logical field without a physical counterpart."""
+
+    __tablename__ = "logical_mapping_inconsistencies"
+    __table_args__ = (
+        UniqueConstraint("logical_model_id", "logical_field_id", name="uq_logical_mapping_inconsistency_field"),
+        CheckConstraint("status IN ('open', 'accepted', 'assigned', 'resolved')", name="ck_logical_mapping_inconsistency_status"),
+        Index("ix_logical_mapping_inconsistency_owner", "owner_user_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    logical_model_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("logical_models.id", ondelete="CASCADE"), nullable=False)
+    logical_field_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("logical_fields.id", ondelete="RESTRICT"), nullable=False)
+    owner_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    assigned_steward_user_id: Mapped[str | None] = mapped_column(ForeignKey("demo_users.id"))
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")
+    decision_comment: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class LogicalModelReview(Base):

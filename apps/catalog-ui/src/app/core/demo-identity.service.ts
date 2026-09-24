@@ -92,16 +92,18 @@ export class DemoIdentityService {
   readonly headers = computed(() => new HttpHeaders({ 'X-DaCa-User': this.userIdState() }));
   readonly canEditModels = computed(() => this.modelingRoles(this.user()).length > 0);
   readonly canPublishModels = computed(() => this.modelingRoles(this.user()).some((role) => role === 'data_owner' || role === 'deputy_data_owner'));
+  readonly modelingAssignmentsAvailable = signal(false);
 
   constructor() {
     const initialUrl = window.location.href;
     const requestedUserId = this.requestedDemoUserId();
     forkJoin({
       users: this.http.get<DemoUser[]>('/api/v1/demo-users').pipe(catchError(() => of([...POC_USERS]))),
-      personas: this.http.get<ModelingPersona[]>('/api/v1/modeling/personas').pipe(catchError(() => of([]))),
+      personas: this.http.get<ModelingPersona[]>('/api/v1/modeling/personas').pipe(catchError(() => of(null))),
     }).subscribe(({ users, personas }) => {
+      this.modelingAssignmentsAvailable.set(personas !== null);
       const source = users.length ? users : POC_USERS;
-      const available = source.map((user) => this.withModelingPersonas(user, personas));
+      const available = source.map((user) => this.withModelingPersonas(user, personas ?? []));
       this.usersState.set(available);
       this.directoryResolved = true;
       const preferredUserId = this.pendingUserId ?? requestedUserId;

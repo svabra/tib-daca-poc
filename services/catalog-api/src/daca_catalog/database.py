@@ -2,7 +2,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from fastapi import Request
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -43,6 +43,16 @@ def default_session_factory(settings: Settings) -> sessionmaker[Session]:
 def get_session(request: Request) -> Iterator[Session]:
     session_factory: sessionmaker[Session] = request.app.state.session_factory
     with session_factory() as session:
+        # The local preview identity is already the authority used by ActorDep.
+        # Bind the validated actor to this transaction for database triggers.
+        if request.app.state.settings.daca_demo_auth:
+            actor_id = (request.headers.get("X-DaCa-User") or "").strip()[:200]
+            if actor_id:
+                from .models import DemoUser
+
+                user = session.get(DemoUser, actor_id)
+                if user is not None and user.active:
+                    session.execute(text("SELECT set_config('daca.role_actor', :actor, true)"), {"actor": actor_id})
         # Exception handlers need to roll back failed flushes before returning a
         # RFC-7807 response.  Keep the request-scoped session discoverable for
         # that narrow purpose only.

@@ -62,10 +62,10 @@ def create_app(
     runtime_version = get_runtime_version()
     application = FastAPI(
         title="BIT DaCa Control Plane API",
-        summary="Declarative catalog registration, trust and future sync control.",
+        summary="Administrative observations and historical PoC configuration for central DaCa.",
         description=(
-            "Manages desired control-plane state. It deliberately does not transfer "
-            "metadata, lineage, provenance, or policies between catalogs."
+            "Retains historical instance, trust and synchronization-intent records and "
+            "observes the central DaCa catalog. No catalog resources are transferred."
         ),
         version=runtime_version,
         lifespan=lifespan,

@@ -1,7 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { DemoIdentityService } from '../../core/demo-identity.service';
 import { POC_GUIDE_STATUS_LABELS, pocJourneyById } from './poc-guide.data';
 import { PocGuideAction, PocGuideScreenshot } from './poc-guide.models';
 import { PocGuideConfigService } from './poc-guide-config.service';
@@ -14,7 +13,7 @@ import { PocGuideConfigService } from './poc-guide-config.service';
   template: `
     @if (journey(); as current) {
       <nav class="poc-guide-breadcrumb" aria-label="Brotkrümelnavigation">
-        <a routerLink="/poc-guide">PoC Leitfaden</a><span aria-hidden="true">›</span><span>{{ current.title }}</span>
+        <a routerLink="/documentation">Dokumentation Datenkatalog</a><span aria-hidden="true">›</span><a routerLink="/documentation/journeys">User Journeys</a><span aria-hidden="true">›</span><span>{{ current.title }}</span>
       </nav>
 
       <section class="daca-page-heading poc-guide-detail-heading" data-poc-guide-detail>
@@ -28,6 +27,8 @@ import { PocGuideConfigService } from './poc-guide-config.service';
           <div><dt>Stufe</dt><dd>{{ current.difficulty }}</dd></div>
         </dl>
       </section>
+
+      <div class="poc-guide-card-tags poc-guide-detail-tags" aria-label="Tags">@for (tag of current.tags; track tag) { <span>{{ tag }}</span> }</div>
 
       @if (current.verification) {
         <p class="daca-alert is-success poc-guide-verification"><strong>✓ {{ current.verification.label }}:</strong> {{ current.verification.detail }}</p>
@@ -79,7 +80,11 @@ import { PocGuideConfigService } from './poc-guide-config.service';
                   <div class="poc-guide-actions">
                     @for (action of step.actions; track action.label) {
                       @if (action.target === 'internal') {
-                        <a class="daca-button is-secondary" [routerLink]="action.path" [queryParams]="internalQueryParams(action)" [fragment]="action.fragment" (click)="selectDemoUser(action)">{{ action.label }}</a>
+                        @if (action.demoUserId) {
+                          <a class="daca-button is-secondary" [href]="internalHref(action)">{{ action.label }}</a>
+                        } @else {
+                          <a class="daca-button is-secondary" [routerLink]="action.path" [queryParams]="internalQueryParams(action)" [fragment]="action.fragment">{{ action.label }}</a>
+                        }
                       } @else if (externalHref(action); as href) {
                         <a class="daca-button is-secondary" [href]="href" target="_blank" rel="noopener noreferrer">{{ action.label }} <span aria-hidden="true">↗</span></a>
                       } @else {
@@ -111,7 +116,7 @@ import { PocGuideConfigService } from './poc-guide-config.service';
       </section>
 
       <footer class="poc-guide-detail-footer">
-        <a class="daca-button is-secondary" routerLink="/poc-guide">Alle Journeys</a>
+        <a class="daca-button is-secondary" routerLink="/documentation/journeys">Alle Journeys</a>
         <a class="daca-button" routerLink="/poc-simulation">Simulationen und Grenzfälle</a>
       </footer>
     } @else {
@@ -141,7 +146,6 @@ export class PocGuideDetailComponent {
   private readonly routeParams = toSignal(this.route.paramMap, { initialValue: this.route.snapshot.paramMap });
   private returnFocus: HTMLElement | null = null;
   readonly guideConfig = inject(PocGuideConfigService);
-  private readonly identity = inject(DemoIdentityService);
   readonly journey = computed(() => pocJourneyById(this.routeParams().get('journeyId')));
   readonly selectedScreenshot = signal<PocGuideScreenshot | null>(null);
   readonly statusLabels = POC_GUIDE_STATUS_LABELS;
@@ -162,8 +166,9 @@ export class PocGuideDetailComponent {
     return Object.keys(queryParams).length ? queryParams : null;
   }
 
-  selectDemoUser(action: PocGuideAction): void {
-    if (action.demoUserId) this.identity.select(action.demoUserId);
+  internalHref(action: PocGuideAction): string {
+    const query = new URLSearchParams(this.internalQueryParams(action) ?? {});
+    return `${action.path ?? '/'}${query.size ? `?${query}` : ''}${action.fragment ? `#${encodeURIComponent(action.fragment)}` : ''}`;
   }
 
   openScreenshot(screenshot: PocGuideScreenshot, event: Event): void {

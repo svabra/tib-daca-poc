@@ -25,10 +25,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CATALOG_APP = Path("apps/catalog-ui")
 DESIGN_SYSTEM = Path("packages/design-system")
 VERSION_FILE = DESIGN_SYSTEM / "src/lib/version.ts"
+RELEASE_HISTORY_FILE = DESIGN_SYSTEM / "src/lib/release-history.ts"
 NGSW_CONFIG = CATALOG_APP / "ngsw-config.json"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 VERSION_DECLARATION = re.compile(
     r"(?m)^export const DACA_VERSION = '(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)' as const;$"
+)
+RELEASE_HISTORY_DECLARATION = re.compile(
+    r"(?m)^const CURRENT_RELEASE_VERSION: typeof DACA_VERSION = '(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)';$"
 )
 HASHED_ASSET = re.compile(
     r"(?:^|[-.])[A-Z0-9_-]{8,}\.(?:css|js|svg|png|ico|webp|avif)$", re.IGNORECASE
@@ -99,6 +103,18 @@ def set_snapshot_version(snapshot: Path, version: str) -> None:
             f"Expected one DACA_VERSION declaration in {version_path}; found {count}."
         )
     version_path.write_text(updated, encoding="utf-8")
+
+    release_history_path = snapshot / RELEASE_HISTORY_FILE
+    release_history = release_history_path.read_text(encoding="utf-8")
+    updated_history, count = RELEASE_HISTORY_DECLARATION.subn(
+        f"const CURRENT_RELEASE_VERSION: typeof DACA_VERSION = '{version}';",
+        release_history,
+    )
+    if count != 1:
+        raise AssertionError(
+            f"Expected one current release declaration in {release_history_path}; found {count}."
+        )
+    release_history_path.write_text(updated_history, encoding="utf-8")
 
     config_path = snapshot / NGSW_CONFIG
     config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -286,17 +302,21 @@ EVIDENCE_RECORDER = """
 def new_context(playwright: Playwright) -> BrowserContext:
     browser = playwright.chromium.launch(headless=True)
     context = browser.new_context(service_workers="allow")
+    context.route(
+        "**/api/v1/session",
+        lambda route: route.fulfill(status=200, json={"userId": "joel.ruod"}),
+    )
     context.add_init_script(EVIDENCE_RECORDER)
     return context
 
 
 def wait_for_controlled_app(page: Page, origin: str, version: str) -> None:
     page.goto(origin, wait_until="domcontentloaded")
-    expect(page.get_by_text(f"V{version}", exact=True).last).to_be_visible(timeout=30_000)
+    expect(page.locator('.daca-version-overlay-value')).to_have_text(f"V{version}", timeout=30_000)
     page.evaluate("async () => { await navigator.serviceWorker.ready; }")
     page.reload(wait_until="domcontentloaded")
     page.wait_for_function("() => navigator.serviceWorker.controller !== null", timeout=30_000)
-    expect(page.get_by_text(f"V{version}", exact=True).last).to_be_visible(timeout=30_000)
+    expect(page.locator('.daca-version-overlay-value')).to_have_text(f"V{version}", timeout=30_000)
 
 
 def reset_evidence(page: Page) -> None:
@@ -354,11 +374,27 @@ def test_startup_update(
         server.switch(new, asset_delay_seconds=0.08)
         page.goto(origin, wait_until="domcontentloaded")
 
-        expect(page.get_by_text(f"V{new.version}", exact=True).last).to_be_visible(timeout=45_000)
+        confirmation = page.locator('[data-testid="app-update-confirmation"]')
+        expect(confirmation).to_be_visible(timeout=45_000)
+        expect(confirmation).to_contain_text(f"V{old.version} → V{new.version}")
+        assert_load_count(page, 1)
+        confirmation.get_by_role(
+            "button", name=re.compile(r"Update später durchführen|Update later", re.IGNORECASE)
+        ).click()
+        expect(confirmation).not_to_be_visible()
+        assert_load_count(page, 1)
+
+        page.locator('[data-testid="app-update-reload"]').click()
+        expect(confirmation).to_be_visible()
+        confirmation.get_by_role(
+            "button", name=re.compile(r"Update durchführen|Apply update", re.IGNORECASE)
+        ).click()
+
+        expect(page.locator('.daca-version-overlay-value')).to_have_text(f"V{new.version}", timeout=45_000)
         page.wait_for_timeout(500)
         assert_update_evidence(page, old.version, new.version)
         assert_load_count(page, 2)
-        print(f"PASS startup update: V{old.version} -> V{new.version}, exactly one automatic reload")
+        print(f"PASS startup update: V{old.version} -> V{new.version}, deferred then confirmed reload")
     finally:
         context.browser.close()
 
@@ -385,14 +421,14 @@ def test_mid_session_update(
         expect(reload_button).to_be_visible(timeout=45_000)
         assert_load_count(page, 0)
 
-        reload_button.click()
         confirmation = page.locator('[data-testid="app-update-confirmation"]')
         expect(confirmation).to_be_visible()
+        expect(confirmation).to_contain_text(f"V{old.version} → V{new.version}")
         confirmation.get_by_role(
-            "button", name=re.compile(r"Jetzt aktualisieren|Update now", re.IGNORECASE)
+            "button", name=re.compile(r"Update durchführen|Apply update", re.IGNORECASE)
         ).click()
 
-        expect(page.get_by_text(f"V{new.version}", exact=True).last).to_be_visible(timeout=45_000)
+        expect(page.locator('.daca-version-overlay-value')).to_have_text(f"V{new.version}", timeout=45_000)
         page.wait_for_timeout(500)
         assert_update_evidence(page, old.version, new.version)
         assert_load_count(page, 1)
@@ -408,7 +444,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Build and serve two catalog PWA releases on one origin, then verify Angular's "
-            "automatic-startup and confirmed-session update flows in Chromium."
+            "confirmed startup and session update flows in Chromium."
         )
     )
     parser.add_argument("--to-version", default=target)

@@ -5,6 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { StatusBadgeComponent } from '@bit-daca/design-system';
 import { finalize, forkJoin, Observable } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
+import { CatalogI18nService } from '../../core/catalog-i18n.service';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 import { DomainChangeRequest, DomainSummary, GlossaryTermProposal, GlossaryTermSummary } from '../../core/catalog.models';
 
@@ -23,44 +24,44 @@ export function resolveSemanticTab(routeTab: unknown, legacyTab: string | null):
   template: `
     <section class="daca-page-heading">
       <div>
-        <p class="daca-eyebrow">Fachliche Semantik</p>
-        <h1>Domäne und Terminology</h1>
-        <p>Domains ordnen Datenprodukte fachlich ein. Sie sind keine Organisationen, Ämter oder Abteilungen.</p>
+        <p class="daca-eyebrow">{{ i18n.t('businessSemantics') }}</p>
+        <h1>{{ i18n.t('domainTerminology') }}</h1>
+        <p>{{ i18n.t('domainIntro') }}</p>
       </div>
       @if (tab() === 'domains' && canRequestDomain()) {
-        <button class="daca-button" type="button" (click)="openCreate()">Domain beantragen</button>
+        <button class="daca-button" type="button" (click)="openCreate()">{{ i18n.t('requestDomain') }}</button>
       } @else if (tab() === 'terms') {
-        <a class="daca-button" routerLink="/glossary/proposals/new">Neuen Term vorschlagen</a>
+        <a class="daca-button" routerLink="/glossary/proposals/new">{{ i18n.t('proposeNewTerm') }}</a>
       }
     </section>
 
     @if (notice()) { <p class="daca-alert" role="status">{{ notice() }}</p> }
     @if (error()) { <p class="daca-alert is-error" role="alert">{{ error() }} <button class="daca-button is-secondary" type="button" (click)="load()">Erneut laden</button></p> }
 
-    <nav class="semantic-tabs" aria-label="Domäne und Terminology">
-      <a routerLink="/domains" [attr.aria-current]="tab() === 'domains' ? 'page' : null" [class.is-active]="tab() === 'domains'">Domänen <span>{{ domains().length }}</span></a>
-      <a routerLink="/domains/terminology" [attr.aria-current]="tab() === 'terms' ? 'page' : null" [class.is-active]="tab() === 'terms'">Terminology <span>{{ terms().length }}</span></a>
-      <a routerLink="/domains/concepts">I14Y-Konzepte</a>
-      <a routerLink="/domains/themes">Themen</a>
+    <nav class="semantic-tabs" [attr.aria-label]="i18n.t('domainTerminology')">
+      <a routerLink="/domains" [attr.aria-current]="tab() === 'domains' ? 'page' : null" [class.is-active]="tab() === 'domains'">{{ i18n.t('domains') }} <span>{{ domains().length }}</span></a>
+      <a routerLink="/domains/terminology" [attr.aria-current]="tab() === 'terms' ? 'page' : null" [class.is-active]="tab() === 'terms'">{{ i18n.t('terminology') }} <span>{{ terms().length }}</span></a>
+      <a routerLink="/domains/concepts">{{ i18n.t('i14yConcepts') }}</a>
+      <a routerLink="/domains/themes">{{ i18n.t('themes') }}</a>
       <a routerLink="/domains/governance" [attr.aria-current]="tab() === 'governance' ? 'page' : null" [class.is-active]="tab() === 'governance'">Governance <span>{{ openGovernanceCount() }}</span></a>
     </nav>
 
     @if (loading()) {
-      <div class="daca-card semantic-state" aria-live="polite">Domainregister und Terminology werden geladen …</div>
+      <div class="daca-card semantic-state" aria-live="polite">{{ i18n.t('loadingSemantics') }}</div>
     } @else if (!error() && tab() === 'domains') {
-      <label class="semantic-search">Domains durchsuchen <input type="search" [value]="query()" (input)="query.set(searchValue($event))" placeholder="Name, Definition oder Owner"></label>
+      <label class="semantic-search">{{ i18n.t('searchDomains') }} <input type="search" [value]="query()" (input)="query.set(searchValue($event))" placeholder="Name, Definition oder Owner"></label>
       @if (filteredDomains().length) {
         <div class="semantic-grid">
           @for (domain of filteredDomains(); track domain.id) {
             <article class="daca-card semantic-card">
               <div class="daca-card-header"><div><p class="daca-eyebrow">Fachdomain</p><h2>{{ domain.preferredLabel }}</h2></div><daca-status-badge [tone]="domain.status === 'active' ? 'green' : 'neutral'">{{ domain.status === 'active' ? 'Aktiv' : 'Stillgelegt' }}</daca-status-badge></div>
-              <div class="daca-card-body"><p>{{ domain.definition || 'Noch keine Definition hinterlegt.' }}</p><dl><div><dt>Data Owner</dt><dd>{{ domain.ownerName }} · {{ domain.ownerOrganization }}</dd></div><div><dt>Stellvertretung</dt><dd>{{ domain.deputyOwnerName }} · {{ domain.deputyOwnerOrganization }}</dd></div><div><dt>Inhalt</dt><dd>{{ domain.productCount }} Produkte · {{ domain.termCount }} Terme</dd></div><div><dt>Revision</dt><dd>{{ domain.revision }}</dd></div></dl><div class="domain-actions"><a class="daca-button is-secondary" [routerLink]="['/domains', domain.id]">Domain öffnen</a>@if(domain.status==='active'&&canRequestDomain()){<button class="daca-button is-secondary" type="button" (click)="openDomainEdit(domain,false)">Änderung beantragen</button><button type="button" (click)="requestRetirement(domain)">Stilllegung beantragen</button>}@if(domain.status==='active'&&isRegisterOwner()){<button type="button" (click)="openDomainEdit(domain,true)">Direkt bearbeiten</button><button type="button" (click)="retireDirect(domain)">Direkt stilllegen</button>}</div></div>
+              <div class="daca-card-body"><p>{{ domain.definition || i18n.t('noDefinition') }}</p><dl><div><dt>Data Owner</dt><dd>{{ domain.ownerName }} · {{ domain.ownerOrganization }}</dd></div><div><dt>Stellvertretung</dt><dd>{{ domain.deputyOwnerName }} · {{ domain.deputyOwnerOrganization }}</dd></div><div><dt>Inhalt</dt><dd>{{ domain.productCount }} Produkte · {{ domain.termCount }} Terme</dd></div><div><dt>Revision</dt><dd>{{ domain.revision }}</dd></div></dl><div class="domain-actions"><a class="daca-button is-secondary" [routerLink]="['/domains', domain.id]">{{ i18n.t('openDomain') }}</a>@if(domain.status==='active'&&canRequestDomain()){<button class="daca-button is-secondary" type="button" (click)="openDomainEdit(domain,false)">Änderung beantragen</button><button type="button" (click)="requestRetirement(domain)">Stilllegung beantragen</button>}@if(domain.status==='active'&&isRegisterOwner()){<button type="button" (click)="openDomainEdit(domain,true)">Direkt bearbeiten</button><button type="button" (click)="retireDirect(domain)">Direkt stilllegen</button>}</div></div>
             </article>
           }
         </div>
-      } @else { <div class="daca-card semantic-state">Keine passende Domain gefunden.</div> }
+      } @else { <div class="daca-card semantic-state">{{ i18n.t('noMatchingDomain') }}</div> }
     } @else if (!error() && tab() === 'terms') {
-      <label class="semantic-search">Terminology durchsuchen <input type="search" [value]="termQuery()" (input)="termQuery.set(searchValue($event))" placeholder="Begriff, Abkürzung oder Definition"></label>
+      <label class="semantic-search">{{ i18n.t('searchTerminology') }} <input type="search" [value]="termQuery()" (input)="termQuery.set(searchValue($event))" placeholder="Begriff, Abkürzung oder Definition"></label>
       @if (filteredTerms().length) {
         <div class="semantic-grid">
           @for (term of filteredTerms(); track term.id) {
@@ -97,6 +98,7 @@ export function resolveSemanticTab(routeTab: unknown, legacyTab: string | null):
 })
 export class DomainsGlossaryComponent {
   readonly api = inject(CatalogApiService);
+  readonly i18n = inject(CatalogI18nService);
   readonly identity = inject(DemoIdentityService);
   private readonly fb = inject(FormBuilder);
   private readonly route = inject(ActivatedRoute);

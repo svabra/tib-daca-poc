@@ -13,7 +13,7 @@ This independently runnable FastAPI project is the PostgreSQL-backed metadata st
 - OPA bundle distribution with trusted Policy Information Point (PIP) resource attributes
 - PostgreSQL entitlement projection to the sample data product
 
-Federation and synchronization are intentionally not implemented here. Stable URNs, origin catalog, and revisions preserve the information needed by a future sync protocol.
+DaCa is the central catalog. Stable URNs, origin identifiers and revisions support local versioning and traceability. Existing synchronization-intent records do not transfer catalog resources.
 
 ## Local development
 

@@ -1,24 +1,27 @@
 # BIT DaCa
 
-**DaCa** means **Distributed Data Catalog**. This proof of concept contains a standalone catalog,
-a catalog control plane, and a synthetic ESTV data product protected over both REST and direct
-PostgreSQL access.
+**DaCa** is the central **Data Catalog** of the BIT data platform. This proof of concept contains
+the catalog, an administrative control-plane prototype, and a synthetic ESTV data product
+protected over both REST and direct PostgreSQL access.
+The original PoC catalog description is corrected in a new metadata revision, retaining its
+previous wording only as version history.
 
 ## Projects
 
 | Project | Purpose | Local URL |
 |---|---|---|
 | Catalog UI | Metadata, lineage, provenance, endpoints, policy authoring | http://localhost:8080 |
-| Catalog API | Standalone catalog and PAP/PIP | http://localhost:8080/catalog-api/docs |
-| Control-plane UI | Instances, directed trust, sync intent, status | http://localhost:8081 |
+| Catalog API | Central catalog and PAP/PIP | http://localhost:8080/catalog-api/docs |
+| Control-plane UI | Administrative status and historical PoC configuration | http://localhost:8081 |
 | Control-plane API | Control-plane REST and SSE | http://localhost:8002/docs |
 | Sample data product | Protected synthetic ESTV aggregates | http://localhost:8080/sample-api/docs |
 | OPA PDP | Bundle status and local policy decisions | http://localhost:8181 |
 | PostgreSQL 18.4 | Catalog, Control Plane, Sample-Daten und direkter Produktzugriff | localhost:55432 |
 | pgAdmin | Nur lokale Verwaltung der drei PostgreSQL-Datenbanken | http://localhost:5051 |
 
-The only supported protocols are HTTP and PostgreSQL wire protocol. Federation configuration is
-persisted but no catalog-to-catalog synchronization is performed.
+The only supported protocols are HTTP and PostgreSQL wire protocol. Catalog metadata and
+governance are managed centrally. The older trust/sync configuration prototype does not
+transfer catalog resources.
 
 ## Stack
 
@@ -34,6 +37,25 @@ Both PWAs consume `packages/design-system`, a focused Angular port of the refere
 federal authority strip, Confederation/BIT header, Swiss-red/blue tokens, sharp surfaces,
 typography, focus behavior, and responsive breakpoints. The Confederation logo and favicon are
 byte-identical copies of the supplied reference assets; its monolithic stylesheet is not imported.
+
+The catalog header's information icon opens `/documentation`, which contains the existing User
+Journeys, static catalog guidance and a PostgreSQL-backed DaCa application glossary.
+The DaCa glossary is stored separately from governed business terminology. It contains curated
+system terms, including Data Owner and Data Steward with tasks, authority and accountability;
+Catalog users can read these entries but cannot edit or enrich them.
+Glossary words use a light-gray wavy underline in both DaCa and DAAIF; the explanation and detail link remain available by pointer, keyboard and touch.
+The thirteen DaCa journeys at `/documentation/journeys` have their own topic tags and can be filtered by free text (title, summary, outcome, roles and tags) together with a selected tag. The filter shows a result count and an empty state; existing journey deep links remain stable.
+
+Settings include `/settings/responsibilities` with category, person and domain perspectives on persisted
+responsibility relationships. Glossary-backed role help loads on first interaction and links to
+the full entry. The popup stays open while the pointer moves down to its link. The data and
+authorization boundaries are described in
+[`docs/catalog-documentation-and-responsibilities.md`](docs/catalog-documentation-and-responsibilities.md).
+Physical tables can be linked directly to domains before a logical model mapping exists.
+The settings submenu also exposes `/settings/role-changes`: a PostgreSQL-backed, append-only
+protocol of role assignments, changes and removals. The User Journey **Zugriff und Verantwortung
+im Überblick behalten** shows how to use all three perspectives and the protocol. The role
+change scenario is specified in [`docs/use-cases/role-changes.md`](docs/use-cases/role-changes.md).
 
 ## Start locally
 
@@ -185,11 +207,29 @@ The existing DaCa Journey 02 links to DAAIF's closed-by-default source explorer;
 
 `Datenmodelle` is independent of `Meine Datenprodukte`. `Neues logisches Modell` asks whether to
 start with an empty logical form or from an existing data source; the adjacent action is therefore
-named `Bestehende Datenquellen`. The DAAIF-aligned first level presents active connection cards.
+named **Sichtbare Datenquellen**. The DAAIF-aligned first level presents active connection cards.
+The page now uses **Sichtbare Datenquellen** with a direct expert-search link that carries the
+current filter text as `q`; the expert search applies it to visible physical sources as well as
+data products. The synthetic SAP VIBDBU real-estate source is readable across
+modeling scopes; import and changes remain limited to its owning scope. The catalog header
+offers a local sign-in view backed by a revocable, HttpOnly demo session, profile avatar and
+sign-out, language selection and a light/dark switch. Header actions and the language selector
+have no surrounding boxes; the opened language list has readable option colors in both themes,
+and keyboard focus uses an underline instead of a frame. In dark mode the federal logo keeps its
+transparent background and red shield while its lettering appears white. A language change updates the visible interface immediately, then
+asks whether to keep it in this browser or the demo user's server profile; cancelling restores
+the previous language. Theme and language storage each require that explicit choice. This local preview
+shows the active person in the header instead of repeating an Arbeitskontext panel in workspaces.
+The translation dictionary covers the shared shell, sign-in, source register, expert search,
+welcome page, product overview, model overview, task overview and main domain view in DE/FR/IT/EN.
+Specialized editors and some workflow details still contain German text. The local preview retains
+`X-DaCa-User` for PoC/CLI flows under `DACA_DEMO_AUTH=true`; it is not production IAM.
 One card represents one technical system instance: active registrations with the same catalog path
 are consolidated, while distinct PostgreSQL, S3, or future Oracle instances remain separate.
 The register can be narrowed by free text across instance name, catalog path and owner, or by
-source type and owner. The VIBDBU PostgreSQL demo source is seeded active and can be imported
+source type and owner. Its federal administration level selector shows Bund, Kantone, Gemeinde,
+Bundesnahe Betriebe and Kantonalbanken; only Bund is currently available and selected. A tooltip
+explains this PoC scope. The VIBDBU PostgreSQL demo source is seeded active and can be imported
 again whenever a fresh structural snapshot is required.
 Opening a source reveals its database/schema/table tree, complete field metadata and a table
 context menu. `Logisches Modell ableiten` creates the technical draft and its pinned exact 1:1
@@ -198,8 +238,10 @@ mappings atomically and opens the mapping workspace directly. When a table is al
 the precise snapshot and table selected. Product publication and DAAIF investigation remain visibly
 disabled.
 Tables with an existing logical-model mapping show a dedicated model icon before the compact `…`
-action control; its tooltip confirms the link independently of its mapping status.
-It closes immediately when the pointer leaves the icon.
+action control. Its rear square is gray and its front square blue. The icon links directly to the
+logical model; a second tooltip line explains the click action. If several models are linked, the
+most recently updated one opens. The tooltip confirms the link independently of mapping status
+and closes immediately when the pointer leaves the icon.
 The model overview displays each change timestamp with both date and local time.
 The physical snapshot card in the mapping graph identifies the scope's Data Owner, displays its
 data-source-type icon, and shows the full canonical catalog path alongside its pinned revision.
@@ -230,6 +272,22 @@ explicit user decisions. The model-level section remains `Model Merkmale` on `Mo
 hovering or focusing the field title opens the tooltip above it and repeats the covered title; it
 closes as soon as the pointer leaves that title. Opening another field help first closes the
 previous tooltip, so contextual explanations never accumulate over the mapping workspace.
+
+The logical-model detail page keeps its title above three tabs: `Status & Klassifikation`
+contains the saved metadata summary, publication readiness, version history and exports;
+`Model Merkmale` contains the DCAT-AP-CH and organization form; `Logische Entitäten und Felder`
+contains the field table and editor. The same form instance retains unsaved changes when tabs
+change. New models open on model characteristics; existing models open on status.
+
+The mapping graph now uses compact cards and a 570 px canvas beside the persistent field editor.
+Connections can be removed while older mapping revisions stay in history; logical fields can also
+be removed from the editor. A model that has ever been linked to a physical representation may be
+saved with an unbound logical field, but DaCa rates that field as an **Inkonsistenzfehler**. A
+PostgreSQL issue record creates a personal Data Owner task. The owner must accept the error with a
+reason or assign investigation to an eligible Data Steward. Adding a physical mapping or removing
+the field resolves the issue and completes open tasks. A model created purely logically, without
+any physical binding, remains valid. Journey 13 and the dated, tagged static documentation article
+show this workflow with interface images.
 
 The sample PostgreSQL database contains quoted table `VIBDBU`: all 47 fields from
 `tests/VIBDBU.csv`, column comments, and exactly 1'000 deterministic, semantically plausible Swiss
@@ -271,6 +329,14 @@ Journey 10 uses Mirjam Keller (Data Steward, armasuisse Immobilien), Daniel Weng
 of the `Immobilienmanagement VBS` domain) and Eliane Rossi (delegated deputy). Submission creates
 an immutable review snapshot and owner task; acceptance publishes immediately, while rejection
 requires a comment and creates a `changes_requested` successor for the submitting steward.
+The guide calls this journey **Logisches Datenmodell erfassen**: Mirjam enters exactly one logical
+model in `/models/new`, adds entities and fields manually, and publishes it through domain review
+without a physical source or mapping. Journey 11, **Logisches Modell von physischer Repräsentation
+ableiten**, immediately follows it in the guide. Christian Man (or Christian Spider) opens the
+seeded VIBDBU source, checks its 47 structure fields, derives a technical draft from the table
+menu, reviews the pinned direct mappings, and completes the domain semantics. Repeating the same
+table/snapshot derivation returns the same model. Journey links that specify a demo person now
+perform a full local-session sign-in before the target page loads.
 The demo-user selector also includes Giuseppe Starwars (Data Owner) and Thomas Wikinger (Data
 Steward) in the parent organization armasuisse.
 
@@ -341,12 +407,25 @@ to configure it again explicitly. The hook runs `npm run test:ui-regression` bef
 The GitHub **UI regression** pull-request check runs the same command against Compose. It uploads
 screenshots only on failure and retains them for three days.
 
+### Personal profile and cross-organization modeling
+
+The signed-in name in the header opens `/profile`. The page shows the person's portrait (or
+initials), primary organization, email, active server-backed modeling assignments and other
+application roles. It maps each modeling role to the actions available in its organization scope.
+The profile is absent from the main navigation; the header name is its only entry. Sign-out is
+available on the profile page only. A visitor without a local session sees the demo-person picker
+before any DaCa page is rendered.
+Christian Spider and Christian Man retain their Verteidigung roles and also have Data Steward
+assignments in `VBS / armasuisse Immobilien`. They can create and derive VIBDBU logical drafts and
+edit their mappings. Their additional role also permits structural metadata management there;
+publishing still requires the named owner or delegated deputy of the specific model.
+
 ## Exercise the control plane
 
-Catalog registrations, directed grants, sync intent, deployment observations, health history,
+Historical PoC catalog registrations, directed grants, sync intent, deployment observations, health history,
 and audit events are available under `http://localhost:8002/api/v1`. Mutations require the local
 `X-DaCa-Actor: demo-control-admin` header. A sync configuration can be enabled only when an
-approved matching directed grant exists; no federation traffic is sent.
+approved matching directed grant exists; the configuration does not transfer resources.
 
 ## Test the protected REST product
 
@@ -415,10 +494,22 @@ repository, then updates all managed surfaces and validates the result:
 npm run version:bump -- 0.2.0
 ```
 
-The lower-right version box in both web applications also opens a plain-language feature list.
-It shows the capabilities of the current Catalog or Control Plane release in the application's
-language and clearly identifies simulated PoC behavior. Its displayed version is bound to the
-same shared release constant and is covered by `version:check`.
+The lower-right version box in both web applications uses the DAAIF card design and opens a
+short, plain-language summary of the newest release. The link in that popup opens
+`/settings/features`, where users can search the tagged release history by feature or topic.
+When a new Angular PWA build is ready, Catalog and Control Plane automatically open the DAAIF-style
+update dialog once per build. It shows the current and target versions, warns that unsaved page
+content will be lost, offers the target release notes and links to the feature list. Users can
+apply the update with a full reload or leave their current work open and update later from the
+version card.
+The settings icon beside the theme control opens `/settings` and its DAAIF-style submenu with
+personal language settings, appearance, and the feature list. Tenant language settings are absent
+because DaCa has no tenancy. Both the settings and day/night icons show translated hover/focus
+tooltips. Language and appearance choices on these pages use the same browser-or-profile
+confirmation as the header controls. The archive contains the published versions verified in
+the `VERSION` history from 0.1.1 onward; numbers that were never released are omitted. Simulated
+behavior is identified on the page. The displayed version is bound to the shared release constant and
+covered by `version:check`.
 
 After the complete GitHub test suite and the PostgreSQL 17/18 compatibility jobs pass, CI builds
 all five first-party Linux images and publishes each component to its own Docker Hub repository:
@@ -459,7 +550,7 @@ production dependency vulnerabilities at the time of this implementation.
 Architecture and PBAC details are in `docs/architecture.md` and `docs/security/pbac.md`. The
 combined component, PBAC, WSO2, PostgreSQL projection, and request-activity diagrams are in
 `docs/architecture-pbac-diagrams.md`. The root `AGENTS.md` is the AI capability harness and records
-the deliberately unimplemented federation contract.
+the central-catalog boundary and security invariants.
 
 ## OpenShift presentation deployment
 

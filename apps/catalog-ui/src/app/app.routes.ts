@@ -9,6 +9,12 @@ import { DATA_MODEL_ROUTES } from './features/data-models/data-model.routes';
 export const routes: Routes = [
   { path: '', pathMatch: 'full', component: WelcomePageComponent, title: 'Willkommen | DaCa' },
   {
+    path: 'profile',
+    pathMatch: 'full',
+    loadComponent: () => import('./features/profile/user-profile.component').then((m) => m.UserProfileComponent),
+    title: 'Mein Profil | DaCa',
+  },
+  {
     path: 'products',
     pathMatch: 'full',
     loadComponent: () => import('./features/products/my-data-products.component').then((m) => m.MyDataProductsComponent),
@@ -29,6 +35,12 @@ export const routes: Routes = [
     title: 'Aufgaben | DaCa',
   },
   ...DOMAIN_ROUTES,
+  { path: 'documentation', pathMatch: 'full', loadComponent: () => import('./features/documentation/documentation-home.component').then((m) => m.DocumentationHomeComponent), title: 'Dokumentation Datenkatalog | DaCa' },
+  { path: 'documentation/journeys', pathMatch: 'full', loadComponent: () => import('./features/poc-guide/poc-guide-overview.component').then((m) => m.PocGuideOverviewComponent), title: 'User Journeys | DaCa' },
+  { path: 'documentation/journeys/:journeyId', loadComponent: () => import('./features/poc-guide/poc-guide-detail.component').then((m) => m.PocGuideDetailComponent), title: 'User Journey | DaCa' },
+  { path: 'documentation/static', pathMatch: 'full', loadComponent: () => import('./features/documentation/documentation-static.component').then((m) => m.DocumentationStaticComponent), title: 'Statische Dokumentation | DaCa' },
+  { path: 'documentation/glossary', pathMatch: 'full', loadComponent: () => import('./features/documentation/documentation-glossary.component').then((m) => m.DocumentationGlossaryComponent), title: 'DaCa Glossar | DaCa' },
+  { path: 'documentation/glossary/:termId', loadComponent: () => import('./features/documentation/documentation-glossary.component').then((m) => m.DocumentationGlossaryComponent), title: 'Glossarbegriff | DaCa' },
   {
     path: 'governance-submissions/:id',
     loadComponent: () => import('./features/tasks/governance-review.component').then((m) => m.GovernanceReviewComponent),
@@ -86,7 +98,12 @@ export const routes: Routes = [
     data: { eventType: 'isbo_restricted' },
     title: 'Durch ISBO eingeschränkt | PoC Simulation',
   },
-  { path: 'settings', pathMatch: 'full', redirectTo: 'poc-simulation/product-submitted' },
+  { path: 'settings', pathMatch: 'full', redirectTo: 'settings/features' },
+  { path: 'settings/language-personal', loadComponent: () => import('./features/settings/catalog-settings.component').then((m) => m.CatalogSettingsComponent), data: { settingsSection: 'language' }, title: 'Spracheinstellungen | DaCa' },
+  { path: 'settings/appearance', loadComponent: () => import('./features/settings/catalog-settings.component').then((m) => m.CatalogSettingsComponent), data: { settingsSection: 'appearance' }, title: 'Erscheinungsbild | DaCa' },
+  { path: 'settings/features', loadComponent: () => import('./features/settings/catalog-settings.component').then((m) => m.CatalogSettingsComponent), data: { settingsSection: 'features' }, title: 'Featureliste | DaCa' },
+  { path: 'settings/responsibilities', loadComponent: () => import('./features/settings/catalog-settings.component').then((m) => m.CatalogSettingsComponent), data: { settingsSection: 'responsibilities' }, title: 'Rollen und Zuständigkeiten | DaCa' },
+  { path: 'settings/role-changes', loadComponent: () => import('./features/settings/catalog-settings.component').then((m) => m.CatalogSettingsComponent), data: { settingsSection: 'role-changes' }, title: 'Rollenprotokoll | DaCa' },
   {
     path: 'products/:id/quality',
     loadComponent: () => import('./features/quality/product-quality-wizard.component').then((m) => m.ProductQualityWizardComponent),

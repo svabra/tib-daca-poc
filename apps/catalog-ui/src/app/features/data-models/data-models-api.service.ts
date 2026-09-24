@@ -30,6 +30,20 @@ import {
 export type ModelingApiErrorKind = 'conflict' | 'permission' | 'validation' | 'not_found' | 'unavailable' | 'unknown';
 export type LogicalModelExportRepresentation = 'dcat-ttl' | 'dcat-jsonld' | 'shacl-ttl' | 'shacl-jsonld';
 
+export interface MappingInconsistency {
+  id: string;
+  logicalModelId: string;
+  logicalFieldId: string;
+  fieldName: string;
+  ownerUserId: string;
+  assignedStewardUserId: string | null;
+  status: 'open' | 'accepted' | 'assigned' | 'resolved';
+  decisionComment: string | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+}
+
 export interface ModelingValidationIssue {
   location: string;
   message: string;
@@ -139,7 +153,7 @@ export class DataModelsApiService {
   listLogicalModels(): Observable<readonly LogicalModelSummary[]> {
     return this.identitySafe(this.http.get<CollectionResponse<unknown> | unknown[]>(
       '/api/v1/logical-models', { headers: this.identity.headers() },
-    )).pipe(map((response) => (Array.isArray(response) ? response : response.items).map((item) => this.normalizeLogicalModel(item))));
+    ), 30000).pipe(map((response) => (Array.isArray(response) ? response : response.items).map((item) => this.normalizeLogicalModel(item))));
   }
 
   loadLogicalModel(id: string): Observable<ApiResult<LogicalModel>> {
@@ -314,6 +328,20 @@ export class DataModelsApiService {
     return this.identitySafe(this.http.get<CollectionResponse<unknown> | unknown[]>(
       '/api/v1/asset-mappings', { headers: this.identity.headers(), params },
     )).pipe(map((response) => (Array.isArray(response) ? response : response.items).map((item) => this.normalizeMapping(item))));
+  }
+
+  listMappingInconsistencies(modelId: string): Observable<{ qualityStatus: 'ok' | 'error'; items: MappingInconsistency[]; total: number; eligibleStewards: { id: string; displayName: string }[] }> {
+    return this.identitySafe(this.http.get<{ qualityStatus: 'ok' | 'error'; items: MappingInconsistency[]; total: number; eligibleStewards: { id: string; displayName: string }[] }>(
+      `/api/v1/logical-models/${encodeURIComponent(modelId)}/mapping-inconsistencies`,
+      { headers: this.identity.headers() },
+    ));
+  }
+
+  decideMappingInconsistency(modelId: string, issueId: string, action: 'accept' | 'dispatch', comment: string, stewardUserId?: string): Observable<MappingInconsistency> {
+    return this.identitySafe(this.http.post<MappingInconsistency>(
+      `/api/v1/logical-models/${encodeURIComponent(modelId)}/mapping-inconsistencies/${encodeURIComponent(issueId)}/decision`,
+      { action, comment, stewardUserId: stewardUserId || null }, { headers: this.identity.headers() },
+    ));
   }
 
   createMapping(value: AssetMappingWrite): Observable<ApiResult<AssetMapping>> {
@@ -581,6 +609,7 @@ export class DataModelsApiService {
       fields,
       fieldCount: numberValue(root['fieldCount'], fields.length),
       hasPhysicalMapping: booleanValue(root['hasPhysicalMapping'], false),
+      mappingInconsistencyCount: numberValue(root['mappingInconsistencyCount'], 0),
       productId: nullableText(root['productId']),
       distributionIds: stringArray(root['distributionIds']).length
         ? stringArray(root['distributionIds'])
@@ -769,10 +798,10 @@ export class DataModelsApiService {
     };
   }
 
-  private identitySafe<T>(request: Observable<T>): Observable<T> {
+  private identitySafe<T>(request: Observable<T>, timeoutMs = 8000): Observable<T> {
     const requestedIdentity = this.identity.userId();
     return request.pipe(
-      timeout(8000),
+      timeout(timeoutMs),
       map((body) => {
         this.assertIdentity(requestedIdentity);
         return body;

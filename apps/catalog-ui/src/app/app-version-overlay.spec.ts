@@ -6,68 +6,31 @@ import { FederalShellComponent } from '../../../../packages/design-system/src/li
 import { DACA_VERSION } from '../../../../packages/design-system/src/lib/version';
 
 describe('Catalog runtime version overlay', () => {
-  it('opens a German, plain-language feature list tied to the shared release', async () => {
-    await TestBed.configureTestingModule({
-      imports: [FederalShellComponent],
-      providers: [provideRouter([])],
-    }).compileComponents();
-
+  it('shows only the latest release and links to the searchable history', async () => {
+    await TestBed.configureTestingModule({ imports: [FederalShellComponent], providers: [provideRouter([])] }).compileComponents();
     const fixture = TestBed.createComponent(FederalShellComponent);
     fixture.componentRef.setInput('appTitle', 'Data Catalog');
     fixture.componentRef.setInput('navigation', []);
     fixture.componentRef.setInput('locale', 'de');
     fixture.componentRef.setInput('versionProductName', 'DaCa Catalog');
-    fixture.componentRef.setInput('versionFeatureScope', 'catalog');
     fixture.detectChanges();
-
-    const overlay = fixture.nativeElement.querySelector('.daca-version-overlay') as HTMLElement | null;
-    const trigger = fixture.nativeElement.querySelector('.daca-version-feature-trigger') as HTMLButtonElement | null;
-    expect(overlay).not.toBeNull();
-    expect(overlay?.getAttribute('aria-label')).toBe('DaCa-Anwendungsversion');
-    expect(overlay?.textContent).toContain('DaCa Catalog');
-    expect(overlay?.textContent).toContain(`V${DACA_VERSION}`);
-    expect(trigger?.textContent?.trim()).toBe('Featureliste anzeigen');
-    expect(trigger?.getAttribute('aria-haspopup')).toBe('dialog');
-    expect(trigger?.getAttribute('aria-expanded')).toBe('false');
-
-    trigger?.click();
+    const overlay = fixture.nativeElement.querySelector('.daca-version-overlay') as HTMLElement;
+    expect(overlay.textContent).toContain(`V${DACA_VERSION}`);
+    expect(overlay.textContent).toContain('Version ist aktuell');
+    expect(overlay.textContent).toContain('Co-Designed by ESTV und BIT');
+    const settingsIcon = fixture.nativeElement.querySelector('.daca-header-settings') as HTMLAnchorElement;
+    const themeIcon = fixture.nativeElement.querySelector('.daca-header-theme') as HTMLButtonElement;
+    expect(settingsIcon.getAttribute('href')).toBe('/settings');
+    expect(settingsIcon.querySelector('.daca-header-icon-tooltip')?.textContent).toBe('Einstellungen öffnen');
+    expect(themeIcon.querySelector('.daca-header-icon-tooltip')?.textContent).toBe('Dunklen Modus einschalten');
+    (overlay.querySelector('.daca-version-feature-trigger') as HTMLButtonElement).click();
     fixture.detectChanges();
-
-    const dialog = fixture.nativeElement.querySelector('.daca-feature-dialog') as HTMLDialogElement | null;
-    const features = fixture.nativeElement.querySelectorAll('.daca-feature-list li');
-    expect(dialog?.hasAttribute('open')).toBe(true);
-    expect(dialog?.getAttribute('aria-labelledby')).toBe('daca-feature-list-title');
-    expect(dialog?.getAttribute('aria-describedby')).toBe('daca-feature-list-introduction');
-    expect(dialog?.textContent).toContain(`Featureliste · V${DACA_VERSION}`);
-    expect(dialog?.textContent).toContain('Was kann DaCa Catalog?');
-    expect(dialog?.textContent).toContain('Logische Datenmodelle verständlich erfassen');
-    expect(dialog?.textContent).toContain('Entwürfe gezielt zur Domänenfreigabe einreichen');
-    expect(dialog?.textContent).toContain('I14Y-Concepts bleiben optional');
-    expect(dialog?.textContent).toContain('unveränderlichem Snapshot');
-    expect(dialog?.textContent).toContain('Bestehende Datenquellen wie in DAAIF erkunden');
-    expect(dialog?.textContent).toContain('Logische und physische Modelle verbinden');
-    expect(dialog?.textContent).toContain('Domänen und Terminology gemeinsam steuern');
-    expect(dialog?.textContent).toContain('TERMDAT-Suche');
-    expect(dialog?.textContent).toContain('Neue Versionen ohne F5 übernehmen');
-    expect(dialog?.textContent).toContain('Datenprodukte finden und verstehen');
-    expect(dialog?.textContent).toContain('Schnell oder gezielt suchen');
-    expect(dialog?.textContent).toContain('Service Level gemeinsam festlegen');
-    expect(dialog?.textContent).toContain('Änderungen nachvollziehen');
-    expect(dialog?.textContent).toContain('Verantwortung und Stellvertretung sichtbar machen');
-    expect(dialog?.textContent).toContain('PoC anhand geführter Journeys erleben');
-    expect(dialog?.textContent).toContain('zehn wiederholbare Abläufe');
-    expect(dialog?.textContent).toContain('Zugriff gezielt freigeben und verlängern');
-    expect(dialog?.textContent).toContain('Oracle-Datenquellen kontrolliert erschliessen');
-    expect(dialog?.textContent).toContain('aktuellen PoC-Stand');
-    expect(features.length).toBe(19);
-    expect(trigger?.getAttribute('aria-expanded')).toBe('true');
-
-    const close = fixture.nativeElement.querySelector('.daca-feature-dialog-close') as HTMLButtonElement | null;
-    expect(close?.getAttribute('aria-label')).toBe('Featureliste schliessen');
-    close?.click();
-    fixture.detectChanges();
-    expect(dialog?.hasAttribute('open')).toBe(false);
-    expect(trigger?.getAttribute('aria-expanded')).toBe('false');
+    const dialog = fixture.nativeElement.querySelector('.daca-feature-dialog') as HTMLDialogElement;
+    expect(dialog.hasAttribute('open')).toBe(true);
+    expect(dialog.textContent).toContain(`V${DACA_VERSION}`);
+    expect(dialog.textContent).toContain('Verbesserungen schneller finden');
+    expect(dialog.textContent).not.toContain('Datenprodukte leichter finden');
+    expect(dialog.querySelector('a')?.getAttribute('href')).toBe('/settings/features');
   });
 
   it('offers a ready update with a safe confirmation before reloading', async () => {
@@ -96,19 +59,66 @@ describe('Catalog runtime version overlay', () => {
 
     const reload = fixture.nativeElement.querySelector('[data-testid="app-update-reload"]') as HTMLButtonElement;
     expect(reload.getAttribute('aria-label')).toBe('Neue DaCa-Version V0.1.12 laden');
-    reload.click();
-    fixture.detectChanges();
     await fixture.whenStable();
 
     const confirmation = fixture.nativeElement.querySelector('[data-testid="app-update-confirmation"]') as HTMLDialogElement;
     expect(confirmation.hasAttribute('open')).toBe(true);
     expect(confirmation.textContent).toContain('DaCa Catalog · V0.1.11 → V0.1.12');
-    expect(confirmation.textContent).toContain('Nicht gespeicherte Eingaben');
-    expect((document.activeElement as HTMLElement | null)?.textContent?.trim()).toBe('Abbrechen');
+    expect(confirmation.textContent).toContain('Ungespeicherte Seiteninhalte gehen beim Update verloren');
+    expect(confirmation.querySelector('a')?.getAttribute('href')).toBe('/settings/features');
+    expect(confirmation.querySelector('button[autofocus]')?.textContent?.trim()).toBe('Update später durchführen');
+
+    const notes = confirmation.querySelector('[data-testid="app-update-notes-toggle"]') as HTMLButtonElement;
+    notes.click();
+    fixture.detectChanges();
+    expect(confirmation.textContent).toContain('Neue Versionen leichter übernehmen');
 
     const confirm = [...confirmation.querySelectorAll('button')]
-      .find((button) => button.textContent?.trim() === 'Jetzt aktualisieren') as HTMLButtonElement;
+      .find((button) => button.textContent?.trim() === 'Update durchführen') as HTMLButtonElement;
     confirm.click();
     expect(reloadToLatest).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens only once per ready build and keeps a manual retry after later', async () => {
+    const ready = signal(true);
+    const state = signal({ phase: 'ready', latestHash: 'first-build', targetVersion: null });
+    const update = {
+      updateReady: ready,
+      updating: signal(false),
+      targetVersion: signal<string | null>(null),
+      state,
+      currentVersion: '0.1.11',
+      reloadToLatest: vi.fn(),
+    } as unknown as DacaAppUpdateService;
+    await TestBed.configureTestingModule({ imports: [FederalShellComponent], providers: [provideRouter([]), { provide: DacaAppUpdateService, useValue: update }] }).compileComponents();
+    const fixture = TestBed.createComponent(FederalShellComponent);
+    fixture.componentRef.setInput('appTitle', 'Data Catalog');
+    fixture.componentRef.setInput('navigation', []);
+    fixture.componentRef.setInput('locale', 'de');
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const dialog = fixture.nativeElement.querySelector('[data-testid="app-update-confirmation"]') as HTMLDialogElement;
+    expect(dialog.hasAttribute('open')).toBe(true);
+    expect(dialog.textContent).toContain('V0.1.11 → neue Version');
+    expect(dialog.querySelector('[data-testid="app-update-notes-toggle"]')).toBeNull();
+    const later = [...dialog.querySelectorAll('button')].find((button) => button.textContent?.trim() === 'Update später durchführen') as HTMLButtonElement;
+    later.click();
+    expect(dialog.hasAttribute('open')).toBe(false);
+
+    ready.set(false);
+    fixture.detectChanges();
+    ready.set(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(dialog.hasAttribute('open')).toBe(false);
+    (fixture.nativeElement.querySelector('[data-testid="app-update-reload"]') as HTMLButtonElement).click();
+    expect(dialog.hasAttribute('open')).toBe(true);
+    later.click();
+
+    state.set({ phase: 'ready', latestHash: 'second-build', targetVersion: null });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(dialog.hasAttribute('open')).toBe(true);
   });
 });

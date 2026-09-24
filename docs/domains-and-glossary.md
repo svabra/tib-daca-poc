@@ -56,7 +56,7 @@ to glossary concepts with `dcterms:subject`. Localized term data uses `skos:pref
 `skos:altLabel`, and `skos:definition`, and verified relations use the matching SKOS properties.
 Terms can belong to multiple domain concept schemes. Governance requests, personal workflow
 tasks, and personal contact data are not exported. DaCa provides JSON-LD over HTTP only: it does
-not add a graph database, SPARQL endpoint, or federation traffic.
+not add a graph database, SPARQL endpoint, or cross-catalog transfer.
 
 Abbreviations are normally not separate concepts. `GepFz`, `MWST`, `VAT`, `C2`, `Bodluv` and
 similar short forms are language-scoped `skos:altLabel` values on the concept they denote. This
@@ -159,7 +159,7 @@ source citations in a later schema revision instead of inferring provenance from
 
 ## Catalog API
 
-The feature stays inside the standalone Catalog API:
+The feature stays inside the central Catalog API:
 
 - `GET|POST /api/v1/domains` and revision-bound direct register changes under
   `/api/v1/domains/{id}`;

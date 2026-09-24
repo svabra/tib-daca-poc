@@ -23,6 +23,7 @@ from .modeling_schemas import AssetMappingWrite, LogicalModelWrite
 from .modeling_service import create_asset_mapping, create_logical_model, persist_physical_import
 from .models import (
     AdministrativeOrganization,
+    CatalogObjectResponsibility,
     DataModelRoleAssignment,
     DemoUser,
     Domain,
@@ -35,10 +36,12 @@ from .models import (
     LogicalModel,
     PhysicalColumn,
     PhysicalDatabase,
+    PhysicalDomainAssignment,
     PhysicalSchema,
     PhysicalSchemaSnapshot,
     PhysicalSource,
     PhysicalTable,
+    RoleChangeEvent,
     SeedMarker,
     TerminologyTerm,
     TerminologyTermResponsibility,
@@ -46,6 +49,14 @@ from .models import (
     TerminologyTermVersionDomain,
     TerminologyTermVersionLabel,
 )
+
+
+def _was_revoked(session: Session, entity_id: uuid.UUID) -> bool:
+    """Do not resurrect an intentionally removed seeded responsibility."""
+    return session.scalar(select(RoleChangeEvent.sequence).where(
+        RoleChangeEvent.entity_id == str(entity_id),
+        RoleChangeEvent.action == "removed",
+    ).limit(1)) is not None
 
 MODELING_SEED_NAME = "data-modeling-v1"
 MODELING_ORGANIZATION_ID = "vbs-verteidigung"
@@ -100,7 +111,7 @@ def _seed_armasuisse_personas(session: Session) -> None:
                 is_primary=True, valid_from=date(2026, 1, 1), created_at=_NOW,
             ))
         role_id = stable_uuid(f"role:{ARMASUISSE_ORGANIZATION_ID}:{user_id}:{role}")
-        if session.get(DataModelRoleAssignment, role_id) is None:
+        if session.get(DataModelRoleAssignment, role_id) is None and not _was_revoked(session, role_id):
             session.add(DataModelRoleAssignment(
                 id=role_id, user_id=user_id, department_code="VBS",
                 organization_id=ARMASUISSE_ORGANIZATION_ID, role=role,
@@ -130,11 +141,23 @@ def _seed_real_estate_journey(session: Session) -> None:
                 is_primary=True, valid_from=date(2026, 1, 1), created_at=_NOW,
             ))
         role_id = stable_uuid(f"role:{REAL_ESTATE_ORGANIZATION_ID}:{user_id}:{role}")
-        if session.get(DataModelRoleAssignment, role_id) is None:
+        if session.get(DataModelRoleAssignment, role_id) is None and not _was_revoked(session, role_id):
             session.add(DataModelRoleAssignment(
                 id=role_id, user_id=user_id, department_code="VBS",
                 organization_id=REAL_ESTATE_ORGANIZATION_ID, role=role,
                 delegated_owner_user_id=delegated_owner, active=True, created_at=_NOW,
+            ))
+    # Verteidigung's two modeling editors collaborate on the VIBDBU example.
+    # Their primary membership stays in Verteidigung; this is an additional,
+    # explicitly scoped modeling assignment for armasuisse Immobilien.
+    for user_id in ("christian.spider", "christian.man"):
+        role_id = stable_uuid(f"role:{REAL_ESTATE_ORGANIZATION_ID}:{user_id}:data_steward")
+        assignment = session.get(DataModelRoleAssignment, role_id)
+        if assignment is None and not _was_revoked(session, role_id):
+            session.add(DataModelRoleAssignment(
+                id=role_id, user_id=user_id, department_code="VBS",
+                organization_id=REAL_ESTATE_ORGANIZATION_ID, role="data_steward",
+                delegated_owner_user_id=None, active=True, created_at=_NOW,
             ))
     session.flush()
     if session.get(Domain, REAL_ESTATE_DOMAIN_ID) is None:
@@ -241,6 +264,12 @@ def _seed_people_and_roles(session: Session) -> None:
             # must not be repurposed as modeling authorization.
             user.selectable = True
             user.active = True
+        membership_id = stable_uuid(f"federal-membership:{user_id}:{MODELING_ORGANIZATION_ID}")
+        if session.get(FederalPersonMembership, membership_id) is None:
+            session.add(FederalPersonMembership(
+                id=membership_id, user_id=user_id, organization_id=MODELING_ORGANIZATION_ID,
+                is_primary=True, valid_from=date(2026, 1, 1), created_at=_NOW,
+            ))
     session.flush()
     assignments = (
         ("christian.spider", "data_owner", None),
@@ -252,7 +281,7 @@ def _seed_people_and_roles(session: Session) -> None:
     )
     for user_id, role, delegated_owner in assignments:
         assignment_id = stable_uuid(f"role:{MODELING_ORGANIZATION_ID}:{user_id}:{role}")
-        if session.get(DataModelRoleAssignment, assignment_id) is None:
+        if session.get(DataModelRoleAssignment, assignment_id) is None and not _was_revoked(session, assignment_id):
             session.add(
                 DataModelRoleAssignment(
                     id=assignment_id,
@@ -740,7 +769,51 @@ def seed_modeling_catalog(session: Session) -> None:
     # the marker but removes the scenarios.  Keep the individually guarded
     # scenario seed self-healing so downgrade/re-upgrade/seed remains idempotent.
     _seed_scenarios(session)
+    _seed_responsibility_examples(session)
     _retire_duplicate_source_instances(session)
     if session.get(SeedMarker, MODELING_SEED_NAME) is None:
         session.add(SeedMarker(name=MODELING_SEED_NAME, applied_at=_NOW))
     session.commit()
+
+
+def _seed_responsibility_examples(session: Session) -> None:
+    """Make the existing real-estate modeling scope visible at object level.
+
+    These rows describe explicitly scoped stewardship; the authorization source
+    remains DataModelRoleAssignment and the canonical owner fields on objects.
+    """
+    examples = (
+        (REAL_ESTATE_DOMAIN_ID, None, "domain"),
+        (None, VIBDBU_PHYSICAL_SOURCE_ID, "physical-source"),
+    )
+    for domain_id, source_id, kind in examples:
+        if domain_id and session.get(Domain, domain_id) is None:
+            continue
+        if source_id and session.get(PhysicalSource, source_id) is None:
+            continue
+        for user_id in ("mirjam.keller", "christian.spider", "christian.man"):
+            row_id = stable_uuid(f"responsibility:{kind}:{domain_id or source_id}:{user_id}:data_steward")
+            if session.get(CatalogObjectResponsibility, row_id) is not None or _was_revoked(session, row_id):
+                continue
+            session.add(CatalogObjectResponsibility(
+                id=row_id,
+                user_id=user_id,
+                role="data_steward",
+                organization_id=REAL_ESTATE_ORGANIZATION_ID,
+                domain_id=domain_id,
+                physical_source_id=source_id,
+                provenance="modeling-seed",
+                created_at=_NOW,
+            ))
+    if session.get(Domain, REAL_ESTATE_DOMAIN_ID) and session.get(PhysicalSource, VIBDBU_PHYSICAL_SOURCE_ID):
+        table_key = "daca_sample.public.VIBDBU"
+        link_id = stable_uuid(f"physical-domain:{VIBDBU_PHYSICAL_SOURCE_ID}:{table_key}:{REAL_ESTATE_DOMAIN_ID}")
+        if session.get(PhysicalDomainAssignment, link_id) is None:
+            session.add(PhysicalDomainAssignment(
+                id=link_id,
+                physical_source_id=VIBDBU_PHYSICAL_SOURCE_ID,
+                physical_table_key=table_key,
+                domain_id=REAL_ESTATE_DOMAIN_ID,
+                provenance="modeling-seed",
+                created_at=_NOW,
+            ))

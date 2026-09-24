@@ -3,10 +3,18 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { DemoIdentityService } from '../../core/demo-identity.service';
+import { CatalogI18nService } from '../../core/catalog-i18n.service';
 import { DataModelsApiService } from './data-models-api.service';
 import { AssetMapping, LogicalModel, PhysicalSource } from './data-models.models';
 import { FALLBACK_LOGICAL_MODEL, FALLBACK_PHYSICAL_SNAPSHOT } from './mapping-fallback';
 import { PhysicalAssetsComponent } from './physical-assets.component';
+
+vi.mock('@bit-daca/design-system', async () => {
+  const { Component } = await import('@angular/core');
+  class GlossaryTermStub { explanation = ''; open = false; }
+  Component({ selector: 'daca-glossary-term', standalone: true, template: '<button class="daca-glossary-trigger" type="button" (click)="open = !open">?</button>@if (open) { <span class="daca-glossary-tooltip is-visible">{{ explanation }}</span> }', inputs: ['term', 'explanation', 'iconOnly'] })(GlossaryTermStub);
+  return { DacaGlossaryTermComponent: GlossaryTermStub };
+});
 
 describe('PhysicalAssetsComponent DAAIF source explorer', () => {
   const steward = { id: 'cinthya.thor', displayName: 'Cinthya Thor', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'cinthya.thor@vtg.admin.ch', phone: null, avatarUrl: null, roles: ['data_consumer'], primaryModelingRole: 'data_steward' };
@@ -18,7 +26,7 @@ describe('PhysicalAssetsComponent DAAIF source explorer', () => {
   };
 
   function configure(sourceId: string | null = null, query: Record<string, string> = {}): void {
-    TestBed.configureTestingModule({ imports: [PhysicalAssetsComponent], providers: [provideRouter([]), { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap(sourceId ? { sourceId } : {}), queryParamMap: convertToParamMap(query) } } }, { provide: DemoIdentityService, useValue: { user: signal(steward).asReadonly(), userId: signal('cinthya.thor').asReadonly(), canEditModels: signal(true).asReadonly() } }, { provide: DataModelsApiService, useValue: api }] });
+    TestBed.configureTestingModule({ imports: [PhysicalAssetsComponent], providers: [provideRouter([]), { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap(sourceId ? { sourceId } : {}), queryParamMap: convertToParamMap(query) } } }, { provide: DemoIdentityService, useValue: { user: signal(steward).asReadonly(), userId: signal('cinthya.thor').asReadonly(), canEditModels: signal(true).asReadonly() } }, { provide: CatalogI18nService, useValue: { t: (key: string) => ({ visibleSources: 'Sichtbare Datenquellen', activeConnections: 'Aktive Verbindungen', notIngested: 'Nicht ingestiert.', federalLevel: 'Föderale Verwaltungsebene', federalLevelHelp: 'Im PoC sind derzeit nur Datenquellen des Bundes verfügbar.', federalGovernment: 'Bund', cantons: 'Kantone', municipality: 'Gemeinde', federalEnterprises: 'Bundesnahe Betriebe', cantonalBanks: 'Kantonalbanken' } as Record<string, string>)[key] ?? key } }, { provide: DataModelsApiService, useValue: api }] });
   }
 
   beforeEach(() => vi.clearAllMocks());
@@ -26,13 +34,35 @@ describe('PhysicalAssetsComponent DAAIF source explorer', () => {
 
   it('shows existing sources as DAAIF-style connection cards', () => {
     configure(); const fixture = TestBed.createComponent(PhysicalAssetsComponent); fixture.detectChanges(); const root = fixture.nativeElement as HTMLElement;
-    expect(root.textContent).toContain('Bestehende Datenquellen'); expect(root.textContent).toContain('Aktive Verbindungen'); expect(root.querySelectorAll('.source-card')).toHaveLength(2); expect(root.textContent).toContain('Nicht ingestiert');
+    expect(root.textContent).toContain('Sichtbare Datenquellen'); expect(root.textContent).toContain('Aktive Verbindungen'); expect(root.querySelectorAll('.source-card')).toHaveLength(2); expect(root.textContent).toContain('Nicht ingestiert');
+  });
+
+  it('shows the federal level filter with only Bund available and an explanation', () => {
+    configure(); const fixture = TestBed.createComponent(PhysicalAssetsComponent); fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const select = root.querySelector<HTMLSelectElement>('#source-federal-level');
+    expect(select?.value).toBe('bund');
+    expect([...select!.options].map((option) => [option.textContent?.trim(), option.disabled])).toEqual([
+      ['Bund', false], ['Kantone', true], ['Gemeinde', true], ['Bundesnahe Betriebe', true], ['Kantonalbanken', true],
+    ]);
+    const help = root.querySelector<HTMLButtonElement>('.source-level-filter .daca-glossary-trigger');
+    help?.click(); fixture.detectChanges();
+    expect(root.querySelector('.source-level-filter .daca-glossary-tooltip.is-visible')?.textContent).toContain('nur Datenquellen des Bundes verfügbar');
   });
 
   it('groups matching catalog paths and filters instances by text, type, and owner', () => {
     const duplicate = { ...source, id: 'duplicate-source', name: 'Same PostgreSQL', updatedAt: '2026-09-06T07:20:00Z' }; api.listPhysicalSources.mockReturnValue(of([source, duplicate, pendingSource])); configure(); const fixture = TestBed.createComponent(PhysicalAssetsComponent); fixture.detectChanges(); const component = fixture.componentInstance;
     expect(component.sourceInstances()).toHaveLength(2); component.sourceQuery.set('Christian'); expect(component.filteredSources().map((item) => item.id)).toEqual(['duplicate-source']);
     component.sourceQuery.set(''); component.sourceType.set('s3'); expect(component.filteredSources()).toEqual([]); component.sourceType.set('postgresql'); component.sourceOwner.set('Christian Man'); expect(component.filteredSources().map((item) => item.id)).toEqual(['duplicate-source']);
+  });
+
+  it('passes the current source search term to expert search', () => {
+    configure();
+    const fixture = TestBed.createComponent(PhysicalAssetsComponent);
+    fixture.componentInstance.sourceQuery.set('VIBDBU');
+    fixture.detectChanges();
+    const link = (fixture.nativeElement as HTMLElement).querySelector<HTMLAnchorElement>('.source-notice a[href^="/search"]');
+    expect(link?.getAttribute('href')).toBe('/search?q=VIBDBU');
   });
 
   it('drills into one source and keeps older snapshots in history', () => {
@@ -48,8 +78,13 @@ describe('PhysicalAssetsComponent DAAIF source explorer', () => {
   it('marks a table with a linked logical model regardless of mapping status', () => {
     const table = FALLBACK_PHYSICAL_SNAPSHOT.tables[0]; const mapping = { logicalModelId: FALLBACK_LOGICAL_MODEL.id, physicalSnapshotId: FALLBACK_PHYSICAL_SNAPSHOT.id, physicalColumnIds: [table.columns[0].id], status: 'draft' } as AssetMapping;
     api.listMappings.mockReturnValue(of([mapping])); configure(source.id); const fixture = TestBed.createComponent(PhysicalAssetsComponent); fixture.detectChanges();
-    const indicator = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.linked-model-indicator');
-    expect(indicator?.getAttribute('aria-label')).toContain('Ein logisches Modell ist'); expect(indicator?.textContent).toContain('Entwurf');
+    const indicator = (fixture.nativeElement as HTMLElement).querySelector<HTMLAnchorElement>('.linked-model-indicator');
+    expect(indicator?.getAttribute('href')).toBe(`/models/${FALLBACK_LOGICAL_MODEL.id}`);
+    expect(indicator?.getAttribute('aria-label')).toContain('Ein logisches Modell ist');
+    expect(indicator?.querySelector('.linked-model-tooltip > span:first-child')?.textContent).toContain('Entwurf');
+    expect(indicator?.querySelector('.linked-model-tooltip-action')?.textContent).toBe('Klicken, um das logische Modell zu öffnen.');
+    expect(indicator?.querySelector('svg .linked-model-physical')).not.toBeNull();
+    expect(indicator?.querySelector('svg .linked-model-logical')).not.toBeNull();
     fixture.componentInstance.showLinkedModelTooltip(table.id); fixture.detectChanges(); expect(indicator?.getAttribute('data-tooltip-open')).toBe('true');
     fixture.componentInstance.hideLinkedModelTooltip(table.id); fixture.detectChanges(); expect(indicator?.getAttribute('data-tooltip-open')).toBe('false');
     fixture.componentInstance.toggleMenu(table.id); fixture.detectChanges(); const referencedModelItem = [...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('[role="menuitem"]')][1];

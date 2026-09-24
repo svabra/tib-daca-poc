@@ -1,7 +1,7 @@
 {
   "name": "BIT DaCa Control Plane",
   "short_name": "DaCa Control",
-  "description": "Distributed Data Catalog trust and federation control plane",
+  "description": "Central data catalog operations and historical PoC configuration",
   "theme_color": "#e0001a",
   "background_color": "#f4f6f7",
   "display": "standalone",

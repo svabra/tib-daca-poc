@@ -4,12 +4,17 @@ This document defines the four metadata layers added to the standalone DaCa cata
 related through explicit, version-pinned references; none of them is a replacement for an
 existing data product, DaCa glossary term, or I14Y MappingTable.
 
+The logical-model overview uses the active catalog language for its navigation, filters, statuses,
+counts and actions. Model titles and descriptions select the matching stored localization, then
+fall back to German. Changing language updates the overview immediately without reloading models;
+the specialist model editor still has untranslated German controls.
+
 ## Responsibilities and data flow
 
 ```mermaid
 flowchart LR
   Person[Owner, deputy, or steward] -->|HTTP| UI[Catalog UI]
-  UI -->|REST + If-Match| API[Standalone catalog API]
+  UI -->|REST + If-Match| API[Central catalog API]
 
   subgraph CatalogDB[Catalog PostgreSQL]
     DCAT[DCAT catalog and dataset versions]
@@ -37,7 +42,7 @@ flowchart LR
   API -. disabled publication port .-> I14YWrite[Future authenticated I14Y publication]
 ```
 
-The control plane is not on this path.  No catalog federation traffic, I14Y write request, table
+The administrative prototype is outside this path. No cross-catalog transfer, I14Y write request, table
 content query, or mapping transformation is performed.
 
 ```mermaid
@@ -176,6 +181,27 @@ explicit review candidate and is never silently accepted.
 
 ### DaCa asset-mapping layer
 
+The logical-model detail page presents a persistent title followed by three tabs:
+`Status & Klassifikation` for the saved summary, readiness, history and exports;
+`Model Merkmale` for dataset and organizational attributes; and
+`Logische Entitäten und Felder` for SHACL entities and fields. Tabs only change visibility;
+all edits remain in one form until a versioned save. Validation directs users to the tab
+containing the affected input. The embedded mapping editor keeps its compact field-only form.
+
+The graph uses a 570 px canvas with compact field and physical-column cards so the right-hand
+editor remains visible on desktop. A mapping can be superseded through “Verbindung entfernen”;
+its earlier version remains historical evidence. Deleting a logical field creates a new model
+version. Connections to surviving fields are rebased to the new field versions as draft
+successors; connections involving a removed field are superseded.
+
+Physical links are optional for a purely logical model. After a model has been linked to a
+physical representation, however, an active logical field without a current physical counterpart
+is rated as an **Inkonsistenzfehler**. Saving stays possible. PostgreSQL stores one decision per
+model/field root and creates a personal Data Owner task. The owner can accept the finding with a
+reason (the quality error remains) or dispatch an investigation to a scoped Data Steward. A new
+mapping or field removal automatically resolves the issue and completes outstanding tasks. The
+new Journey 13 and the static documentation article explain this workflow with interface images.
+
 An asset mapping pins one logical model/field revision and one physical snapshot/column set.  Both
 sides are many-to-many so one business field can have several representations and derived targets
 can consume several source fields.  Supported mapping types are `Direct`, `Renamed`, `Derived`,
@@ -200,8 +226,15 @@ snapshot.
 
 ## Roles and demo scenarios
 
-Modelling authorization is scoped to the `VBS / Verteidigung` organization and does not change
-legacy data-product permissions.
+The PoC guide separates model entry from physical derivation. Journey 10 captures one logical
+model manually with no physical snapshot or mappings, then takes it through domain review.
+Journey 11 uses `daca_sample.public.VIBDBU` to create one technical draft and 47 direct mappings
+against a pinned snapshot; fachliche Merkmale remain an explicit editing step. Christian Man and
+Christian Spider have scoped Data Steward assignments for that source. Repeating a derivation of
+the same table and snapshot is idempotent.
+
+Modelling authorization is scoped to explicit VBS organizations and does not change legacy
+data-product permissions. The base personnel scenarios use `VBS / Verteidigung`.
 
 | Persona | Modelling role | Scenario |
 |---|---|---|
@@ -243,6 +276,15 @@ authoritative server-side source for the primary owner and visible deputy. Savin
 creates a task; explicit submission creates exactly one immutable review snapshot and one task for
 the primary owner. The deputy has no decision right.
 
+Christian Spider and Christian Man additionally hold active Data Steward assignments for
+`VBS / armasuisse Immobilien`. These scoped assignments allow them to create and derive VIBDBU
+logical drafts, edit their mappings, and manage structural metadata there. Their primary
+Verteidigung membership and roles remain intact. Publication still requires the model's named
+Data Owner or delegated deputy. `/profile` displays the persisted assignments and maps roles to
+actions. A modeling role in parent armasuisse covers its descendant Immobilien unit.
+The profile is opened from the header name rather than the main navigation. Its sign-out action
+returns to the required local demo-person picker.
+
 ## Language and terminology assistance
 
 Title blur requests FR, IT and EN translations from DeepL Free and silently prefetches TERMDAT
@@ -281,8 +323,12 @@ The three deterministic journeys are:
 
 1. **Logical first:** create and reopen `Mitarbeitende` without product, distribution, physical
    asset, or mapping; associate cached Concepts and export DCAT/SHACL.
-2. **Physical first:** open `Bestehende Datenquellen`, enter the PostgreSQL source and inspect
-   `logistics.vehicle_inventory` or `daca_sample.public.VIBDBU`. The table actions menu derives a
+2. **Physical first:** open **Sichtbare Datenquellen**, enter the PostgreSQL source and inspect
+   `logistics.vehicle_inventory` or `daca_sample.public.VIBDBU`. The seeded VIBDBU real-estate
+   source is readable by modeling personas across organizational scopes; only an owner-scope
+   persona may reimport its structure. The source list sends its current text filter to
+   Expertensuche via `q` when following the blue information notice; the destination searches
+   visible physical sources alongside products. The table actions menu derives a
    technical logical draft and all exact 1:1 mappings atomically, then opens the mapping workspace.
    The source scope must already resolve to one governed domain; DaCa never guesses one from table
    names. The edge reads `1:1 · wird repräsentiert durch` from logical to physical and
@@ -295,11 +341,17 @@ The three deterministic journeys are:
 `Datenquellen` is exposed in the main navigation between `Meine Datenprodukte` and
 `Domäne und Terminology`. Its hierarchy deliberately reuses DAAIF's visual vocabulary for server,
 PostgreSQL provider, database, schema, table and view nodes.
+The source register shows a federal administration level selector with a glossary tooltip. Bund is
+the only available value in the current PoC; Kantone, Gemeinde, Bundesnahe Betriebe and
+Kantonalbanken are visible but disabled. The selection stays at Bund when the other source filters
+are reset.
 Any table with a persisted mapping to a logical model shows a model icon before its compact `…`
-context-menu control. Its hover/focus tooltip reports that link independently of mapping status.
-The tooltip closes immediately when the pointer leaves the icon. Its `Referenziertes logisches
-Modell öffnen` menu action is enabled and opens the linked model's mapping workspace with the
-physical snapshot and table preselected.
+context-menu control. The physical square is gray and the logical square blue. The icon is a
+keyboard-accessible link to the logical model detail page. Its hover/focus tooltip reports the
+link independently of mapping status and explains the click action on a separate line. The
+tooltip closes immediately when the pointer leaves the icon. If several models are linked, the
+most recently updated one opens. The `Referenziertes logisches Modell öffnen` menu action keeps
+the physical snapshot and table selected in the linked model's mapping workspace.
 The model overview records the `Geändert` timestamp with date and local time.
 
 After a physical-first derivation the mapping workspace keeps the graph or matrix visible and opens

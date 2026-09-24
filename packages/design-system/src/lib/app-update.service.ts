@@ -158,21 +158,16 @@ export class DacaAppUpdateService {
   }
 
   reloadToLatest(): void {
-    this.reloadReadyUpdate(false);
+    this.reloadReadyUpdate();
   }
 
-  private reloadReadyUpdate(automatic: boolean): void {
+  private reloadReadyUpdate(): void {
     const update = this.state();
     if (update.phase !== 'ready' || !update.latestHash) {
       return;
     }
 
-    const guardPersisted = this.rememberReloadedHash(update.latestHash);
-    if (automatic && !guardPersisted) {
-      // Without a readable loop guard, leave the update as an explicit manual
-      // choice instead of risking an automatic reload cycle.
-      return;
-    }
+    this.rememberReloadedHash(update.latestHash);
     this.mutableState.set({ ...update, phase: 'reloading' });
     this.reloadHandle = this.runtime.setTimeout(() => this.runtime.reload(), RELOAD_DELAY_MS);
   }
@@ -226,16 +221,6 @@ export class DacaAppUpdateService {
         };
         this.mutableState.set(ready);
 
-        if (this.wasHashAlreadyReloaded(event.latestVersion.hash)) {
-          // A repeated ready hash after a reload points to stale/mixed
-          // infrastructure. Keep an explicit manual retry visible, but never
-          // enter another automatic reload cycle.
-          break;
-        }
-
-        if (this.startupCheckPending && !this.startupInteractionDetected) {
-          this.reloadReadyUpdate(true);
-        }
         break;
       }
       case 'VERSION_INSTALLATION_FAILED':
@@ -332,13 +317,8 @@ export class DacaAppUpdateService {
     return `daca.app-update.reloaded-hash.${this.config.appId}`;
   }
 
-  private wasHashAlreadyReloaded(hash: string): boolean {
-    return this.runtime.readSessionValue(this.reloadStorageKey()) === hash;
-  }
-
-  private rememberReloadedHash(hash: string): boolean {
+  private rememberReloadedHash(hash: string): void {
     this.runtime.writeSessionValue(this.reloadStorageKey(), hash);
-    return this.runtime.readSessionValue(this.reloadStorageKey()) === hash;
   }
 
   private dispose(): void {

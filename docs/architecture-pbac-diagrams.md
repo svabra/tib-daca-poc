@@ -1,8 +1,7 @@
 # BIT DaCa architecture and PBAC diagrams
 
-These diagrams distinguish the components that are implemented in the POC from the proposed
-WSO2 and federation extensions. Solid lines are implemented. Dashed lines are proposed or record
-future intent only.
+These diagrams distinguish implemented central-catalog components from the proposed WSO2
+integration. Solid lines are implemented. Dashed lines are proposed or record observations.
 
 ## 1. Component architecture
 
@@ -13,7 +12,7 @@ flowchart LR
   RestConsumer["REST consumer"]
   PgConsumer["PostgreSQL consumer"]
 
-  subgraph Catalog["Standalone DaCa catalog"]
+  subgraph Catalog["Central DaCa catalog"]
     CatalogUI["Catalog UI<br/>Angular PWA"]
     CatalogAPI["Catalog API<br/>FastAPI<br/>metadata + PAP + PIP + compiler"]
     OPA["Local OPA<br/>PDP"]
@@ -22,9 +21,9 @@ flowchart LR
     OPA -->|"HTTP POST<br/>activation status"| CatalogAPI
   end
 
-  subgraph Control["DaCa control plane - not on the authorization path"]
+  subgraph Control["Administrative prototype - outside the authorization path"]
     ControlUI["Control-plane UI<br/>Angular PWA"]
-    ControlAPI["Control-plane API<br/>FastAPI<br/>instances + trust + sync intent + health"]
+    ControlAPI["Control-plane API<br/>FastAPI<br/>historical configuration + health"]
     ControlUI -->|"HTTP REST + SSE"| ControlAPI
   end
 
@@ -38,11 +37,10 @@ flowchart LR
   end
 
   subgraph Storage["PostgreSQL 18.4 - isolated logical databases and roles"]
-    ControlDB[("daca_control_plane<br/>registrations + trust + sync intent")]
+    ControlDB[("daca_control_plane<br/>PoC configuration + observations")]
     ProductDB[("daca_sample<br/>ESTV rows + entitlements<br/>ACL + FORCE RLS PEP")]
   end
 
-  FutureFederation["Federation adapter<br/>future - no sync traffic"]
 
   Owner -->|"browser"| CatalogUI
   Operator -->|"browser"| ControlUI
@@ -55,7 +53,6 @@ flowchart LR
   RestConsumer -->|"HTTP + demo identity"| ProductAPI
   PgConsumer -->|"PostgreSQL wire<br/>SESSION_USER"| ProductDB
   ControlAPI -. "HTTP readiness probes" .-> CatalogAPI
-  ControlAPI -. "desired trust and sync only" .-> FutureFederation
   RestConsumer -. "future alternative HTTP ingress" .-> WSO2
   WSO2 -. "OPA Data API decision" .-> OPA
   WSO2 -. "forward only after allow" .-> ProductAPI
@@ -69,11 +66,11 @@ flowchart LR
   class CatalogAPI,ControlAPI,ProductAPI service;
   class OPA,ProductDB security;
   class CatalogDB,ControlDB store;
-  class WSO2,FutureFederation future;
+  class WSO2 future;
 ```
 
-The control plane stores desired topology, directed trust, synchronization scopes, and health
-observations. It is deliberately absent from the policy-decision request path. The only supported
+The administrative prototype retains topology, trust and synchronization-intent fixtures and
+health observations. It is absent from the policy-decision request path. The only supported
 wire protocols remain HTTP and the PostgreSQL wire protocol.
 
 ## 2. PBAC component model

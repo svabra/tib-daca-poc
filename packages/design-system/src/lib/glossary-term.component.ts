@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 
 export const DACA_GLOSSARY: Readonly<Record<string, string>> = {
-  DaCa: 'Distributed Data Catalog – der zentrale Einstieg in Metadaten, Verantwortlichkeiten und Zugriffsregeln der Data Platform BIT.',
+  DaCa: 'Zentraler Datenkatalog der Data Platform BIT für Metadaten, Verantwortlichkeiten und Zugriffsregeln.',
   DAAIF: 'Data Analytics und AI Feed – Expert Data Analytics and Data Product Curation Platform.',
   ISBO: 'Informatiksicherheitsbeauftragte oder Informatiksicherheitsbeauftragter der Organisationseinheit.',
   PoC: 'Proof of Concept – eine bewusst begrenzte Umsetzung zum Prüfen von Nutzen, Abläufen und technischen Annahmen.',

@@ -12,6 +12,11 @@ export const POC_GUIDE_STATUS_LABELS: Readonly<Record<PocGuideStatus, string>> =
 
 export const POC_GUIDE_CAPABILITIES: readonly PocGuideCapability[] = [
   {
+    title: 'Zugriff und Verantwortung nachvollziehen',
+    description: 'Drei Perspektiven zeigen gespeicherte Zuständigkeiten. Das fortlaufende Rollenprotokoll macht spätere Zuweisungen, Änderungen und Entzüge sichtbar.',
+    status: 'implemented',
+  },
+  {
     title: 'Datenprodukte finden und verstehen',
     description: 'Katalogsuche, Metadaten, Schnittstellen, Lineage und Provenienz sind direkt im DaCa sichtbar.',
     status: 'implemented',
@@ -55,8 +60,8 @@ export const POC_GUIDE_CAPABILITIES: readonly PocGuideCapability[] = [
 
 export const POC_GUIDE_LIMITS: readonly PocGuideCapability[] = [
   {
-    title: 'Keine echte Anmeldung',
-    description: 'Die sichtbare Benutzerauswahl ist nur ein Demo-Kontext und ersetzt weder eIAM noch eine Mandantentrennung.',
+    title: 'Keine produktive Anmeldung',
+    description: 'Die lokale Demo-Anmeldung hat widerrufbare Sitzungen, ersetzt aber weder eIAM noch eine Mandantentrennung.',
     status: 'out-of-scope',
   },
   {
@@ -65,8 +70,8 @@ export const POC_GUIDE_LIMITS: readonly PocGuideCapability[] = [
     status: 'out-of-scope',
   },
   {
-    title: 'Keine aktive Katalogföderation',
-    description: 'Das Control Plane und echter Katalogverkehr sind im präsentierten RHOS-Umfang nicht aktiv.',
+    title: 'Zentraler Katalogbetrieb',
+    description: 'Der präsentierte RHOS-Umfang verwaltet Katalogmetadaten zentral in DaCa.',
     status: 'out-of-scope',
   },
   {
@@ -84,6 +89,7 @@ export const POC_GUIDE_LIMITS: readonly PocGuideCapability[] = [
 export const POC_JOURNEYS: readonly PocJourney[] = [
   {
     id: 'understand-and-use-product',
+    tags: ['Datenprodukt', 'Suche', 'Datennutzung'],
     number: '01',
     title: 'Datenprodukt finden, verstehen und nutzen',
     summary: 'Ein publiziertes Datenprodukt fachlich einordnen, sein Datenschema lesen und den geschützten REST-Endpunkt sicher ausprobieren.',
@@ -203,6 +209,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
   },
   {
     id: 'data-analysts-journey',
+    tags: ['Datenprodukt', 'Analyse', 'Freigabe'],
     number: '02',
     title: 'A Data Analyst’s Journey',
     summary: 'Vom synthetischen Rohdatensatz über SQL und Python zum geprüften, OPA-geschützten REST-Datenprodukt.',
@@ -254,7 +261,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
         status: 'implemented',
         actions: [
           { label: 'DAAIF Quellen-Explorer öffnen', target: 'daaif-source-explorer' },
-          { label: 'Bestehende Datenquellen in DaCa öffnen', target: 'internal', path: '/physical-models', demoUserId: 'joel.ruod' },
+          { label: 'Sichtbare Datenquellen in DaCa öffnen', target: 'internal', path: '/physical-models', demoUserId: 'joel.ruod' },
         ],
         checkpoint: 'Technische Objektkennung, DaCa-URN und Mappingrevision werden getrennt behandelt; nur ein validiertes Mapping darf Analysekontext begründen.',
       },
@@ -330,6 +337,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
   },
   {
     id: 'consumer-access-request',
+    tags: ['Datenprodukt', 'Zugriff', 'Freigabe'],
     number: '03',
     title: 'Datenprodukt finden und Zugriff beantragen',
     summary: 'Ein Data Consumer findet ein geeignetes Produkt; der Data Owner prüft und publiziert die zeitlich begrenzte Policy.',
@@ -400,6 +408,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
   },
   {
     id: 'metadata-quality',
+    tags: ['Metadaten', 'Qualität', 'Semantik'],
     number: '04',
     title: 'Metadatenqualität von Bronze zu Platinum',
     summary: 'Eine kantonale Data Ownerin ergänzt technische, fachliche und semantische Informationen bis zur höchsten PoC-Reifestufe.',
@@ -472,6 +481,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
   },
   {
     id: 'governance-exception',
+    tags: ['Governance', 'Aufgaben', 'Audit'],
     number: '05',
     title: 'Governance-Ausnahmefall bearbeiten',
     summary: 'Ein kontrolliertes Ereignis erzeugt einen sichtbaren Produktzustand, eine persönliche Aufgabe und eine bleibende Auditspur.',
@@ -536,6 +546,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
   },
   {
     id: 'change-history',
+    tags: ['Änderungsverlauf', 'Audit', 'Freigabe'],
     number: '06',
     title: 'Änderungen und Freigaben nachvollziehen',
     summary: 'Owner, Approver und Data Consumer prüfen denselben echten Produktverlauf mit passend geschützter Evidenz.',
@@ -647,6 +658,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
   },
   {
     id: 'access-renewal',
+    tags: ['Zugriff', 'Verlängerung', 'Freigabe'],
     number: '07',
     title: 'Zugriff vor Ablauf verlängern',
     summary: 'Eine in 14 Tagen auslaufende Freigabe verlängern, erneut im Vier-Augen-Prinzip prüfen und bis zur technischen Durchsetzung nachvollziehen.',
@@ -810,6 +822,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
   },
   {
     id: 'domain-governance',
+    tags: ['Domain', 'Governance', 'Wissensgraph'],
     number: '08',
     title: 'Domain beantragen und Produkt fachlich einordnen',
     summary: 'Eine fachliche Domain unabhängig von der Organisation anlegen, genehmigen und mehreren Domains eines Datenprodukts zuordnen.',
@@ -830,6 +843,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
   },
   {
     id: 'glossary-governance',
+    tags: ['Glossar', 'Governance', 'Semantik'],
     number: '09',
     title: 'Glossarterm gemeinsam prüfen und anhängen',
     summary: 'Einen zweisprachigen Term vorschlagen, über mehrere Domains einstimmig freigeben und automatisch mit dem Produkt verknüpfen.',
@@ -850,22 +864,99 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
   },
   {
     id: 'create-data-model',
+    tags: ['Logisches Modell', 'Modellierung', 'Governance'],
     number: '10',
-    title: 'Datenmodell erstellen',
-    summary: 'Ein logisches Datenmodell für das Immobilienmanagement des VBS erfassen, übersetzen und durch den Domänen-Owner publizieren lassen.',
+    title: 'Logisches Datenmodell erfassen',
+    summary: 'Ein einziges logisches Datenmodell ohne physische Repräsentation manuell erfassen, als Entwurf speichern und durch den Domain Owner prüfen lassen.',
     duration: '10–15 Minuten',
     difficulty: 'Mittel',
     systems: ['DaCa', 'Catalog API', 'PostgreSQL', 'TERMDAT', 'DeepL Free', 'DCAT-AP-CH', 'SHACL'],
     roles: [{ name: 'Mirjam Keller', responsibility: 'Data Steward · erstellt und reicht das Modell ein' }, { name: 'Daniel Wenger', responsibility: 'Data Owner der Domäne · nimmt an oder weist zurück' }, { name: 'Eliane Rossi', responsibility: 'Stellvertretung · sichtbar, aber nicht primäre Entscheiderin' }],
-    prerequisites: ['Die Modellierungs-Fixture ist vorbereitet.', 'Für automatische Übersetzung ist optional DACA_DEEPL_API_KEY konfiguriert.'],
-    outcome: 'Das Modell «Immobilienportfolio VBS» ist im Scope VBS → armasuisse → armasuisse Immobilien versioniert publiziert.',
-    repeatability: 'Die synthetischen Personas, die Domäne und drei Geschäftsobjekte werden idempotent reseeded.',
+    prerequisites: ['Mirjam Keller kann sich mit ihrem Data-Steward-Profil anmelden.', 'Die Domäne «Immobilienmanagement VBS» und die drei Geschäftsobjekte sind vorhanden.', 'Für automatische Übersetzung ist optional DACA_DEEPL_API_KEY konfiguriert. Eine physische Datenquelle wird nicht benötigt.'],
+    outcome: 'Ein manuell erfasstes, versioniert publiziertes Modell «Immobilienportfolio VBS» im Scope VBS → armasuisse → armasuisse Immobilien, ohne physische Zuordnung.',
+    repeatability: 'Personas, Domäne und Geschäftsobjekte werden idempotent bereitgestellt. Für einen erneuten Durchlauf einen neuen eindeutigen Modell-Identifier wählen; veröffentlichte Modelle bleiben versioniert erhalten.',
     steps: [
-      { title: 'Mehrere Modelle im armasuisse-Kontext erfassen', description: 'Mirjam öffnet den Editor und erfasst nacheinander unabhängige Modelle in PostgreSQL. Nach einem fehlgeschlagenen Speicherversuch erscheinen unvollständige oder ungültige Felder rot hinterlegt und mit einer vollständigen Liste unter der Aktion. Die Feldtitel erklären ihre Semantik auf Deutsch, Französisch oder Italienisch gemäss Browsersprache; I14Y-Zuordnungen bleiben optional.', status: 'implemented', actions: [{ label: 'Modell als Mirjam erstellen', target: 'internal', path: '/models/new', demoUserId: 'mirjam.keller' }], checkpoint: 'Beide Entwürfe erscheinen nach einem Reload als getrennte Modelle; die Organisationskette stammt aus dem Staatskalender-Snapshot.' },
-      { title: 'Titel und Beschreibung übersetzen', description: 'Nach Fokusverlust werden unklassifizierte deutsche Texte serverseitig übersetzt. Vorhandene Übersetzungen bleiben stehen und erhalten nur einen vergleichbaren Vorschlag. TERMDAT öffnet erst über den Trefferhinweis oder den Suchknopf.', status: 'implemented', actions: [{ label: 'Editor öffnen', target: 'internal', path: '/models/new', demoUserId: 'mirjam.keller' }], checkpoint: 'Leere Sprachen sind befüllt; manuelle Inhalte wurden nicht überschrieben.', warning: 'Interne, vertrauliche oder geheime Inhalte werden nie an externe Assistenzdienste gesendet.' },
-      { title: 'Domäne und Geschäftsobjekte zuweisen', description: 'Mirjam wählt «Immobilienmanagement VBS» und pinnt Immobilienobjekt, Infrastrukturbedarf oder Bauprojekt auf konkrete Terminology-Versionen.', status: 'implemented', actions: [{ label: 'Terminology prüfen', target: 'internal', path: '/domains/terminology', demoUserId: 'mirjam.keller' }], checkpoint: 'Freitext ist durch versionierte Geschäftsobjekt-Referenzen ersetzt.' },
-      { title: 'Gespeicherten Entwurf einreichen', description: 'Die Infobox nennt Daniel als primären Domain Owner und Eliane als sichtbare Stellvertretung. Erst das separate Einreichen erzeugt eine unveränderliche Review-Version und genau eine persönliche Aufgabe für Daniel.', status: 'implemented', actions: [{ label: 'Modelle als Mirjam öffnen', target: 'internal', path: '/models', demoUserId: 'mirjam.keller' }], checkpoint: 'Das Modell steht auf «Zur Prüfung»; Eliane erhält keinen Auftrag und Mirjam kann nicht selbst publizieren.' },
-      { title: 'Benutzer wechseln und unmittelbar publizieren', description: 'Nach dem Wechsel zu Daniel erscheint der Auftrag in seiner persönlichen Liste und öffnet direkt den unveränderlichen Review-Snapshot. Seine Annahme erzeugt transaktional die publizierte Nachfolgeversion und setzt dct:issued.', status: 'implemented', actions: [{ label: 'Aufgaben als Daniel öffnen', target: 'internal', path: '/tasks', demoUserId: 'daniel.wenger' }], checkpoint: 'Die Aufgabe verschwindet nach dem Entscheid; eine separate Publish-Aktion existiert nicht.' },
+      { title: 'Leeres logisches Modell öffnen', description: 'Melden Sie sich als Mirjam Keller an und öffnen Sie direkt «Neues logisches Modell». Dieser Einstieg beginnt mit einem leeren Formular; wählen Sie keine Datenquelle und keine physische Tabelle.', status: 'implemented', actions: [{ label: 'Leeren Editor als Mirjam öffnen', target: 'internal', path: '/models/new', demoUserId: 'mirjam.keller' }], checkpoint: 'Der Editor zeigt ein neues Modell ohne physischen Snapshot und ohne Mapping.' },
+      { title: 'Modellmerkmale und Organisation erfassen', description: 'Erfassen Sie den deutschen Titel «Immobilienportfolio VBS», eine fachliche Beschreibung und einen neuen eindeutigen Identifier. Wählen Sie VBS → armasuisse → armasuisse Immobilien sowie die DaCa-Domäne «Immobilienmanagement VBS». Die Domäne setzt Daniel Wenger als Data Owner und Eliane Rossi als Stellvertretung.', status: 'implemented', checkpoint: 'Der Scope, die Domäne und die verantwortlichen Personen stimmen überein; der Identifier ist verfügbar.' },
+      { title: 'Entität und Felder manuell beschreiben', description: 'Fügen Sie eine logische Entität und fachliche Felder über «Feld hinzufügen» hinzu. Wählen Sie jedes Feld in der kompakten Tabelle aus und pflegen Sie rechts seine Merkmale wie Typ, Kardinalität und Beschreibung. Ein I14Y-Concept oder Geschäftsobjekt kann bewusst verknüpft werden, ist aber nicht Voraussetzung für den ersten Entwurf.', status: 'implemented', checkpoint: 'Die logischen Felder beschreiben ihre fachliche Bedeutung; es gibt weiterhin keine physische Zuordnung.' },
+      { title: 'Mehrsprachige Angaben prüfen', description: 'Ergänzen Sie Französisch, Italienisch oder Englisch manuell oder prüfen Sie bei unklassifizierten Texten einen serverseitigen Übersetzungsvorschlag. TERMDAT-Treffer werden erst nach bewusster Übernahme in das Modell geschrieben; bestehende Übersetzungen werden nicht automatisch überschrieben.', status: 'implemented', checkpoint: 'Titel und Beschreibung sind fachlich geprüft; freiwillige Terminology-Referenzen zeigen auf konkrete Versionen.', warning: 'Interne, vertrauliche und geheime Texte werden nicht an externe Übersetzungsdienste gesendet.' },
+      { title: 'Genau einen Entwurf speichern', description: 'Wählen Sie «Als Entwurf speichern». Ungültige Angaben werden am Feld markiert und unter der Aktion vollständig aufgelistet. Nach erfolgreichem Speichern öffnet sich das versionierte Modell; prüfen Sie in der Übersicht, dass «Keine physische Zuordnung» angezeigt wird.', status: 'implemented', actions: [{ label: 'Modellübersicht als Mirjam öffnen', target: 'internal', path: '/models', demoUserId: 'mirjam.keller' }], checkpoint: 'Ein einzelnes neues Modell ist als Entwurf gespeichert und besitzt keine Ableitung aus einer Tabelle.' },
+      { title: 'Entwurf zur Domänenfreigabe einreichen', description: 'Öffnen Sie den gespeicherten Entwurf und wählen Sie «Zur Domänenfreigabe einreichen». Erst dieser separate Schritt erzeugt einen unveränderlichen Review-Snapshot und eine persönliche Aufgabe für Daniel Wenger.', status: 'implemented', checkpoint: 'Der Status lautet «Zur Prüfung»; Mirjam veröffentlicht nicht selbst und Eliane erhält keinen primären Prüfauftrag.' },
+      { title: 'Als Daniel prüfen und publizieren', description: 'Öffnen Sie Daniels Aufgaben, prüfen Sie den Review-Snapshot und nehmen Sie ihn an. Die Annahme publiziert unmittelbar eine neue Modellversion. Alternativ kann Daniel mit Begründung Änderungen verlangen.', status: 'implemented', actions: [{ label: 'Aufgaben als Daniel öffnen', target: 'internal', path: '/tasks', demoUserId: 'daniel.wenger' }], checkpoint: '«Immobilienportfolio VBS» ist publiziert; die Versionshistorie bleibt nachvollziehbar und eine physische Repräsentation ist nicht erforderlich.' },
+    ],
+  },
+  {
+    id: 'derive-logical-model',
+    tags: ['Logisches Modell', 'Mapping', 'Physische Quelle'],
+    number: '11',
+    title: 'Logisches Modell von physischer Repräsentation ableiten',
+    summary: 'Aus der sichtbaren SAP-VIBDBU-Tabelle einen technischen Modell-Entwurf mit gepinnten 1:1-Zuordnungen erzeugen und fachlich nachbearbeiten.',
+    duration: '8–12 Minuten',
+    difficulty: 'Mittel',
+    systems: ['DaCa', 'Catalog API', 'PostgreSQL', 'SHACL'],
+    roles: [{ name: 'Christian Man', responsibility: 'Data Steward · leitet das Modell aus VIBDBU ab' }, { name: 'Christian Spider', responsibility: 'Data Steward in armasuisse Immobilien · kann dieselbe Ableitung bearbeiten' }, { name: 'Daniel Wenger', responsibility: 'Data Owner der Immobilien-Domäne · bleibt fachlich verantwortlich' }],
+    prerequisites: ['Die Quelle «SAP VIBDBU Gebäudebestand» und ihr Struktursnapshot sind im DaCa sichtbar.', 'Christian Man oder Christian Spider hat eine aktive Modellierungsrolle für armasuisse Immobilien.', 'Im Organisationsbereich der Quelle ist die aktive Domäne «Immobilienmanagement VBS» eindeutig bestimmbar.'],
+    outcome: 'Ein editierbarer technischer VIBDBU-Modellentwurf mit 47 Feldern und exakten 1:1-Mappings auf den gepinnten Struktursnapshot. Es werden keine Datenzeilen übernommen.',
+    repeatability: 'Eine erneute Ableitung derselben Tabelle aus demselben Snapshot öffnet denselben Entwurf und erzeugt keine doppelten Mappings. Ein späterer Strukturimport erzeugt einen neuen Snapshot und muss getrennt geprüft werden.',
+    steps: [
+      { title: 'Sichtbare Datenquelle öffnen', description: 'Melden Sie sich als Christian Man an, öffnen Sie «Sichtbare Datenquellen» und wählen Sie «SAP VIBDBU Gebäudebestand». Christian Spider kann diesen Ablauf mit seiner zusätzlichen Data-Steward-Zuweisung ebenso durchführen.', status: 'implemented', actions: [{ label: 'VIBDBU als Christian Man öffnen', target: 'internal', path: '/physical-models/adf4a86e-7ab3-5035-b2cc-c8c907e79468', demoUserId: 'christian.man' }], checkpoint: 'Die Quelle ist verbunden, der Struktursnapshot ist vorhanden und die Verantwortung liegt bei armasuisse Immobilien.' },
+      { title: 'Physische Tabelle und Felder prüfen', description: 'Klappen Sie im Quellenbaum die Datenbank «daca_sample» und das Schema «public» auf und wählen Sie «VIBDBU». Prüfen Sie die 47 Spalten, Typen, Längen und Kommentare. Diese Ansicht lädt keine Datenzeilen.', status: 'implemented', checkpoint: 'Der Pfad endet auf daca_sample.public.VIBDBU; die Tabellenansicht zeigt ausschliesslich Strukturmetadaten.' },
+      { title: 'Logisches Modell ableiten', description: 'Öffnen Sie beim Tabellen-Eintrag das Menü «…» und wählen Sie «Logisches Modell ableiten». DaCa erstellt in einer Transaktion einen technischen logischen Entwurf und für jedes Feld ein direktes 1:1-Mapping auf die gewählte Snapshot-Revision.', status: 'implemented', checkpoint: 'Der Mapping-Arbeitsplatz öffnet sich mit dem neuen Modell und dem ausgewählten physischen Snapshot.', warning: 'Die Ableitung ist ein technischer Startpunkt. Fachliche Bedeutung, Klassifikation und I14Y-Entscheide sind vor einer Freigabe zu prüfen.' },
+      { title: 'Generierte Struktur und Zuordnungen kontrollieren', description: 'Vergleichen Sie im Mapping-Arbeitsplatz die 47 logischen Felder mit den physischen Spalten. Die Kanten lesen sich als «wird repräsentiert durch»; Modell und Mappings sind versioniert und an genau diesen Snapshot gebunden. Öffnen Sie den Modell-Editor und ergänzen Sie fachliche Beschreibungen und weitere erforderliche Merkmale.', status: 'implemented', checkpoint: 'Jede abgeleitete Spalte hat eine überprüfbare direkte Zuordnung; technische Vorschläge bleiben editierbar.' },
+      { title: 'Entwurf speichern und wiederfinden', description: 'Speichern Sie fachliche Ergänzungen als Entwurf. In «Datenmodelle» finden Sie den Eintrag samt physischer Zuordnung. Im VIBDBU-Quellenbaum markiert ein Modell-Icon die verknüpfte Tabelle; «Referenziertes logisches Modell öffnen» führt wieder in den Mapping-Arbeitsplatz.', status: 'implemented', actions: [{ label: 'Datenmodelle als Christian Man öffnen', target: 'internal', path: '/models', demoUserId: 'christian.man' }, { label: 'VIBDBU-Quelle erneut öffnen', target: 'internal', path: '/physical-models/adf4a86e-7ab3-5035-b2cc-c8c907e79468', demoUserId: 'christian.man' }], checkpoint: 'Modell, Quelle, Snapshot und Mapping-Revisionen bleiben nachvollziehbar; es wurde kein Datenprodukt publiziert.' },
+    ],
+  },
+  {
+    id: 'overview-access-responsibility',
+    tags: ['Rollen', 'Verantwortung', 'Audit'],
+    number: '12',
+    title: 'Zugriff und Verantwortung im Überblick behalten',
+    summary: 'Zuständige Personen und ihre Rollen aus drei Perspektiven finden, die Grundlage der Zuordnung prüfen und Änderungen im Rollenprotokoll verfolgen.',
+    duration: '7–10 Minuten',
+    difficulty: 'Einfach',
+    systems: ['DaCa', 'Catalog API', 'PostgreSQL'],
+    roles: [
+      { name: 'Christian Man', responsibility: 'Data Steward · prüft die Zuständigkeiten für VIBDBU' },
+      { name: 'Daniel Wenger', responsibility: 'Data Owner · verantwortet die Domäne Immobilienmanagement VBS' },
+    ],
+    prerequisites: [
+      'Die lokale Anmeldung ist aktiv; Christian Man kann ausgewählt werden.',
+      'Die Domäne «Immobilienmanagement VBS», die VIBDBU-Repräsentation und ihre Rollenzuordnungen sind im Katalog vorhanden.',
+      'Die Migration für das Rollenprotokoll ist ausgeführt. Frühere Zuordnungen erscheinen als Anfangsbestand.',
+    ],
+    outcome: 'Christian kann für eine Domäne, eine Person und ein Datenobjekt die aktuell hinterlegten Verantwortlichkeiten benennen und eine spätere Rollenänderung anhand ihrer fortlaufenden Protokollnummer nachvollziehen.',
+    repeatability: 'Das Lesen der drei Perspektiven und des Protokolls ändert keine Zuordnung. Die Journey ist beliebig wiederholbar; für die Anzeige eines neuen Protokolleintrags muss zuvor eine echte Rollenänderung stattgefunden haben.',
+    steps: [
+      { title: 'Zuständigkeitsübersicht öffnen', description: 'Melden Sie sich als Christian Man an und öffnen Sie unter Einstellungen «Rollen und Zuständigkeiten». Alle Perspektiven lesen dieselben in PostgreSQL gespeicherten Personen-, Organisations- und Objektbeziehungen.', status: 'implemented', actions: [{ label: 'Zuständigkeiten als Christian öffnen', target: 'internal', path: '/settings/responsibilities', demoUserId: 'christian.man' }], checkpoint: 'Die Umschaltung «Perspektiven» bietet Kategorien, Personen und Domänen an.' },
+      { title: 'Vom Datenobjekt zur Person wechseln', description: 'Bleiben Sie bei «Kategorien», suchen Sie VIBDBU und wählen Sie die physische Repräsentation. Lesen Sie, wer als Data Steward zugeordnet ist und ob die Grundlage eine direkte Zuordnung oder eine Organisationsrolle ist. Öffnen Sie bei Bedarf die Rollenhilfe über den gewellten Begriff.', status: 'implemented', checkpoint: 'Christian Man und Christian Spider sind im Immobilienbereich als Data Stewards sichtbar; der Rollen-Tooltip führt zum Glossar.' },
+      { title: 'Rechte einer Person überblicken', description: 'Wechseln Sie zu «Personen» und suchen Sie Christian Man. Die Matrix zählt seine sichtbaren Domänen, logischen Modelle, physischen Repräsentationen und Datenprodukte. Die Detailansicht listet die konkreten Objekte auf.', status: 'implemented', checkpoint: 'Die Personenzählung und die zuvor gewählte VIBDBU-Zuordnung beruhen auf denselben gespeicherten Beziehungen.' },
+      { title: 'Verantwortung einer Domäne prüfen', description: 'Wechseln Sie zu «Domänen» und öffnen Sie «Immobilienmanagement VBS». Prüfen Sie Daniel Wenger als Data Owner, die Stellvertretung sowie die Verantwortlichen der zugeordneten Modelle und Repräsentationen.', status: 'implemented', checkpoint: 'Die Domänenansicht führt vom Bereich zu den verantwortlichen Personen und den konkreten Datenobjekten.' },
+      { title: 'Rollenänderungen sequentiell lesen', description: 'Öffnen Sie im Einstellungsmenü «Rollenprotokoll». Prüfen Sie die fortlaufende Nummer, Aktion, betroffene Person, Rolle, Bereich und ausführende Person. «Anfangsbestand» kennzeichnet Zuordnungen, die vor Einführung des Protokolls bestanden; spätere Änderungen tragen ihren tatsächlichen Änderungsakteur. Laden Sie bei Bedarf ältere Einträge nach.', status: 'implemented', actions: [{ label: 'Rollenprotokoll öffnen', target: 'internal', path: '/settings/role-changes', demoUserId: 'christian.man' }], checkpoint: 'Eine Änderung ersetzt keinen älteren Eintrag; Zuweisung, Änderung und Entzug bleiben als getrennte, sortierte Ereignisse lesbar.' },
+      { title: 'Zuständigkeit und Datenzugriff unterscheiden', description: 'Öffnen Sie ein Datenprodukt und prüfen Sie dessen Zugriffsseite separat. Die hier gezeigten Verwaltungsrollen und direkten Objektzuordnungen sind keine Freigabe zum Lesen geschützter Daten. Die wirksame Zugriffspolicy und ihre Entscheidungen bleiben im Produktkontext nachvollziehbar.', status: 'implemented', actions: [{ label: 'Datenprodukte öffnen', target: 'internal', path: '/products', demoUserId: 'christian.man' }], checkpoint: 'Christian kann benennen, wer ein Objekt verwaltet, ohne aus dieser Zuordnung eine Datenfreigabe abzuleiten.' },
+    ],
+  },
+  {
+    id: 'resolve-logical-mapping-inconsistency',
+    number: '13',
+    title: 'Inkonsistenz zwischen logischem und physischem Modell bearbeiten',
+    summary: 'Eine Feldverbindung entfernen, den speicherbaren Inkonsistenzfehler prüfen und den Entscheid des Data Owners bis zur Behebung durch einen Data Steward verfolgen.',
+    tags: ['Logisches Modell', 'Mapping', 'Datenqualität', 'Aufgaben'],
+    duration: '8–12 Minuten',
+    difficulty: 'Mittel',
+    systems: ['DaCa', 'Catalog API', 'PostgreSQL'],
+    roles: [
+      { name: 'Christian Man', responsibility: 'Data Steward · bearbeitet Feld und physische Zuordnung' },
+      { name: 'Daniel Wenger', responsibility: 'Data Owner · entscheidet über den Inkonsistenzfehler' },
+    ],
+    prerequisites: ['Ein logisches Modell ist bereits mit einer physischen Repräsentation verbunden.', 'Der Data Owner und mindestens ein Data Steward haben aktive Rollen im Organisationsbereich des Modells.'],
+    outcome: 'Eine entfernte Verbindung oder ein neues unverbundenes Feld wird als Inkonsistenzfehler sichtbar. Der Data Owner akzeptiert den Befund oder beauftragt einen Data Steward. Eine erneute Zuordnung oder das Entfernen des Feldes löst den Fehler auf.',
+    repeatability: 'Eine erneut entfernte Verbindung öffnet einen gelösten Vorgang wieder. Historische Modell- und Mappingversionen bleiben lesbar; der rein manuelle Modellaufbau ohne physische Bindung löst keinen Fehler aus.',
+    steps: [
+      { title: 'Verbindung oder logisches Feld bearbeiten', description: 'Öffnen Sie als Data Steward den Mapping-Arbeitsplatz eines physisch gebundenen Modells. Die kompakte Grafik lässt rechts Platz für Entität, Datentyp und weitere Feldmerkmale. Wählen Sie eine Zuordnung und «Verbindung entfernen»; alternativ ergänzen Sie ein logisches Feld ohne physische Verbindung oder entfernen ein bestehendes Feld über das rechte Panel.', status: 'implemented', actions: [{ label: 'Mapping-Arbeitsplatz öffnen', target: 'internal', path: '/models', demoUserId: 'christian.man' }], checkpoint: 'Der unverbundene logische Feldname erscheint im Fehlerbereich; der Modellentwurf bleibt speicherbar.' },
+      { title: 'Inkonsistenz und Aufgabe prüfen', description: 'DaCa bewertet jedes unverbundene logische Feld eines physisch gebundenen Modells als Inkonsistenzfehler und erstellt eine persönliche Aufgabe für den Data Owner. Ein rein logisches Modell ohne jemals zugeordnete physische Repräsentation bleibt hiervon ausgenommen.', status: 'implemented', actions: [{ label: 'Owner-Aufgaben öffnen', target: 'internal', path: '/tasks', demoUserId: 'daniel.wenger' }], checkpoint: 'Die Aufgabe führt zum betroffenen Modell und Feld. Der Fehler ist auch im Mapping-Arbeitsplatz sichtbar.' },
+      { title: 'Als Data Owner entscheiden', description: 'Öffnen Sie den Inkonsistenzfehler, begründen Sie den Entscheid und wählen Sie «Inkonsistenz akzeptieren» oder einen zuständigen Data Steward und «Prüfung beauftragen». Akzeptieren schliesst die Entscheidungsaufgabe, lässt die Qualitätsbewertung Fehler jedoch bestehen.', status: 'implemented', checkpoint: 'Bei einer Beauftragung erscheint eine neue Aufgabe beim gewählten Data Steward; der Vorgang zeigt den Entscheid und die zuständige Person.' },
+      { title: 'Als Data Steward auflösen', description: 'Öffnen Sie die zugewiesene Aufgabe. Verbinden Sie das logische Feld wieder mit einer passenden physischen Spalte und speichern Sie die versionierte Zuordnung. Falls das logische Feld fachlich nicht benötigt wird, entfernen Sie es im rechten Feldpanel und speichern die Modellrevision.', status: 'implemented', checkpoint: 'Der Vorgang wird automatisch als aufgelöst markiert; die offene Aufgabe verschwindet. Andere offene Inkonsistenzen bleiben sichtbar.' },
+      { title: 'Versionen und Bewertung kontrollieren', description: 'Prüfen Sie den Mapping-Arbeitsplatz erneut und öffnen Sie die Modellhistorie. Die entfernte Verbindung oder das entfernte Feld bleibt in älteren Revisionen nachvollziehbar; das aktuelle Modell zeigt nur noch verbleibende offene Inkonsistenzen.', status: 'implemented', actions: [{ label: 'Modellübersicht öffnen', target: 'internal', path: '/models', demoUserId: 'christian.man' }], checkpoint: 'Die Auflösung ändert keine historische Version und schliesst nur die betroffenen Aufgaben.' },
     ],
   },
 ] as const;

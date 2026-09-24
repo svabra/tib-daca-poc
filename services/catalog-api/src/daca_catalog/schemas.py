@@ -1517,6 +1517,8 @@ class WorkflowTaskResponse(ApiModel):
         "glossary_term_decision",
         "logical_model_review",
         "logical_model_changes_requested",
+        "logical_mapping_inconsistency",
+        "logical_mapping_investigation",
     ]
     status: Literal["open", "in_progress", "completed"]
     task_kind: Literal["action", "information"] = "action"
@@ -1530,6 +1532,8 @@ class WorkflowTaskResponse(ApiModel):
     domain_change_request_id: uuid.UUID | None = None
     glossary_term_proposal_id: uuid.UUID | None = None
     logical_model_review_id: uuid.UUID | None = None
+    logical_model_id: uuid.UUID | None = None
+    logical_mapping_issue_id: uuid.UUID | None = None
     title: str
     detail: str
     created_at: datetime

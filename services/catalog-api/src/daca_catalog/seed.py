@@ -837,12 +837,15 @@ def main() -> None:
     # Imported lazily to keep the foundational catalog seed reusable by the
     # modeling seed without creating a module import cycle.
     from .modeling_seed import seed_modeling_catalog
+    from .site_glossary_seed import seed_site_glossary_terms
 
     settings = get_settings()
     session_factory = default_session_factory(settings)
     with session_factory() as session:
         created = seed_catalog(session)
         seed_modeling_catalog(session)
+        seed_site_glossary_terms(session)
+        session.commit()
     print("catalog seed applied" if created else "catalog seed already present")
 
 

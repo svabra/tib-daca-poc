@@ -19,6 +19,7 @@ from .modeling_api import (
     _require_version_scope,
 )
 from .modeling_core import canonical_hash
+from .mapping_inconsistencies import sync_mapping_inconsistencies
 from .modeling_schemas import (
     AssetMappingResponse,
     AssetMappingWrite,
@@ -304,6 +305,7 @@ def create_modeling_lifecycle_router() -> APIRouter:
             last_drift_check_at=version.last_drift_check_at,
             action="superseded",
         )
+        sync_mapping_inconsistencies(session, mapping.logical_model_id)
         session.commit()
         response.headers["ETag"] = _etag(successor.lock_version)
         return mapping_payload(session, mapping, successor)
@@ -345,6 +347,7 @@ def create_modeling_lifecycle_router() -> APIRouter:
         mapping.lifecycle = "retired"
         mapping.retired_at = retired_at
         mapping.updated_at = retired_at
+        sync_mapping_inconsistencies(session, mapping.logical_model_id)
         session.commit()
         response.headers["ETag"] = _etag(successor.lock_version)
         return mapping_payload(session, mapping, successor)

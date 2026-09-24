@@ -25,44 +25,35 @@ export interface DacaUserOption {
   imports: [RouterLink, RouterLinkActive, DacaGlossaryTermComponent, DacaVersionOverlayComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <a class="daca-skip-link" href="#main-content">{{ locale() === 'de' ? 'Zum Inhalt springen' : 'Skip to content' }}</a>
+    <a class="daca-skip-link" href="#main-content">{{ shellLabel('skip') }}</a>
     <header class="daca-federal-header">
-      <div class="daca-authority-strip" [attr.aria-label]="locale() === 'de' ? 'Navigation der Bundesbehörden' : 'Federal authority navigation'">
+      <div class="daca-authority-strip" [attr.aria-label]="shellLabel('federalNavigation')">
         <div class="daca-header-inner daca-authority-inner" [class.has-user]="!!userName()">
           <a class="daca-authority-link" href="https://www.admin.ch/" target="_blank" rel="noreferrer">
-            <span>{{ locale() === 'de' ? 'Alle Schweizer Bundesbehörden' : 'All Swiss federal authorities' }}</span>
+            <span>{{ shellLabel('federalAuthorities') }}</span>
             <svg class="daca-authority-chevron" viewBox="0 0 24 24" aria-hidden="true">
               <path d="m5.706 10.015 6.669 3.85 6.669-3.85.375.649-7.044 4.067-7.044-4.067z" />
             </svg>
           </a>
           @if (userName(); as name) {
-            @if (users().length > 1) {
-              <label class="daca-authority-user daca-user-switcher">
-                @if (userAvatarUrl()) { <img [src]="userAvatarUrl()!" alt=""> }
-                <span class="daca-authority-user-role">{{ locale() === 'de' ? 'Demo-Benutzerin' : 'Demo user' }}</span>
-                <select [value]="userId()" (change)="userChange.emit($any($event.target).value)" aria-label="Demo-Benutzer wechseln">
-                  @for (user of users(); track user.id) { <option [value]="user.id" [selected]="user.id === userId()">{{ user.displayName }} · {{ user.organization }}</option> }
-                </select>
-              </label>
-            } @else {
-            <span
-              class="daca-authority-user"
-              [attr.aria-label]="locale() === 'de'
-                ? 'Demo-Benutzerin ' + name + '. Anmeldung noch nicht verfügbar.'
-                : 'Demo user ' + name + '. Sign-in is not yet available.'"
-            >
-              <span class="daca-authority-user-role">{{ locale() === 'de' ? 'Demo-Benutzerin' : 'Demo user' }}</span>
+            @if (userProfileHref()) {
+            <a class="daca-authority-user" [routerLink]="userProfileHref() || null" [attr.aria-label]="shellLabel('profile') + ': ' + name">
+              @if (userAvatarUrl()) { <img class="daca-profile-avatar" [src]="userAvatarUrl()!" alt=""> } @else { <span class="daca-user-avatar-fallback" aria-hidden="true">{{ name.slice(0, 1) }}</span> }
               <strong>{{ name }}</strong>
-            </span>
+            </a>
+            } @else {
+              <span class="daca-authority-user" [attr.aria-label]="name">
+                @if (userAvatarUrl()) { <img class="daca-profile-avatar" [src]="userAvatarUrl()!" alt=""> } @else { <span class="daca-user-avatar-fallback" aria-hidden="true">{{ name.slice(0, 1) }}</span> }
+                <strong>{{ name }}</strong>
+              </span>
             }
+            @if (showHeaderLogout()) { <button class="daca-header-action" type="button" (click)="logout.emit()">{{ shellLabel('logout') }}</button> }
           }
           @if (notificationCount() > 0) {
             <a
               class="daca-authority-notification"
               [href]="notificationHref()"
-              [attr.aria-label]="locale() === 'de'
-                ? notificationCount() + (notificationCount() === 1 ? ' offene Aufgabe anzeigen' : ' offene Aufgaben anzeigen')
-                : 'Show ' + notificationCount() + (notificationCount() === 1 ? ' open task' : ' open tasks')"
+              [attr.aria-label]="notificationCount() + ' ' + shellLabel(notificationCount() === 1 ? 'notificationSingular' : 'notificationPlural')"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" />
@@ -70,33 +61,25 @@ export interface DacaUserOption {
               <span>{{ notificationCount() > 99 ? '99+' : notificationCount() }}</span>
             </a>
           }
-          <nav
-            class="daca-language-nav"
-            [attr.aria-label]="locale() === 'de' ? 'Sprachen · Wechsel im POC nicht verfügbar' : 'Languages · switching is unavailable in the POC'"
-          >
-            <span lang="de" [attr.aria-current]="locale() === 'de' ? 'true' : null" [attr.aria-disabled]="locale() === 'de' ? null : 'true'">
-              DE
-              <svg class="daca-language-chevron" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m5.706 10.015 6.669 3.85 6.669-3.85.375.649-7.044 4.067-7.044-4.067z" />
-              </svg>
-            </span>
-            <span lang="fr" aria-disabled="true">FR</span>
-            <span lang="it" aria-disabled="true">IT</span>
-            <span lang="rm" aria-disabled="true">RM</span>
-            <span lang="en" [attr.aria-current]="locale() === 'en' ? 'true' : null" [attr.aria-disabled]="locale() === 'en' ? null : 'true'">
-              EN
-              <svg class="daca-language-chevron" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m5.706 10.015 6.669 3.85 6.669-3.85.375.649-7.044 4.067-7.044-4.067z" />
-              </svg>
-            </span>
-          </nav>
+          <label class="daca-header-language"><span class="daca-sr-only">{{ shellLabel('language') }}</span><select [value]="locale()" (change)="languageChange.emit($any($event.target).value)"><option value="de">DE</option><option value="fr">FR</option><option value="it">IT</option><option value="en">EN</option></select></label>
+          <button class="daca-header-theme" type="button" (click)="themeToggle.emit()" [attr.aria-label]="shellLabel(theme() === 'dark' ? 'lightMode' : 'darkMode')">{{ theme() === 'dark' ? '☀' : '◐' }}<span class="daca-header-icon-tooltip" aria-hidden="true">{{ shellLabel(theme() === 'dark' ? 'lightMode' : 'darkMode') }}</span></button>
+          @if (documentationHref()) {
+            <a class="daca-header-documentation" [routerLink]="documentationHref()" [attr.aria-label]="shellLabel('documentation')">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.3"/><path d="M12 10.5v6M12 7.2h.01"/></svg>
+              <span class="daca-header-icon-tooltip" aria-hidden="true">{{ shellLabel('documentation') }}</span>
+            </a>
+          }
+          <a class="daca-header-settings" routerLink="/settings" [attr.aria-label]="shellLabel('settings')">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2h4l.6 2.3 2 .9 2.1-1.2 2.8 2.8-1.2 2.1.9 2L23 11v4l-2.3.6-.9 2 1.2 2.1-2.8 2.8-2.1-1.2-2 .9L14 24h-4l-.6-2.3-2-.9-2.1 1.2-2.8-2.8 1.2-2.1-.9-2L0 15v-4l2.3-.6.9-2L2 6.3l2.8-2.8 2.1 1.2 2-.9L10 2Z" transform="translate(1 -1) scale(.92)"/><circle cx="12" cy="12" r="3" /></svg>
+            <span class="daca-header-icon-tooltip" aria-hidden="true">{{ shellLabel('settings') }}</span>
+          </a>
         </div>
       </div>
 
       <div class="daca-brand-row">
         <div class="daca-header-inner daca-brand-inner">
-          <a class="daca-logo-link" routerLink="/" [attr.aria-label]="locale() === 'de' ? 'Zur Startseite von ' + appTitle() : 'Go to the ' + appTitle() + ' home page'">
-            <img class="daca-logo" src="/assets/swiss-confederation-logo.png" [alt]="locale() === 'de' ? 'Schweizerische Eidgenossenschaft' : 'Swiss Confederation'">
+          <a class="daca-logo-link" routerLink="/" [attr.aria-label]="shellLabel('homePrefix') + appTitle() + shellLabel('homeSuffix')">
+            <img class="daca-logo" src="/assets/swiss-confederation-logo.png" [alt]="shellLabel('confederation')">
           </a>
           <div class="daca-brand-copy" [class.has-subtitle-below]="subtitleBelow()">
             @if (subtitleBelow()) {
@@ -108,9 +91,9 @@ export interface DacaUserOption {
             }
           </div>
           <div class="daca-environment">
-            <span class="daca-environment-label">{{ locale() === 'de' ? 'POC-Umgebung' : 'POC environment' }}</span>
+            <span class="daca-environment-label">{{ shellLabel('environment') }}</span>
             <span class="daca-live-dot" aria-hidden="true"></span>
-            <span>{{ locale() === 'de' ? 'Lokaler Katalog' : 'Local federation' }}</span>
+            <span>{{ shellLabel('localCatalog') }}</span>
           </div>
           <button
             class="daca-menu-button"
@@ -120,7 +103,7 @@ export interface DacaUserOption {
             (click)="menuOpen.set(!menuOpen())"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
-            {{ locale() === 'de' ? 'Menü' : 'Menu' }}
+            {{ shellLabel('menu') }}
           </button>
         </div>
       </div>
@@ -129,7 +112,7 @@ export interface DacaUserOption {
         id="daca-main-navigation"
         class="daca-main-nav"
         [class.daca-main-nav-open]="menuOpen()"
-        [attr.aria-label]="locale() === 'de' ? 'Hauptnavigation' : 'Main navigation'"
+        [attr.aria-label]="shellLabel('mainNavigation')"
       >
         <div class="daca-header-inner daca-main-nav-inner">
           @for (item of navigation(); track item.path) {
@@ -154,7 +137,7 @@ export interface DacaUserOption {
                     type="button"
                     [attr.aria-expanded]="openNavigationPath() === item.path"
                     [attr.aria-controls]="navigationId(item.path)"
-                    [attr.aria-label]="'Untermenü ' + item.label + (openNavigationPath() === item.path ? ' schliessen' : ' öffnen')"
+                    [attr.aria-label]="shellLabel('submenu') + ' ' + item.label + ' ' + shellLabel(openNavigationPath() === item.path ? 'close' : 'open')"
                     (click)="toggleNavigation(item.path, $event)"
                   ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5.7 9.5 6.3 6 6.3-6 1.4 1.5-7.7 7.3L4.3 11z" /></svg></button>
                 </span>
@@ -189,7 +172,7 @@ export interface DacaUserOption {
           <span>{{ text }}</span>
         } @else {
           <span>Bundesamt f&uuml;r Informatik und Telekommunikation BIT</span>
-          <span>{{ footerProductName() ?? 'BIT DaCa' }} &middot; Distributed Data Catalog &middot; Proof of concept</span>
+          <span>{{ footerProductName() ?? 'BIT DaCa' }} &middot; Central Data Catalog &middot; Proof of concept</span>
         }
       </div>
     </footer>
@@ -197,13 +180,40 @@ export interface DacaUserOption {
     <daca-version-overlay
       [productName]="versionProductName()"
       [description]="versionDescription()"
-      [locale]="locale()"
+      [locale]="locale() === 'de' ? 'de' : 'en'"
       [featureScope]="versionFeatureScope()"
       [ariaLabel]="locale() === 'de' ? 'DaCa-Anwendungsversion' : 'DaCa application version'"
     />
   `,
 })
 export class FederalShellComponent {
+  shellLabel(key: string): string {
+    if (key === 'profile') return ({ de: 'Profil', fr: 'Profil', it: 'Profilo', en: 'Profile' })[this.locale()];
+    const labels: Record<string, readonly [string, string, string, string]> = {
+      skip: ['Zum Inhalt springen', 'Aller au contenu', 'Vai al contenuto', 'Skip to content'],
+      federalNavigation: ['Navigation der Bundesbehörden', 'Navigation des autorités fédérales', 'Navigazione delle autorità federali', 'Federal authority navigation'],
+      federalAuthorities: ['Alle Schweizer Bundesbehörden', 'Toutes les autorités fédérales suisses', 'Tutte le autorità federali svizzere', 'All Swiss federal authorities'],
+      logout: ['Abmelden', 'Déconnexion', 'Disconnetti', 'Sign out'],
+      language: ['Sprache wählen', 'Choisir la langue', 'Scegli la lingua', 'Choose language'],
+      lightMode: ['Hellen Modus einschalten', 'Activer le mode clair', 'Attiva modalità chiara', 'Enable light mode'],
+      darkMode: ['Dunklen Modus einschalten', 'Activer le mode sombre', 'Attiva modalità scura', 'Enable dark mode'],
+      settings: ['Einstellungen öffnen', 'Ouvrir les paramètres', 'Apri impostazioni', 'Open settings'],
+      documentation: ['Dokumentation Datenkatalog', 'Documentation du catalogue de données', 'Documentazione del catalogo dati', 'Data catalog documentation'],
+      environment: ['POC-Umgebung', 'Environnement POC', 'Ambiente POC', 'POC environment'],
+      localCatalog: ['Lokaler Katalog', 'Catalogue local', 'Catalogo locale', 'Local catalog'],
+      menu: ['Menü', 'Menu', 'Menu', 'Menu'],
+      mainNavigation: ['Hauptnavigation', 'Navigation principale', 'Navigazione principale', 'Main navigation'],
+      homePrefix: ['Zur Startseite von ', 'Aller à la page d’accueil de ', 'Vai alla pagina iniziale di ', 'Go to the '],
+      homeSuffix: ['', '', '', ' home page'],
+      confederation: ['Schweizerische Eidgenossenschaft', 'Confédération suisse', 'Confederazione Svizzera', 'Swiss Confederation'],
+      notificationSingular: ['offene Aufgabe anzeigen', 'tâche ouverte à afficher', 'attività aperta da visualizzare', 'open task to view'],
+      notificationPlural: ['offene Aufgaben anzeigen', 'tâches ouvertes à afficher', 'attività aperte da visualizzare', 'open tasks to view'],
+      submenu: ['Untermenü', 'Sous-menu', 'Sottomenu', 'Submenu'],
+      close: ['schliessen', 'fermer', 'chiudi', 'close'],
+      open: ['öffnen', 'ouvrir', 'apri', 'open'],
+    };
+    return labels[key]?.[({ de: 0, fr: 1, it: 2, en: 3 })[this.locale()]] ?? key;
+  }
   readonly appTitle = input.required<string>();
   readonly appSubtitle = input('Bundesamt f\u00fcr Informatik und Telekommunikation BIT');
   readonly footerProductName = input<string | null>(null);
@@ -212,12 +222,19 @@ export class FederalShellComponent {
   readonly versionDescription = input('A PoC by BIT and ESTV');
   readonly versionFeatureScope = input<DacaFeatureScope>('catalog');
   readonly subtitleBelow = input(false);
-  readonly locale = input<'de' | 'en'>('en');
+  readonly locale = input<'de' | 'fr' | 'it' | 'en'>('en');
+  readonly theme = input<'light' | 'dark'>('light');
   readonly userName = input<string | null>(null);
   readonly userId = input<string | null>(null);
   readonly userAvatarUrl = input<string | null>(null);
+  readonly userProfileHref = input<string | null>(null);
+  readonly documentationHref = input<string | null>(null);
+  readonly showHeaderLogout = input(true);
   readonly users = input<readonly DacaUserOption[]>([]);
   readonly userChange = output<string>();
+  readonly logout = output<void>();
+  readonly languageChange = output<string>();
+  readonly themeToggle = output<void>();
   readonly notificationCount = input(0);
   readonly notificationHref = input('/#main-content');
   readonly navigation = input.required<readonly DacaNavigationItem[]>();

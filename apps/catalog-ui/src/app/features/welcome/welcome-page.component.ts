@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { Router, RouterLink } from '@angular/router';
 import { DacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-daca/design-system';
 import { CatalogApiService } from '../../core/catalog-api.service';
+import { CatalogI18nService } from '../../core/catalog-i18n.service';
 import { DataProduct, StoredAccessRequest } from '../../core/catalog.models';
 import { selectNextWelcomeHeroTheme } from './welcome-hero-theme';
 import {
@@ -66,18 +67,17 @@ function selectSessionHeroTheme() {
         </picture>
           <div class="welcome-hero-copy">
             <p class="daca-eyebrow"><daca-glossary-term term="DaCa" /></p>
-            <h1 id="welcome-title">Willkommen im zentralen Data Catalog der Schweizer<br>Bundesverwaltung</h1>
+            <h1 id="welcome-title">{{ i18n.t('welcomeTitle') }}</h1>
             <p class="welcome-lead">
-              Entdecken, beschreiben und verantwortungsvoll freigeben: Hier finden Sie Metadaten,
-              Schnittstellen, Herkunft und Zugriffsregeln Ihrer Datenprodukte an einem Ort.
+              {{ i18n.t('welcomeLead') }}
             </p>
             <div class="welcome-hero-actions">
-              <a class="daca-button" routerLink="/products">Meine Datenprodukte öffnen</a>
-              <a class="daca-button is-secondary" [routerLink]="['/products', product().id, 'access']">Freigaben verwalten</a>
+              <a class="daca-button" routerLink="/products">{{ i18n.t('openMyProducts') }}</a>
+              <a class="daca-button is-secondary" [routerLink]="['/products', product().id, 'access']">{{ i18n.t('manageAccess') }}</a>
             </div>
             <p class="welcome-context">
               <span>Proof of Concept</span>
-              PoC Data Catalog · Anmeldung noch nicht verfügbar · Co-Design von ESTV und BIT
+              PoC Data Catalog · {{ i18n.t('welcomeContext') }}
             </p>
           </div>
 
@@ -90,17 +90,17 @@ function selectSessionHeroTheme() {
             (focusout)="collapseSearchIfFocusLeaves($event)"
           >
             <div>
-              <p class="daca-eyebrow">Katalog durchsuchen</p>
-              <h2>Wonach suchen Sie?</h2>
-              <p>Finden Sie Datenprodukte nach Thema, Organisation oder Stichwort.</p>
+              <p class="daca-eyebrow">{{ i18n.t('catalogSearch') }}</p>
+              <h2>{{ i18n.t('welcomeSearchQuestion') }}</h2>
+              <p>{{ i18n.t('welcomeSearchIntro') }}</p>
             </div>
-            <label for="catalog-search">Suchbegriff</label>
+            <label for="catalog-search">{{ i18n.t('searchTerm') }}</label>
             <div class="welcome-search-control">
               <input
                 id="catalog-search"
                 type="search"
                 autocomplete="off"
-                placeholder="z. B. Steuerstatistik oder ESTV"
+                [placeholder]="i18n.t('welcomeSearchPlaceholder')"
                 aria-describedby="catalog-search-feedback"
                 [attr.aria-invalid]="searchStatus() === 'empty' ? 'true' : null"
                 [attr.aria-expanded]="searchExpanded()"
@@ -109,19 +109,19 @@ function selectSessionHeroTheme() {
                 (input)="updateSearch($any($event.target).value)"
                 (keydown.escape)="collapseSearch($event)"
               >
-              <button class="daca-button" type="submit">Suchen</button>
+              <button class="daca-button" type="submit">{{ i18n.t('search') }}</button>
             </div>
             <div id="catalog-search-feedback" class="welcome-search-feedback" aria-live="polite">
               @switch (searchStatus()) {
                 @case ('empty') {
-                  <p class="is-warning">Bitte geben Sie einen Suchbegriff ein.</p>
+                  <p class="is-warning">{{ i18n.t('enterSearchPlease') }}</p>
                 }
                 @case ('short') {
-                  <p class="is-hint">Geben Sie mindestens {{ searchMinimumLength }} Zeichen ein.</p>
+                  <p class="is-hint">{{ i18n.t('atLeastCharacters', { count: searchMinimumLength }) }}</p>
                 }
                 @case ('match') {
-                  <p class="is-match">{{ searchResultCount() }} {{ searchResultCount() === 1 ? 'Datenprodukt gefunden' : 'Datenprodukte gefunden' }}</p>
-                  <ul class="welcome-search-results" aria-label="Gefundene Datenprodukte">
+                  <p class="is-match">{{ i18n.t('productsFound', { count: searchResultCount() }) }}</p>
+                  <ul class="welcome-search-results" [attr.aria-label]="i18n.t('foundProducts')">
                     @for (result of searchResults(); track result.id) {
                       <li>
                         <a [routerLink]="['/products', result.id, 'overview']">
@@ -133,15 +133,15 @@ function selectSessionHeroTheme() {
                   </ul>
                   @if (searchResultCount() > searchResults().length) {
                     <a class="welcome-search-all" [routerLink]="['/search']" [queryParams]="{ q: searchQuery().trim() }">
-                      Alle {{ searchResultCount() }} Ergebnisse in der Expertensuche anzeigen
+                      {{ i18n.t('allExpertResults', { count: searchResultCount() }) }}
                     </a>
                   }
                 }
                 @case ('none') {
-                  <p>Keine Datenprodukte für diesen Suchbegriff gefunden.</p>
+                  <p>{{ i18n.t('noWelcomeProducts') }}</p>
                 }
                 @default {
-                  <p class="is-hint">Tipp: Suchen Sie nach „Kanton“ oder „ESTV“.</p>
+                  <p class="is-hint">{{ i18n.t('welcomeSearchTip') }}</p>
                 }
               }
             </div>
@@ -150,8 +150,8 @@ function selectSessionHeroTheme() {
               [routerLink]="['/search']"
               [queryParams]="expertSearchQueryParams()"
             >
-              <span class="welcome-search-expert-meta">Alle Produkte · Erweiterte Filter</span>
-              <strong>Expertensuche öffnen</strong>
+              <span class="welcome-search-expert-meta">{{ i18n.t('expertFilters') }}</span>
+              <strong>{{ i18n.t('openExpertSearch') }}</strong>
             </a>
           </form>
       </section>
@@ -159,30 +159,30 @@ function selectSessionHeroTheme() {
       <section id="handlungsbedarf" class="welcome-alerts" aria-labelledby="welcome-alerts-title">
         <div class="welcome-alerts-heading">
           <div>
-            <p class="daca-eyebrow">Für {{ api.identityUser().displayName }}</p>
-            <h2 id="welcome-alerts-title">Handlungsbedarf</h2>
+            <p class="daca-eyebrow">{{ i18n.t('forPerson', { name: api.identityUser().displayName }) }}</p>
+            <h2 id="welcome-alerts-title">{{ i18n.t('actionNeeded') }}</h2>
           </div>
           @if (taskLoadError()) {
-            <span><strong>–</strong> Status unbekannt</span>
+            <span><strong>–</strong> {{ i18n.t('statusUnknown') }}</span>
           } @else if (!ownerInboxLoading()) {
-            <span><strong>{{ actionCount() }}</strong> {{ actionCount() === 1 ? 'offene Aufgabe' : 'offene Aufgaben' }}</span>
+            <span>{{ i18n.t('openTasks', { count: actionCount() }) }}</span>
           }
         </div>
 
         @if (taskLoadError(); as loadError) {
           <div class="daca-card welcome-alert-empty is-error" role="alert">
-            <strong>Aufgabenstatus unbekannt</strong><p>{{ loadError }}</p>
-            <button class="daca-button is-secondary" type="button" (click)="retryTaskStatus()">Erneut laden</button>
+            <strong>{{ i18n.t('taskStatusUnknown') }}</strong><p>{{ loadError }}</p>
+            <button class="daca-button is-secondary" type="button" (click)="retryTaskStatus()">{{ i18n.t('retry') }}</button>
           </div>
         } @else if (ownerInboxLoading()) {
-          <div class="daca-card welcome-alert-empty" aria-live="polite">Aufgaben werden geladen…</div>
+          <div class="daca-card welcome-alert-empty" aria-live="polite">{{ i18n.t('loadingTasks') }}</div>
         } @else if (actionCount()) {
           <div class="welcome-alert-list">
             @for (task of actionTasks(); track task.id) {
               <article class="daca-card welcome-alert-item is-simulation-alert">
                 <span class="welcome-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5 21 20H3L12 3.5Z"/><path d="M12 9v5M12 17.2v.2"/></svg></span>
-                <div class="welcome-alert-copy"><div><span>{{ task.taskType === 'simulation_isbo_restriction' ? 'Dringend' : 'Prüfung nötig' }}</span><time [attr.datetime]="task.createdAt">{{ task.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</time></div><h3>{{ task.title }}</h3><p>{{ task.detail }}</p></div>
-                <a class="daca-button is-secondary" [routerLink]="taskRoute(task)" [queryParams]="taskQueryParams(task)">Aufgabe öffnen</a>
+                <div class="welcome-alert-copy"><div><span>{{ i18n.t(task.taskType === 'simulation_isbo_restriction' ? 'urgent' : 'reviewNeeded') }}</span><time [attr.datetime]="task.createdAt">{{ task.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</time></div><h3>{{ task.title }}</h3><p>{{ task.detail }}</p></div>
+                <a class="daca-button is-secondary" [routerLink]="taskRoute(task)" [queryParams]="taskQueryParams(task)">{{ i18n.t('openTask') }}</a>
               </article>
             }
             @for (request of ownerRequests(); track request.id) {
@@ -191,65 +191,65 @@ function selectSessionHeroTheme() {
                   <svg viewBox="0 0 24 24"><path d="M12 3.5 21 20H3L12 3.5Z"/><path d="M12 9v5M12 17.2v.2"/></svg>
                 </span>
                 <div class="welcome-alert-copy">
-                  <div><span>Entscheid nötig</span><time [attr.datetime]="request.createdAt">{{ request.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</time></div>
-                  <h3>Zugriffsanfrage von {{ request.requesterName }}</h3>
-                  <p><strong>{{ request.requesterOrganization }}</strong> beantragt Zugriff auf «{{ requestProductTitle(request) }}».</p>
+                  <div><span>{{ i18n.t('decisionNeeded') }}</span><time [attr.datetime]="request.createdAt">{{ request.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</time></div>
+                  <h3>{{ i18n.t('accessRequestFrom', { name: request.requesterName }) }}</h3>
+                  <p><strong>{{ request.requesterOrganization }}</strong> {{ i18n.t('requestsAccessTo') }} «{{ requestProductTitle(request) }}».</p>
                   <dl>
                     <div><dt>Zugriff</dt><dd>{{ request.consumerType === 'person' ? 'Persönlich · eIAM ' + request.requesterId : 'M2M · ' + request.machineId }}</dd></div>
-                    <div><dt>Zweck</dt><dd>{{ request.purpose }}</dd></div>
-                    <div><dt>Status</dt><dd>Anfrage eingegangen</dd></div>
+                    <div><dt>{{ i18n.t('purpose') }}</dt><dd>{{ request.purpose }}</dd></div>
+                    <div><dt>{{ i18n.t('status') }}</dt><dd>{{ i18n.t('requestReceived') }}</dd></div>
                   </dl>
                 </div>
-                <a class="daca-button is-secondary" routerLink="/tasks">Aufgabe öffnen</a>
+                <a class="daca-button is-secondary" routerLink="/tasks">{{ i18n.t('openTask') }}</a>
               </article>
             }
           </div>
         } @else {
-          <div class="daca-card welcome-alert-empty">Keine offenen Aufgaben. Ihre Datenprodukte benötigen aktuell keinen Entscheid.</div>
+          <div class="daca-card welcome-alert-empty">{{ i18n.t('noOpenTasks') }}</div>
         }
       </section>
 
       <section class="welcome-tasks" aria-labelledby="welcome-tasks-title">
         <div class="welcome-section-heading">
           <div>
-            <p class="daca-eyebrow">Direkteinstieg</p>
-            <h2 id="welcome-tasks-title">Was möchten Sie tun?</h2>
+            <p class="daca-eyebrow">{{ i18n.t('directEntry') }}</p>
+            <h2 id="welcome-tasks-title">{{ i18n.t('whatToDo') }}</h2>
           </div>
-          <p>Wählen Sie einen Bereich, um mit dem Beispiel-Datenprodukt zu arbeiten.</p>
+          <p>{{ i18n.t('chooseArea') }}</p>
         </div>
 
         <div class="welcome-task-grid">
           <a class="welcome-task-card" routerLink="/products">
             <span class="welcome-task-number" aria-hidden="true">01</span>
             <span class="welcome-task-copy">
-              <strong>Datenprodukt pflegen</strong>
-              <span>Metadaten, Qualität und REST-/PostgreSQL-Endpunkte prüfen und bearbeiten.</span>
+              <strong>{{ i18n.t('maintainProduct') }}</strong>
+              <span>{{ i18n.t('maintainProductText') }}</span>
             </span>
-            <span class="welcome-task-link">Meine Datenprodukte öffnen</span>
+            <span class="welcome-task-link">{{ i18n.t('openMyProducts') }}</span>
           </a>
           <a class="welcome-task-card" routerLink="/tasks">
             <span class="welcome-task-number" aria-hidden="true">02</span>
             <span class="welcome-task-copy">
-              <strong>Aufgaben bearbeiten</strong>
-              <span>Zugriffsanfragen und weitere Aufgaben zu Ihren Datenprodukten bearbeiten.</span>
+              <strong>{{ i18n.t('workOnTasks') }}</strong>
+              <span>{{ i18n.t('workOnTasksText') }}</span>
             </span>
-            <span class="welcome-task-link">Aufgaben öffnen</span>
+            <span class="welcome-task-link">{{ i18n.t('openTasksLink') }}</span>
           </a>
           <a class="welcome-task-card" [routerLink]="['/products', product().id, 'access']">
             <span class="welcome-task-number" aria-hidden="true">03</span>
             <span class="welcome-task-copy">
-              <strong>Freigaben verwalten</strong>
-              <span>Zugriffsanfragen, Datenkonsumenten und KOBY-Metadatenzugriff verwalten.</span>
+              <strong>{{ i18n.t('manageAccess') }}</strong>
+              <span>{{ i18n.t('manageAccessText') }}</span>
             </span>
-            <span class="welcome-task-link">Freigaben öffnen</span>
+            <span class="welcome-task-link">{{ i18n.t('openAccess') }}</span>
           </a>
           <a class="welcome-task-card" [routerLink]="['/products', product().id, 'lineage']">
             <span class="welcome-task-number" aria-hidden="true">04</span>
             <span class="welcome-task-copy">
-              <strong>Herkunft nachvollziehen</strong>
-              <span>Lineage, Transformationen und append-only Provenienz einsehen.</span>
+              <strong>{{ i18n.t('traceOrigin') }}</strong>
+              <span>{{ i18n.t('traceOriginText') }}</span>
             </span>
-            <span class="welcome-task-link">Lineage öffnen</span>
+            <span class="welcome-task-link">{{ i18n.t('openLineage') }}</span>
           </a>
         </div>
       </section>
@@ -258,51 +258,50 @@ function selectSessionHeroTheme() {
         <div class="welcome-product-main">
           <div class="welcome-product-heading">
             <div>
-              <p class="daca-eyebrow">Beispiel-Datenprodukt</p>
+              <p class="daca-eyebrow">{{ i18n.t('exampleProduct') }}</p>
               <h2 id="welcome-product-title">{{ productTitle() }}</h2>
             </div>
-            <daca-status-badge tone="red">Eingeschränkt</daca-status-badge>
+            <daca-status-badge tone="red">{{ i18n.t('restricted') }}</daca-status-badge>
           </div>
           <p class="welcome-product-description">{{ productDescription() }}</p>
-          <div class="welcome-product-meta" aria-label="Produktmerkmale">
-            <span>Eigentümerin: {{ product().owner }}</span>
+          <div class="welcome-product-meta" [attr.aria-label]="i18n.t('exampleProduct')">
+            <span>{{ i18n.t('ownerFemale') }}: {{ product().owner }}</span>
             <span>Revision {{ product().revision }}</span>
-            <span>Jährlich</span>
+            <span>{{ i18n.t('annually') }}</span>
             <span>REST &amp; PostgreSQL</span>
           </div>
           <p class="welcome-access-note">
-            <strong>Zugriff im Demo-Szenario:</strong>
-            Nur die Benutzergruppe Kanton St. Gallen darf die Produktdaten lesen.
+            <strong>{{ i18n.t('demoAccess') }}</strong>
+            {{ i18n.t('demoAccessText') }}
           </p>
           <div class="welcome-product-actions">
-            <a class="daca-button" routerLink="/products">Meine Datenprodukte öffnen</a>
-            <a class="daca-button is-secondary" [routerLink]="['/products', product().id, 'access']">Freigaben</a>
+            <a class="daca-button" routerLink="/products">{{ i18n.t('openMyProducts') }}</a>
+            <a class="daca-button is-secondary" [routerLink]="['/products', product().id, 'access']">{{ i18n.t('access') }}</a>
           </div>
         </div>
 
         <aside class="welcome-mcp-note" aria-labelledby="welcome-mcp-title">
           <span class="welcome-mcp-label">KOBY · AI Services</span>
-          <h3 id="welcome-mcp-title">Metadatenzugriff über MCP</h3>
+          <h3 id="welcome-mcp-title">{{ i18n.t('metadataViaMcp') }}</h3>
           <p>
-            KOBY erhält nur nach ausdrücklicher Freigabe Zugriff auf Metadaten.
-            Produktdaten und Zugangsdaten bleiben ausgeschlossen.
+            {{ i18n.t('metadataViaMcpText') }}
           </p>
-          <a [routerLink]="['/products', product().id, 'access', 'grant']" fragment="koby">KOBY-Metadatenzugriff prüfen</a>
+          <a [routerLink]="['/products', product().id, 'access', 'grant']" fragment="koby">{{ i18n.t('reviewKoby') }}</a>
         </aside>
       </section>
 
-      <section class="welcome-trust" aria-label="Grundsätze des Datenkatalogs">
+      <section class="welcome-trust" [attr.aria-label]="i18n.t('catalogPrinciples')">
         <article>
-          <h3>Standardmässig gesperrt</h3>
-          <p>Unklare oder fehlende Entscheide geben keine Daten frei.</p>
+          <h3>{{ i18n.t('defaultDeny') }}</h3>
+          <p>{{ i18n.t('defaultDenyText') }}</p>
         </article>
         <article>
-          <h3>Keine Zugangsdaten im Katalog</h3>
-          <p>Endpunkte werden beschrieben, Geheimnisse nicht gespeichert.</p>
+          <h3>{{ i18n.t('noCredentials') }}</h3>
+          <p>{{ i18n.t('noCredentialsText') }}</p>
         </article>
         <article>
-          <h3>Eigenständig nutzbar</h3>
-          <p>Der lokale Katalog bleibt ohne Control Plane funktionsfähig.</p>
+          <h3>{{ i18n.t('standalone') }}</h3>
+          <p>{{ i18n.t('standaloneText') }}</p>
         </article>
       </section>
     </div>
@@ -310,16 +309,17 @@ function selectSessionHeroTheme() {
 })
 export class WelcomePageComponent {
   readonly api = inject(CatalogApiService);
+  readonly i18n = inject(CatalogI18nService);
   private readonly router = inject(Router);
   readonly product = computed(() => this.api.product());
   readonly productTitle = computed(() =>
     this.product().globalId === 'urn:daca:ch:estv:tax-statistics-by-canton'
-      ? 'ESTV-Steuerstatistik nach Kanton'
+      ? this.i18n.t('exampleProductTitle')
       : this.product().title,
   );
   readonly productDescription = computed(() =>
     this.product().globalId === 'urn:daca:ch:estv:tax-statistics-by-canton'
-      ? 'Aggregierte jährliche Steuerstatistiken der Schweizer Kantone. Das Datenprodukt enthält synthetische Werte für den DaCa-Proof-of-Concept und keine Personendaten.'
+      ? this.i18n.t('exampleProductDescription')
       : this.product().description,
   );
   readonly searchQuery = signal('');

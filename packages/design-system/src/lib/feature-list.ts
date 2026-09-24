@@ -24,7 +24,9 @@ interface DacaLocalizedFeatureList {
 }
 
 /**
- * Plain-language release capabilities shown from the version overlay.
+ * Cumulative PoC capability snapshot retained for compatibility.
+ * The user-facing, version-specific and tagged archive lives in release-history.ts;
+ * the version overlay renders only its newest release.
  *
  * The release identifier deliberately references DACA_VERSION instead of
  * repeating a version literal, so the feature list cannot drift from the UI
@@ -36,9 +38,21 @@ export const DACA_FEATURE_RELEASE = {
     catalog: {
       de: {
         title: 'Was kann DaCa Catalog?',
-        introduction: 'DaCa bringt Informationen, Freigaben und Aufgaben rund um Datenprodukte an einem Ort zusammen.',
+        introduction: 'DaCa ist der zentrale Datenkatalog der Data Platform BIT und bringt Metadaten, Freigaben und Aufgaben an einem Ort zusammen.',
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
+          {
+            title: 'Zentraler Datenkatalog',
+            description: 'DaCa verwaltet Metadaten, Datenprodukte, Endpunkte, Herkunftsinformationen und Zugriffsregeln in einem zentralen Katalog. Die bisherigen Trust- und Sync-Einträge der Control Plane sind PoC-Prototypdaten.',
+          },
+          {
+            title: 'Zuständigkeiten aus drei Perspektiven und Katalogdokumentation',
+            description: 'Unter Einstellungen zeigen Kategorien, Personen und Domänen dieselben in PostgreSQL gespeicherten Rollen- und Objektbeziehungen. Physische Tabellen bleiben über eine direkte Domänenzuordnung auch ohne logisches Mapping auffindbar. Die Dokumentation im Header bündelt User Journeys, Grundlagen und das eigenständige DaCa-Anwendungsglossar. Fachliche Terminologie bleibt separat. Rollenbegriffe sind hellgrau gewellt markiert und erhalten bei Bedarf eine Kurzbeschreibung mit Link zum vollständigen Eintrag und AKV. Der Tooltip bleibt beim Mausweg zum Link geöffnet.',
+          },
+          {
+            title: 'Rollenprotokoll und Journey zur Verantwortung',
+            description: 'Ein fortlaufendes PostgreSQL-Protokoll zeigt den Anfangsbestand sowie spätere Zuweisungen, Änderungen und Entzüge von Verwaltungsrollen und Objektverantwortungen. Die neue User Journey führt durch Kategorien, Personen und Domänen bis zum Protokoll und grenzt Verwaltungsrollen von Datenzugriffen ab.',
+          },
           {
             title: 'Rollen im Demo-Benutzerkontext erleben',
             description: 'Der Demo-Benutzerwechsel umfasst auch Giuseppe Starwars als Data Owner und Thomas Wikinger als Data Steward von armasuisse. Damit lassen sich die beiden Rollen im VBS-Modellierungsscope sichtbar nachvollziehen.',
@@ -52,12 +66,20 @@ export const DACA_FEATURE_RELEASE = {
             description: 'Speichern und Einreichen sind bewusst getrennt. Die gewählte Domäne bestimmt den primären Domain Owner und die sichtbare Stellvertretung. Erst das Einreichen erzeugt einen persönlichen Prüfauftrag mit unveränderlichem Snapshot; nur der primäre Owner kann publizieren oder mit Begründung Änderungen verlangen.',
           },
           {
-            title: 'Bestehende Datenquellen wie in DAAIF erkunden',
-            description: '«Datenquellen» ist ein eigener Hauptmenüpunkt. Jede aktive Verbindungskarte steht für genau eine Systeminstanz pro Katalogpfad; mehrere PostgreSQL-, S3- oder künftige Oracle-Instanzen bleiben getrennt. Freitext, Typ und Owner filtern das Register; die aktive VIBDBU-Demoquelle kann erneut importiert werden. Die Karten führen in den Datenbank-/Schema-/Tabellenbaum mit denselben Server-, PostgreSQL-, Datenbank-, Schema-, Tabellen- und View-Icons wie DAAIF. Ein Modell-Icon vor dem «…»-Kontextmenü markiert Tabellen mit einer logischen Verknüpfung und erklärt sie per Tooltip unabhängig vom Status; beim Verlassen des Icons schliesst der Tooltip sofort. Bei einer Verknüpfung öffnet «Referenziertes logisches Modell öffnen» den Mapping-Arbeitsplatz mit Tabelle und Snapshot vorausgewählt. Das Kontextmenü einer Tabelle leitet ein vollständig editierbares logisches Modell direkt ab; die VIBDBU-Demoquelle liefert dafür 47 kommentierte Felder.',
+            title: 'Sichtbare Datenquellen und persönliche Darstellung',
+            description: '«Sichtbare Datenquellen» zeigt Verbindungskarten, einschliesslich der katalogweit lesbaren synthetischen VIBDBU-Quelle. Import bleibt auf ihre zuständigen Personen beschränkt. Freitext, Typ und Owner filtern das Register; die föderale Verwaltungsebene zeigt aktuell nur Bund als auswählbaren Wert, während Kantone, Gemeinde, bundesnahe Betriebe und Kantonalbanken sichtbar deaktiviert sind. Ein Tooltip erläutert die Einordnung. Der blaue Hinweis übernimmt den Suchtext in die Expertensuche, die auch sichtbare physische Quellen als Treffer zeigt. Die Karten führen in den Datenbank-/Schema-/Tabellenbaum; ein graublaues Modell-Icon markiert verknüpfte Tabellen und öffnet per Klick das logische Modell. Der Tooltip erklärt den Link in einer zweiten Zeile. Das Kontextmenü kann ein editierbares logisches Modell direkt ableiten. Im Kopf stehen Profilbild, lokale Anmeldung mit widerrufbarer HttpOnly-Sitzung sowie rahmenlose Sprach- und Moduswahl bereit; die Abmeldung liegt nur im Profil. Die Sprachliste bleibt in hellem und dunklem Modus lesbar. Das Bundeslogo behält im dunklen Modus einen transparenten Hintergrund, das rote Schild und weisse Schrift. Doppelte Arbeitskontext-Panels entfallen. Ein Sprachwechsel übersetzt Startseite, Suche und zentrale Übersichten sofort; Abbrechen stellt die vorherige Sprache wieder her. Speicherung im Browser oder Profil bleibt eine bewusste Wahl.',
+          },
+          {
+            title: 'Persönliches Profil und erweiterte Modellierungsrollen',
+            description: 'Nur der nicht unterstrichene Name im Header öffnet das Profil mit Foto oder Initialen, Abmeldung, Organisation, Server-Rollenzuweisungen und einer verständlichen Zuordnung der erlaubten Aktionen. Ohne lokale Anmeldung erscheint zuerst die Personenauswahl. Christian Spider und Christian Man besitzen zusätzlich eine Data-Steward-Zuweisung für armasuisse Immobilien und können VIBDBU-Modelle erstellen, ableiten und bearbeiten. Veröffentlichung bleibt an die persönliche Owner-Zuordnung gebunden.',
+          },
+          {
+            title: 'Persönliche Einstellungen wie in DAAIF',
+            description: 'Das Einstellungssymbol öffnet eine Seite mit Kontextnavigation für Spracheinstellungen, Erscheinungsbild und Featureliste. DaCa hat keine Mandantensprache. Sprach- und Moduswahl nutzen weiterhin den Dialog zur Speicherung im Browser oder im persönlichen Profil. Einstellungs- und Tag/Nacht-Symbol haben sichtbare Tooltips für Maus und Tastatur.',
           },
           {
             title: 'Logische und physische Modelle verbinden',
-            description: 'Logical-first und Physical-first bleiben getrennte Einstiege. Die direkte Tabellenableitung erzeugt Modell und exakte 1:1-Mapping-Entwürfe atomar und öffnet sofort den Mapping-Arbeitsplatz; weitere versionierte Repräsentationen werden dort ergänzt. Die Snapshot-Karte im Graphen zeigt das Datenquellen-Icon, Data Ownerin, vollständigen Katalogpfad und gepinnte Revision. Die Kanten messen die gerenderten Anschlussknoten und bleiben bei variabler Kartenhöhe verbunden. Die Kante liest sich logisch zu physisch als «wird repräsentiert durch».',
+            description: 'Der Leitfaden trennt das manuelle logische Modell (Journey 10) von der VIBDBU-Ableitung (Journey 11) und erklärt den Inkonsistenzfall (Journey 13). Der kompakte Mappinggraph lässt den Feldeditor rechts sichtbar. Verbindungen und logische Felder lassen sich entfernen. Fehlende physische Counterparts bleiben speicherbar, werden aber als Qualitätsfehler und persönliche Aufgabe des Data Owners erfasst. Er kann den Fehler begründet akzeptieren oder einen Data Steward zur Prüfung beauftragen; eine erneute Zuordnung oder Feldlöschung löst ihn auf.',
           },
           {
             title: 'Domänen und Terminology gemeinsam steuern',
@@ -73,11 +95,11 @@ export const DACA_FEATURE_RELEASE = {
           },
           {
             title: 'Neue Versionen ohne F5 übernehmen',
-            description: 'DaCa erkennt bereitstehende Versionen, zeigt den Wechsel verständlich an und lädt die Anwendung kontrolliert neu.',
+            description: 'DaCa öffnet für jeden bereitstehenden Build automatisch einen Dialog mit bisheriger und neuer Version, Warnung zu ungespeicherten Seiteninhalten, Neuerungen und Link zur Featureliste. «Update durchführen» lädt die Anwendung vollständig neu; «Update später durchführen» erhält die laufende Arbeit.',
           },
           {
             title: 'PoC anhand geführter Journeys erleben',
-            description: 'Der PoC Leitfaden erklärt zehn wiederholbare Abläufe mit Rollen, Voraussetzungen, echten Screenshots und klar ausgewiesenen Grenzen. Die Modellierungsabläufe decken Ableitung, Mapping, Validierung, Driftauflösung und die Freigabe eines armasuisse-Modells durch den Domain Owner ab.',
+            description: 'Der PoC Leitfaden erklärt dreizehn wiederholbare, nach Text und Tags durchsuchbare Abläufe mit Rollen und Voraussetzungen. Die statische Dokumentation enthält Artikel mit Kategorie, Tags und Erstelldatum sowie Bilder zum Umgang mit unverbundenen logischen Feldern und dem Entscheid des Data Owners.',
           },
           {
             title: 'Datenprodukte finden und verstehen',
@@ -119,9 +141,21 @@ export const DACA_FEATURE_RELEASE = {
       },
       en: {
         title: 'What can DaCa Catalog do?',
-        introduction: 'DaCa brings product information, approvals and tasks together in one place.',
+        introduction: 'DaCa is the central data catalog of the BIT data platform and brings metadata, approvals and tasks together in one place.',
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
+          {
+            title: 'Central data catalog',
+            description: 'DaCa manages metadata, data products, endpoints, provenance and access rules in one central catalog. Earlier Control Plane trust and sync records are PoC prototype data.',
+          },
+          {
+            title: 'Three responsibility perspectives and catalog documentation',
+            description: 'Settings show PostgreSQL-backed role and object relationships by category, person and domain. Physical tables remain linked to a domain before any logical model mapping exists. The header documentation brings together user journeys, fundamentals and the separate DaCa application glossary. Business terminology stays independent. Role terms use a light-gray wavy underline and load short explanations on demand with links to full entries. The popup stays open while the pointer moves to its link.',
+          },
+          {
+            title: 'Role change protocol and responsibility journey',
+            description: 'A sequential PostgreSQL protocol shows the initial state and later assignments, changes and removals of management roles and object responsibilities. A new user journey connects the category, person and domain views to the protocol and distinguishes management roles from data access.',
+          },
           {
             title: 'Explore roles in the demo-user context',
             description: 'The demo-user selector includes Giuseppe Starwars as the armasuisse Data Owner and Thomas Wikinger as its Data Steward, making both roles visible in the VBS modelling scope.',
@@ -140,7 +174,7 @@ export const DACA_FEATURE_RELEASE = {
           },
           {
             title: 'Connect logical and physical models',
-            description: 'Logical-first and physical-first remain separate entry points. Direct table derivation atomically creates the model and exact 1:1 mapping drafts, then opens the mapping workspace; further versioned representations are added there. The logical-to-physical edge reads “is represented by”.',
+            description: 'Logical-first and physical-first remain separate entry points. The logical-model page puts its title above tabs for status and classification, model characteristics, and logical entities and fields; unsaved edits survive tab changes. The compact mapping graph leaves the field editor visible at the right. Connections and logical fields can be removed. A missing physical counterpart remains saveable but creates a quality error and an owner task. The owner can accept it with a reason or assign investigation to a data steward; reconnecting or removing the field resolves it.',
           },
           {
             title: 'Govern domains and terminology together',
@@ -156,11 +190,11 @@ export const DACA_FEATURE_RELEASE = {
           },
           {
             title: 'Apply new versions without F5',
-            description: 'DaCa detects available versions, explains the change and reloads the application in a controlled way.',
+            description: 'DaCa automatically offers each ready build with its version transition, unsaved-content warning, release notes and feature-list link. Apply update reloads the app; Update later keeps the current work.',
           },
           {
             title: 'Explore the PoC through guided journeys',
-            description: 'The PoC guide explains ten repeatable workflows with roles, prerequisites, real screenshots and clearly stated limitations. Modeling journeys cover derivation, mapping, validation, drift resolution and domain-owner approval of an armasuisse model.',
+            description: 'The PoC guide explains thirteen repeatable workflows searchable by text and topic tags. Static documentation articles carry a category, tags and creation date, with images for the mapping inconsistency and owner decision workflow.',
           },
           {
             title: 'Find and understand data products',
@@ -204,24 +238,24 @@ export const DACA_FEATURE_RELEASE = {
     'control-plane': {
       de: {
         title: 'Was kann DaCa Control Plane?',
-        introduction: 'Die Control Plane hilft Betriebsverantwortlichen, die Zusammenarbeit zwischen Datenkatalogen sicher zu steuern.',
+        introduction: 'Die Control Plane zeigt Betriebsbeobachtungen zum zentralen DaCa und bewahrt Konfigurationen des früheren PoC-Prototyps auf.',
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
           {
             title: 'Neue Versionen ohne F5 übernehmen',
-            description: 'DaCa erkennt bereitstehende Versionen, zeigt den Wechsel verständlich an und lädt die Anwendung kontrolliert neu.',
+            description: 'DaCa öffnet für jeden bereitstehenden Build automatisch einen Dialog mit bisheriger und neuer Version, Warnung zu ungespeicherten Seiteninhalten, Neuerungen und Link zur Featureliste. «Update durchführen» lädt die Anwendung vollständig neu; «Update später durchführen» erhält die laufende Arbeit.',
           },
           {
-            title: 'Kataloge registrieren',
-            description: 'Erfassen Sie die beteiligten Kataloge und sehen Sie deren Verbindungs- und Betriebsstatus.',
+            title: 'Katalogeinträge beobachten',
+            description: 'Sehen Sie den Verbindungs- und Betriebsstatus der vorhandenen PoC-Einträge. DaCa verwaltet Metadaten zentral.',
           },
           {
-            title: 'Vertrauen gezielt festlegen',
-            description: 'Bestimmen Sie, welcher Katalog Informationen an welchen anderen Katalog weitergeben darf.',
+            title: 'Frühere Trust-Konfiguration einsehen',
+            description: 'Die vorhandenen Vertrauenseinträge dokumentieren Szenarien des früheren Prototyps.',
           },
           {
-            title: 'Synchronisation vorbereiten',
-            description: 'Halten Sie fest, welche Informationen ausgetauscht werden sollen, ohne ungewollt eine Übertragung auszulösen.',
+            title: 'PoC-Synchronisationseinträge einsehen',
+            description: 'Gespeicherte Absichten bleiben nachvollziehbar; es wird kein Kataloginhalt übertragen.',
           },
           {
             title: 'Änderungen nachvollziehen',
@@ -231,24 +265,24 @@ export const DACA_FEATURE_RELEASE = {
       },
       en: {
         title: 'What can DaCa Control Plane do?',
-        introduction: 'The Control Plane helps operations teams manage collaboration between data catalogs safely.',
+        introduction: 'The Control Plane shows operations observations for central DaCa and retains earlier PoC configuration records.',
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
           {
             title: 'Apply new versions without F5',
-            description: 'DaCa detects available versions, explains the change and reloads the application in a controlled way.',
+            description: 'DaCa automatically offers each ready build with its version transition, unsaved-content warning, release notes and feature-list link. Apply update reloads the app; Update later keeps the current work.',
           },
           {
-            title: 'Register catalogs',
-            description: 'Record participating catalogs and see their connection and operating status.',
+            title: 'Observe catalog records',
+            description: 'View connection and operating status for existing PoC records. DaCa manages metadata centrally.',
           },
           {
-            title: 'Define trust deliberately',
-            description: 'Decide which catalog may share information with which other catalog.',
+            title: 'Review earlier trust configuration',
+            description: 'Existing trust records document scenarios from the earlier prototype.',
           },
           {
-            title: 'Prepare synchronization',
-            description: 'Record what should be exchanged without accidentally starting a transfer.',
+            title: 'Review PoC synchronization records',
+            description: 'Stored intent remains traceable; no catalog content is transferred.',
           },
           {
             title: 'Track changes',

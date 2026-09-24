@@ -8,13 +8,13 @@
 The I14Y Public API has Concepts and themes but no Domain resource.  DaCa domains are governed
 subject areas, the existing glossary is locally governed business terminology, and I14Y Concepts
 are externally published reference definitions.  Labelling them as one resource would obscure
-ownership and synchronization state.
+ownership and publication state.
 
 ## Decision
 
 Rename the existing top-level navigation item to **Domäne und Terminology** while retaining the
 `/domains` compatibility route.  Present separate route-backed areas for DaCa domains, the DaCa
-glossary, synchronized I14Y Concepts, and I14Y/DCAT themes.  Add one top-level
+glossary, referenced I14Y Concepts, and I14Y/DCAT themes. Add one top-level
 **Datenmodelle** entry whose secondary navigation contains logical models, physical assets, and
 the mapping workspace.
 

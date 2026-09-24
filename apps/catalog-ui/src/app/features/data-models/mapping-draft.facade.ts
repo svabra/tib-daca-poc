@@ -214,6 +214,14 @@ export class MappingDraftFacade {
     if (this.selectedMappingId() === localId) this.selectedMappingId.set(saved.id);
   }
 
+  discardLocalMapping(id: string): void {
+    if (!id.startsWith('draft-mapping-')) return;
+    this.mappingsState.update((items) => items.filter((item) => item.id !== id));
+    this.dirtyIdsState.update((ids) => { const next = new Set(ids); next.delete(id); return next; });
+    this.selectedMappingId.set(null);
+    this.announcement.set('Lokaler Zuordnungsentwurf entfernt.');
+  }
+
   markValidation(mapping: AssetMapping): void {
     this.mappingsState.update((items) => items.map((item) => item.id === mapping.id ? mapping : item));
     this.selectedMappingId.set(mapping.id);

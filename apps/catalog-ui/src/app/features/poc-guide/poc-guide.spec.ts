@@ -8,10 +8,9 @@ import { POC_GUIDE_CAPABILITIES, POC_GUIDE_LIMITS, POC_JOURNEYS } from './poc-gu
 import { PocGuideConfigService } from './poc-guide-config.service';
 import { PocGuideDetailComponent } from './poc-guide-detail.component';
 import { PocGuideOverviewComponent } from './poc-guide-overview.component';
-import { DemoIdentityService } from '../../core/demo-identity.service';
 
 describe('PoC guide contract', () => {
-  it('defines ten complete, uniquely addressable journeys and twenty-nine screenshot contracts', () => {
+  it('defines thirteen complete, uniquely addressable journeys and twenty-nine screenshot contracts', () => {
     expect(POC_JOURNEYS.map((journey) => journey.id)).toEqual([
       'understand-and-use-product',
       'data-analysts-journey',
@@ -23,10 +22,17 @@ describe('PoC guide contract', () => {
       'domain-governance',
       'glossary-governance',
       'create-data-model',
+      'derive-logical-model',
+      'overview-access-responsibility',
+      'resolve-logical-mapping-inconsistency',
     ]);
-    expect(POC_JOURNEYS.map((journey) => journey.number)).toEqual(['01', '02', '03', '04', '05', '06', '07', '08', '09', '10']);
+    expect(POC_JOURNEYS.map((journey) => journey.number)).toEqual(['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13']);
     expect(POC_JOURNEYS[1].verification?.label).toBe('Durchgängig verifiziert');
-    expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(10);
+    expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(13);
+    expect(POC_JOURNEYS[9].title).toBe('Logisches Datenmodell erfassen');
+    expect(POC_JOURNEYS[9].steps.flatMap((step) => step.actions ?? []).some((action) => action.path?.startsWith('/physical-models'))).toBe(false);
+    expect(POC_JOURNEYS[10].steps.flatMap((step) => step.actions ?? []).some((action) => action.path?.includes('adf4a86e-7ab3-5035-b2cc-c8c907e79468'))).toBe(true);
+    expect(POC_JOURNEYS[11].steps.flatMap((step) => step.actions ?? []).some((action) => action.path === '/settings/role-changes')).toBe(true);
     const screenshots = POC_JOURNEYS.flatMap((journey) => journey.steps.flatMap((step) => step.screenshots ?? []));
     expect(screenshots.length).toBe(29);
     expect(screenshots.slice(0, 4).map((screenshot) => screenshot.src)).toEqual([
@@ -56,6 +62,8 @@ describe('PoC guide contract', () => {
       demoUserId: 'beat.stalder',
     }));
     for (const journey of POC_JOURNEYS) {
+      expect(journey.tags.length).toBeGreaterThan(0);
+      expect(new Set(journey.tags).size).toBe(journey.tags.length);
       expect(journey.roles.length).toBeGreaterThan(0);
       expect(journey.prerequisites.length).toBeGreaterThan(0);
       expect(journey.steps.length).toBeGreaterThanOrEqual(5);
@@ -80,15 +88,46 @@ describe('PoC guide contract', () => {
     fixture.detectChanges();
 
     const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector('h1')?.textContent).toContain('PoC Leitfaden');
+    expect(root.querySelector('h1')?.textContent).toContain('User Journeys');
     const journeyCards = root.querySelectorAll('[data-poc-guide-journey]');
-    expect(journeyCards.length).toBe(10);
+    expect(journeyCards.length).toBe(13);
     expect(journeyCards.item(0).getAttribute('data-poc-guide-journey')).toBe('understand-and-use-product');
     expect(journeyCards.item(9).getAttribute('data-poc-guide-journey')).toBe('create-data-model');
+    expect(journeyCards.item(10).getAttribute('data-poc-guide-journey')).toBe('derive-logical-model');
+    expect(journeyCards.item(11).getAttribute('data-poc-guide-journey')).toBe('overview-access-responsibility');
     expect(journeyCards.item(8).textContent).toContain('Glossarterm gemeinsam prüfen');
     expect(root.textContent).toContain('Das können Sie testen');
     expect(root.textContent).toContain('Das ist nicht Teil des PoC');
     expect(root.querySelector('a[href="/poc-simulation"]')).not.toBeNull();
+  });
+
+  it('filters DaCa journeys by search terms and tags', async () => {
+    await TestBed.configureTestingModule({
+      imports: [PocGuideOverviewComponent],
+      providers: [provideRouter([])],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(PocGuideOverviewComponent);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const search = root.querySelector<HTMLInputElement>('#poc-guide-query')!;
+    search.value = 'VIBDBU';
+    search.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect([...root.querySelectorAll('[data-poc-guide-journey]')].map((card) => card.getAttribute('data-poc-guide-journey'))).toContain('derive-logical-model');
+
+    search.value = '';
+    search.dispatchEvent(new Event('input'));
+    const roleTag = [...root.querySelectorAll<HTMLButtonElement>('.poc-guide-filters button')].find((button) => button.textContent?.trim() === 'Rollen')!;
+    roleTag.click();
+    fixture.detectChanges();
+    expect([...root.querySelectorAll('[data-poc-guide-journey]')].map((card) => card.getAttribute('data-poc-guide-journey'))).toEqual(['overview-access-responsibility']);
+    expect(root.querySelector('[data-poc-guide-journey]')?.textContent).toContain('Rollen');
+
+    search.value = 'kein Treffer';
+    search.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(root.querySelectorAll('[data-poc-guide-journey]').length).toBe(0);
+    expect(root.querySelector('.poc-guide-empty')).not.toBeNull();
   });
 });
 
@@ -134,20 +173,37 @@ describe('PoC guide detail', () => {
             : target === 'daaif-source-explorer' ? `${daaifUiUrl}/catalog/sources/bit-shared-pg/explorer` : null;
       },
     };
-    const identity = { select: vi.fn() };
     await TestBed.configureTestingModule({
       imports: [PocGuideDetailComponent],
       providers: [
         provideRouter([]),
         { provide: ActivatedRoute, useValue: { paramMap: of(paramMap), snapshot: { paramMap } } },
         { provide: PocGuideConfigService, useValue: guideConfig },
-        { provide: DemoIdentityService, useValue: identity },
       ],
     }).compileComponents();
     const fixture = TestBed.createComponent(PocGuideDetailComponent);
     fixture.detectChanges();
-    return { fixture, identity };
+    return { fixture };
   }
+
+  it('describes exactly one manually captured logical model without a physical source', async () => {
+    const manual = (await render('create-data-model')).fixture.nativeElement as HTMLElement;
+    expect(manual.querySelector('h1')?.textContent).toBe('Logisches Datenmodell erfassen');
+    expect(manual.querySelector('.poc-guide-detail-tags')?.textContent).toContain('Modellierung');
+    expect(manual.querySelectorAll('[data-poc-guide-step]').length).toBe(7);
+    expect(manual.querySelector('a[href*="/physical-models"]')).toBeNull();
+    expect(manual.textContent).toContain('ohne physische Zuordnung');
+  });
+
+  it('links VIBDBU derivation with a full-page persona sign-in', async () => {
+    const derived = (await render('derive-logical-model')).fixture.nativeElement as HTMLElement;
+    expect(derived.querySelector('h1')?.textContent).toBe('Logisches Modell von physischer Repräsentation ableiten');
+    expect(derived.querySelectorAll('[data-poc-guide-step]').length).toBe(5);
+    const sourceLink = derived.querySelector<HTMLAnchorElement>('.poc-guide-actions a[href*="/physical-models/"]');
+    expect(sourceLink).not.toBeNull();
+    expect(new URL(sourceLink!.href).searchParams.get('demoUser')).toBe('christian.man');
+    expect(derived.textContent).toContain('47');
+  });
 
   it('renders roles, checkpoints, safe external links and accessible screenshots', async () => {
     const { fixture } = await render('data-analysts-journey');
@@ -187,7 +243,7 @@ describe('PoC guide detail', () => {
   });
 
   it('renders the read-only consumer journey with prefilled search and anchored usage actions', async () => {
-    const { fixture, identity } = await render('understand-and-use-product');
+    const { fixture } = await render('understand-and-use-product');
     const root = fixture.nativeElement as HTMLElement;
 
     expect(root.querySelector('h1')?.textContent).toContain('Datenprodukt finden, verstehen und nutzen');
@@ -218,12 +274,11 @@ describe('PoC guide detail', () => {
       q: 'Gewerbesteuer',
       demoUser: 'beat.stalder',
     });
-    fixture.componentInstance.selectDemoUser(searchAction!);
-    expect(identity.select).toHaveBeenCalledWith('beat.stalder');
+    expect(fixture.componentInstance.internalHref(searchAction!)).toBe('/search?q=Gewerbesteuer&demoUser=beat.stalder');
   });
 
   it('renders the read-only change-history journey for owner, approver and consumer', async () => {
-    const { fixture, identity } = await render('change-history');
+    const { fixture } = await render('change-history');
     const root = fixture.nativeElement as HTMLElement;
 
     expect(root.querySelector('h1')?.textContent).toContain('Änderungen und Freigaben nachvollziehen');
@@ -237,16 +292,16 @@ describe('PoC guide detail', () => {
     expect(root.querySelector('a[href*="/history?demoUser=beat.stalder"]')).not.toBeNull();
     expect(root.textContent).toContain('Lineage erklärt Quelle und Verarbeitung');
 
-    fixture.componentInstance.selectDemoUser({
+    expect(fixture.componentInstance.internalHref({
       label: 'Änderungsverlauf als Beat öffnen',
       target: 'internal',
+      path: '/history',
       demoUserId: 'beat.stalder',
-    });
-    expect(identity.select).toHaveBeenCalledWith('beat.stalder');
+    })).toBe('/history?demoUser=beat.stalder');
   });
 
   it('renders the access-renewal journey with stable entry routes and dynamic-ID hand-offs', async () => {
-    const { fixture, identity } = await render('access-renewal');
+    const { fixture } = await render('access-renewal');
     const root = fixture.nativeElement as HTMLElement;
 
     expect(root.querySelector('h1')?.textContent).toContain('Zugriff vor Ablauf verlängern');
@@ -286,8 +341,7 @@ describe('PoC guide detail', () => {
 
     const thomasAction = POC_JOURNEYS[6].steps[4].actions?.[0];
     expect(thomasAction).toBeDefined();
-    fixture.componentInstance.selectDemoUser(thomasAction!);
-    expect(identity.select).toHaveBeenCalledWith('thomas.kriegli');
+    expect(fixture.componentInstance.internalHref(thomasAction!)).toContain('demoUser=thomas.kriegli');
   });
 
   it('shows a stable not-found state for unknown journey IDs', async () => {

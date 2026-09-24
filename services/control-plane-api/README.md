@@ -1,8 +1,8 @@
 # BIT DaCa Control Plane API
 
-FastAPI service for registering Distributed Data Catalog instances and declaring
-their desired trust and synchronization topology. This service stores and validates
-configuration; it **does not synchronize any catalog resources**.
+FastAPI service for administrative observations of the central DaCa catalog. The
+existing instance, trust and synchronization-intent endpoints retain historical PoC
+configuration; this service **does not synchronize catalog resources**.
 
 ## Responsibilities
 
@@ -20,7 +20,7 @@ configuration; it **does not synchronize any catalog resources**.
 - Record append-only audit and deployment observations.
 
 Only HTTP and PostgreSQL wire protocols are used. There is no GraphQL, gRPC,
-message bus, WebSocket, or federation data transfer implementation.
+message bus, WebSocket, or catalog-resource transfer implementation.
 
 ## Local development
 

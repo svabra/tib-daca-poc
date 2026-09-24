@@ -360,6 +360,10 @@ async function logicalFirstFlow() {
     "[...document.querySelectorAll('.field-list select[formcontrolname=\"entityBusinessObjectVersionId\"], .field-list select[formcontrolname=\"businessObjectVersionId\"]')].length === 2 && [...document.querySelectorAll('.field-list select[formcontrolname=\"entityBusinessObjectVersionId\"], .field-list select[formcontrolname=\"businessObjectVersionId\"]')].every((select) => [...select.options].some((option) => option.value))",
     'duplicate-identifier business objects did not finish loading',
   );
+  await waitFor(
+    `Array.from(document.querySelector('select[formcontrolname="dataDomainId"]')?.options ?? []).some((option) => option.value === ${JSON.stringify(reference.dataDomainId)})`,
+    'duplicate-identifier domain options did not finish loading',
+  );
   await setControls({
     'input[formcontrolname="titleDe"]': `Duplicate ID ${Date.now()}`,
     'textarea[formcontrolname="descriptionDe"]': 'Browser test for a structured duplicate identifier error.',
@@ -661,6 +665,10 @@ async function physicalFirstFlow() {
   }), 200, 'reset the single physical-first fixture instance to baseline');
 
   await navigate('/models', 'christian.man');
+  await waitFor(
+    "[...document.querySelectorAll('.models-actions button')].some((button) => button.textContent.includes('Neues logisches Modell') && !button.disabled)",
+    'model creation action did not receive the active modelling role',
+  );
   await clickText('.models-actions button', 'Neues logisches Modell');
   await waitFor("document.querySelector('.creation-dialog[open]') !== null", 'model creation chooser did not open');
   await clickText('.creation-card', 'Aus bestehender Datenquelle ableiten');
@@ -929,6 +937,10 @@ async function existingToExistingFlow(physical) {
   invariant(focused, 'keyboard-only matrix edit action could not receive focus');
   await pressKey('Enter', 'Enter', 13);
   await waitFor("document.querySelector('.mapping-dialog[open]') !== null", 'Enter did not open the mapping dialog');
+  await waitFor(
+    "[...document.querySelectorAll('.mapping-dialog select[formcontrolname=\"physicalColumnIds\"] option')].some((option) => option.textContent.includes('logistics.vehicle_inventory.designation_de'))",
+    'Current snapshot replacement column did not load in the dialog',
+  );
   const targetIndex = await evaluate(`(() => {
     const select = document.querySelector('.mapping-dialog select[formcontrolname="physicalColumnIds"]');
     const options = [...select.options];
@@ -1038,6 +1050,12 @@ try {
   const attached = await cdp.call('Target.attachToTarget', { targetId: target.targetId, flatten: true });
   sessionId = attached.sessionId;
   await cdp.call('Page.enable', {}, sessionId);
+  await cdp.call('Page.addScriptToEvaluateOnNewDocument', {
+    source: `try {
+      const user = new URL(location.href).searchParams.get('demoUser');
+      if (user) localStorage.setItem('daca.preference.' + user + '.language', 'de');
+    } catch {}`,
+  }, sessionId);
   await cdp.call('Runtime.enable', {}, sessionId);
   await cdp.call('Network.enable', {}, sessionId);
   await cdp.call('Network.setCacheDisabled', { cacheDisabled: true }, sessionId);

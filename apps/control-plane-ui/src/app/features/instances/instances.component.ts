@@ -11,10 +11,10 @@ import { CatalogInstance } from '../../core/control-plane.models';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="daca-page-heading">
-      <div><p class="daca-eyebrow">Control-plane inventory</p><h1>Catalog instances</h1><p>Registered autonomous catalogs, declared capabilities and observed operational state.</p></div>
+      <div><p class="daca-eyebrow">Historical PoC inventory</p><h1>Catalog records</h1><p>Earlier instance records, declared capabilities and observed operational state. DaCa is operated as one central catalog.</p></div>
       <button class="daca-button" type="button" disabled title="Registration API is available; creation is intentionally disabled in preview">Register catalog</button>
     </section>
-    <p class="daca-alert">Registration records endpoint and capability declarations only. Data and credentials remain with each catalog owner.</p>
+    <p class="daca-alert">These records describe an earlier PoC scenario. The central DaCa catalog is the authoritative metadata store.</p>
 
     <section class="instance-grid" aria-label="Registered catalog instances">
       @for (catalog of api.catalogs(); track catalog.id) {

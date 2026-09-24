@@ -2,10 +2,10 @@
 
 ## Mission
 
-BIT DaCa (Distributed Data Catalog) is a federation-ready catalog ecosystem. A catalog is
-usable on its own and owns metadata about data products, endpoint descriptions, lineage,
-provenance, and access policies. The control plane observes and configures relationships; it
-must never become a runtime dependency for a standalone catalog.
+BIT DaCa (Data Catalog) is the central data catalog of the BIT data platform. It owns metadata
+about data products, endpoint descriptions, lineage, provenance, and access policies. Catalog
+metadata and governance have one central source of truth. The control-plane prototype records
+administrative observations; it is outside the catalog authorization request path.
 
 ## Implemented capabilities
 
@@ -14,7 +14,8 @@ must never become a runtime dependency for a standalone catalog.
 - Display product lineage and append-only provenance/audit history.
 - Author a constrained PBAC policy and generate Rego for a local OPA PDP.
 - Enforce HTTP access at a FastAPI PEP and PostgreSQL access with ACLs plus forced RLS.
-- Register catalog instances and record directed trust grants and desired sync configurations.
+- Record catalog-instance, trust and sync-intent fixtures in the existing control-plane prototype;
+  these records are not part of the central catalog's operating model.
 - Stream health/configuration observations over HTTP Server-Sent Events.
 - Demonstrate ESTV access where only `kanton-st-gallen` may read the synthetic product.
 
@@ -24,15 +25,12 @@ HTTP is used for REST, SSE, OPA decisions, and OPA bundle distribution. PostgreS
 is the only non-HTTP protocol. Do not add GraphQL, gRPC, Kafka, WebSockets, S3 data endpoints, or
 another product-delivery protocol without an explicit architecture decision.
 
-## Future federation capability (not implemented)
+## Central catalog boundary
 
-Catalogs may eventually exchange metadata, lineage, provenance, endpoint descriptions, and
-access-policy settings. Future resources must retain a stable `urn:daca:*` URI,
-`originCatalogId`, monotonic revision, content hash, and tombstone/retirement information.
-Synchronization must require directed trust, declare resource scopes, preserve origin ownership,
-be idempotent, expose desired/observed revisions, and define conflict handling. The POC records
-`origin-wins` as its intended default but sends no federation traffic. Policy synchronization is
-opt-in and disabled by default because it carries a higher trust requirement than metadata.
+DaCa maintains one authoritative catalog. Stable `urn:daca:*` identifiers, revisions, content
+hashes and retirement markers support local versioning and traceability. Existing control-plane
+trust and synchronization records are historical PoC fixtures; no catalog-to-catalog traffic is
+part of the product. Product access still follows the central catalog's published policies.
 
 ## Security invariants
 
@@ -54,8 +52,8 @@ opt-in and disabled by default because it carries a higher trust requirement tha
 
 - `apps/catalog-ui`: catalog Angular PWA.
 - `apps/control-plane-ui`: control-plane Angular PWA.
-- `services/catalog-api`: standalone catalog/PAP API.
-- `services/control-plane-api`: catalog relationship and health API.
+- `services/catalog-api`: central catalog/PAP API.
+- `services/control-plane-api`: administrative observation and historical PoC configuration API.
 - `services/sample-data-product`: ESTV sample product and HTTP PEP.
 - `packages/design-system`: shared federal CI tokens/assets.
 - `infra`: PostgreSQL and OPA local runtime configuration.

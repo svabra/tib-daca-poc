@@ -1,6 +1,6 @@
 # Control-plane data model
 
-The optional control plane observes catalogs and records desired federation configuration without becoming their runtime dependency.
+The administrative prototype retains historical PoC configuration and health observations outside the central catalog authorization path.
 
 **Storage:** PostgreSQL (`daca_control_plane`).
 
@@ -23,7 +23,7 @@ The optional control plane observes catalogs and records desired federation conf
 
 - `catalog_instances.capabilities` and all resource/owner/domain/product filters are string arrays.
 - `audit_events.details` is an extensible metadata object and must not contain secrets or protected payloads.
-- Sync configuration is desired state only: no federation traffic is implemented in this PoC.
+- Historical sync-intent configuration is stored only; no catalog resources are transferred.
 
 ## Entity relationships
 
@@ -143,7 +143,7 @@ Constraints and indexes:
 
 ### `catalog_instances`
 
-Registered standalone catalogs and their desired/observed state.
+Historical PoC instance records and their desired/observed state.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|

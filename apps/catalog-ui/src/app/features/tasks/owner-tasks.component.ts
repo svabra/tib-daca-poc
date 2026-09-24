@@ -5,6 +5,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-daca/design-system';
 import { finalize } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
+import { CatalogI18nService } from '../../core/catalog-i18n.service';
 import { AccessRenewalContext, StoredAccessRequest } from '../../core/catalog.models';
 import { SourceAccessRequestsComponent } from './source-access-requests.component';
 
@@ -17,16 +18,16 @@ import { SourceAccessRequestsComponent } from './source-access-requests.componen
     <section class="daca-page-heading owner-tasks-heading">
       <div>
         <p class="daca-eyebrow">Data Owner Workspace</p>
-        <h1>Aufgaben</h1>
-        <p>Hier finden Sie Zugriffsanfragen und weitere Aufgaben zu Ihren Datenprodukten.</p>
+        <h1>{{ i18n.t('tasks') }}</h1>
+        <p>{{ i18n.t('tasksIntro') }}</p>
       </div>
       @if (taskStatusUnknown()) {
-        <daca-status-badge tone="red">Aufgabenstatus unbekannt</daca-status-badge>
+        <daca-status-badge tone="red">{{ i18n.t('taskStatusUnknown') }}</daca-status-badge>
       } @else if (taskStatusLoading()) {
-        <daca-status-badge tone="neutral">Aufgabenstatus wird geladen</daca-status-badge>
+        <daca-status-badge tone="neutral">{{ i18n.t('taskStatusLoading') }}</daca-status-badge>
       } @else {
         <daca-status-badge [tone]="openTaskCount() ? 'orange' : 'green'">
-          {{ openTaskCount() }} {{ openTaskCount() === 1 ? 'offene Aufgabe' : 'offene Aufgaben' }}
+          {{ openTaskCount() }} {{ i18n.t(openTaskCount() === 1 ? 'openTasksSingular' : 'openTasksPlural') }}
         </daca-status-badge>
       }
     </section>
@@ -35,12 +36,12 @@ import { SourceAccessRequestsComponent } from './source-access-requests.componen
 
     @if (api.workflowTasksLoading()) {
       <section class="owner-workflow-section" aria-labelledby="workflow-title">
-        <div class="owner-tasks-section-heading"><div><p class="daca-eyebrow"><daca-glossary-term term="DAAIF" /> → <daca-glossary-term term="DaCa" /></p><h2 id="workflow-title">Qualität, Governance und Alerts</h2></div><span>–</span></div>
-        <div class="daca-card owner-task-empty" aria-live="polite">Weitere Aufgaben werden geladen…</div>
+        <div class="owner-tasks-section-heading"><div><p class="daca-eyebrow"><daca-glossary-term term="DAAIF" /> → <daca-glossary-term term="DaCa" /></p><h2 id="workflow-title">{{ i18n.t('workflowQuality') }}</h2></div><span>–</span></div>
+        <div class="daca-card owner-task-empty" aria-live="polite">{{ i18n.t('loadingMoreTasks') }}</div>
       </section>
     } @else if (api.workflowTasksError(); as taskError) {
       <section class="owner-workflow-section" aria-labelledby="workflow-title">
-        <div class="owner-tasks-section-heading"><div><p class="daca-eyebrow"><daca-glossary-term term="DAAIF" /> → <daca-glossary-term term="DaCa" /></p><h2 id="workflow-title">Qualität, Governance und Alerts</h2></div><span>–</span></div>
+        <div class="owner-tasks-section-heading"><div><p class="daca-eyebrow"><daca-glossary-term term="DAAIF" /> → <daca-glossary-term term="DaCa" /></p><h2 id="workflow-title">{{ i18n.t('workflowQuality') }}</h2></div><span>–</span></div>
         <div class="daca-card owner-task-empty is-error" role="alert">
           <strong>Status unbekannt</strong><p>{{ taskError }}</p>
           <button class="daca-button is-secondary" data-testid="retry-workflow-tasks" type="button" (click)="api.refreshWorkflowTasks()">Erneut laden</button>
@@ -50,7 +51,7 @@ import { SourceAccessRequestsComponent } from './source-access-requests.componen
       @for (group of workflowGroups(); track group.kind) {
         <section class="owner-workflow-section" [attr.aria-labelledby]="'workflow-'+group.kind">
           <div class="owner-tasks-section-heading"><div><p class="daca-eyebrow">{{ group.eyebrow }}</p><h2 [id]="'workflow-'+group.kind">{{ group.title }}</h2></div><span>{{ group.tasks.length }}</span></div>
-          @if(group.tasks.length){<div class="owner-task-list">@for (task of group.tasks; track task.id) {<article class="daca-card owner-task-card" [class.is-simulation-alert]="task.taskType.startsWith('simulation_')"><div class="owner-task-priority" aria-hidden="true"></div><div class="owner-task-main"><div><span>{{ taskLabel(task.taskType) }}</span><time>{{ task.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</time></div><h3>{{ task.title }}</h3><p>{{ task.detail }}</p></div>@if(group.kind === 'information'){<div class="owner-task-actions"><a class="daca-button is-secondary" [routerLink]="taskRoute(task)" [queryParams]="taskQueryParams(task)">Kontext öffnen</a><button class="daca-button is-secondary" type="button" (click)="acknowledge(task.id)">Zur Kenntnis nehmen</button></div>}@else{<a class="daca-button" [routerLink]="taskRoute(task)" [queryParams]="taskQueryParams(task)">{{ group.kind === 'collaboration' ? 'Mitarbeit öffnen' : 'Aufgabe öffnen' }}</a>}</article>}</div>}@else{<div class="daca-card owner-task-empty">Keine offenen Einträge.</div>}
+          @if(group.tasks.length){<div class="owner-task-list">@for (task of group.tasks; track task.id) {<article class="daca-card owner-task-card" [class.is-simulation-alert]="task.taskType.startsWith('simulation_')"><div class="owner-task-priority" aria-hidden="true"></div><div class="owner-task-main"><div><span>{{ taskLabel(task.taskType) }}</span><time>{{ task.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</time></div><h3>{{ task.title }}</h3><p>{{ task.detail }}</p></div>@if(group.kind === 'information'){<div class="owner-task-actions"><a class="daca-button is-secondary" [routerLink]="taskRoute(task)" [queryParams]="taskQueryParams(task)">Kontext öffnen</a><button class="daca-button is-secondary" type="button" (click)="acknowledge(task.id)">Zur Kenntnis nehmen</button></div>}@else{<a class="daca-button" [routerLink]="taskRoute(task)" [queryParams]="taskQueryParams(task)">{{ group.kind === 'collaboration' ? 'Mitarbeit öffnen' : 'Aufgabe öffnen' }}</a>}</article>}</div>}@else{<div class="daca-card owner-task-empty">{{ i18n.t('noOpenEntries') }}</div>}
         </section>
       }
     }
@@ -65,13 +66,13 @@ import { SourceAccessRequestsComponent } from './source-access-requests.componen
     <div class="owner-tasks-layout">
       <section aria-labelledby="access-task-title">
         <div class="owner-tasks-section-heading">
-          <div><p class="daca-eyebrow">Entscheid nötig</p><h2 id="access-task-title">Zugriffsanfragen</h2></div>
+          <div><p class="daca-eyebrow">Entscheid nötig</p><h2 id="access-task-title">{{ i18n.t('accessRequests') }}</h2></div>
           <span>{{ api.ownerAccessRequestLoading() || api.ownerAccessRequestError() ? '–' : requests().length }}</span>
         </div>
         @if (decisionError()) { <p class="daca-alert is-error" role="alert">{{ decisionError() }}</p> }
         @if (decisionNotice()) { <p class="daca-alert" role="status">{{ decisionNotice() }}</p> }
         @if (api.ownerAccessRequestLoading()) {
-          <div class="daca-card owner-task-empty" aria-live="polite">Zugriffsanfragen werden geladen…</div>
+          <div class="daca-card owner-task-empty" aria-live="polite">{{ i18n.t('loadingAccessRequests') }}</div>
         } @else if (api.ownerAccessRequestError(); as inboxError) {
           <div class="daca-card owner-task-empty is-error" role="alert">
             <strong>Status unbekannt</strong><p>{{ inboxError }}</p>
@@ -145,15 +146,15 @@ import { SourceAccessRequestsComponent } from './source-access-requests.componen
             }
           </div>
         } @else {
-          <div class="daca-card owner-task-empty">Keine offenen Zugriffsanfragen für diese Auswahl.</div>
+          <div class="daca-card owner-task-empty">{{ i18n.t('noOpenAccessRequests') }}</div>
         }
       </section>
 
       <aside class="daca-card owner-task-notices" aria-labelledby="owner-notices-title">
-        <div class="daca-card-header"><div><p class="daca-eyebrow">Zur Kenntnis</p><h2 id="owner-notices-title">Weitere Aufgaben</h2></div></div>
+        <div class="daca-card-header"><div><p class="daca-eyebrow">{{ i18n.t('forInformation') }}</p><h2 id="owner-notices-title">{{ i18n.t('furtherTasks') }}</h2></div></div>
         <div class="daca-card-body">
-          <article><strong>Neue Datenkonsumenten</strong><p>Änderungen bei aktiven Freigaben erscheinen künftig hier.</p></article>
-          <article><strong>Auslaufende Freigaben</strong><p>Vor Ablauf einer Berechtigung wird eine Aufgabe erzeugt.</p></article>
+          <article><strong>{{ i18n.t('newConsumers') }}</strong><p>{{ i18n.t('newConsumersText') }}</p></article>
+          <article><strong>{{ i18n.t('expiringGrants') }}</strong><p>{{ i18n.t('expiringGrantsText') }}</p></article>
         </div>
       </aside>
     </div>
@@ -161,6 +162,7 @@ import { SourceAccessRequestsComponent } from './source-access-requests.componen
 })
 export class OwnerTasksComponent {
   readonly api = inject(CatalogApiService);
+  readonly i18n = inject(CatalogI18nService);
   private readonly route = inject(ActivatedRoute);
   private readonly queryParamMap = toSignal(this.route.queryParamMap, { initialValue: this.route.snapshot.queryParamMap });
   readonly filteredProductId = computed(() => this.queryParamMap().get('product'));
@@ -186,6 +188,7 @@ export class OwnerTasksComponent {
 
   constructor() {
     this.api.refreshSourceAccessRequestInbox();
+    this.api.refreshWorkflowTasks();
   }
 
   productTitle(productId: string): string {
@@ -244,6 +247,8 @@ export class OwnerTasksComponent {
       glossary_term_decision: 'Glossar-Entscheid',
       logical_model_review: 'Datenmodell-Prüfung',
       logical_model_changes_requested: 'Datenmodell überarbeiten',
+      logical_mapping_inconsistency: 'Inkonsistenzfehler prüfen',
+      logical_mapping_investigation: 'Physische Zuordnung prüfen',
     } as Record<string, string>)[value] ?? 'Aufgabe';
   }
 
@@ -251,7 +256,8 @@ export class OwnerTasksComponent {
     return value === 'collaboration' ? 'Mitarbeit' : value === 'information' ? 'Zur Kenntnis' : 'Entscheid nötig';
   }
 
-  taskRoute(task: { taskType: string; dataProductId: string | null; governanceSubmissionId?: string | null; domainChangeRequestId?: string | null; glossaryTermProposalId?: string | null; logicalModelReviewId?: string | null }): unknown[] {
+  taskRoute(task: { taskType: string; dataProductId: string | null; governanceSubmissionId?: string | null; domainChangeRequestId?: string | null; glossaryTermProposalId?: string | null; logicalModelReviewId?: string | null; logicalModelId?: string | null }): unknown[] {
+    if (task.taskType.startsWith('logical_mapping_') && task.logicalModelId) return ['/models', task.logicalModelId, 'mappings'];
     if (task.taskType === 'logical_model_review' && task.logicalModelReviewId) return ['/model-reviews', task.logicalModelReviewId];
     if (task.taskType === 'logical_model_changes_requested' && task.logicalModelReviewId) return ['/model-reviews', task.logicalModelReviewId];
     if (task.taskType.startsWith('glossary_term_') && task.glossaryTermProposalId) return ['/glossary/proposals', task.glossaryTermProposalId, 'review'];

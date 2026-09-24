@@ -36,6 +36,7 @@ export interface PocJourney {
   readonly number: string;
   readonly title: string;
   readonly summary: string;
+  readonly tags: readonly string[];
   readonly duration: string;
   readonly difficulty: 'Einfach' | 'Mittel' | 'Fortgeschritten';
   readonly systems: readonly string[];

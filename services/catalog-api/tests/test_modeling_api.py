@@ -9,6 +9,7 @@ from daca_catalog.modeling_seed import (
     PERSONNEL_DOMAIN_ID,
     PERSONNEL_MODEL_ID,
     PHYSICAL_SOURCE_ID,
+    VIBDBU_PHYSICAL_SOURCE_ID,
     seed_modeling_catalog,
 )
 from daca_catalog.models import (
@@ -31,6 +32,103 @@ def _headers(actor: str, etag: str | None = None) -> dict[str, str]:
     if etag is not None:
         headers["If-Match"] = etag
     return headers
+
+
+def test_synthetic_real_estate_source_is_readable_across_modeling_scopes(client, session_factory) -> None:
+    with session_factory() as session:
+        seed_modeling_catalog(session)
+
+    sources = client.get("/api/v1/physical-sources", headers=_headers("christian.spider"))
+    assert sources.status_code == 200
+    matching = [item for item in sources.json()["items"] if item["id"] == str(VIBDBU_PHYSICAL_SOURCE_ID)]
+    assert len(matching) == 1
+    assert matching[0]["name"] == "SAP VIBDBU Gebäudebestand"
+
+    snapshots = client.get(
+        f"/api/v1/physical-snapshots?sourceId={VIBDBU_PHYSICAL_SOURCE_ID}",
+        headers=_headers("christian.spider"),
+    )
+    assert snapshots.status_code == 200
+    assert snapshots.json()["total"] >= 1
+    snapshot_id = snapshots.json()["items"][0]["id"]
+    assert client.get(
+        f"/api/v1/physical-snapshots/{snapshot_id}", headers=_headers("christian.spider")
+    ).status_code == 200
+    assert client.post(
+        f"/api/v1/physical-sources/{VIBDBU_PHYSICAL_SOURCE_ID}/imports",
+        json={"fixtureVariant": "baseline"}, headers=_headers("sibilla.micheli", '"1"'),
+    ).status_code == 403
+
+
+def test_defence_editors_can_derive_real_estate_models_with_scoped_roles(
+    client, session_factory
+) -> None:
+    with session_factory() as session:
+        seed_modeling_catalog(session)
+        seed_modeling_catalog(session)
+        table_id = session.scalar(
+            select(PhysicalTable.id)
+            .join(PhysicalSchema, PhysicalSchema.id == PhysicalTable.physical_schema_id)
+            .join(PhysicalDatabase, PhysicalDatabase.id == PhysicalSchema.physical_database_id)
+            .join(PhysicalSchemaSnapshot, PhysicalSchemaSnapshot.id == PhysicalDatabase.snapshot_id)
+            .where(
+                PhysicalSchemaSnapshot.source_id == VIBDBU_PHYSICAL_SOURCE_ID,
+                PhysicalTable.name == "VIBDBU",
+            )
+        )
+    assert table_id is not None
+    personas = client.get("/api/v1/modeling/personas").json()
+    for actor in ("christian.spider", "christian.man"):
+        assert len([
+            item for item in personas
+            if item["userId"] == actor
+            and item["organizationId"] == "vbs-armasuisse-immobilien"
+            and item["role"] == "data_steward"
+            and item["primaryOrganizationId"] == MODELING_ORGANIZATION_ID
+        ]) == 1
+        response = client.post(
+            f"/api/v1/physical-tables/{table_id}/quick-derive-logical-model",
+            json={}, headers=_headers(actor),
+        )
+        assert response.status_code == 201, response.text
+        assert response.json()["organizationId"] == "vbs-armasuisse-immobilien"
+    denied = client.post(
+        f"/api/v1/physical-tables/{table_id}/quick-derive-logical-model",
+        json={}, headers=_headers("sibilla.micheli"),
+    )
+    assert denied.status_code == 403
+
+
+def test_personal_preferences_are_validated_and_scoped_to_demo_user(client, session_factory) -> None:
+    with session_factory() as session:
+        seed_modeling_catalog(session)
+    path = "/api/v1/me/preferences/language"
+    saved = client.put(path, json={"value": "fr"}, headers=_headers("christian.spider"))
+    assert saved.status_code == 200
+    assert client.get(path, headers=_headers("christian.spider")).json() == {"value": "fr"}
+    assert client.get(path, headers=_headers("cinthya.thor")).json() == {"value": "de"}
+    assert client.put(path, json={"value": "invalid"}, headers=_headers("christian.spider")).status_code == 422
+
+
+def test_local_preview_session_uses_revocable_httponly_cookie(client, session_factory) -> None:
+    with session_factory() as session:
+        seed_modeling_catalog(session)
+    assert client.get("/api/v1/session").status_code == 401
+    login = client.post("/api/v1/session/login", json={"userId": "christian.spider"})
+    assert login.status_code == 200
+    assert login.json() == {"userId": "christian.spider"}
+    assert "httponly" in login.headers["set-cookie"].lower()
+    assert client.get("/api/v1/session").json() == {"userId": "christian.spider"}
+    assert client.put(
+        "/api/v1/me/preferences/theme", json={"value": "dark"},
+        headers=_headers("cinthya.thor"),
+    ).status_code == 200
+    assert client.get("/api/v1/me/preferences/theme").json() == {"value": "dark"}
+    assert client.post("/api/v1/session/logout").status_code == 200
+    assert client.get("/api/v1/session").status_code == 401
+    assert client.get(
+        "/api/v1/me/preferences/theme", headers=_headers("cinthya.thor")
+    ).json() == {"value": "light"}
 
 
 def _vehicle_table_id(session_factory) -> uuid.UUID:

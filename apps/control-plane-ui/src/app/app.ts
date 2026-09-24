@@ -15,9 +15,9 @@ import { DacaNavigationItem, FederalShellComponent } from '@bit-daca/design-syst
 })
 export class App {
   readonly navigation: readonly DacaNavigationItem[] = [
-    { label: 'Security & federation', path: '/federation' },
-    { label: 'Catalog instances', path: '/instances' },
-    { label: 'Directed trust', path: '/trust' },
-    { label: 'Sync intent', path: '/sync' },
+    { label: 'Central catalog status', path: '/federation' },
+    { label: 'Catalog records', path: '/instances' },
+    { label: 'PoC trust records', path: '/trust' },
+    { label: 'PoC sync records', path: '/sync' },
   ];
 }

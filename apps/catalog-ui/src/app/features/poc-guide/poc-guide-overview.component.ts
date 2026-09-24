@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { POC_GUIDE_CAPABILITIES, POC_GUIDE_LIMITS, POC_GUIDE_STATUS_LABELS, POC_JOURNEYS } from './poc-guide.data';
 
@@ -10,8 +10,8 @@ import { POC_GUIDE_CAPABILITIES, POC_GUIDE_LIMITS, POC_GUIDE_STATUS_LABELS, POC_
   template: `
     <section class="daca-page-heading poc-guide-heading" data-poc-guide-overview>
       <div>
-        <p class="daca-eyebrow">Proof of Concept · Schritt für Schritt</p>
-        <h1>PoC Leitfaden</h1>
+        <p class="daca-eyebrow">Dokumentation Datenkatalog · Schritt für Schritt</p>
+        <h1>User Journeys</h1>
         <p>Erleben Sie DaCa aus Sicht von Data Analyst, Data Consumer, Data Owner und prüfender Fachrolle. Alle Anleitungen arbeiten ausschliesslich mit synthetischen Daten.</p>
       </div>
       <span class="poc-guide-count">{{ journeys.length }} Journeys</span>
@@ -30,14 +30,27 @@ import { POC_GUIDE_CAPABILITIES, POC_GUIDE_LIMITS, POC_GUIDE_STATUS_LABELS, POC_
       </div>
     </section>
 
+    <section class="poc-guide-search daca-card" aria-label="Journeys durchsuchen">
+      <label for="poc-guide-query">Journeys durchsuchen</label>
+      <input id="poc-guide-query" type="search" [value]="query()" (input)="query.set($any($event.target).value)" placeholder="Titel, Beschreibung, Rolle oder Tag suchen">
+      <div class="poc-guide-filters" role="group" aria-label="Nach Tag filtern">
+        <button type="button" [class.is-active]="selectedTag() === null" [attr.aria-pressed]="selectedTag() === null" (click)="selectedTag.set(null)">Alle</button>
+        @for (tag of tags; track tag) {
+          <button type="button" [class.is-active]="selectedTag() === tag" [attr.aria-pressed]="selectedTag() === tag" (click)="toggleTag(tag)">{{ tag }}</button>
+        }
+      </div>
+      <p class="poc-guide-result-count" role="status">{{ filteredJourneys().length }} von {{ journeys.length }} Journeys</p>
+    </section>
+
     <div class="poc-guide-grid" aria-label="Verfügbare Customer Journeys">
-      @for (journey of journeys; track journey.id) {
-        <a class="daca-card poc-guide-card" [routerLink]="['/poc-guide', journey.id]" [attr.data-poc-guide-journey]="journey.id">
+      @for (journey of filteredJourneys(); track journey.id) {
+        <a class="daca-card poc-guide-card" [routerLink]="['/documentation/journeys', journey.id]" [attr.data-poc-guide-journey]="journey.id">
           <span class="poc-guide-card-number">{{ journey.number }}</span>
           <div class="poc-guide-card-main">
             <p>{{ journey.systems.join(' · ') }}</p>
             <h2>{{ journey.title }}</h2>
             <span>{{ journey.summary }}</span>
+            <div class="poc-guide-card-tags" aria-label="Tags">@for (tag of journey.tags; track tag) { <span>{{ tag }}</span> }</div>
             @if (journey.verification) { <mark class="poc-guide-verified">✓ {{ journey.verification.label }}</mark> }
           </div>
           <dl>
@@ -49,6 +62,7 @@ import { POC_GUIDE_CAPABILITIES, POC_GUIDE_LIMITS, POC_GUIDE_STATUS_LABELS, POC_
         </a>
       }
     </div>
+    @if (filteredJourneys().length === 0) { <p class="poc-guide-empty" role="status">Keine Journey gefunden. Passen Sie Suchtext oder Tag an.</p> }
 
     <section class="poc-guide-boundaries" aria-labelledby="poc-guide-boundaries-title">
       <div class="poc-guide-section-heading">
@@ -83,7 +97,23 @@ import { POC_GUIDE_CAPABILITIES, POC_GUIDE_LIMITS, POC_GUIDE_STATUS_LABELS, POC_
 })
 export class PocGuideOverviewComponent {
   readonly journeys = POC_JOURNEYS;
+  readonly query = signal('');
+  readonly selectedTag = signal<string | null>(null);
+  readonly tags = [...new Set(POC_JOURNEYS.flatMap((journey) => journey.tags))].sort((a, b) => a.localeCompare(b, 'de'));
+  readonly filteredJourneys = computed(() => {
+    const terms = this.query().trim().toLocaleLowerCase('de').split(/\s+/).filter(Boolean);
+    const tag = this.selectedTag();
+    return this.journeys.filter((journey) => {
+      if (tag && !journey.tags.includes(tag)) return false;
+      const searchable = [journey.title, journey.summary, journey.outcome, ...journey.tags, ...journey.roles.map((role) => `${role.name} ${role.responsibility}`)].join(' ').toLocaleLowerCase('de');
+      return terms.every((term) => searchable.includes(term));
+    });
+  });
   readonly capabilities = POC_GUIDE_CAPABILITIES;
   readonly limits = POC_GUIDE_LIMITS;
   readonly statusLabels = POC_GUIDE_STATUS_LABELS;
+
+  toggleTag(tag: string): void {
+    this.selectedTag.update((current) => current === tag ? null : tag);
+  }
 }

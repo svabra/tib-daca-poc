@@ -2,6 +2,8 @@
 
 This documentation is the durable reference for every persistence context owned by the DaCa
 monorepo. Request and response DTOs remain documented by each service's OpenAPI document.
+DaCa's central catalog is the authoritative metadata and governance store. Control-plane trust
+and synchronization tables retain historical PoC configuration, not the product architecture.
 
 ## Boundaries and sources of truth
 
@@ -11,6 +13,30 @@ monorepo. Request and response DTOs remain documented by each service's OpenAPI 
 - DAAIF is external. Only the metadata publication and workflow evidence stored by DaCa are in scope.
 - IDs passed between services are projections or references, not cross-database foreign keys.
 
+The VIBDBU demonstration seeds active `data_steward` assignments in
+`vbs-armasuisse-immobilien` for Christian Spider and Christian Man. Their primary Verteidigung
+memberships remain. These assignments are idempotent and appear in the profile through the
+existing modeling-personas API; the table shape does not change.
+The six Verteidigung modeling personas also receive explicit primary memberships in
+`vbs-verteidigung`, so additional role scopes cannot be mistaken for their home organization.
+
+The `role_change_events` sequence records a baseline of active role relationships at migration
+`0028_role_change_protocol` and every subsequent assignment, change or removal to modeling
+roles, direct object responsibilities and canonical owner/deputy fields. PostgreSQL triggers
+capture even direct SQL mutations and reject mutation of the protocol itself. Historical rows
+retain subject and target IDs without foreign-key cascades; current authorization still comes
+from the source role and owner tables, not from the protocol.
+
+The DaCa application glossary has its own `site_glossary_terms` and
+`site_glossary_localizations` tables. Business terminology remains in `glossary_terms` and its
+governance tables. Equal labels can exist independently; no cross-table foreign key or automatic
+copy exists. Catalog users have read-only glossary access. Future Control Plane editing and
+TERMDAT enrichment are not yet implemented.
+
+`physical_domain_assignments` stores a source/table stable key and domain ID directly. It
+allows a physical representation to appear under its business domain before a logical model
+or asset mapping exists; mappings may associate further domains at table grain.
+
 Update generated sections with `npm run docs:data-model`. Validate them with
 `npm run docs:data-model:check`; the root test command runs the same drift check.
 
@@ -18,7 +44,7 @@ Update generated sections with `npm run docs:data-model`. Validate them with
 
 | Persistence context | Storage | Tables | Alembic head | Migration fingerprint |
 |---|---|---:|---|---|
-| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 87 | `0024_model_identifier` | `8de8bcb9e62e94b9` |
+| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 94 | `0032_mapping_inconsistencies` | `98308219c4510ea0` |
 | [Control-plane data model](control-plane.md) | PostgreSQL (`daca_control_plane`) | 6 | `20260803_0001` | `ff3a5ea9ca863788` |
 | [Sample data-product model](sample-data-product.md) | PostgreSQL (`daca_sample`) | 4 | `0004_vibdbu_buildings` | `62c6765d78832f77` |
 
@@ -26,15 +52,15 @@ Update generated sections with `npm run docs:data-model`. Validate them with
 
 ```mermaid
 flowchart LR
-    DAAIF["DAAIF (external)"] -->|metadata publication| CATALOG["Standalone DaCa catalog\nPostgreSQL"]
+    DAAIF["DAAIF (external)"] -->|metadata publication| CATALOG["Central DaCa catalog\nPostgreSQL"]
     CATALOG -->|published PBAC projection| OPA["OPA bundle"]
     CATALOG -->|entitlements + revision| SAMPLE["Sample data product\nPostgreSQL"]
-    CONTROL["Optional control plane\nPostgreSQL"] -.->|health and desired configuration| CATALOG
+    CONTROL["Administrative PoC prototype\nPostgreSQL"] -.->|health observation| CATALOG
     CONSUMER["Person or machine"] -->|HTTP via PEP| SAMPLE
     CONSUMER -->|PostgreSQL wire + RLS| SAMPLE
 ```
 
-Arrows are API calls or projections, never cross-database foreign keys. The control plane is not a runtime dependency of a standalone catalog.
+Arrows are API calls or projections, never cross-database foreign keys. The administrative prototype is outside the central catalog authorization path.
 
 ## Qualified table inventory
 
@@ -50,6 +76,7 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.audit_events`
 - `catalog.canonical_ontology_terms`
 - `catalog.canonical_ontology_versions`
+- `catalog.catalog_object_responsibilities`
 - `catalog.data_model_role_assignments`
 - `catalog.data_product_domains`
 - `catalog.data_product_fields`
@@ -64,6 +91,7 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.dcat_datasets`
 - `catalog.dcat_distribution_versions`
 - `catalog.dcat_distributions`
+- `catalog.demo_login_sessions`
 - `catalog.demo_users`
 - `catalog.domain_change_requests`
 - `catalog.domain_localizations`
@@ -90,6 +118,7 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.logical_entity_versions`
 - `catalog.logical_field_versions`
 - `catalog.logical_fields`
+- `catalog.logical_mapping_inconsistencies`
 - `catalog.logical_model_assistance_provenance`
 - `catalog.logical_model_identifier_reservations`
 - `catalog.logical_model_reviews`
@@ -100,6 +129,7 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.ontology_term_alignments`
 - `catalog.physical_columns`
 - `catalog.physical_databases`
+- `catalog.physical_domain_assignments`
 - `catalog.physical_drift_changes`
 - `catalog.physical_drift_reports`
 - `catalog.physical_schema_snapshots`
@@ -114,8 +144,11 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.product_quality_assessments`
 - `catalog.product_semantic_mappings`
 - `catalog.provenance_events`
+- `catalog.role_change_events`
 - `catalog.seed_markers`
 - `catalog.service_level_revisions`
+- `catalog.site_glossary_localizations`
+- `catalog.site_glossary_terms`
 - `catalog.source_access_grants`
 - `catalog.source_access_requests`
 - `catalog.source_catalog_entries`
@@ -146,7 +179,7 @@ Roles declared by the local Compose bootstrap:
 
 | Role | Purpose |
 |---|---|
-| `daca_catalog` | Owns and runs the standalone catalog schema. |
+| `daca_catalog` | Owns and runs the central catalog schema. |
 | `daca_control` | Owns and runs the control-plane schema. |
 | `daca_policy_projector` | Writes projected entitlements and deployment revisions only. |
 | `daca_sample_api` | HTTP PEP database role; subject and protocol are set in the transaction. |
@@ -158,7 +191,7 @@ Databases:
 
 | Database | Purpose |
 |---|---|
-| `daca_catalog` | Standalone product metadata, workflow, policy and semantic evidence. |
+| `daca_catalog` | Central product metadata, workflow, policy and semantic evidence. |
 | `daca_control_plane` | Control-plane registry, trust, desired sync state and observations. |
 | `daca_sample` | Protected sample product data and the policy projection used by RLS. |
 

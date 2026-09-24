@@ -11,9 +11,9 @@ import { ControlPlaneApiService } from '../../core/control-plane-api.service';
   template: `
     <section class="daca-page-heading">
       <div>
-        <p class="daca-eyebrow">Mockup 03 · Security & federation control</p>
-        <h1>Catalog federation overview</h1>
-        <p>Register autonomous catalogs, govern directed trust and declare future synchronization intent without centralizing their data.</p>
+        <p class="daca-eyebrow">Central Data Catalog · operations</p>
+        <h1>Central catalog status</h1>
+        <p>Observe DaCa operations and review historical PoC configuration records. The central catalog is the authoritative metadata store.</p>
       </div>
       <daca-status-badge [tone]="api.eventStreamConnected() ? 'green' : api.usingFallback() ? 'orange' : 'blue'">
         {{ api.eventStreamConnected() ? 'Health SSE connected' : api.usingFallback() ? 'Preview topology' : 'Health polling active' }}
@@ -21,20 +21,20 @@ import { ControlPlaneApiService } from '../../core/control-plane-api.service';
     </section>
 
     @if (api.usingFallback()) {
-      <p class="daca-alert is-warning">The control-plane API is starting or unavailable. A deterministic federation preview is displayed and controls do not mutate local data.</p>
+      <p class="daca-alert is-warning">The control-plane API is starting or unavailable. A deterministic operations preview is displayed and controls do not mutate local data.</p>
     }
 
-    <section class="control-kpis" aria-label="Federation status">
-      <article><span>Registered catalogs</span><strong>{{ api.catalogs().length }}</strong><small>{{ healthyCount() }} healthy · {{ degradedCount() }} needs attention</small></article>
-      <article><span>Approved trust grants</span><strong>{{ approvedGrants() }}</strong><small>{{ api.trustGrants().length }} directed grants total</small></article>
-      <article><span>Declared sync routes</span><strong>{{ enabledSyncs() }}</strong><small>Policy sharing remains opt-in</small></article>
-      <article><span>Config drift</span><strong>{{ driftCount() }}</strong><small>desired ≠ observed revision</small></article>
+    <section class="control-kpis" aria-label="Catalog operations status">
+      <article><span>PoC catalog records</span><strong>{{ api.catalogs().length }}</strong><small>{{ healthyCount() }} healthy · {{ degradedCount() }} needs attention</small></article>
+      <article><span>PoC trust records</span><strong>{{ approvedGrants() }}</strong><small>{{ api.trustGrants().length }} historical grants total</small></article>
+      <article><span>PoC sync records</span><strong>{{ enabledSyncs() }}</strong><small>Historical configuration only</small></article>
+      <article><span>Recorded config drift</span><strong>{{ driftCount() }}</strong><small>desired ≠ observed revision</small></article>
     </section>
 
     <div class="federation-main-grid">
       <section class="daca-card topology-card" aria-labelledby="topology-title">
         <div class="daca-card-header">
-          <div><p class="daca-eyebrow">Directed trust topology</p><h2 id="topology-title">Swiss catalog ecosystem</h2></div>
+          <div><p class="daca-eyebrow">Historical PoC topology</p><h2 id="topology-title">Prototype catalog records</h2></div>
           <div class="topology-legend"><span><i></i>Approved</span><span><i class="is-draft"></i>Draft</span></div>
         </div>
         <div class="topology-canvas">
@@ -71,7 +71,7 @@ import { ControlPlaneApiService } from '../../core/control-plane-api.service';
             </g>
           </svg>
         </div>
-        <div class="topology-footer"><span>Arrows show provider → consumer grants, not active federation traffic.</span><a routerLink="/trust">Manage directed trust →</a></div>
+        <div class="topology-footer"><span>Arrows depict historical PoC grants; DaCa operates as a central catalog.</span><a routerLink="/trust">Review trust records →</a></div>
       </section>
 
       <aside class="federation-side-stack">
@@ -83,7 +83,7 @@ import { ControlPlaneApiService } from '../../core/control-plane-api.service';
           </div>
         </section>
         <section class="daca-card">
-          <div class="daca-card-header"><h2>Federation guardrails</h2><daca-status-badge [tone]="api.usingFallback() ? 'orange' : 'green'">{{ api.usingFallback() ? 'Preview rules' : 'Enforced' }}</daca-status-badge></div>
+          <div class="daca-card-header"><h2>Prototype configuration rules</h2><daca-status-badge [tone]="api.usingFallback() ? 'orange' : 'green'">{{ api.usingFallback() ? 'Preview rules' : 'Stored' }}</daca-status-badge></div>
           <div class="daca-card-body guardrail-list">
             <p><span>✓</span><strong>Directed trust required</strong><small>Every route needs a matching approved grant.</small></p>
             <p><span>✓</span><strong>Origin always wins</strong><small>Consumers cannot overwrite origin records.</small></p>

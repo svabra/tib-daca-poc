@@ -42,6 +42,7 @@ from .access_renewals import (
 from .control_people import assign_default_control_person, is_active_publication_approver
 from .database import default_session_factory, get_session
 from .deputy_owners import assign_default_deputy_owner
+from .documentation_read import catalog_responsibilities, glossary_entries, role_change_history
 from .domain_glossary_seed import (
     ARMOURED_VEHICLE_PROPOSAL_ID,
     DEFENCE_DOMAIN_ID,
@@ -65,6 +66,7 @@ from .governance import (
 from .i14y_public_api import I14YPublicApiPort, VerifiedI14YPublicApi
 from .i14y_publication import DisabledI14YPublicationAdapter, I14YPublicationPort
 from .logical_model_review_api import create_logical_model_review_router
+from .mapping_inconsistency_api import create_mapping_inconsistency_router
 from .modeling_api import create_modeling_router
 from .modeling_assistance_api import create_modeling_assistance_router
 from .modeling_lifecycle_api import create_modeling_lifecycle_router
@@ -81,6 +83,7 @@ from .models import (
     DataProductDomain,
     DataProductField,
     DataProductGlossaryTerm,
+    DemoLoginSession,
     DemoUser,
     Domain,
     DomainChangeRequest,
@@ -109,6 +112,7 @@ from .models import (
     ProvenanceEvent,
     SeedMarker,
     ServiceLevelRevision,
+    SiteGlossaryLocalization,
     WorkflowTask,
     utc_now,
 )
@@ -257,6 +261,7 @@ from .service_levels import (
     withdraw_revision as withdraw_service_level_revision,
 )
 from .settings import Settings, get_settings
+from .site_glossary_seed import seed_site_glossary_terms
 from .source_access import (
     access_context as source_access_context,
 )
@@ -326,6 +331,24 @@ def actor_profile(session: Session, actor: str) -> DemoUser:
     if user is None or not user.active:
         raise HTTPException(401, "Unknown or inactive local demo identity")
     return user
+
+
+def local_session_user(session: Session, request: Request) -> DemoUser:
+    token = request.cookies.get("daca_session")
+    if not token:
+        raise HTTPException(401, "No local catalog session")
+    entry = session.get(DemoLoginSession, hashlib.sha256(token.encode()).hexdigest())
+    if entry is None or entry.revoked_at is not None or entry.expires_at <= utc_now():
+        raise HTTPException(401, "Local catalog session expired")
+    return actor_profile(session, entry.user_id)
+
+
+def personal_preference_user(
+    session: Session, request: Request, x_daca_user: str | None
+) -> DemoUser:
+    if request.cookies.get("daca_session"):
+        return local_session_user(session, request)
+    return actor_profile(session, require_demo_actor(request, x_daca_user))
 
 
 DEMO_ACTOR_PROFILES: dict[str, tuple[str, str]] = {
@@ -2331,6 +2354,69 @@ def create_router() -> APIRouter:
             )
         )
 
+    @router.get("/session", tags=["POC"])
+    def read_local_session(request: Request, session: SessionDep) -> dict[str, str]:
+        if not request.app.state.settings.daca_demo_auth:
+            raise HTTPException(503, "Local demo sessions are disabled")
+        return {"userId": local_session_user(session, request).id}
+
+    @router.post("/session/login", tags=["POC"])
+    def login_local_session(
+        body: dict[str, str], request: Request, response: Response, session: SessionDep
+    ) -> dict[str, str]:
+        if not request.app.state.settings.daca_demo_auth:
+            raise HTTPException(503, "Local demo sessions are disabled")
+        user = session.get(DemoUser, body.get("userId", ""))
+        if user is None or not user.active or not user.selectable:
+            raise HTTPException(401, "Unknown local demo identity")
+        token = secrets.token_urlsafe(32)
+        now = utc_now()
+        session.add(DemoLoginSession(
+            token_hash=hashlib.sha256(token.encode()).hexdigest(),
+            user_id=user.id, created_at=now, expires_at=now + timedelta(hours=12),
+        ))
+        session.commit()
+        response.set_cookie(
+            "daca_session", token, max_age=12 * 60 * 60, httponly=True,
+            secure=request.url.scheme == "https", samesite="lax", path="/",
+        )
+        return {"userId": user.id}
+
+    @router.post("/session/logout", tags=["POC"])
+    def logout_local_session(request: Request, response: Response, session: SessionDep) -> dict[str, bool]:
+        token = request.cookies.get("daca_session")
+        if token:
+            entry = session.get(DemoLoginSession, hashlib.sha256(token.encode()).hexdigest())
+            if entry is not None and entry.revoked_at is None:
+                entry.revoked_at = utc_now()
+                session.commit()
+        response.delete_cookie("daca_session", path="/")
+        return {"ok": True}
+
+    @router.get("/me/preferences/{name}", tags=["POC"])
+    def read_personal_preference(
+        name: Literal["language", "theme"], request: Request, session: SessionDep,
+        x_daca_user: Annotated[str | None, Header(alias="X-DaCa-User")] = None,
+    ) -> dict[str, str]:
+        user = personal_preference_user(session, request, x_daca_user)
+        defaults = {"language": "de", "theme": "light"}
+        return {"value": (user.preferences or {}).get(name, defaults[name])}
+
+    @router.put("/me/preferences/{name}", tags=["POC"])
+    def save_personal_preference(
+        name: Literal["language", "theme"], body: dict[str, str],
+        request: Request, session: SessionDep,
+        x_daca_user: Annotated[str | None, Header(alias="X-DaCa-User")] = None,
+    ) -> dict[str, str]:
+        allowed = {"language": {"de", "fr", "it", "en"}, "theme": {"light", "dark"}}
+        value = body.get("value")
+        if value not in allowed[name]:
+            raise HTTPException(422, "Invalid personal preference")
+        user = personal_preference_user(session, request, x_daca_user)
+        user.preferences = {**(user.preferences or {}), name: value}
+        session.commit()
+        return {"value": value}
+
     @router.get("/domains", response_model=list[DomainResponse], tags=["domains & glossary"])
     def list_domains(
         session: SessionDep,
@@ -2722,6 +2808,68 @@ def create_router() -> APIRouter:
         )
         session.commit()
         return change
+
+    @router.get("/documentation/responsibilities", tags=["documentation"])
+    def read_documentation_responsibilities(
+        session: SessionDep,
+        actor: ActorDep,
+        lang: Literal["de", "fr", "it", "en"] = "de",
+    ) -> dict[str, Any]:
+        return catalog_responsibilities(session, actor, lang)
+
+    @router.get("/documentation/role-changes", tags=["documentation"])
+    def read_documentation_role_changes(
+        session: SessionDep,
+        actor: ActorDep,
+        lang: Literal["de", "fr", "it", "en"] = "de",
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+        before: Annotated[int | None, Query(ge=1)] = None,
+    ) -> dict[str, Any]:
+        return role_change_history(session, actor, lang, limit=limit, before=before)
+
+    @router.get("/documentation/glossary/lookup", tags=["documentation"])
+    def lookup_documentation_glossary_term(
+        term: str,
+        session: SessionDep,
+        actor: ActorDep,
+        lang: Literal["de", "fr", "it", "en"] = "de",
+    ) -> dict[str, Any]:
+        del actor
+        needle = term.strip().casefold()
+        if not needle:
+            raise HTTPException(404, "Glossary term not found")
+        matched_id = next((row.term_id for row in session.scalars(select(SiteGlossaryLocalization))
+                           if row.preferred_label.casefold() == needle
+                           or row.normalized_label.casefold() == needle), None)
+        if matched_id is None:
+            raise HTTPException(404, "Glossary term not found")
+        item = next((entry for entry in glossary_entries(session, lang) if entry["id"] == str(matched_id)), None)
+        if item is None:
+            raise HTTPException(404, "Glossary term not found")
+        return item
+
+    @router.get("/documentation/glossary", tags=["documentation"])
+    def list_documentation_glossary(
+        session: SessionDep,
+        actor: ActorDep,
+        lang: Literal["de", "fr", "it", "en"] = "de",
+        q: str = "",
+    ) -> list[dict[str, Any]]:
+        del actor
+        return glossary_entries(session, lang, q)
+
+    @router.get("/documentation/glossary/{term_id}", tags=["documentation"])
+    def read_documentation_glossary_term(
+        term_id: uuid.UUID,
+        session: SessionDep,
+        actor: ActorDep,
+        lang: Literal["de", "fr", "it", "en"] = "de",
+    ) -> dict[str, Any]:
+        del actor
+        item = next((entry for entry in glossary_entries(session, lang) if entry["id"] == str(term_id)), None)
+        if item is None:
+            raise HTTPException(404, "Glossary term not found")
+        return item
 
     @router.get(
         "/glossary/terms", response_model=list[GlossaryTermResponse], tags=["domains & glossary"]
@@ -6713,6 +6861,8 @@ def create_app(
             with resolved_session_factory() as session:
                 seed_catalog(session)
                 seed_modeling_catalog(session)
+                seed_site_glossary_terms(session)
+                session.commit()
         try:
             yield
         finally:
@@ -6756,6 +6906,7 @@ def create_app(
     app.include_router(create_terminology_router())
     app.include_router(create_modeling_lifecycle_router())
     app.include_router(create_logical_model_review_router())
+    app.include_router(create_mapping_inconsistency_router())
     app.include_router(create_modeling_resources_router())
 
     @app.get("/health/live", response_model=HealthResponse, tags=["health"])

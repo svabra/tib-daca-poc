@@ -16,6 +16,20 @@ vi.mock('@bit-daca/design-system',async()=>{
 describe('LogicalModelsOverviewComponent',()=>{
   afterEach(()=>TestBed.resetTestingModule());
 
+  it('links a model quality error to its mapping workspace',()=>{
+    const model={...FALLBACK_LOGICAL_MODEL,mappingInconsistencyCount:2};
+    const user=signal({id:'cinthya.thor',displayName:'Cinthya Thor',organization:'Verteidigung',department:'VBS',office:'vbs-verteidigung',roles:['data_steward'],primaryModelingRole:'data_steward'});
+    TestBed.configureTestingModule({imports:[LogicalModelsOverviewComponent],providers:[
+      provideRouter([]),
+      {provide:DemoIdentityService,useValue:{userId:signal('cinthya.thor'),user,canEditModels:signal(true)}},
+      {provide:DataModelsApiService,useValue:{listLogicalModels:()=>of([model])}},
+    ]});
+    const fixture=TestBed.createComponent(LogicalModelsOverviewComponent);fixture.detectChanges();TestBed.tick();fixture.detectChanges();
+    const link=(fixture.nativeElement as HTMLElement).querySelector<HTMLAnchorElement>('.mapping-quality-error a');
+    expect(link?.textContent).toContain('Inkonsistenzfehler (2)');
+    expect(link?.getAttribute('href')).toBe(`/models/${model.id}/mappings`);
+  });
+
   it('offers an explicit owner selector and filters by stable owner id',()=>{
     const other={...FALLBACK_LOGICAL_MODEL,id:'model-lawrence',title:{...FALLBACK_LOGICAL_MODEL.title,de:'Fahrzeugbestand'},dataOwner:{id:'lawrence.hill',displayName:'Lawrence Hill'}};
     const user=signal({id:'cinthya.thor',displayName:'Cinthya Thor',organization:'Verteidigung',department:'VBS',office:'vbs-verteidigung',roles:['data_steward'],primaryModelingRole:'data_steward'});

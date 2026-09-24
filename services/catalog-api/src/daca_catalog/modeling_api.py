@@ -47,6 +47,8 @@ from .modeling_schemas import (
     PhysicalSnapshotResponse,
     PhysicalSourceCollection,
 )
+from .modeling_seed import VIBDBU_PHYSICAL_SOURCE_ID
+from .mapping_inconsistencies import rebase_mapping_versions, sync_mapping_inconsistencies
 from .modeling_service import (
     clone_logical_version,
     clone_mapping_version,
@@ -58,7 +60,7 @@ from .modeling_service import (
     get_logical_model,
     get_logical_version,
     get_mapping_version,
-    logical_summary,
+    logical_summary_payload,
     logical_version_payload,
     logical_write_from_payload,
     mapping_payload,
@@ -596,14 +598,14 @@ def create_modeling_router() -> APIRouter:
             select(LogicalModel).where(LogicalModel.lifecycle == "active").order_by(LogicalModel.updated_at.desc())
         ):
             version = get_logical_version(session, model.id)
-            payload = logical_version_payload(session, model, version)
+            payload = logical_summary_payload(session, model, version)
             if status and payload["status"] != status:
                 continue
             if owner_user_id and payload["dataOwnerUserId"] != owner_user_id:
                 continue
             if q and q.casefold() not in f"{payload['title']} {payload['description']}".casefold():
                 continue
-            items.append(logical_summary(payload))
+            items.append(payload)
         return {"items": items, "total": len(items)}
 
     @router.post("/logical-models", response_model=LogicalModelResponse, status_code=201)
@@ -718,6 +720,8 @@ def create_modeling_router() -> APIRouter:
             actor,
             action="draft-revised",
         )
+        rebase_mapping_versions(session, model, successor, actor)
+        sync_mapping_inconsistencies(session, model.id)
         session.commit()
         response.headers["ETag"] = _etag(successor.lock_version)
         return logical_version_payload(session, model, successor)
@@ -805,7 +809,9 @@ def create_modeling_router() -> APIRouter:
         for source in session.scalars(
             select(PhysicalSource).where(PhysicalSource.lifecycle == "active").order_by(PhysicalSource.name)
         ):
-            if (source.department_code, source.organization_id) not in scopes:
+            # The synthetic VIBDBU demonstration is readable across catalog
+            # organizations; ownership-scoped writes remain protected below.
+            if (source.department_code, source.organization_id) not in scopes and source.id != VIBDBU_PHYSICAL_SOURCE_ID:
                 continue
             latest = session.scalar(
                 select(PhysicalSchemaSnapshot)
@@ -949,7 +955,7 @@ def create_modeling_router() -> APIRouter:
         items = [
             snapshot_tree(session, snapshot)["snapshot"]
             for snapshot, source in rows
-            if (source.department_code, source.organization_id) in scopes
+            if (source.department_code, source.organization_id) in scopes or source.id == VIBDBU_PHYSICAL_SOURCE_ID
         ]
         return {"items": items, "total": len(items)}
 
@@ -1032,7 +1038,10 @@ def create_modeling_router() -> APIRouter:
         if snapshot is None:
             raise HTTPException(404, "Physical snapshot not found")
         source = session.get(PhysicalSource, snapshot.source_id)
-        _require_scope(session, actor, source.department_code, source.organization_id)
+        assignments = _require_any_assignment(session, actor)
+        scopes = {(item.department_code, item.organization_id) for item in assignments}
+        if (source.department_code, source.organization_id) not in scopes and source.id != VIBDBU_PHYSICAL_SOURCE_ID:
+            raise HTTPException(403, "Physical snapshot is outside your catalog scope")
         return snapshot_tree(session, snapshot)
 
     @router.get("/physical-snapshots/{snapshot_id}/drift", response_model=DriftReportResponse)
@@ -1658,6 +1667,7 @@ def create_modeling_router() -> APIRouter:
     ) -> dict[str, Any]:
         _validate_mapping_scope(session, actor, body)
         mapping, version = create_asset_mapping(session, body, actor)
+        sync_mapping_inconsistencies(session, mapping.logical_model_id)
         session.commit()
         response.headers["ETag"] = _etag(version.lock_version)
         return mapping_payload(session, mapping, version)
@@ -1720,6 +1730,7 @@ def create_modeling_router() -> APIRouter:
             actor,
             action="draft-revised",
         )
+        sync_mapping_inconsistencies(session, mapping.logical_model_id)
         session.commit()
         response.headers["ETag"] = _etag(successor.lock_version)
         return mapping_payload(session, mapping, successor)

@@ -52,6 +52,7 @@ from .models import (
     LogicalModelIdentifierReservation,
     LogicalModelReview,
     LogicalModelVersion,
+    LogicalMappingInconsistency,
     PhysicalColumn,
     PhysicalDatabase,
     PhysicalDriftChange,
@@ -267,6 +268,12 @@ def logical_version_payload(session: Session, model: LogicalModel, version: Logi
         "dataDomainId": dataset_version.data_domain_id,
         "dataClassification": dataset_version.data_classification,
         "hasPhysicalMapping": bool(has_mapping),
+        "mappingInconsistencyCount": session.scalar(
+            select(func.count(LogicalMappingInconsistency.id)).where(
+                LogicalMappingInconsistency.logical_model_id == model.id,
+                LogicalMappingInconsistency.status != "resolved",
+            )
+        ) or 0,
         "fieldCount": sum(len(entity["fields"]) for entity in entities),
         "updatedAt": version.updated_at,
         "identifiers": dataset_version.identifiers,
@@ -374,6 +381,7 @@ def logical_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "dataDomainId",
         "dataClassification",
         "hasPhysicalMapping",
+        "mappingInconsistencyCount",
         "fieldCount",
         "updatedAt",
         "identifiers",
@@ -381,6 +389,51 @@ def logical_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "createdAt",
     }
     return {key: value for key, value in payload.items() if key in keys}
+
+
+def logical_summary_payload(session: Session, model: LogicalModel,
+                            version: LogicalModelVersion) -> dict[str, Any]:
+    """Read list metadata without loading every field, concept and distribution."""
+    dataset = session.get(DcatDatasetVersion, version.dataset_version_id)
+    if dataset is None:
+        raise HTTPException(500, "Logical model is missing its DCAT dataset version")
+    localization = session.scalar(select(DcatDatasetVersionLocalization).where(
+        DcatDatasetVersionLocalization.dataset_version_id == dataset.id,
+    ).order_by(
+        (DcatDatasetVersionLocalization.language != "de"),
+        DcatDatasetVersionLocalization.language,
+    ).limit(1))
+    if localization is None:
+        raise HTTPException(500, "Logical model is missing its localization")
+    field_count = session.scalar(select(func.count(LogicalFieldVersion.id))
+        .join(LogicalEntityVersion, LogicalEntityVersion.id == LogicalFieldVersion.logical_entity_version_id)
+        .where(LogicalEntityVersion.logical_model_version_id == version.id)) or 0
+    return {
+        "id": model.id, "urn": model.urn, "revision": version.revision,
+        "publishedRevision": model.published_revision, "lifecycle": model.lifecycle,
+        "versionId": version.id, "datasetVersionId": version.dataset_version_id,
+        "predecessorVersionId": version.predecessor_version_id,
+        "lockVersion": version.lock_version, "status": version.status,
+        "title": localization.title, "description": localization.description,
+        "dataOwnerUserId": dataset.data_owner_user_id,
+        "deputyOwnerUserId": dataset.deputy_owner_user_id,
+        "departmentCode": dataset.department_code,
+        "organizationId": dataset.organization_id,
+        "organizationUnitId": dataset.organization_id,
+        "dataDomainId": dataset.data_domain_id,
+        "dataClassification": dataset.data_classification,
+        "hasPhysicalMapping": session.scalar(select(AssetMapping.id).where(
+            AssetMapping.logical_model_id == model.id,
+            AssetMapping.lifecycle == "active",
+        ).limit(1)) is not None,
+        "mappingInconsistencyCount": session.scalar(select(func.count(LogicalMappingInconsistency.id)).where(
+            LogicalMappingInconsistency.logical_model_id == model.id,
+            LogicalMappingInconsistency.status != "resolved",
+        )) or 0,
+        "fieldCount": field_count, "updatedAt": version.updated_at,
+        "identifiers": dataset.identifiers, "dateCreated": dataset.date_created,
+        "createdAt": version.created_at,
+    }
 
 
 def ensure_dcat_catalog(session: Session) -> DcatCatalog:
@@ -391,8 +444,8 @@ def ensure_dcat_catalog(session: Session) -> DcatCatalog:
     payload = {
         "title": {"de": "BIT DaCa Datenkatalog", "en": "BIT DaCa data catalog"},
         "description": {
-            "de": "Eigenständig nutzbarer verteilter Datenkatalog des BIT DaCa PoC.",
-            "en": "Standalone distributed data catalog of the BIT DaCa proof of concept.",
+            "de": "Zentraler Datenkatalog der Data Platform BIT im DaCa PoC.",
+            "en": "Central data catalog of the BIT data platform in the DaCa proof of concept.",
         },
         "publisher": {"name": "Bundesamt für Informatik und Telekommunikation BIT"},
         "languages": ["de", "fr", "it", "en"],

@@ -1,11 +1,14 @@
-import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, inject, input, signal } from '@angular/core';
-import { DacaFeatureLocale, DacaFeatureScope, dacaFeatureList } from './feature-list';
+import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, effect, inject, input, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { DacaFeatureLocale, DacaFeatureScope } from './feature-list';
+import { dacaReleaseHistory } from './release-history';
 import { DacaAppUpdateService } from './app-update.service';
 import { DACA_VERSION } from './version';
 
 @Component({
   selector: 'daca-version-overlay',
   standalone: true,
+  imports: [RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <aside class="daca-version-overlay" [attr.aria-label]="ariaLabel()">
@@ -32,9 +35,8 @@ import { DACA_VERSION } from './version';
           }
         </span>
       </div>
-      <div class="daca-version-overlay-row daca-version-overlay-row-poc">
-        <span class="daca-version-overlay-description">{{ description() }}</span>
-      </div>
+      <p class="daca-version-overlay-status">{{ updateReady() ? (locale() === 'de' ? 'Neue Version ist bereit' : 'New version is ready') : (locale() === 'de' ? 'Version ist aktuell' : 'Version is current') }}</p>
+      <p class="daca-version-overlay-credit">Co-Designed by ESTV und BIT</p>
       <button
         #featureTrigger
         class="daca-version-feature-trigger"
@@ -43,7 +45,7 @@ import { DACA_VERSION } from './version';
         aria-controls="daca-feature-list-dialog"
         [attr.aria-expanded]="featureListOpen()"
         (click)="openFeatureList()"
-      >{{ locale() === 'de' ? 'Featureliste anzeigen' : 'View feature list' }}</button>
+      >{{ locale() === 'de' ? 'Neu in dieser Version' : 'New in this version' }}</button>
     </aside>
 
     <dialog
@@ -58,8 +60,8 @@ import { DACA_VERSION } from './version';
       <div class="daca-feature-dialog-content">
         <header class="daca-feature-dialog-header">
           <div>
-            <p class="daca-feature-dialog-release">{{ locale() === 'de' ? 'Featureliste' : 'Feature list' }} · V{{ featureList().version }}</p>
-            <h2 id="daca-feature-list-title">{{ featureList().title }}</h2>
+            <p class="daca-feature-dialog-release">V{{ latestRelease().version }}</p>
+            <h2 id="daca-feature-list-title">{{ locale() === 'de' ? 'Neu in dieser Version' : 'New in this version' }}</h2>
           </div>
           <button
             #featureCloseButton
@@ -71,20 +73,20 @@ import { DACA_VERSION } from './version';
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19" /></svg>
           </button>
         </header>
-        <p id="daca-feature-list-introduction" class="daca-feature-dialog-introduction">{{ featureList().introduction }}</p>
+        <p id="daca-feature-list-introduction" class="daca-feature-dialog-introduction">{{ locale() === 'de' ? 'Diese Verbesserungen unterstützen Ihre Arbeit mit DaCa.' : 'These improvements help you work with DaCa.' }}</p>
         <ul class="daca-feature-list">
-          @for (feature of featureList().features; track feature.title) {
+          @for (feature of latestRelease().features; track feature.title) {
             <li>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
               <div>
                 <h3>{{ feature.title }}</h3>
                 <p>{{ feature.description }}</p>
+                <div class="daca-release-tags">@for (tag of feature.tags; track tag) { <span>{{ tag }}</span> }</div>
               </div>
             </li>
           }
         </ul>
-        <p class="daca-feature-dialog-note">{{ featureList().pocNote }}</p>
         <div class="daca-feature-dialog-actions">
+          <a class="daca-button" routerLink="/settings/features" (click)="closeFeatureList()">{{ locale() === 'de' ? 'Alle Versionen und Features ansehen' : 'View all versions and features' }}</a>
           <button class="daca-button is-secondary" type="button" (click)="closeFeatureList()">
             {{ locale() === 'de' ? 'Schliessen' : 'Close' }}
           </button>
@@ -104,19 +106,32 @@ import { DACA_VERSION } from './version';
     >
       <div class="daca-update-confirmation-content">
         <p class="daca-feature-dialog-release">{{ locale() === 'de' ? 'Neue Version verfügbar' : 'New version available' }}</p>
-        <h2 id="daca-update-confirmation-title">{{ locale() === 'de' ? 'DaCa jetzt neu laden?' : 'Reload DaCa now?' }}</h2>
+        <h2 id="daca-update-confirmation-title">{{ locale() === 'de' ? 'DaCa-Update verfügbar' : 'DaCa update available' }}</h2>
         <p id="daca-update-confirmation-description">
           {{ locale() === 'de'
-            ? 'Nicht gespeicherte Eingaben gehen beim Neuladen verloren. Die neue Version wird anschliessend vollständig geladen.'
-            : 'Unsaved input will be lost when the page reloads. The new version will then be loaded in full.' }}
+            ? 'Ungespeicherte Seiteninhalte gehen beim Update verloren. Die neue Version wird anschliessend vollständig geladen.'
+            : 'Unsaved page content will be lost during the update. The new version will then be loaded in full.' }}
         </p>
         <p class="daca-update-confirmation-transition">{{ transitionLabel() }}</p>
+        @if (targetRelease(); as release) {
+          <button class="daca-update-notes-toggle" type="button" data-testid="app-update-notes-toggle" [attr.aria-expanded]="showReleaseNotes()" (click)="showReleaseNotes.set(!showReleaseNotes())">
+            {{ locale() === 'de' ? (showReleaseNotes() ? 'Neuerungen ausblenden' : 'Neuerungen in V' + release.version + ' anzeigen') : (showReleaseNotes() ? 'Hide changes' : 'Show changes in V' + release.version) }}
+          </button>
+          @if (showReleaseNotes()) {
+            <ul class="daca-update-release-notes" aria-label="Release notes">
+              @for (feature of release.features; track feature.title) {
+                <li><h3>{{ feature.title }}</h3><p>{{ feature.description }}</p></li>
+              }
+            </ul>
+          }
+        }
+        <a class="daca-update-feature-link" routerLink="/settings/features" (click)="closeUpdateConfirmation(false)">{{ locale() === 'de' ? 'Alle Versionen und Features ansehen' : 'View all versions and features' }}</a>
         <div class="daca-feature-dialog-actions">
-          <button #updateCancelButton class="daca-button is-secondary" type="button" (click)="closeUpdateConfirmation()">
-            {{ locale() === 'de' ? 'Abbrechen' : 'Cancel' }}
+          <button #updateCancelButton class="daca-button is-secondary" type="button" autofocus (click)="closeUpdateConfirmation()">
+            {{ locale() === 'de' ? 'Update später durchführen' : 'Update later' }}
           </button>
           <button #updateConfirmButton class="daca-button" type="button" (click)="confirmUpdate()">
-            {{ locale() === 'de' ? 'Jetzt aktualisieren' : 'Update now' }}
+            {{ locale() === 'de' ? 'Update durchführen' : 'Apply update' }}
           </button>
         </div>
       </div>
@@ -159,6 +174,8 @@ export class DacaVersionOverlayComponent {
   @ViewChild('updateDialog', { static: true }) private readonly updateDialog!: ElementRef<HTMLDialogElement>;
   @ViewChild('updateTrigger') private readonly updateTrigger?: ElementRef<HTMLButtonElement>;
   @ViewChild('updateCancelButton') private readonly updateCancelButton?: ElementRef<HTMLButtonElement>;
+  private readonly dialogReady = signal(false);
+  private readonly shownUpdateHashes = new Set<string>();
   private updateFocusReturn: HTMLElement | null = null;
   @ViewChild('updateScreen')
   private set updateScreen(element: ElementRef<HTMLDialogElement> | undefined) {
@@ -197,7 +214,9 @@ export class DacaVersionOverlayComponent {
   readonly locale = input<DacaFeatureLocale>('en');
   readonly featureScope = input<DacaFeatureScope>('catalog');
   readonly featureListOpen = signal(false);
-  readonly featureList = computed(() => dacaFeatureList(this.featureScope(), this.locale()));
+  readonly showReleaseNotes = signal(false);
+  readonly latestRelease = computed(() => dacaReleaseHistory(this.featureScope(), this.locale())[0]);
+  readonly targetRelease = computed(() => dacaReleaseHistory(this.featureScope(), this.locale()).find((release) => release.version === this.appUpdate?.targetVersion()) ?? null);
   readonly updateReady = computed(() => this.appUpdate?.updateReady() ?? false);
   readonly updating = computed(() => this.appUpdate?.updating() ?? false);
   readonly updateButtonLabel = computed(() => {
@@ -217,11 +236,27 @@ export class DacaVersionOverlayComponent {
     }
     if (target === current) {
       return this.locale() === 'de'
-        ? `${this.productName()} · Build-Aktualisierung für V${current}`
-        : `${this.productName()} · Build update for V${current}`;
+        ? `${this.productName()} · V${current} → V${target} · neuer Build`
+        : `${this.productName()} · V${current} → V${target} · new build`;
     }
     return `${this.productName()} · V${current} → V${target}`;
   });
+
+  constructor() {
+    effect(() => {
+      const ready = this.updateReady();
+      const hash = this.appUpdate?.state?.().latestHash ?? this.appUpdate?.targetVersion() ?? 'ready';
+      if (!this.dialogReady() || !ready || this.shownUpdateHashes.has(hash)) return;
+      this.shownUpdateHashes.add(hash);
+      queueMicrotask(() => {
+        if (this.updateReady()) this.openUpdateConfirmation();
+      });
+    });
+  }
+
+  ngAfterViewInit(): void {
+    this.dialogReady.set(true);
+  }
 
   openFeatureList(): void {
     const dialog = this.featureDialog.nativeElement;
@@ -257,7 +292,11 @@ export class DacaVersionOverlayComponent {
   }
 
   openUpdateConfirmation(): void {
+    this.showReleaseNotes.set(false);
     const dialog = this.updateDialog.nativeElement;
+    if (dialog.hasAttribute('open')) return;
+    this.closeDialogWithoutFocus(this.featureDialog.nativeElement);
+    this.featureListOpen.set(false);
     if (typeof dialog.showModal === 'function') {
       dialog.showModal();
     } else {

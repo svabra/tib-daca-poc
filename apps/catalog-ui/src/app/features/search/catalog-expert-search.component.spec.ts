@@ -3,6 +3,8 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
+import { UserPreferencesService } from '../../core/user-preferences.service';
+import { DataModelsApiService } from '../data-models/data-models-api.service';
 import { FALLBACK_PRODUCT } from '../../core/catalog.seed';
 import { CatalogExpertSearchComponent } from './catalog-expert-search.component';
 
@@ -30,6 +32,8 @@ describe('CatalogExpertSearchComponent quality medal', () => {
       providers: [
         provideRouter([]),
         { provide: CatalogApiService, useValue: api },
+        { provide: UserPreferencesService, useValue: { language: signal('de') } },
+        { provide: DataModelsApiService, useValue: { listPhysicalSources: () => of([]) } },
         {
           provide: ActivatedRoute,
           useValue: {
@@ -63,6 +67,8 @@ describe('CatalogExpertSearchComponent quality medal', () => {
       providers: [
         provideRouter([]),
         { provide: CatalogApiService, useValue: api },
+        { provide: UserPreferencesService, useValue: { language: signal('de') } },
+        { provide: DataModelsApiService, useValue: { listPhysicalSources: () => of([]) } },
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { queryParamMap }, queryParamMap: of(queryParamMap) },
@@ -76,5 +82,24 @@ describe('CatalogExpertSearchComponent quality medal', () => {
 
     expect(link?.textContent?.trim()).toBe('Fachbegriff fehlt? Vorschlagen');
     expect(link?.getAttribute('href')).toBe('/glossary/proposals/new?q=GepFz%20Einsatz');
+  });
+
+  it('applies a transferred query to visible physical sources', async () => {
+    const queryParamMap = convertToParamMap({ q: 'VIBDBU' });
+    await TestBed.configureTestingModule({
+      imports: [CatalogExpertSearchComponent],
+      providers: [
+        provideRouter([]),
+        { provide: CatalogApiService, useValue: { loading: signal(false), products: signal([]) } },
+        { provide: UserPreferencesService, useValue: { language: signal('de') } },
+        { provide: DataModelsApiService, useValue: { listPhysicalSources: () => of([{ id: 'vibdbu', name: 'SAP VIBDBU Gebäudebestand', description: 'Immobilien', catalogPath: 'postgresql://daca_sample/', ownerName: 'Mirjam Keller', databaseName: 'daca_sample' }]) } },
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap }, queryParamMap: of(queryParamMap) } },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(CatalogExpertSearchComponent);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.textContent).toContain('SAP VIBDBU Gebäudebestand');
+    expect(root.querySelector<HTMLAnchorElement>('.expert-source-results h3 a')?.getAttribute('href')).toBe('/physical-models/vibdbu');
   });
 });

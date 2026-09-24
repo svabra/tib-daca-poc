@@ -91,6 +91,7 @@ export interface LogicalModelSummary {
   mediaFormats: string[];
   fieldCount: number;
   hasPhysicalMapping: boolean;
+  mappingInconsistencyCount?: number;
   productId: string | null;
   distributionIds: string[];
   createdBy: NamedReference;

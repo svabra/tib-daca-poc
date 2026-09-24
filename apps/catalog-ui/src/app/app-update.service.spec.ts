@@ -90,7 +90,7 @@ describe('DacaAppUpdateService', () => {
     service = TestBed.inject(DacaAppUpdateService);
   });
 
-  it('blocks an untouched startup while installing and reloads only after VERSION_READY', () => {
+  it('offers an untouched startup update for confirmation after VERSION_READY', () => {
     swUpdate.checkForUpdate.mockReturnValue(new Promise(() => undefined));
     service.initialize();
 
@@ -105,11 +105,14 @@ describe('DacaAppUpdateService', () => {
     expect(runtime.reload).not.toHaveBeenCalled();
 
     swUpdate.versionUpdates.next(readyEvent());
-    expect(service.state().phase).toBe('reloading');
+    expect(service.state().phase).toBe('ready');
     expect(runtime.reload).not.toHaveBeenCalled();
     swUpdate.versionUpdates.next(readyEvent());
-    expect(service.state().phase).toBe('reloading');
+    expect(service.state().phase).toBe('ready');
 
+    runtime.runTimeouts();
+    expect(runtime.reload).not.toHaveBeenCalled();
+    service.reloadToLatest();
     runtime.runTimeouts();
     expect(runtime.reload).toHaveBeenCalledTimes(1);
   });

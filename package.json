@@ -1,8 +1,8 @@
 {
   "name": "bit-daca",
-  "version": "0.1.27",
+  "version": "0.1.28",
   "private": true,
-  "description": "BIT Distributed Data Catalog proof of concept",
+  "description": "BIT central Data Catalog proof of concept",
   "workspaces": [
     "apps/*",
     "packages/*"

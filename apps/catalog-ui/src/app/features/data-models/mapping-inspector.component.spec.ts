@@ -34,11 +34,13 @@ describe('MappingInspectorComponent workflow actions', () => {
     draft.fixture.destroy();
 
     const review = render('review_pending');
-    expect(review.root.querySelector('.inspector-actions')?.textContent?.trim()).toBe('Validieren');
+    expect(review.root.querySelector('.inspector-actions')?.textContent).toContain('Validieren');
+    expect(review.root.querySelector('.inspector-actions')?.textContent).toContain('Verbindung entfernen');
     review.fixture.destroy();
 
     const validated = render('validated');
-    expect(validated.root.querySelector('.inspector-actions')?.textContent?.trim()).toBe('Ablösen');
+    expect(validated.root.querySelector('.inspector-actions')?.textContent).toContain('Ablösen');
+    expect(validated.root.querySelector('.inspector-actions')?.textContent).toContain('Verbindung entfernen');
     validated.fixture.destroy();
 
     const superseded = render('superseded');

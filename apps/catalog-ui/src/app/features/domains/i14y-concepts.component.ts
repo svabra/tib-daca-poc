@@ -4,14 +4,13 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StatusBadgeComponent } from '@bit-daca/design-system';
 import { finalize, forkJoin } from 'rxjs';
 import { DemoIdentityService } from '../../core/demo-identity.service';
-import { WorkContextComponent } from '../data-models/work-context.component';
 import { I14yConceptsApiService } from './i14y-concepts-api.service';
 import { I14yConcept, I14ySyncStatus } from './i14y-concepts.models';
 
 @Component({
-  selector: 'daca-i14y-concepts', standalone: true, imports: [DatePipe, RouterLink, StatusBadgeComponent, WorkContextComponent], changeDetection: ChangeDetectionStrategy.OnPush,
+  selector: 'daca-i14y-concepts', standalone: true, imports: [DatePipe, RouterLink, StatusBadgeComponent], changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="daca-page-heading concept-heading"><div><p class="daca-eyebrow">Fachliche Semantik</p><h1>Domäne und Terminology</h1><p>DaCa-Domänen und lokale Terminology bleiben von den schreibgeschützt synchronisierten I14Y-Concepts getrennt.</p></div><daca-work-context [user]="identity.user()" /></section>
+    <section class="daca-page-heading concept-heading"><div><p class="daca-eyebrow">Fachliche Semantik</p><h1>Domäne und Terminology</h1><p>DaCa-Domänen und lokale Terminology bleiben von den schreibgeschützt synchronisierten I14Y-Concepts getrennt.</p></div></section>
     <nav class="semantic-tabs" aria-label="Domäne und Terminology"><a routerLink="/domains">Domänen</a><a routerLink="/domains/terminology">Terminology</a><a routerLink="/domains/concepts" class="is-active" aria-current="page">I14Y-Konzepte <span>{{ total() }}</span></a><a routerLink="/domains/themes">Themen</a><a routerLink="/domains/governance">Governance</a></nav>
 
     @if(sync();as status){<section class="sync-panel" aria-labelledby="sync-title"><div><p class="daca-eyebrow">Referenzquelle</p><h2 id="sync-title">I14Y Public API</h2><p><a [href]="status.sourceUrl" target="_blank" rel="noopener noreferrer">{{ status.sourceUrl }}</a> · lokaler Cache · {{ status.conceptCount }} Concepts</p></div><dl><div><dt>Status</dt><dd><daca-status-badge [tone]="syncTone(status.status)">{{ syncLabel(status.status) }}</daca-status-badge></dd></div><div><dt>Letzter Erfolg</dt><dd>{{ status.lastSuccessfulAt ? (status.lastSuccessfulAt|date:'dd.MM.yyyy, HH:mm') : 'Noch nie' }}</dd></div></dl><button class="daca-button" type="button" [disabled]="refreshing()" (click)="refresh()">{{ refreshing()?'Synchronisation läuft …':'I14Y-Konzepte aktualisieren' }}</button></section>}

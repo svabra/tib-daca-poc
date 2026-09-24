@@ -34,7 +34,7 @@ describe('mapping interaction modes', () => {
       0,
     );
 
-    expect(path).toMatch(/^M 372 \d+ C 480 \d+, 540 \d+, 648 \d+$/);
+    expect(path).toMatch(/^M 235 \d+ C 270 \d+, 300 \d+, 335 \d+$/);
   });
 
   it('uses measured node centres when the physical snapshot card changes height', () => {
@@ -47,7 +47,7 @@ describe('mapping interaction modes', () => {
     });
 
     expect(component.edgePath(mapping.logicalFieldVersionIds[0], mapping.physicalColumnIds[0], 0))
-      .toBe('M 372 148 C 480 148, 540 247, 648 247');
+      .toBe('M 372 148 C 407 148, 613 247, 648 247');
   });
 
   it('shows the physical data owner and canonical catalog path in the snapshot card', () => {

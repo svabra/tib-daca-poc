@@ -2,7 +2,6 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } 
 import { RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 import { DemoIdentityService } from '../../core/demo-identity.service';
-import { WorkContextComponent } from '../data-models/work-context.component';
 import { I14yConceptsApiService } from './i14y-concepts-api.service';
 import { I14yConcept } from './i14y-concepts.models';
 
@@ -33,7 +32,7 @@ export function aggregateI14yThemes(concepts: readonly I14yConcept[]): I14yTheme
 @Component({
   selector: 'daca-i14y-themes',
   standalone: true,
-  imports: [RouterLink, WorkContextComponent],
+  imports: [RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="daca-page-heading themes-heading">
@@ -42,7 +41,6 @@ export function aggregateI14yThemes(concepts: readonly I14yConcept[]): I14yTheme
         <h1>Domäne und Terminology</h1>
         <p>Themen werden schreibgeschützt aus den im lokalen I14Y-Cache vorkommenden Concept-Zuordnungen zusammengefasst.</p>
       </div>
-      <daca-work-context [user]="identity.user()" />
     </section>
 
     <nav class="semantic-tabs" aria-label="Domäne und Terminology">

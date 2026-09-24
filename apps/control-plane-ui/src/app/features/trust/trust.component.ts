@@ -11,7 +11,7 @@ import { TrustGrant } from '../../core/control-plane.models';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="daca-page-heading">
-      <div><p class="daca-eyebrow">Federation authorization</p><h1>Directed trust grants</h1><p>A provider explicitly selects which consumer may receive which resource types. Reverse sharing always needs a second grant.</p></div>
+      <div><p class="daca-eyebrow">Historical PoC configuration</p><h1>Directed trust records</h1><p>These prototype records describe former provider and consumer scenarios. DaCa manages catalog metadata centrally.</p></div>
       <button class="daca-button" type="button" disabled>Propose trust grant</button>
     </section>
     <div class="trust-explainer">

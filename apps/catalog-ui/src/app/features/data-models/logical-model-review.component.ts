@@ -7,17 +7,15 @@ import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 import { DataModelsApiService } from './data-models-api.service';
 import { LogicalModel, LogicalModelReview } from './data-models.models';
-import { WorkContextComponent } from './work-context.component';
 
 @Component({
   selector: 'daca-logical-model-review',
   standalone: true,
-  imports: [DatePipe, RouterLink, StatusBadgeComponent, WorkContextComponent],
+  imports: [DatePipe, RouterLink, StatusBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="daca-page-heading review-heading">
       <div><p class="daca-eyebrow">Persönlicher Prüfauftrag</p><h1>Logisches Modell prüfen</h1><p>Der eingereichte Stand ist unveränderlich. Der Entscheid bezieht sich exakt auf diesen Snapshot.</p></div>
-      <daca-work-context [user]="identity.user()" />
     </section>
 
     @if(loading()){<section class="daca-card review-state" aria-live="polite">Prüfauftrag wird geladen …</section>}
