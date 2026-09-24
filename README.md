@@ -486,6 +486,9 @@ The root [`VERSION`](VERSION) file is the sole DaCa release-version source. The 
 keeps the first-party Node and Python package metadata and lockfiles, service runtime constants,
 the shared UI version constant, focused OpenAPI documents, and OpenShift image pins synchronized.
 Do not edit those derived release surfaces individually.
+Release 0.1.29 lists the mapping graph's field focus and context actions in the catalog feature
+history; the previous 0.1.28 notes remain searchable there. The control plane shares the version
+without presenting catalog-only changes as its own features.
 
 Validate the repository before CI/CD builds or publishing images:
 

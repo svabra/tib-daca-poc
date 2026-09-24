@@ -29,7 +29,7 @@ describe('Catalog runtime version overlay', () => {
     const dialog = fixture.nativeElement.querySelector('.daca-feature-dialog') as HTMLDialogElement;
     expect(dialog.hasAttribute('open')).toBe(true);
     expect(dialog.textContent).toContain(`V${DACA_VERSION}`);
-    expect(dialog.textContent).toContain('Verbesserungen schneller finden');
+    expect(dialog.textContent).toContain('Feldmerkmale direkt bearbeiten');
     expect(dialog.textContent).not.toContain('Datenprodukte leichter finden');
     expect(dialog.querySelector('a')?.getAttribute('href')).toBe('/settings/features');
   });

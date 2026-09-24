@@ -59,8 +59,9 @@ full reload or defer it and continue working; the version card remains available
 The archive covers published versions verified in the `VERSION` history from 0.1.1; unreleased
 numbers are omitted. Every release item explains its practical use and has searchable tags.
 Both pages identify simulated workflows. The canonical `VERSION` and managed release surfaces
-are synchronized at 0.1.28.
-Catalog UI: 338 Angular tests passed; Control Plane UI: 6 tests passed. Both production builds,
+are synchronized at 0.1.29. The latest catalog notes cover direct focus in the field editor,
+logical-field context actions, and the co-design credit; 0.1.28 remains searchable in the archive.
+Catalog UI: 350 Angular tests passed; Control Plane UI: 6 tests passed. Both production builds,
 `version:check`, `version:check-build` and Compose validation passed. The PWA A/B browser smoke
 verified the startup and in-session update dialogs, deferral without reload and exactly one reload
 after confirmation. Two pre-existing component CSS budget warnings remain in the Catalog build.

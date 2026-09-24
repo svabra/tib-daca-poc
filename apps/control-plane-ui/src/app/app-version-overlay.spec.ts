@@ -24,7 +24,7 @@ describe('Control-plane runtime version overlay', () => {
     const dialog = fixture.nativeElement.querySelector('.daca-feature-dialog') as HTMLDialogElement;
     expect(dialog.hasAttribute('open')).toBe(true);
     expect(dialog.textContent).toContain(`V${DACA_VERSION}`);
-    expect(dialog.textContent).toContain('Find improvements faster');
+    expect(dialog.textContent).toContain('Shared version updated');
     expect(dialog.textContent).not.toContain('Monitor catalogs');
     expect(dialog.querySelector('a')?.getAttribute('href')).toBe('/settings/features');
   });

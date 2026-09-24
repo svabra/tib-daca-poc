@@ -10,8 +10,11 @@ describe('DaCa release history', () => {
     fixture.componentRef.setInput('locale', 'de');
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain(`V${DACA_VERSION}`);
+    expect(fixture.nativeElement.textContent).toContain('V0.1.28');
+    expect(fixture.nativeElement.textContent).toContain('Feldmerkmale direkt bearbeiten');
     expect(fixture.nativeElement.textContent).toContain('V0.1.1');
     expect(dacaReleaseHistory('catalog', 'de').every((release) => release.features.every((feature) => feature.tags.length > 0))).toBe(true);
+    expect(dacaReleaseHistory('control-plane', 'en')[0]?.features.some((feature) => feature.title.includes('field'))).toBe(false);
     const search = fixture.nativeElement.querySelector('input[type="search"]') as HTMLInputElement;
     search.value = 'Datenmodelle';
     search.dispatchEvent(new Event('input'));

@@ -2,7 +2,7 @@ import { DacaFeatureLocale, DacaFeatureScope } from './feature-list';
 import { DACA_VERSION } from './version';
 
 // A version bump must supply new customer-facing notes before the UI can build.
-const CURRENT_RELEASE_VERSION: typeof DACA_VERSION = '0.1.28';
+const CURRENT_RELEASE_VERSION: typeof DACA_VERSION = '0.1.29';
 
 export interface DacaReleaseFeature {
   readonly title: string;
@@ -23,6 +23,7 @@ interface HistoricalFeature {
 
 /** Verified release versions from VERSION history; unreleased numbers are deliberately absent. */
 const CATALOG_HISTORY: readonly HistoricalFeature[] = [
+  { version: '0.1.28', de: ['Updates und Einstellungen im Blick', 'Die Versionskarte erklärt Neuerungen und führt zur durchsuchbaren Featureliste; Updates lassen sich bewusst übernehmen. Die Einstellungen sind direkt im Header erreichbar.', ['Updates', 'Einstellungen']], en: ['See updates and settings', 'The version card explains changes and links to the searchable feature list; you choose when to apply updates. Settings are available from the header.', ['Updates', 'Settings']] },
   { version: '0.1.27', de: ['Quellenpfade zuverlässig öffnen', 'Verweise auf den Katalogpfad einer Datenquelle führen wieder zum passenden Objekt.', ['Datenquellen', 'Navigation']], en: ['Open source paths reliably', 'Catalog source links lead to the corresponding object again.', ['Data sources', 'Navigation']] },
   { version: '0.1.26', de: ['Mit einer vorhandenen Tabelle starten', 'Aus einer sichtbaren Datenquelle lässt sich direkt ein bearbeitbarer Entwurf für ein logisches Modell ableiten.', ['Datenquellen', 'Datenmodelle']], en: ['Start from an existing table', 'Derive an editable logical-model draft directly from a visible data source.', ['Data sources', 'Data models']] },
   { version: '0.1.25', de: ['Modellkennung zugänglich wählen', 'Die Wahl der Modellkennung ist auch mit Tastatur und Hilfstechnologien verständlich bedienbar.', ['Datenmodelle', 'Bedienung']], en: ['Choose model identifiers accessibly', 'The model identifier control works clearly with keyboards and assistive technology.', ['Data models', 'Usability']] },
@@ -49,6 +50,7 @@ const CATALOG_HISTORY: readonly HistoricalFeature[] = [
 ];
 
 const CONTROL_PLANE_HISTORY: readonly HistoricalFeature[] = [
+  { version: '0.1.28', de: ['Updates und Einstellungen im Blick', 'Die Versionskarte führt zur durchsuchbaren Featureliste. Updates lassen sich nach einer Warnung zu ungespeicherten Inhalten bewusst übernehmen; Einstellungen sind direkt im Header erreichbar.', ['Updates', 'Einstellungen']], en: ['See updates and settings', 'The version card links to the searchable feature list. Choose when to apply an update after a warning about unsaved content; settings are available from the header.', ['Updates', 'Settings']] },
   { version: '0.1.12', de: ['Neue Versionen leichter übernehmen', 'Bereitstehende Updates können nach Bestätigung geladen werden.', ['Updates', 'Bedienung']], en: ['Apply new versions easily', 'Available updates can be loaded after confirmation.', ['Updates', 'Usability']] },
   { version: '0.1.11', de: ['Kataloge im Blick behalten', 'Registrierte Kataloge und ihr Status sind in der lokalen Steuerungsansicht sichtbar.', ['Kataloge', 'Betrieb']], en: ['Monitor catalogs', 'Registered catalogs and their status are visible in the local control view.', ['Catalogs', 'Operations']] },
   { version: '0.1.1', de: ['Zusammenarbeit vorbereiten', 'Vertrauensbeziehungen und gewünschte Synchronisationen lassen sich ohne Datenübertragung festhalten.', ['Vertrauen', 'Synchronisation']], en: ['Prepare collaboration', 'Record trust and desired synchronization without transferring data.', ['Trust', 'Synchronization']] },
@@ -60,15 +62,21 @@ function localizedFeature(source: HistoricalFeature, locale: DacaFeatureLocale):
 }
 
 export function dacaReleaseHistory(scope: DacaFeatureScope, locale: DacaFeatureLocale): readonly DacaRelease[] {
-  const latest: DacaRelease = { version: CURRENT_RELEASE_VERSION, features: locale === 'de' ? [
-    { title: 'Verbesserungen schneller finden', description: 'Die Versionskarte zeigt die neuesten Änderungen. In der vollständigen Liste suchen Sie nach Funktion oder Thema.', tags: ['Updates', 'Suche'] },
-    { title: 'Updates bewusst übernehmen', description: 'Ein Dialog zeigt den Versionswechsel und warnt vor dem Verlust ungespeicherter Inhalte. Sie entscheiden zwischen sofortigem Update und späterem Weiterarbeiten.', tags: ['Updates', 'Bedienung'] },
-    { title: 'Einstellungen direkt öffnen', description: 'Das neue Einstellungssymbol neben der Moduswahl führt unmittelbar zur Featureliste.', tags: ['Einstellungen', 'Navigation'] },
+  const catalogFeatures: readonly DacaReleaseFeature[] = locale === 'de' ? [
+    { title: 'Feldmerkmale direkt bearbeiten', description: 'Nach der Auswahl eines logischen Felds im Mappinggraph steht der Schreibcursor direkt im Eingabefeld «Entität». Das gilt auch für «Feld bearbeiten» im Kontextmenü.', tags: ['Datenmodelle', 'Bedienung'] },
+    { title: 'Feldaktionen im Kontextmenü', description: 'Data Owner und Data Stewards können am logischen Feld per Rechtsklick oder Umschalt+F10 Merkmale bearbeiten, eine Verbindung beginnen, einzelne physische Verbindungen trennen oder das Feld entfernen.', tags: ['Datenmodelle', 'Zuordnungen'] },
+    { title: 'Co-Design auf der Versionskarte', description: 'Die Versionskarte nennt V, armasuisse, ESTV und BIT als Co-Designer über dem Versionsstatus.', tags: ['Updates', 'Information'] },
   ] : [
-    { title: 'Find improvements faster', description: 'The version card shows the latest changes. Search the full release list by feature or topic.', tags: ['Updates', 'Search'] },
-    { title: 'Choose when to update', description: 'A dialog shows the version transition and warns about unsaved content. Apply the update now or continue working and update later.', tags: ['Updates', 'Usability'] },
-    { title: 'Choose settings from the header', description: 'The settings icon beside the theme control opens the feature list directly.', tags: ['Settings', 'Navigation'] },
-  ] };
+    { title: 'Edit field characteristics immediately', description: 'Selecting a logical field in the mapping graph places the text cursor in the Entity input. The same applies to Edit field in the context menu.', tags: ['Data models', 'Usability'] },
+    { title: 'Field actions in the context menu', description: 'Data owners and data stewards can right-click a logical field or press Shift+F10 to edit its characteristics, start a connection, remove an individual physical link, or delete the field.', tags: ['Data models', 'Mappings'] },
+    { title: 'Co-design credit on the version card', description: 'The version card credits V, armasuisse, ESTV and BIT above the version status.', tags: ['Updates', 'Information'] },
+  ];
+  const controlPlaneFeatures: readonly DacaReleaseFeature[] = locale === 'de' ? [
+    { title: 'Versionsstand gemeinsam aktualisiert', description: 'Die Kontrollkomponente zeigt denselben aktuellen Versionsstand wie der Datenkatalog.', tags: ['Updates', 'Betrieb'] },
+  ] : [
+    { title: 'Shared version updated', description: 'The control plane displays the same current version as the data catalog.', tags: ['Updates', 'Operations'] },
+  ];
+  const latest: DacaRelease = { version: CURRENT_RELEASE_VERSION, features: scope === 'catalog' ? catalogFeatures : controlPlaneFeatures };
   const historical = scope === 'catalog' ? CATALOG_HISTORY : CONTROL_PLANE_HISTORY;
   return [latest, ...historical.map((item) => ({ version: item.version, features: [localizedFeature(item, locale)] }))];
 }
