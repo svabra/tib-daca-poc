@@ -35,8 +35,8 @@ import { DACA_VERSION } from './version';
           }
         </span>
       </div>
+      <p class="daca-version-overlay-credit">Co-Designed by V, armasuisse, ESTV und BIT</p>
       <p class="daca-version-overlay-status">{{ updateReady() ? (locale() === 'de' ? 'Neue Version ist bereit' : 'New version is ready') : (locale() === 'de' ? 'Version ist aktuell' : 'Version is current') }}</p>
-      <p class="daca-version-overlay-credit">Co-Designed by ESTV und BIT</p>
       <button
         #featureTrigger
         class="daca-version-feature-trigger"

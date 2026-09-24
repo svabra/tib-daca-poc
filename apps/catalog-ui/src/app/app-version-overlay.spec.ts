@@ -17,7 +17,8 @@ describe('Catalog runtime version overlay', () => {
     const overlay = fixture.nativeElement.querySelector('.daca-version-overlay') as HTMLElement;
     expect(overlay.textContent).toContain(`V${DACA_VERSION}`);
     expect(overlay.textContent).toContain('Version ist aktuell');
-    expect(overlay.textContent).toContain('Co-Designed by ESTV und BIT');
+    expect(overlay.textContent).toContain('Co-Designed by V, armasuisse, ESTV und BIT');
+    expect(overlay.querySelector('.daca-version-overlay-credit')?.nextElementSibling?.classList.contains('daca-version-overlay-status')).toBe(true);
     const settingsIcon = fixture.nativeElement.querySelector('.daca-header-settings') as HTMLAnchorElement;
     const themeIcon = fixture.nativeElement.querySelector('.daca-header-theme') as HTMLButtonElement;
     expect(settingsIcon.getAttribute('href')).toBe('/settings');

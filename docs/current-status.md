@@ -46,6 +46,7 @@ history and to the separate data-access view. The bounded UC and acceptance crit
 ## Release information for users
 
 Catalog and Control Plane now show the same translucent, blue-accented version card as DAAIF.
+The card places `Co-Designed by V, armasuisse, ESTV und BIT` above the version status.
 Its popup describes only the latest release. The popup link opens a dedicated feature list with
 search across descriptions and tags. The settings icon opens a DAAIF-style settings page with a
 submenu for personal language, appearance, feature list and responsibilities. There is no tenant language

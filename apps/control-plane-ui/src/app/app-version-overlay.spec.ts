@@ -17,7 +17,7 @@ describe('Control-plane runtime version overlay', () => {
     const overlay = fixture.nativeElement.querySelector('.daca-version-overlay') as HTMLElement;
     expect(overlay.textContent).toContain(`V${DACA_VERSION}`);
     expect(overlay.textContent).toContain('Version is current');
-    expect(overlay.textContent).toContain('Co-Designed by ESTV und BIT');
+    expect(overlay.textContent).toContain('Co-Designed by V, armasuisse, ESTV und BIT');
     expect(fixture.nativeElement.querySelector('.daca-header-settings')?.getAttribute('href')).toBe('/settings');
     (overlay.querySelector('.daca-version-feature-trigger') as HTMLButtonElement).click();
     fixture.detectChanges();

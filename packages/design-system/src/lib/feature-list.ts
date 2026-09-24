@@ -95,7 +95,7 @@ export const DACA_FEATURE_RELEASE = {
           },
           {
             title: 'Neue Versionen ohne F5 übernehmen',
-            description: 'DaCa öffnet für jeden bereitstehenden Build automatisch einen Dialog mit bisheriger und neuer Version, Warnung zu ungespeicherten Seiteninhalten, Neuerungen und Link zur Featureliste. «Update durchführen» lädt die Anwendung vollständig neu; «Update später durchführen» erhält die laufende Arbeit.',
+            description: 'DaCa öffnet für jeden bereitstehenden Build automatisch einen Dialog mit bisheriger und neuer Version, Warnung zu ungespeicherten Seiteninhalten, Neuerungen und Link zur Featureliste. «Update durchführen» lädt die Anwendung vollständig neu; «Update später durchführen» erhält die laufende Arbeit. Die Versionskarte nennt V, armasuisse, ESTV und BIT als Co-Designer über dem Versionsstatus.',
           },
           {
             title: 'PoC anhand geführter Journeys erleben',
@@ -190,7 +190,7 @@ export const DACA_FEATURE_RELEASE = {
           },
           {
             title: 'Apply new versions without F5',
-            description: 'DaCa automatically offers each ready build with its version transition, unsaved-content warning, release notes and feature-list link. Apply update reloads the app; Update later keeps the current work.',
+            description: 'DaCa automatically offers each ready build with its version transition, unsaved-content warning, release notes and feature-list link. Apply update reloads the app; Update later keeps the current work. The version card credits V, armasuisse, ESTV und BIT above its status.',
           },
           {
             title: 'Explore the PoC through guided journeys',
@@ -243,7 +243,7 @@ export const DACA_FEATURE_RELEASE = {
         features: [
           {
             title: 'Neue Versionen ohne F5 übernehmen',
-            description: 'DaCa öffnet für jeden bereitstehenden Build automatisch einen Dialog mit bisheriger und neuer Version, Warnung zu ungespeicherten Seiteninhalten, Neuerungen und Link zur Featureliste. «Update durchführen» lädt die Anwendung vollständig neu; «Update später durchführen» erhält die laufende Arbeit.',
+            description: 'DaCa öffnet für jeden bereitstehenden Build automatisch einen Dialog mit bisheriger und neuer Version, Warnung zu ungespeicherten Seiteninhalten, Neuerungen und Link zur Featureliste. «Update durchführen» lädt die Anwendung vollständig neu; «Update später durchführen» erhält die laufende Arbeit. Die Versionskarte nennt V, armasuisse, ESTV und BIT als Co-Designer über dem Versionsstatus.',
           },
           {
             title: 'Katalogeinträge beobachten',
@@ -270,7 +270,7 @@ export const DACA_FEATURE_RELEASE = {
         features: [
           {
             title: 'Apply new versions without F5',
-            description: 'DaCa automatically offers each ready build with its version transition, unsaved-content warning, release notes and feature-list link. Apply update reloads the app; Update later keeps the current work.',
+            description: 'DaCa automatically offers each ready build with its version transition, unsaved-content warning, release notes and feature-list link. Apply update reloads the app; Update later keeps the current work. The version card credits V, armasuisse, ESTV und BIT above its status.',
           },
           {
             title: 'Observe catalog records',

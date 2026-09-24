@@ -37,6 +37,7 @@ Both PWAs consume `packages/design-system`, a focused Angular port of the refere
 federal authority strip, Confederation/BIT header, Swiss-red/blue tokens, sharp surfaces,
 typography, focus behavior, and responsive breakpoints. The Confederation logo and favicon are
 byte-identical copies of the supplied reference assets; its monolithic stylesheet is not imported.
+The shared version card credits `V, armasuisse, ESTV und BIT` above the update status.
 
 The catalog header's information icon opens `/documentation`, which contains the existing User
 Journeys, static catalog guidance and a PostgreSQL-backed DaCa application glossary.
