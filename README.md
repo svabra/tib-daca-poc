@@ -281,6 +281,7 @@ contains the field table and editor. The same form instance retains unsaved chan
 change. New models open on model characteristics; existing models open on status.
 
 The mapping graph now uses compact cards and a 570 px canvas beside the persistent field editor.
+Selecting a graph field places the text cursor in the editor's first input, `Entität`, once the field is shown.
 Connections can be removed while older mapping revisions stay in history; logical fields can also
 be removed from the editor. On a graph field, right click or Shift+F10 opens actions for editing
 field characteristics, adding a connection, removing an individual physical link, or removing the

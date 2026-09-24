@@ -46,6 +46,7 @@ interface FieldLink { mapping: AssetMapping; columnId: string; label: string; }
 export class MappingGraphComponent {
   readonly facade=inject(MappingDraftFacade);
   readonly canManage=input(false);
+  readonly fieldActivated=output<string>();
   readonly disconnect=output<{mappingId:string;columnId:string}>();
   readonly deleteField=output<string>();
   readonly menu=signal<FieldMenu|null>(null);
@@ -65,11 +66,11 @@ export class MappingGraphComponent {
   fieldStatusLabel(fieldId:string):string{const status=this.facade.mappingStatusForField(fieldId);return status==='unmapped'?'Offen':MAPPING_STATUS_LABELS[status];}
   fieldAriaLabel(field:LogicalField):string{return `Logisches Feld ${field.name}, ${field.dataType}, Status ${this.fieldStatusLabel(field.id)}. ${this.canManage()?'Aktivieren, dann physische Spalte wählen. Umschalt+F10 öffnet Aktionen.':'Aktivieren, um Feldmerkmale anzuzeigen.'}`;}
   fieldPointerDown(fieldId:string,event:PointerEvent):void{if(event.button===0&&this.canManage())this.facade.beginConnection(fieldId,event.currentTarget);}
-  fieldClicked(fieldId:string,target:EventTarget|null):void{if(this.canManage())this.facade.beginConnection(fieldId,target);else this.facade.selectField(fieldId);}
+  fieldClicked(fieldId:string,target:EventTarget|null):void{if(this.canManage())this.facade.beginConnection(fieldId,target);else this.facade.selectField(fieldId);this.fieldActivated.emit(fieldId);}
   fieldKeydown(fieldId:string,event:KeyboardEvent):void{if(!this.canManage()||!(event.key==='F10'&&event.shiftKey))return;event.preventDefault();const rect=(event.currentTarget as HTMLElement).getBoundingClientRect();this.showMenu(fieldId,rect.left,rect.bottom);}
   openFieldMenu(fieldId:string,event:MouseEvent):void{if(!this.canManage())return;event.preventDefault();event.stopPropagation();this.facade.cancelConnection();this.facade.selectField(fieldId);this.showMenu(fieldId,event.clientX,event.clientY);}
   private showMenu(fieldId:string,x:number,y:number):void{this.menu.set({fieldId,x:Math.max(8,Math.min(x,window.innerWidth-298)),y:Math.max(8,Math.min(y,window.innerHeight-260))});}
-  editField(fieldId:string):void{this.facade.selectField(fieldId);this.closeMenu();}
+  editField(fieldId:string):void{this.facade.selectField(fieldId);this.closeMenu();this.fieldActivated.emit(fieldId);}
   addConnection(fieldId:string):void{this.facade.beginConnection(fieldId);this.closeMenu();}
   isSelectedColumn(columnId:string):boolean{return this.facade.selectedMapping()?.physicalColumnIds.includes(columnId)??false;}
   complete(columnId:string,target:EventTarget|null):void{if(this.canManage()&&this.facade.pendingLogicalFieldId())this.facade.completeConnection(columnId,target);}

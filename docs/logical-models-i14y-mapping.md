@@ -198,7 +198,8 @@ its earlier version remains historical evidence. Deleting a logical field create
 version. Connections to surviving fields are rebased to the new field versions as draft
 successors; connections involving a removed field are superseded.
 Right click or Shift+F10 on a logical graph field opens actions to inspect its characteristics,
-start a new connection, remove a specific physical link, or delete the logical field. Removing
+start a new connection, remove a specific physical link, or delete the logical field. Activating
+the field moves the text cursor to the first editor input, `Entität`. Removing
 one target from a multi-target mapping writes a successor containing the remaining targets;
 removing its last target supersedes the mapping. A shared mapping with multiple logical fields
 opens in the mapping editor so the action cannot silently remove other fields' links. These

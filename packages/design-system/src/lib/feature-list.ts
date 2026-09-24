@@ -79,7 +79,7 @@ export const DACA_FEATURE_RELEASE = {
           },
           {
             title: 'Logische und physische Modelle verbinden',
-            description: 'Der Leitfaden trennt das manuelle logische Modell (Journey 10) von der VIBDBU-Ableitung (Journey 11) und erklärt den Inkonsistenzfall (Journey 13). Der kompakte Mappinggraph lässt den Feldeditor rechts sichtbar. Rechtsklick oder Umschalt+F10 öffnet am logischen Feld ein Kontextmenü zum Bearbeiten, Verbinden, gezielten Trennen und Entfernen. Lösch- und Trennaktionen erfordern serverseitig eine passende Data-Owner- oder Data-Steward-Rolle. Fehlende physische Counterparts bleiben speicherbar, werden aber als Qualitätsfehler und persönliche Aufgabe des Data Owners erfasst. Er kann den Fehler begründet akzeptieren oder einen Data Steward zur Prüfung beauftragen; eine erneute Zuordnung oder Feldlöschung löst ihn auf.',
+            description: 'Der Leitfaden trennt das manuelle logische Modell (Journey 10) von der VIBDBU-Ableitung (Journey 11) und erklärt den Inkonsistenzfall (Journey 13). Der kompakte Mappinggraph lässt den Feldeditor rechts sichtbar. Nach der Auswahl eines Graph-Felds steht der Schreibcursor im ersten Eingabefeld «Entität». Rechtsklick oder Umschalt+F10 öffnet am logischen Feld ein Kontextmenü zum Bearbeiten, Verbinden, gezielten Trennen und Entfernen. Lösch- und Trennaktionen erfordern serverseitig eine passende Data-Owner- oder Data-Steward-Rolle. Fehlende physische Counterparts bleiben speicherbar, werden aber als Qualitätsfehler und persönliche Aufgabe des Data Owners erfasst. Er kann den Fehler begründet akzeptieren oder einen Data Steward zur Prüfung beauftragen; eine erneute Zuordnung oder Feldlöschung löst ihn auf.',
           },
           {
             title: 'Domänen und Terminology gemeinsam steuern',
@@ -174,7 +174,7 @@ export const DACA_FEATURE_RELEASE = {
           },
           {
             title: 'Connect logical and physical models',
-            description: 'Logical-first and physical-first remain separate entry points. The logical-model page puts its title above tabs for status and classification, model characteristics, and logical entities and fields; unsaved edits survive tab changes. The compact mapping graph leaves the field editor visible at the right. Connections and logical fields can be removed. A missing physical counterpart remains saveable but creates a quality error and an owner task. The owner can accept it with a reason or assign investigation to a data steward; reconnecting or removing the field resolves it.',
+            description: 'Logical-first and physical-first remain separate entry points. The logical-model page puts its title above tabs for status and classification, model characteristics, and logical entities and fields; unsaved edits survive tab changes. The compact mapping graph leaves the field editor visible at the right. Selecting a graph field focuses the first editor input, Entity. Connections and logical fields can be removed. A missing physical counterpart remains saveable but creates a quality error and an owner task. The owner can accept it with a reason or assign investigation to a data steward; reconnecting or removing the field resolves it.',
           },
           {
             title: 'Govern domains and terminology together',

@@ -754,6 +754,25 @@ async function physicalFirstFlow() {
     "document.querySelector('.mapping-side .field-panel-form')?.textContent.includes('Feldmerkmale') && document.querySelector('.mapping-side input[formcontrolname=\"name\"]')?.value.length > 0 && document.querySelector('.mapping-side select[formcontrolname=\"dataType\"]')",
     'shared editable field characteristics panel did not open beside the mapping',
   );
+  const selectedLogicalField = await evaluate(`(() => {
+    const field = document.querySelector('.mapping-graph .field-endpoint');
+    field?.click();
+    return Boolean(field);
+  })()`);
+  invariant(selectedLogicalField, 'logical field could not be selected in the graph');
+  try {
+    await waitFor(
+      "document.activeElement?.matches('.field-panel-form input[formcontrolname=\"entityName\"]') === true",
+      'selecting a logical graph field did not focus the first field characteristic',
+    );
+  } catch (error) {
+    const context = await evaluate(`(() => ({
+      active: document.activeElement?.outerHTML.slice(0, 300),
+      firstInput: document.querySelector('.field-panel-form input[formcontrolname="entityName"]')?.outerHTML.slice(0, 300),
+      editor: document.querySelector('.mapping-side')?.innerText.slice(0, 500),
+    }))()`);
+    throw new Error(`${error.message}: ${JSON.stringify(context)}`);
+  }
   await capturePageSegmentScreenshot('.mapping-shell', 'physical-derived-form-1440x900.png');
 
   await clickText('.representation-panel a', 'Bestehende Datenquelle hinzufügen');

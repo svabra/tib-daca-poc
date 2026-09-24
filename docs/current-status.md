@@ -169,6 +169,7 @@ open with `Status & Klassifikation` (summary, publication readiness, version his
 contains the selectable field table and editor. New models open on `Model Merkmale`, and
 switching tabs preserves unsaved input in the shared form.
 In the mapping graph, right click or Shift+F10 on a logical field opens its context menu.
+Activating a graph field moves the text cursor to the first field characteristic, `Entität`, after the editor renders.
 Scoped Data Owners and Data Stewards can edit field characteristics, start a connection,
 remove a particular physical link, or remove the logical field. Removing a saved link
 preserves its previous revision; removing a field saves a new model version. Local drafts
