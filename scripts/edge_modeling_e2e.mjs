@@ -1063,7 +1063,16 @@ async function existingToExistingFlow(physical) {
     1440,
     900,
   );
-  await waitFor("document.querySelector('.mapping-matrix') !== null", 'desktop matrix did not render');
+  try {
+    await waitFor("document.querySelector('.mapping-matrix') !== null", 'desktop matrix did not render', 25_000);
+  } catch (error) {
+    const context = await evaluate(`(() => ({
+      url: location.href,
+      workspace: document.querySelector('.mapping-shell')?.innerText.slice(0, 800),
+      alert: [...document.querySelectorAll('[role="alert"]')].map((item) => item.innerText),
+    }))()`);
+    throw new Error(`${error.message}: ${JSON.stringify(context)}`);
+  }
   await captureScreenshot('mappings-1440x900.png');
   await captureWorkspaceScreenshot('mappings-workspace-1440x900.png');
   await navigate('/models', 'cinthya.thor', 1774, 887);

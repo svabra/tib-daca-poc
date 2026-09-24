@@ -15,6 +15,7 @@ describe('mapping interaction modes', () => {
 
   it('opens the same mapping editor through graph click-to-connect', () => {
     const fixture = TestBed.createComponent(MappingGraphComponent);
+    fixture.componentRef.setInput('canManage', true);
     fixture.detectChanges();
     const source = fixture.debugElement.queryAll(By.css('.field-endpoint')).at(-1)!;
     source.triggerEventHandler('click', { currentTarget: source.nativeElement });
