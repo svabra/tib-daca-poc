@@ -1,12 +1,13 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
-import { BehaviorSubject, NEVER, Subject } from 'rxjs';
+import { BehaviorSubject, NEVER, of, Subject } from 'rxjs';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DataModelsApiService } from './data-models-api.service';
 import { ApiResult, AssetMapping, DriftReport, LogicalModel, LogicalModelSummary, PhysicalSnapshot } from './data-models.models';
 import { FALLBACK_LOGICAL_MODEL, FALLBACK_PHYSICAL_SNAPSHOT } from './mapping-fallback';
+import { ModelingAssistanceService } from './modeling-assistance.service';
 import { exactMappingSuggestions, MappingWorkspaceComponent } from './mapping-workspace.component';
 
 vi.mock('@bit-daca/design-system',async()=>{
@@ -80,6 +81,7 @@ describe('MappingWorkspaceComponent request ordering',()=>{
         {provide:DataModelsApiService,useValue:api},
         {provide:DemoIdentityService,useValue:{userId:identityId.asReadonly()}},
         {provide:CatalogApiService,useValue:{refreshWorkflowTasks:vi.fn()}},
+        {provide:ModelingAssistanceService,useValue:{myScopes:()=>of([])}},
         {provide:ActivatedRoute,useValue:route},
         {provide:Router,useValue:{navigate:vi.fn().mockResolvedValue(true)}},
       ],
@@ -147,6 +149,7 @@ describe('MappingWorkspaceComponent request ordering',()=>{
         {provide:DataModelsApiService,useValue:api},
         {provide:DemoIdentityService,useValue:{userId:identityId.asReadonly()}},
         {provide:CatalogApiService,useValue:{refreshWorkflowTasks:vi.fn()}},
+        {provide:ModelingAssistanceService,useValue:{myScopes:()=>of([])}},
         {provide:ActivatedRoute,useValue:route},
         {provide:Router,useValue:{navigate:vi.fn().mockResolvedValue(true)}},
       ],

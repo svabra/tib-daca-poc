@@ -288,7 +288,7 @@ def create_modeling_lifecycle_router() -> APIRouter:
         logical_version = session.get(LogicalModelVersion, version.logical_model_version_id)
         if logical_version is None:
             raise HTTPException(500, "Asset mapping is missing its logical model version")
-        _require_version_scope(session, actor, logical_version)
+        _require_version_scope(session, actor, logical_version, roles={"data_owner", "data_steward"})
         _require_etag(if_match, version.lock_version)
         if mapping.lifecycle == "retired":
             raise HTTPException(409, "Asset mapping is retired")

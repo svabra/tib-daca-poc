@@ -1,6 +1,6 @@
 import { AssetMapping, DriftReport } from './data-models.models';
 import { FALLBACK_MAPPINGS, FALLBACK_PHYSICAL_SNAPSHOT } from './mapping-fallback';
-import { mappingsForSnapshotWorkspace } from './mapping-workspace.component';
+import { linkedSnapshotDetailIds, mappingsForSnapshotWorkspace, preferredTableForWorkspace } from './mapping-workspace.component';
 
 vi.mock('@bit-daca/design-system',async()=>{
   const {Component}=await import('@angular/core');
@@ -10,6 +10,42 @@ vi.mock('@bit-daca/design-system',async()=>{
 });
 
 describe('mapping workspace snapshot contract', () => {
+  it('loads only the latest mapped detail per source from snapshot summaries', () => {
+    const old = { ...FALLBACK_PHYSICAL_SNAPSHOT, id: 'source-a-old', sourceId: 'source-a', revision: 1 };
+    const latest = { ...old, id: 'source-a-latest', revision: 2 };
+    const other = { ...old, id: 'source-b', sourceId: 'source-b', revision: 1 };
+    const mappings = [old, latest, other].map((snapshot) => ({
+      ...FALLBACK_MAPPINGS[0],
+      id: `mapping-${snapshot.id}`,
+      physicalSnapshotId: snapshot.id,
+    }));
+
+    expect(linkedSnapshotDetailIds('current', [old, latest, other], mappings)).toEqual(['source-a-latest', 'source-b']);
+  });
+
+  it('selects the previously mapped table after drift even when the new snapshot lists another table first', () => {
+    const previous = { ...FALLBACK_PHYSICAL_SNAPSHOT, id: 'previous', previousSnapshotId: null };
+    const current = {
+      ...FALLBACK_PHYSICAL_SNAPSHOT,
+      id: 'current',
+      previousSnapshotId: previous.id,
+      tables: [...previous.tables].reverse().map((table) => ({
+        ...table,
+        id: `new-${table.id}`,
+        columns: table.columns.map((column) => ({ ...column, id: `new-${column.id}` })),
+      })),
+    };
+    const predecessorMapping = {
+      ...FALLBACK_MAPPINGS[2],
+      physicalSnapshotId: previous.id,
+      physicalColumnIds: ['column-parent-id'],
+      status: 'broken' as const,
+    };
+
+    expect(preferredTableForWorkspace(current, [current, previous], [predecessorMapping], '')?.stableKey)
+      .toBe('hr_core.public.org_unit');
+  });
+
   it('keeps a drift-broken predecessor visible beside mappings already targeting the current snapshot', () => {
     const current = FALLBACK_MAPPINGS[0];
     const broken: AssetMapping = {

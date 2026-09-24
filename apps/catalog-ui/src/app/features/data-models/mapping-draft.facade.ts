@@ -222,6 +222,15 @@ export class MappingDraftFacade {
     this.announcement.set('Lokaler Zuordnungsentwurf entfernt.');
   }
 
+  removeLocalColumn(mappingId: string, columnId: string): void {
+    const mapping = this.mappings().find((item) => item.id === mappingId);
+    if (!mapping?.id.startsWith('draft-mapping-') || !mapping.physicalColumnIds.includes(columnId)) return;
+    const remaining = mapping.physicalColumnIds.filter((id) => id !== columnId);
+    if (!remaining.length) { this.discardLocalMapping(mappingId); return; }
+    this.mappingsState.update((items) => items.map((item) => item.id === mappingId ? { ...item, physicalColumnIds: remaining } : item));
+    this.announcement.set('Verbindung aus lokalem Zuordnungsentwurf entfernt.');
+  }
+
   markValidation(mapping: AssetMapping): void {
     this.mappingsState.update((items) => items.map((item) => item.id === mapping.id ? mapping : item));
     this.selectedMappingId.set(mapping.id);

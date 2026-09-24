@@ -178,6 +178,10 @@ source is immediately browseable; DaCa never copies a data row into the catalog.
 Every import creates an immutable snapshot and compares it with its predecessor.  Drift covers
 additions, removals, datatype, length, precision, scale, and nullability.  Rename similarity is an
 explicit review candidate and is never silently accepted.
+When opening a newer snapshot for a broken mapping, the workspace selects the table with the
+same stable key as the previously mapped table. It does not depend on database row order.
+The workspace uses the loaded snapshot summaries to choose the latest mapped snapshot per source
+for linked representations, avoiding a detail request for every historical mapping version.
 
 ### DaCa asset-mapping layer
 
@@ -193,6 +197,12 @@ editor remains visible on desktop. A mapping can be superseded through “Verbin
 its earlier version remains historical evidence. Deleting a logical field creates a new model
 version. Connections to surviving fields are rebased to the new field versions as draft
 successors; connections involving a removed field are superseded.
+Right click or Shift+F10 on a logical graph field opens actions to inspect its characteristics,
+start a new connection, remove a specific physical link, or delete the logical field. Removing
+one target from a multi-target mapping writes a successor containing the remaining targets;
+removing its last target supersedes the mapping. A shared mapping with multiple logical fields
+opens in the mapping editor so the action cannot silently remove other fields' links. These
+changes require a scoped Data Owner or Data Steward; the server repeats the role check.
 
 Physical links are optional for a purely logical model. After a model has been linked to a
 physical representation, however, an active logical field without a current physical counterpart

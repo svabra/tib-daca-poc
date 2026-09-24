@@ -79,7 +79,7 @@ export const DACA_FEATURE_RELEASE = {
           },
           {
             title: 'Logische und physische Modelle verbinden',
-            description: 'Der Leitfaden trennt das manuelle logische Modell (Journey 10) von der VIBDBU-Ableitung (Journey 11) und erklärt den Inkonsistenzfall (Journey 13). Der kompakte Mappinggraph lässt den Feldeditor rechts sichtbar. Verbindungen und logische Felder lassen sich entfernen. Fehlende physische Counterparts bleiben speicherbar, werden aber als Qualitätsfehler und persönliche Aufgabe des Data Owners erfasst. Er kann den Fehler begründet akzeptieren oder einen Data Steward zur Prüfung beauftragen; eine erneute Zuordnung oder Feldlöschung löst ihn auf.',
+            description: 'Der Leitfaden trennt das manuelle logische Modell (Journey 10) von der VIBDBU-Ableitung (Journey 11) und erklärt den Inkonsistenzfall (Journey 13). Der kompakte Mappinggraph lässt den Feldeditor rechts sichtbar. Rechtsklick oder Umschalt+F10 öffnet am logischen Feld ein Kontextmenü zum Bearbeiten, Verbinden, gezielten Trennen und Entfernen. Lösch- und Trennaktionen erfordern serverseitig eine passende Data-Owner- oder Data-Steward-Rolle. Fehlende physische Counterparts bleiben speicherbar, werden aber als Qualitätsfehler und persönliche Aufgabe des Data Owners erfasst. Er kann den Fehler begründet akzeptieren oder einen Data Steward zur Prüfung beauftragen; eine erneute Zuordnung oder Feldlöschung löst ihn auf.',
           },
           {
             title: 'Domänen und Terminology gemeinsam steuern',

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from daca_catalog.mapping_inconsistencies import rebase_mapping_versions, sync_mapping_inconsistencies
-from daca_catalog.modeling_seed import VEHICLE_MODEL_ID, seed_modeling_catalog
+from daca_catalog.modeling_seed import PERSONNEL_MODEL_ID, VEHICLE_MODEL_ID, seed_modeling_catalog
 from daca_catalog.modeling_service import (
     create_logical_successor, get_logical_version, logical_version_payload,
-    logical_write_from_payload,
+    logical_write_from_payload, mapping_write_from_payload,
 )
 from daca_catalog.models import AssetMapping, AssetMappingVersion, LogicalMappingInconsistency, LogicalModel, WorkflowTask
 from sqlalchemy import select
@@ -128,3 +128,76 @@ def test_field_removal_supersedes_its_connection_and_rebases_survivors(session_f
             LogicalMappingInconsistency.logical_model_id == model.id,
             LogicalMappingInconsistency.logical_field_id == removed.id,
         ))
+
+
+def test_only_scoped_owner_or_steward_can_remove_a_logical_field(client, session_factory) -> None:
+    with session_factory() as session:
+        seed_modeling_catalog(session)
+        model = session.get(LogicalModel, PERSONNEL_MODEL_ID)
+        assert model is not None
+        version = get_logical_version(session, model.id)
+        body = logical_write_from_payload(logical_version_payload(session, model, version))
+        body.entities[0].fields.pop()
+        request = body.model_dump(mode="json", by_alias=True)
+        version_id = version.id
+        etag = f'"{version.lock_version}"'
+
+    url = f"/api/v1/logical-models/{PERSONNEL_MODEL_ID}/versions/{version_id}"
+    forbidden = client.put(url, json=request, headers=_headers("sibilla.micheli", etag))
+    assert forbidden.status_code == 403, forbidden.text
+    allowed = client.put(url, json=request, headers=_headers("cinthya.thor", etag))
+    assert allowed.status_code == 200, allowed.text
+
+
+def test_deputy_cannot_remove_mapping_connection(client, session_factory) -> None:
+    with session_factory() as session:
+        seed_modeling_catalog(session)
+        mapping = session.scalar(select(AssetMapping).where(
+            AssetMapping.logical_model_id == VEHICLE_MODEL_ID,
+        ).limit(1))
+        assert mapping is not None
+        mapping_id = mapping.id
+
+    original = client.get(f"/api/v1/asset-mappings/{mapping_id}", headers=_headers("christian.man"))
+    assert original.status_code == 200, original.text
+    payload = original.json()
+    url = f"/api/v1/asset-mappings/{mapping_id}/versions/{payload['versionId']}/supersede"
+    assert client.post(url, headers=_headers("sibilla.micheli", original.headers["etag"])).status_code == 403
+    assert client.post(url, headers=_headers("christian.man", original.headers["etag"])).status_code == 200
+
+
+def test_removing_one_of_two_physical_targets_preserves_the_other(client, session_factory) -> None:
+    with session_factory() as session:
+        seed_modeling_catalog(session)
+        mapping = session.scalar(select(AssetMapping).where(
+            AssetMapping.logical_model_id == VEHICLE_MODEL_ID,
+        ).limit(1))
+        assert mapping is not None
+        mapping_id = mapping.id
+
+    original = client.get(f"/api/v1/asset-mappings/{mapping_id}", headers=_headers("christian.man"))
+    assert original.status_code == 200, original.text
+    payload = original.json()
+    snapshot = client.get(
+        f"/api/v1/physical-snapshots/{payload['physicalSnapshotId']}",
+        headers=_headers("christian.man"),
+    )
+    assert snapshot.status_code == 200, snapshot.text
+    all_columns = [column["id"] for database in snapshot.json()["databases"]
+                   for schema in database["schemas"] for table in schema["tables"]
+                   for column in table["columns"]]
+    extra = next(column for column in all_columns if column not in payload["physicalColumnIds"])
+    write = mapping_write_from_payload(payload).model_dump(mode="json", by_alias=True)
+    write["physicalColumnIds"] = [*payload["physicalColumnIds"], extra]
+    url = f"/api/v1/asset-mappings/{mapping_id}/versions/{payload['versionId']}"
+    expanded = client.put(url, json=write, headers=_headers("christian.man", original.headers["etag"]))
+    assert expanded.status_code == 200, expanded.text
+
+    write["physicalColumnIds"] = [extra]
+    url = f"/api/v1/asset-mappings/{mapping_id}/versions/{expanded.json()['versionId']}"
+    denied = client.put(url, json=write, headers=_headers("sibilla.micheli", expanded.headers["etag"]))
+    assert denied.status_code == 403, denied.text
+    reduced = client.put(url, json=write, headers=_headers("christian.man", expanded.headers["etag"]))
+    assert reduced.status_code == 200, reduced.text
+    assert reduced.json()["physicalColumnIds"] == [extra]
+    assert reduced.json()["revision"] == expanded.json()["revision"] + 1

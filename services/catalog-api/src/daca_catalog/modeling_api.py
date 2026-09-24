@@ -712,6 +712,17 @@ def create_modeling_router() -> APIRouter:
         _require_etag(if_match, version.lock_version)
         if version.revision != model.revision:
             raise HTTPException(409, "Only the latest logical model version can be revised")
+        previous_field_ids = {
+            field["id"]
+            for entity in logical_version_payload(session, model, version)["entities"]
+            for field in entity["fields"]
+        }
+        requested_fields = (
+            [field for entity in body.entities for field in entity.fields]
+            if body.entities else body.fields
+        )
+        if previous_field_ids - {field.id for field in requested_fields if field.id}:
+            _require_version_scope(session, actor, version, roles={"data_owner", "data_steward"})
         successor = create_logical_successor(
             session,
             model,
@@ -1722,6 +1733,12 @@ def create_modeling_router() -> APIRouter:
         _validate_mapping_scope(session, actor, body, mapping=mapping)
         if version.revision != mapping.revision:
             raise HTTPException(409, "Only the latest mapping version can be revised")
+        previous_mapping = mapping_write_from_payload(mapping_payload(session, mapping, version))
+        if (
+            set(previous_mapping.logical_field_version_ids) - set(body.logical_field_version_ids)
+            or set(previous_mapping.physical_column_ids) - set(body.physical_column_ids)
+        ):
+            _require_version_scope(session, actor, logical_version, roles={"data_owner", "data_steward"})
         successor = create_mapping_successor(
             session,
             mapping,

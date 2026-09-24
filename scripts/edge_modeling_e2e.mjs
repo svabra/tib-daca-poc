@@ -859,10 +859,20 @@ async function existingToExistingFlow(physical) {
     `/models/${organizationModelId}/mappings?view=table&physicalSnapshotId=${physical.snapshotId}`,
     'cinthya.thor',
   );
-  await waitFor(
-    "document.querySelector('.mapping-matrix') && document.body.innerText.includes('Gültig')",
-    'validated mapping did not appear in the matrix',
-  );
+  try {
+    await waitFor(
+      "document.querySelector('.mapping-matrix') && document.body.innerText.includes('Gültig')",
+      'validated mapping did not appear in the matrix',
+    );
+  } catch (error) {
+    const context = await evaluate(`(() => ({
+      url: location.href,
+      matrix: document.querySelector('.mapping-matrix')?.innerText.slice(0, 800),
+      alert: [...document.querySelectorAll('[role="alert"]')].map((item) => item.innerText),
+      snapshot: document.querySelector('.representation-panel')?.innerText.slice(0, 500),
+    }))()`);
+    throw new Error(`${error.message}: ${JSON.stringify(context)}`);
+  }
   await cdp.call('Page.reload', { ignoreCache: true }, sessionId);
   await waitFor(
     "document.querySelector('.mapping-matrix') && document.body.innerText.includes('Gültig')",
@@ -937,10 +947,19 @@ async function existingToExistingFlow(physical) {
   invariant(focused, 'keyboard-only matrix edit action could not receive focus');
   await pressKey('Enter', 'Enter', 13);
   await waitFor("document.querySelector('.mapping-dialog[open]') !== null", 'Enter did not open the mapping dialog');
-  await waitFor(
-    "[...document.querySelectorAll('.mapping-dialog select[formcontrolname=\"physicalColumnIds\"] option')].some((option) => option.textContent.includes('logistics.vehicle_inventory.designation_de'))",
-    'Current snapshot replacement column did not load in the dialog',
-  );
+  try {
+    await waitFor(
+      "[...document.querySelectorAll('.mapping-dialog select[formcontrolname=\"physicalColumnIds\"] option')].some((option) => option.textContent.includes('logistics.vehicle_inventory.designation_de'))",
+      'Current snapshot replacement column did not load in the dialog',
+    );
+  } catch (error) {
+    const context = await evaluate(`(() => ({
+      url: location.href,
+      options: [...document.querySelectorAll('.mapping-dialog select[formcontrolname="physicalColumnIds"] option')].map((option) => option.textContent),
+      workspace: document.querySelector('.mapping-shell')?.innerText.slice(0, 800),
+    }))()`);
+    throw new Error(`${error.message}: ${JSON.stringify(context)}`);
+  }
   const targetIndex = await evaluate(`(() => {
     const select = document.querySelector('.mapping-dialog select[formcontrolname="physicalColumnIds"]');
     const options = [...select.options];
@@ -999,6 +1018,17 @@ async function existingToExistingFlow(physical) {
     844,
   );
   await waitFor("document.querySelector('.mapping-matrix') !== null", 'mobile did not default to the matrix');
+  try {
+    await waitFor(`(() => [...document.querySelectorAll('.mapping-shell button, .workspace-context select')]
+      .filter((element) => element.getClientRects().length > 0)
+      .every((element) => element.getBoundingClientRect().height >= 40))()`, 'mobile interactive targets remained too small');
+  } catch (error) {
+    const targets = await evaluate(`(() => [...document.querySelectorAll('.mapping-shell button, .workspace-context select')]
+      .filter((element) => element.getClientRects().length > 0)
+      .map((element) => ({ label: element.textContent.trim().slice(0, 80), height: element.getBoundingClientRect().height }))
+      .filter((element) => element.height < 40))()`);
+    throw new Error(`${error.message}: ${JSON.stringify(targets)}`);
+  }
   const mobile = await evaluate(`(() => {
     const region = document.querySelector('.matrix-region');
     const targets = [...document.querySelectorAll('.mapping-shell button, .workspace-context select')]

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, ViewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { concatMap, finalize, forkJoin, from, map, of, switchMap } from 'rxjs';
@@ -16,6 +16,7 @@ import { MappingGraphComponent } from './mapping-graph.component';
 import { MappingInspectorComponent } from './mapping-inspector.component';
 import { MappingInconsistenciesComponent } from './mapping-inconsistencies.component';
 import { MappingMatrixComponent } from './mapping-matrix.component';
+import { ModelingAssistanceService, ModelingScope } from './modeling-assistance.service';
 import { FALLBACK_LOGICAL_MODEL, FALLBACK_MAPPINGS, FALLBACK_PHYSICAL_SNAPSHOT } from './mapping-fallback';
 
 export function mappingsForSnapshotWorkspace(
@@ -40,6 +41,39 @@ export function mappingsForSnapshotWorkspace(
       && (mapping.physicalSnapshotId === snapshot.previousSnapshotId || impactedMappingIds.has(mapping.id))
       && (!table || tableImpactedMappingIds.has(mapping.id));
   });
+}
+
+export function preferredTableForWorkspace(
+  snapshot: PhysicalSnapshot,
+  allSnapshots: readonly PhysicalSnapshot[],
+  mappings: readonly AssetMapping[],
+  requestedTableId: string,
+): PhysicalTable | undefined {
+  const requested = snapshot.tables.find((table) => table.id === requestedTableId);
+  if (requested) return requested;
+  const mappedColumnIds = new Set(mappings.filter((mapping) => mapping.physicalSnapshotId === snapshot.id).flatMap((mapping) => mapping.physicalColumnIds));
+  const currentMatch = snapshot.tables.find((table) => table.columns.some((column) => mappedColumnIds.has(column.id)));
+  if (currentMatch) return currentMatch;
+  const predecessorKeys = new Set(allSnapshots.filter((item) => item.id !== snapshot.id).flatMap((item) =>
+    item.tables.filter((table) => mappings.some((mapping) => mapping.physicalSnapshotId === item.id
+      && mapping.physicalColumnIds.some((columnId) => table.columns.some((column) => column.id === columnId))))
+      .map((table) => table.stableKey)));
+  return snapshot.tables.find((table) => predecessorKeys.has(table.stableKey)) ?? snapshot.tables[0];
+}
+
+export function linkedSnapshotDetailIds(
+  currentId: string,
+  summaries: readonly PhysicalSnapshot[],
+  mappings: readonly AssetMapping[],
+): string[] {
+  const mappedIds = new Set(mappings.map((mapping) => mapping.physicalSnapshotId));
+  const latestBySource = new Map<string, PhysicalSnapshot>();
+  for (const snapshot of summaries) {
+    if (snapshot.id === currentId || !mappedIds.has(snapshot.id)) continue;
+    const previous = latestBySource.get(snapshot.sourceId);
+    if (!previous || snapshot.revision > previous.revision) latestBySource.set(snapshot.sourceId, snapshot);
+  }
+  return [...latestBySource.values()].map((snapshot) => snapshot.id);
 }
 
 interface PhysicalRepresentationItem {
@@ -136,8 +170,8 @@ export function exactMappingSuggestions(
       <section class="mapping-shell daca-card">
         <header class="mapping-toolbar"><nav aria-label="Darstellung des Mapping-Arbeitsplatzes"><button type="button" [class.is-active]="facade.view()==='graph'" [attr.aria-pressed]="facade.view()==='graph'" (click)="setView('graph')">Graph</button><button type="button" [class.is-active]="facade.view()==='table'" [attr.aria-pressed]="facade.view()==='table'" (click)="setView('table')">Tabelle</button><button type="button" [class.is-active]="facade.view()==='drift'" [attr.aria-pressed]="facade.view()==='drift'" (click)="setView('drift')">Drift</button></nav><div class="mapping-counts" aria-label="Zuordnungsstatus"><span class="is-valid">{{ facade.statusCounts().validated }} gültig</span><span class="is-review">{{ facade.statusCounts().review_pending+facade.statusCounts().draft }} prüfen</span><span class="is-broken">{{ facade.statusCounts().broken }} gebrochen</span></div><div class="toolbar-actions"><button class="daca-button is-secondary" type="button" (click)="facade.openCreate($event.currentTarget)">Zuordnung hinzufügen</button><button class="daca-button" type="button" [disabled]="!facade.hasDirtyMappings()||saving()||fallbackActive()" (click)="saveMappings()">{{ saving()?'Wird gespeichert …':'Entwurf speichern' }}</button></div></header>
         <div class="mapping-body" [class.is-drift]="facade.view()==='drift'">
-          <main>@switch(facade.view()){@case('graph'){<daca-mapping-graph/>}@case('table'){<daca-mapping-matrix/>}@case('drift'){<daca-mapping-drift/>}}</main>
-          @if(facade.view()!=='drift'){<aside class="mapping-side" aria-label="Merkmale und Zuordnung">@if(facade.selectedField();as field){<daca-logical-model-editor [id]="model.id" [embedded]="true" [fieldPanelOnly]="true" [selectedFieldId]="field.id" (modelSaved)="modelCharacteristicsSaved()" />}<daca-mapping-inspector [showFieldSummary]="false" (validate)="validateMapping($event)" (submit)="submitMapping($event)" (supersede)="supersedeMapping($event)" (remove)="removeMapping($event)" /></aside>}
+          <main>@switch(facade.view()){@case('graph'){<daca-mapping-graph [canManage]="canManageSelectedModel()" (disconnect)="disconnectFieldLink($event.mappingId,$event.columnId)" (deleteField)="deleteLogicalField($event)"/>}@case('table'){<daca-mapping-matrix/>}@case('drift'){<daca-mapping-drift/>}}</main>
+          @if(facade.view()!=='drift'){<aside class="mapping-side" aria-label="Merkmale und Zuordnung">@if(facade.selectedField();as field){<daca-logical-model-editor [id]="model.id" [embedded]="true" [fieldPanelOnly]="true" [selectedFieldId]="field.id" (modelSaved)="modelCharacteristicsSaved()" />}<daca-mapping-inspector [showFieldSummary]="false" [canRemove]="canManageSelectedModel()" (validate)="validateMapping($event)" (submit)="submitMapping($event)" (supersede)="supersedeMapping($event)" (remove)="removeMapping($event)" /></aside>}
         </div>
       </section>
       <p class="mapping-permission">@if(identity.canPublishModels()){Als Data Owner können Sie validierte Modellversionen final publizieren.}@else{Als Data Steward können Sie Mappings bearbeiten und validieren sowie eine Freigabe vorschlagen; die finale Publikation bleibt dem Data Owner vorbehalten.}</p>
@@ -156,9 +190,13 @@ export function exactMappingSuggestions(
   `],
 })
 export class MappingWorkspaceComponent {
-  readonly identity=inject(DemoIdentityService);readonly facade=inject(MappingDraftFacade);private readonly api=inject(DataModelsApiService);private readonly catalogApi=inject(CatalogApiService);private readonly route=inject(ActivatedRoute);private readonly router=inject(Router);
+  @ViewChild(LogicalModelEditorComponent) private fieldEditor?:LogicalModelEditorComponent;
+  readonly identity=inject(DemoIdentityService);readonly facade=inject(MappingDraftFacade);private readonly api=inject(DataModelsApiService);private readonly catalogApi=inject(CatalogApiService);private readonly assistance=inject(ModelingAssistanceService);private readonly route=inject(ActivatedRoute);private readonly router=inject(Router);
+  readonly manageScopes=signal<readonly ModelingScope[]>([]);
+  readonly canManageSelectedModel=computed(()=>{const model=this.facade.model();return Boolean(model&&!this.saving()&&!this.fallbackActive()&&model.status!=='retired'&&model.status!=='review_pending'&&this.manageScopes().some((scope)=>(scope.role==='data_owner'||scope.role==='data_steward')&&scope.descendantOrganizationIds.includes(model.office)));});
   readonly issueRefreshKey=signal(0);
   private catalogRequestToken=0;
+  private scopeRequestToken=0;
   private selectionRequestToken=0;
   private requestedModelId='';
   private requestedSnapshotId='';
@@ -166,7 +204,8 @@ export class MappingWorkspaceComponent {
   private suggestRequested=false;
   readonly modelScoped=Boolean(this.route.snapshot.paramMap.get('id'));
   readonly modelOptions=signal<readonly LogicalModelSummary[]>([]);readonly snapshotOptions=signal<readonly PhysicalSnapshot[]>([]);readonly selectedModelId=signal('');readonly selectedSnapshotId=signal('');readonly selectedPhysicalTableId=signal('');readonly linkedRepresentations=signal<readonly PhysicalRepresentationItem[]>([]);readonly suggestionReview=signal<MappingSuggestionReview|null>(null);readonly loading=signal(true);readonly saving=signal(false);readonly error=signal<string|null>(null);readonly fallbackActive=signal(false);
-  constructor(){this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params)=>{const requestedView=params.get('view')??this.route.snapshot.data['view'];if(requestedView==='graph'||requestedView==='table'||requestedView==='drift')this.facade.view.set(requestedView);else this.facade.view.set(window.matchMedia?.('(max-width: 820px)').matches?'table':'graph');const modelId=params.get('logicalModelId')??this.route.snapshot.paramMap.get('id')??'';const snapshotId=params.get('physicalSnapshotId')??'';const tableId=params.get('physicalTableId')??'';this.suggestRequested=params.get('suggest')==='1';if(modelId){this.requestedModelId=modelId;this.selectedModelId.set(modelId);}if(snapshotId){this.requestedSnapshotId=snapshotId;this.selectedSnapshotId.set(snapshotId);}if(tableId){this.requestedPhysicalTableId=tableId;this.selectedPhysicalTableId.set(tableId);}});effect(()=>{this.identity.userId();this.load();});}
+  constructor(){this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params)=>{const requestedView=params.get('view')??this.route.snapshot.data['view'];if(requestedView==='graph'||requestedView==='table'||requestedView==='drift')this.facade.view.set(requestedView);else this.facade.view.set(window.matchMedia?.('(max-width: 820px)').matches?'table':'graph');const modelId=params.get('logicalModelId')??this.route.snapshot.paramMap.get('id')??'';const snapshotId=params.get('physicalSnapshotId')??'';const tableId=params.get('physicalTableId')??'';this.suggestRequested=params.get('suggest')==='1';if(modelId){this.requestedModelId=modelId;this.selectedModelId.set(modelId);}if(snapshotId){this.requestedSnapshotId=snapshotId;this.selectedSnapshotId.set(snapshotId);}if(tableId){this.requestedPhysicalTableId=tableId;this.selectedPhysicalTableId.set(tableId);}});effect(()=>{this.identity.userId();this.load();this.loadManageScopes();});}
+  private loadManageScopes():void{const token=++this.scopeRequestToken;this.manageScopes.set([]);this.assistance.myScopes().subscribe({next:(scopes)=>{if(token===this.scopeRequestToken)this.manageScopes.set(scopes);},error:()=>{if(token===this.scopeRequestToken)this.manageScopes.set([]);}});}
   load():void {
     const requestToken=++this.catalogRequestToken;
     // A new identity-scoped catalog load also invalidates any detail response
@@ -198,9 +237,9 @@ export class MappingWorkspaceComponent {
     this.error.set(null);
     forkJoin({model:this.api.loadLogicalModel(modelId),snapshot:this.api.loadPhysicalSnapshot(snapshotId),mappings:this.api.listMappings(modelId),drift:this.api.loadDrift(snapshotId)}).pipe(
       switchMap((selection)=>{
-        const otherSnapshotIds=[...new Set(selection.mappings.map((mapping)=>mapping.physicalSnapshotId).filter((id)=>id!==snapshotId))];
-        return otherSnapshotIds.length
-          ? forkJoin(otherSnapshotIds.map((id)=>this.api.loadPhysicalSnapshot(id))).pipe(map((otherSnapshots)=>({...selection,allSnapshots:[selection.snapshot,...otherSnapshots]})))
+        const detailIds=linkedSnapshotDetailIds(snapshotId,this.snapshotOptions(),selection.mappings);
+        return detailIds.length
+          ? forkJoin(detailIds.map((id)=>this.api.loadPhysicalSnapshot(id))).pipe(map((otherSnapshots)=>({...selection,allSnapshots:[selection.snapshot,...otherSnapshots]})))
           : of({...selection,allSnapshots:[selection.snapshot]});
       }),
       finalize(()=>{if(requestToken===this.selectionRequestToken)this.loading.set(false);}),
@@ -208,10 +247,7 @@ export class MappingWorkspaceComponent {
       next:({model,snapshot,mappings,drift,allSnapshots})=>{
         if(requestToken!==this.selectionRequestToken||modelId!==this.selectedModelId()||snapshotId!==this.selectedSnapshotId())return;
         const requestedTableId=this.requestedPhysicalTableId||this.selectedPhysicalTableId();
-        const mappedColumnIds=new Set(mappings.filter((mapping)=>mapping.physicalSnapshotId===snapshot.id).flatMap((mapping)=>mapping.physicalColumnIds));
-        const activeTable=snapshot.tables.find((table)=>table.id===requestedTableId)
-          ?? snapshot.tables.find((table)=>table.columns.some((column)=>mappedColumnIds.has(column.id)))
-          ?? snapshot.tables[0];
+        const activeTable=preferredTableForWorkspace(snapshot,allSnapshots,mappings,requestedTableId);
         if(!activeTable){this.error.set('Der ausgewählte Snapshot enthält keine physische Repräsentation.');return;}
         this.selectedPhysicalTableId.set(activeTable.id);
         const scopedSnapshot={...snapshot,tables:[activeTable]};
@@ -237,8 +273,11 @@ export class MappingWorkspaceComponent {
   selectValue(event:Event):string{return(event.target as HTMLSelectElement).value;}
   setView(view:MappingView):void{this.facade.view.set(view);void this.router.navigate([], {relativeTo:this.route,queryParams:{view},queryParamsHandling:'merge',replaceUrl:true});}
   modelCharacteristicsSaved():void{this.facade.announcement.set('Die Feldmerkmale wurden gespeichert.');this.issueRefreshKey.update((value)=>value+1);this.catalogApi.refreshWorkflowTasks();this.load();}
+  deleteLogicalField(fieldId:string):void{if(!this.canManageSelectedModel()||this.saving()||this.fallbackActive())return;if(this.facade.hasDirtyMappings()){this.error.set('Speichern oder verwerfen Sie zuerst die lokalen Zuordnungsentwürfe.');return;}if(!this.fieldEditor?.removeFieldFromGraph(fieldId))this.error.set('Das Feld konnte nicht entfernt werden. Prüfen Sie die Feldmerkmale und versuchen Sie es erneut.');}
+  disconnectFieldLink(mappingId:string,columnId:string):void{if(!this.canManageSelectedModel())return;const mapping=this.facade.activeMappings().find((item)=>item.id===mappingId);if(!mapping||mapping.logicalFieldVersionIds.length!==1||!mapping.physicalColumnIds.includes(columnId))return;const column=this.facade.physicalColumns().find((item)=>item.id===columnId);if(mapping.id.startsWith('draft-mapping-')){if(window.confirm(`Lokale Verbindung zu «${column?.qualifiedName??columnId}» entfernen?`))this.facade.removeLocalColumn(mappingId,columnId);return;}if(this.facade.dirtyIds().has(mappingId)){this.error.set('Speichern Sie zuerst den lokalen Zuordnungsentwurf.');return;}if(!window.confirm(`Verbindung zu «${column?.qualifiedName??columnId}» entfernen? Die bisherige Version bleibt in der Historie.`))return;if(mapping.physicalColumnIds.length===1){this.removeMapping(mappingId,false);return;}const value={...this.facade.toWrite(mapping),physicalColumnIds:mapping.physicalColumnIds.filter((id)=>id!==columnId)};this.saving.set(true);this.error.set(null);this.api.updateMapping(mapping.id,mapping.versionId,value,`"${mapping.lockVersion}"`).pipe(finalize(()=>this.saving.set(false))).subscribe({next:()=>this.afterLinkRemoval(),error:(error:Error)=>this.error.set(error.message)});}
+  private afterLinkRemoval():void{this.facade.announcement.set('Verbindung entfernt. Das logische Feld wird auf Inkonsistenz geprüft.');this.issueRefreshKey.update((value)=>value+1);this.catalogApi.refreshWorkflowTasks();this.loadSelection(this.selectedModelId(),this.selectedSnapshotId());}
   saveMappings():void{const dirty=this.facade.mappings().filter((mapping)=>this.facade.dirtyIds().has(mapping.id));if(!dirty.length||this.fallbackActive())return;this.saving.set(true);this.error.set(null);let savedCount=0;from(dirty).pipe(concatMap((mapping)=>{const value=this.facade.toWrite(mapping);const etag=`"${mapping.lockVersion}"`;const request=mapping.id.startsWith('draft-mapping-')?this.api.createMapping(value):this.api.updateMapping(mapping.id,mapping.versionId,value,etag);return request.pipe(map((result)=>({localId:mapping.id,result})));}),finalize(()=>this.saving.set(false))).subscribe({next:({localId,result})=>{savedCount+=1;this.facade.replaceSaved(localId,result.body);},complete:()=>{this.facade.announcement.set('Alle Mapping-Entwürfe wurden versioniert gespeichert.');this.issueRefreshKey.update((value)=>value+1);this.catalogApi.refreshWorkflowTasks();},error:(error:Error)=>this.error.set(savedCount?`${error.message} ${savedCount} Entwurf/Entwürfe wurden bereits gespeichert; die übrigen bleiben als lokale Entwürfe markiert.`:error.message)});}
-  removeMapping(id:string):void{const mapping=this.facade.mappings().find((item)=>item.id===id);if(!mapping)return;if(id.startsWith('draft-mapping-')){this.facade.discardLocalMapping(id);return;}if(this.facade.dirtyIds().has(id)||this.saving()||this.fallbackActive())return;if(!window.confirm('Diese Verbindung entfernen? Die bisherige Version bleibt in der Historie erhalten.'))return;this.saving.set(true);this.error.set(null);this.api.supersedeMapping(mapping.id,mapping.versionId,`"${mapping.lockVersion}"`).pipe(finalize(()=>this.saving.set(false))).subscribe({next:()=>{this.facade.announcement.set('Verbindung entfernt. Das logische Feld wird auf Inkonsistenz geprüft.');this.issueRefreshKey.update((value)=>value+1);this.catalogApi.refreshWorkflowTasks();this.loadSelection(this.selectedModelId(),this.selectedSnapshotId());},error:(error:Error)=>this.error.set(error.message)});}
+  removeMapping(id:string,confirm=true):void{if(!this.canManageSelectedModel())return;const mapping=this.facade.mappings().find((item)=>item.id===id);if(!mapping)return;if(id.startsWith('draft-mapping-')){this.facade.discardLocalMapping(id);return;}if(this.facade.dirtyIds().has(id)||this.saving()||this.fallbackActive())return;if(confirm&&!window.confirm('Diese Verbindung entfernen? Die bisherige Version bleibt in der Historie erhalten.'))return;this.saving.set(true);this.error.set(null);this.api.supersedeMapping(mapping.id,mapping.versionId,`"${mapping.lockVersion}"`).pipe(finalize(()=>this.saving.set(false))).subscribe({next:()=>this.afterLinkRemoval(),error:(error:Error)=>this.error.set(error.message)});}
   validateMapping(id:string):void{const mapping=this.facade.mappings().find((item)=>item.id===id);if(!mapping||mapping.status!=='review_pending'||mapping.id.startsWith('draft-mapping-'))return;this.saving.set(true);this.api.validateMapping(mapping.id,mapping.versionId,`"${mapping.lockVersion}"`).pipe(finalize(()=>this.saving.set(false))).subscribe({next:({body})=>{this.facade.markValidation(body);this.facade.announcement.set(body.validationResult?.valid?'Zuordnung ist gültig.':'Zuordnung enthält Prüfhinsweise oder Fehler.');},error:(error:Error)=>this.error.set(error.message)});}
   submitMapping(id:string):void{const mapping=this.facade.mappings().find((item)=>item.id===id);if(!mapping||!['draft','broken'].includes(mapping.status)||mapping.id.startsWith('draft-mapping-')||this.facade.dirtyIds().has(id))return;this.saving.set(true);this.error.set(null);this.api.submitMapping(mapping.id,mapping.versionId,`"${mapping.lockVersion}"`).pipe(finalize(()=>this.saving.set(false))).subscribe({next:({body})=>{this.facade.markValidation(body);this.facade.announcement.set('Die Zuordnung wurde als unveränderliche Nachfolgeversion zur Prüfung eingereicht.');},error:(error:Error)=>this.error.set(error.message)});}
   supersedeMapping(id:string):void{const mapping=this.facade.mappings().find((item)=>item.id===id);if(!mapping||!['validated','broken'].includes(mapping.status)||mapping.id.startsWith('draft-mapping-')||this.facade.dirtyIds().has(id))return;this.saving.set(true);this.error.set(null);this.api.supersedeMapping(mapping.id,mapping.versionId,`"${mapping.lockVersion}"`).pipe(finalize(()=>this.saving.set(false))).subscribe({next:({body})=>{this.facade.markValidation(body);this.facade.announcement.set('Die Zuordnung wurde durch eine unveränderliche Nachfolgeversion abgelöst.');},error:(error:Error)=>this.error.set(error.message)});}

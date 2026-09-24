@@ -1320,10 +1320,14 @@ def _term_response(session: Session, term: GlossaryTerm) -> GlossaryTermResponse
             }
         )
     preferred = _preferred_localization(localizations)
+    # These legacy columns are not part of the governed terminology response;
+    # the independent DaCa application glossary is exposed through its own API.
     return GlossaryTermResponse.model_validate(
         {
             **{
-                column.name: getattr(term, column.name) for column in GlossaryTerm.__table__.columns
+                column.name: getattr(term, column.name)
+                for column in GlossaryTerm.__table__.columns
+                if column.name not in {"abbreviation", "is_termdat"}
             },
             "preferredLabel": preferred.preferred_label if preferred else term.urn,
             "localizations": localizations,

@@ -13,6 +13,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Identity,
     Index,
     Integer,
     String,
@@ -1730,7 +1731,7 @@ class RoleChangeEvent(Base):
         Index("ix_role_change_subject", "subject_user_id", "sequence"),
     )
 
-    sequence: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    sequence: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")
     )

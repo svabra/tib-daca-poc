@@ -281,7 +281,11 @@ change. New models open on model characteristics; existing models open on status
 
 The mapping graph now uses compact cards and a 570 px canvas beside the persistent field editor.
 Connections can be removed while older mapping revisions stay in history; logical fields can also
-be removed from the editor. A model that has ever been linked to a physical representation may be
+be removed from the editor. On a graph field, right click or Shift+F10 opens actions for editing
+field characteristics, adding a connection, removing an individual physical link, or removing the
+logical field. These mutations require a Data Owner or Data Steward assignment in the model's
+organization scope; the API enforces the same restriction. Saved removals create versioned
+successors, while removing a local draft link stays local. A model that has ever been linked to a physical representation may be
 saved with an unbound logical field, but DaCa rates that field as an **Inkonsistenzfehler**. A
 PostgreSQL issue record creates a personal Data Owner task. The owner must accept the error with a
 reason or assign investigation to an eligible Data Steward. Adding a physical mapping or removing

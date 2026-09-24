@@ -84,7 +84,7 @@ terminology. A referenced row remains there as independently governed terminolog
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
 - Alembic head: `0032_mapping_inconsistencies`
-- Schema fingerprint: `3cd2c147f85c7b2b`
+- Schema fingerprint: `dcd722fcaa9aa73c`
 - Migration fingerprint: `98308219c4510ea0`
 - Tables: `94`
 
@@ -3496,7 +3496,7 @@ Append-only, sequential audit of organization roles, direct object responsibilit
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
-| `sequence` | `BIGINT` | no | PK | — |
+| `sequence` | `BIGINT` | no | PK | server: `Identity(always=True)` |
 | `occurred_at` | `DATETIME` | no | — | server: `CURRENT_TIMESTAMP` |
 | `actor_user_id` | `VARCHAR(200)` | no | — | — |
 | `action` | `VARCHAR(20)` | no | — | — |

@@ -77,4 +77,17 @@ describe('MappingInspectorComponent workflow actions', () => {
     validated.root.querySelector<HTMLButtonElement>('.inspector-actions button')!.click();
     expect(supersede).toHaveBeenCalledWith(validated.mapping.id);
   });
+
+  it('disables connection removal without an owner or steward scope', () => {
+    const { fixture, root } = render('validated');
+    fixture.componentRef.setInput('canRemove', false);
+    fixture.detectChanges();
+    const button = [...root.querySelectorAll<HTMLButtonElement>('.inspector-actions button')]
+      .find((item) => item.textContent?.includes('Verbindung entfernen'))!;
+    const remove = vi.fn();
+    fixture.componentInstance.remove.subscribe(remove);
+    expect(button.disabled).toBe(true);
+    button.click();
+    expect(remove).not.toHaveBeenCalled();
+  });
 });

@@ -87,6 +87,35 @@ describe('LogicalModelEditorComponent contracts',()=>{
     expect(root.querySelector('.field-table')).not.toBeNull();
   });
 
+  it('removes a graph field through a versioned model save without silently saving other edits',()=>{
+    const update=vi.fn((_id:string,_versionId:string,_value:LogicalModelWrite,_etag:string)=>of({body:FALLBACK_LOGICAL_MODEL,etag:'"2"'}));
+    Object.assign(TestBed.inject(DataModelsApiService),{
+      loadLogicalModel:()=>of({body:FALLBACK_LOGICAL_MODEL,etag:'"1"'}),
+      updateLogicalModel:update,
+    });
+    Object.assign(TestBed.inject(ModelingAssistanceService),{
+      myScopes:()=>of([{role:'data_steward',organizationId:'vbs-verteidigung',delegatedOwnerUserId:null,breadcrumb:[],descendantOrganizationIds:['vbs-verteidigung']}]),
+    });
+    const confirm=vi.spyOn(window,'confirm').mockReturnValue(true);
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);
+    fixture.componentRef.setInput('id',FALLBACK_LOGICAL_MODEL.id);
+    fixture.componentRef.setInput('embedded',true);
+    fixture.componentRef.setInput('fieldPanelOnly',true);
+    fixture.detectChanges();TestBed.tick();fixture.detectChanges();
+    const component=fixture.componentInstance;
+    component.form.controls.dataset.controls.titleDe.setValue('Ungespeicherter Titel');
+    component.form.markAsDirty();
+    expect(component.removeFieldFromGraph(FALLBACK_LOGICAL_MODEL.fields[0].id)).toBe(false);
+    expect(update).not.toHaveBeenCalled();
+    component.form.controls.dataset.controls.titleDe.setValue(FALLBACK_LOGICAL_MODEL.title.de);
+    component.form.markAsPristine();
+    expect(component.removeFieldFromGraph(FALLBACK_LOGICAL_MODEL.fields[0].id)).toBe(true);
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(update).toHaveBeenCalledOnce();
+    const body=update.mock.calls[0][2] as LogicalModelWrite;
+    expect(body.fields.map((field)=>field.id)).not.toContain(FALLBACK_LOGICAL_MODEL.fields[0].id);
+  });
+
   it('uses the latest version lock for version-specific writes after a root reload',()=>{
     const reloadedModel={...FALLBACK_LOGICAL_MODEL,revision:7,lockVersion:2};
     expect(logicalModelVersionEtag(reloadedModel)).toBe('"2"');

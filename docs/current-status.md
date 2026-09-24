@@ -167,6 +167,11 @@ open with `Status & Klassifikation` (summary, publication readiness, version his
 `Model Merkmale` contains DCAT-AP-CH and organization fields; `Logische Entitäten und Felder`
 contains the selectable field table and editor. New models open on `Model Merkmale`, and
 switching tabs preserves unsaved input in the shared form.
+In the mapping graph, right click or Shift+F10 on a logical field opens its context menu.
+Scoped Data Owners and Data Stewards can edit field characteristics, start a connection,
+remove a particular physical link, or remove the logical field. Removing a saved link
+preserves its previous revision; removing a field saves a new model version. Local drafts
+are edited locally. Both UI and API reject these removals outside the allowed role and scope.
 The logical-model overview renders its `Geändert` value with the local time as well as the date.
 
 The released sample database migration provides `daca_sample.public.VIBDBU` with the 47 CSV-defined
