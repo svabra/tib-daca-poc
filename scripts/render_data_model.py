@@ -74,7 +74,7 @@ CATALOG_TABLES = {
     "physical_drift_reports": "Automatic summary and provenance for comparison of consecutive immutable physical snapshots.",
     "physical_schema_snapshots": "Immutable, fingerprinted observations of a physical source schema.",
     "physical_schemas": "Snapshot-bound schema nodes in the physical metadata hierarchy.",
-    "physical_sources": "Credential-free physical metadata source definitions with PostgreSQL/S3/fixture/CSV adapter and secret-free configuration reference; CSV uploads are declared inventory metadata without a live connection.",
+    "physical_sources": "Credential-free physical metadata source definitions with PostgreSQL/S3/fixture/CSV adapter and secret-free configuration reference; CSV structure inventories have no live endpoint and alone support the archived lifecycle. Unreferenced inventories may be deleted while append-only inventory audit evidence survives.",
     "physical_tables": "Snapshot-bound PostgreSQL table/view, S3 Parquet object or CSV inventory table metadata; import_metadata retains CSV records without field names. row_count comes only from an actual Parquet footer and is distinct from object_count.",
     "access_requests": (
         "Requests by people or machines for time-bounded access, including renewals linked "

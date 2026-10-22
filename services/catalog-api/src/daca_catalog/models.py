@@ -2476,7 +2476,7 @@ class PhysicalSource(Base):
     __tablename__ = "physical_sources"
     __table_args__ = (
         CheckConstraint("adapter_type IN ('postgresql', 's3', 'fixture', 'csv')", name="ck_physical_adapter"),
-        CheckConstraint("lifecycle IN ('active', 'retired')", name="ck_physical_source_lifecycle"),
+        CheckConstraint("lifecycle IN ('active', 'retired') OR (adapter_type = 'csv' AND lifecycle = 'archived')", name="ck_physical_source_lifecycle"),
         CheckConstraint("revision >= 1", name="ck_physical_source_revision"),
         CheckConstraint("length(content_hash) = 64", name="ck_physical_source_hash"),
         Index("ix_physical_source_scope", "department_code", "organization_id"),

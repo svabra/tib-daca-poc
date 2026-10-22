@@ -12,9 +12,11 @@ from sqlalchemy.orm import Session
 from .modeling_api import (
     ActorDep,
     SessionDep,
+    _compatible_representation_scope,
     _etag,
     _require_any_assignment,
     _require_etag,
+    _require_scope,
     _require_snapshot_scope,
     _require_version_scope,
 )
@@ -265,10 +267,7 @@ def _selected_snapshot(
     if requested_snapshot_id is not None:
         snapshot = _require_snapshot_scope(session, actor, requested_snapshot_id)
         source = session.get(PhysicalSource, snapshot.source_id)
-        if source is None or (
-            source.department_code,
-            source.organization_id,
-        ) != (dataset_version.department_code, dataset_version.organization_id):
+        if not _compatible_representation_scope(source, dataset_version.department_code, dataset_version.organization_id):
             raise HTTPException(422, "Workspace snapshot and logical model must share one scope")
         return snapshot
 
@@ -281,10 +280,13 @@ def _selected_snapshot(
         .order_by(AssetMapping.updated_at.desc())
     ):
         source = session.get(PhysicalSource, mapping.physical_source_id)
-        if source is None or source.lifecycle != "active" or (
-            source.department_code,
-            source.organization_id,
-        ) != (dataset_version.department_code, dataset_version.organization_id):
+        if source is None or source.lifecycle != "active" or not _compatible_representation_scope(source, dataset_version.department_code, dataset_version.organization_id):
+            continue
+        try:
+            _require_scope(session, actor, source.department_code, source.organization_id)
+        except HTTPException as error:
+            if error.status_code != 403:
+                raise
             continue
         snapshot = session.scalar(
             select(PhysicalSchemaSnapshot)
@@ -547,6 +549,7 @@ def create_modeling_resources_router() -> APIRouter:
         actor: ActorDep,
     ) -> dict[str, Any]:
         mapping, _latest = get_mapping_version(session, mapping_id)
+        _require_snapshot_scope(session, actor, _latest.physical_snapshot_id)
         versions = list(
             session.scalars(
                 select(AssetMappingVersion)

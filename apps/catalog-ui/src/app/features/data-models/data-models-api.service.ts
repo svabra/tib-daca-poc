@@ -27,6 +27,7 @@ import {
   PhysicalDomainTarget,
   PhysicalSnapshot,
   PhysicalSource,
+  StructureInventoryAuditEvent,
   PhysicalTable,
 } from './data-models.models';
 
@@ -322,9 +323,22 @@ export class DataModelsApiService {
     )).pipe(map(result => ({...result, snapshot: this.normalizePhysicalSnapshot(result.snapshot)})));
   }
 
-  listPhysicalSources(): Observable<readonly PhysicalSource[]> {
+  manageStructureInventory(sourceId: string, revision: number, action: 'archive' | 'restore' | 'delete'): Observable<unknown> {
+    const url = `/api/v1/structure-inventories/${encodeURIComponent(sourceId)}`;
+    const options = {headers: this.writeHeaders(`"${revision}"`)};
+    return this.csvRequest(action === 'delete' ? this.http.delete(url, options) : this.http.post(`${url}/${action}`, {}, options));
+  }
+
+  structureInventoryAudit(): Observable<StructureInventoryAuditEvent[]> {
+    return this.identitySafe(this.http.get<StructureInventoryAuditEvent[]>('/api/v1/structure-inventories/audit-events', {headers: this.identity.headers()}));
+  }
+
+  listPhysicalSources(includeArchived = false, logicalModelId?: string): Observable<readonly PhysicalSource[]> {
+    let params = new HttpParams();
+    if (includeArchived) params = params.set('includeArchived', 'true');
+    if (logicalModelId) params = params.set('logicalModelId', logicalModelId);
     return this.identitySafe(this.http.get<CollectionResponse<unknown> | unknown[]>(
-      '/api/v1/physical-sources', { headers: this.identity.headers() },
+      '/api/v1/physical-sources', { headers: this.identity.headers(), params },
     )).pipe(map((response) => (Array.isArray(response) ? response : response.items).map((item) => this.normalizePhysicalSource(item))));
   }
 
@@ -793,10 +807,10 @@ export class DataModelsApiService {
     const firstDatabase = asRecord(databases[0]);
     const sourceType = textValue(snapshot['sourceAdapterType'], 'fixture') as PhysicalSnapshot['sourceType'];
     return {
-      id: textValue(snapshot['id']), sourceId: textValue(snapshot['sourceId']), sourceName: textValue(snapshot['sourceName'], textValue(snapshot['sourceId'])), sourceType,
+      id: textValue(snapshot['id']), sourceId: textValue(snapshot['sourceId']), sourceName: sourceType === 'csv' ? textValue(snapshot['sourceName']).replace(/\s*·\s*CSV-Struktur$/, '') : textValue(snapshot['sourceName'], textValue(snapshot['sourceId'])), sourceType,
       dataOwnerName: nullableText(snapshot['dataOwnerName']),
       catalogPath: textValue(snapshot['catalogPath'], firstDatabase['name'] ? `${sourceType === 's3' ? 's3' : 'postgresql'}://${textValue(firstDatabase['name'])}/` : ''),
-      systemName: sourceType === 'csv' ? 'CSV-Strukturimport' : sourceType === 's3' ? 'S3 Object Storage' : 'PostgreSQL', databaseName: textValue(firstDatabase['name'], textValue(root['databaseName'])),
+      systemName: sourceType === 'csv' ? 'Strukturinventar' : sourceType === 's3' ? 'S3 Object Storage' : 'PostgreSQL', databaseName: textValue(firstDatabase['name'], textValue(root['databaseName'])),
       revision: numberValue(snapshot['sequence'], numberValue(snapshot['revision'], 1)), contentHash: textValue(snapshot['fingerprint'] ?? snapshot['contentHash']),
       importedAt: textValue(snapshot['importedAt']), importedBy: namedReference(snapshot['importedBy'], textValue(snapshot['importedByUserId']), textValue(snapshot['importedByUserId'])),
       tables, previousSnapshotId: nullableText(snapshot['predecessorSnapshotId'] ?? snapshot['previousSnapshotId']),
@@ -809,10 +823,13 @@ export class DataModelsApiService {
     const connector = textValue(item['connectorType'] ?? item['adapterType'] ?? item['adapterKind']);
     const connectorType = (['fixture', 'postgresql', 's3', 'oracle', 'csv'].includes(connector) ? connector : 'postgresql') as PhysicalSource['connectorType'];
     return {
-      id: textValue(item['id']), revision: numberValue(item['revision'], 1), name: textValue(item['name'], textValue(item['displayName'], 'PostgreSQL-Quelle')),
+      id: textValue(item['id']), revision: numberValue(item['revision'], 1), name: connectorType === 'csv' ? textValue(item['name']).replace(/\s*·\s*CSV-Struktur$/, '') : textValue(item['name'], textValue(item['displayName'], 'PostgreSQL-Quelle')),
+      lifecycle: textValue(item['lifecycle'],'active') as PhysicalSource['lifecycle'], inventoryManageable: booleanValue(item['inventoryManageable'],false),
+      representationAttachable: typeof item['representationAttachable'] === 'boolean' ? item['representationAttachable'] : undefined,
+      representationDisabledReason: nullableText(item['representationDisabledReason']),
       description: nullableText(item['description']),
       connectorType,
-      systemName: textValue(item['systemName'], connectorType === 'csv' ? 'CSV-Strukturimport' : connectorType === 's3' ? 'S3 Object Storage' : 'PostgreSQL'), databaseName: textValue(item['databaseName']),
+      systemName: textValue(item['systemName'], connectorType === 'csv' ? 'Strukturinventar' : connectorType === 's3' ? 'S3 Object Storage' : 'PostgreSQL'), databaseName: textValue(item['databaseName']),
       department: textValue(item['departmentCode'], 'VBS'), office: textValue(item['organizationId'], 'vbs-verteidigung'),
       latestSnapshotId: nullableText(item['latestSnapshotId']), latestSnapshotSequence: nullableNumber(item['latestSnapshotSequence']),
       latestSnapshot: item['latestSnapshot'] ? this.normalizePhysicalSnapshot(item['latestSnapshot']) : null,

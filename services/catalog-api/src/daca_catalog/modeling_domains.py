@@ -52,7 +52,7 @@ def apply_domain_targets(session, actor, domain_id, targets, department_code, or
     if not targets:
         return
     # Runtime import keeps payload enrichment independent of the HTTP router.
-    from .modeling_api import _require_scope
+    from .modeling_api import _compatible_representation_scope, _require_scope
     from .modeling_service import record_audit, utc_now
 
     domain = session.get(Domain, domain_id) if domain_id else None
@@ -69,9 +69,7 @@ def apply_domain_targets(session, actor, domain_id, targets, department_code, or
         source = sources[source_id]
         _require_scope(session, actor, source.department_code, source.organization_id,
                        roles={"data_owner", "data_steward"})
-        if source.lifecycle != "active" or (source.department_code, source.organization_id) != (
-            department_code, organization_id
-        ):
+        if source.lifecycle != "active" or not _compatible_representation_scope(source, department_code, organization_id):
             raise HTTPException(422, "Physical source must share the model's active scope")
         if target.physical_snapshot_id != snapshot_id:
             raise HTTPException(422, "Physical object does not belong to the selected snapshot")

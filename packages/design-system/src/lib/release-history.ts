@@ -2,7 +2,7 @@ import { DacaFeatureLocale, DacaFeatureScope } from './feature-list';
 import { DACA_VERSION } from './version';
 
 // A version bump must supply new customer-facing notes before the UI can build.
-const CURRENT_RELEASE_VERSION: typeof DACA_VERSION = '0.1.30';
+const CURRENT_RELEASE_VERSION: typeof DACA_VERSION = '0.1.31';
 
 export interface DacaReleaseFeature {
   readonly title: string;
@@ -65,6 +65,13 @@ function localizedFeature(source: HistoricalFeature, locale: DacaFeatureLocale):
 
 export function dacaReleaseHistory(scope: DacaFeatureScope, locale: DacaFeatureLocale): readonly DacaRelease[] {
   const catalogFeatures: readonly DacaReleaseFeature[] = locale === 'de' ? [
+    { title: "Strukturinventare organisationsübergreifend zuordnen", description: "Strukturinventare auch aus anderen Organisationen mit logischen Modellen verbinden, wenn für beide Bereiche eine Berechtigung besteht. Der Dialog verwendet die serverseitige Auswahlentscheidung; Speichern und Inspektion prüfen die Rechte erneut. Angebundene Quellen behalten ihre Organisationsgrenze.", tags: ["Datenmodelle", "Datenquellen", "Berechtigungen"] },
+    { title: "Strukturinventare importieren und verwalten", description: "CSV-Strukturinventare ohne technische Anbindung von angebundenen Datenquellen unterscheiden. Physische Modelle mit Vorschau, Suche und Originalangaben inspizieren. Inventare mit Bestätigung archivieren, wiederherstellen oder bei fehlenden Modellverknüpfungen löschen; das Inventarprotokoll hält Person und Zeitpunkt fest und bleibt nach dem Löschen erhalten.", tags: ["Datenmodelle", "Import", "Datenquellen", "Protokoll"] },
+  ] : [
+    { title: "Attach structure inventories across organizations", description: "Link inventories from other organizations when independently authorized for both the model and inventory. The picker uses server-side eligibility; saving and inspection recheck access. Connected sources retain their organization boundary.", tags: ["Data models", "Data sources", "Permissions"] },
+    { title: "Import and manage structure inventories", description: "Distinguish endpoint-free CSV structure inventories from connected data sources. Inspect physical models with preview, search and original declarations. Confirm archival, restoration or deletion of unreferenced inventories; the inventory audit records actor and time and survives deletion.", tags: ["Data models", "Import", "Data sources", "Audit"] },
+  ];
+  const previousCatalogFeatures: readonly DacaReleaseFeature[] = locale === 'de' ? [
     { title: "Physische Modelle aus CSV laden", description: "Strukturinventare mit Vorschau, Suche und Organisationsauswahl als statische Datenquelle importieren. Tabellen und Felder öffnen direkt im Explorer; Originalangaben bleiben erhalten und identische Importe werden wiederverwendet.", tags: ["Datenmodelle", "Import"] },
     { title: "Mehrere physische Repräsentationen verbinden", description: "PostgreSQL-Tabellen und Views, S3-Parquet-Objekte und CSV-Modelle gemeinsam mit einem logischen Modell verbinden. Eindeutig namensgleiche Felder werden unabhängig von Gross- und Kleinschreibung als Entwürfe verknüpft; Typkonflikte bleiben sichtbar.", tags: ["Datenmodelle", "Zuordnungen", "Datenquellen"] },
     { title: "Beziehungen direkt im Canvas bearbeiten", description: "Verbindungslinien per Kontextmenü löschen oder ihren Mapping-Typ und ihre Regel ändern. Erklärende Tooltips helfen bei der Typwahl; beide Linienenden lassen sich auf andere Felder desselben Modells ziehen. Änderungen bleiben Entwürfe bis zum Speichern.", tags: ["Zuordnungen", "Editor"] },
@@ -86,7 +93,7 @@ export function dacaReleaseHistory(scope: DacaFeatureScope, locale: DacaFeatureL
   ];
   const latest: DacaRelease = { version: CURRENT_RELEASE_VERSION, features: scope === 'catalog' ? catalogFeatures : controlPlaneFeatures };
   const historical = scope === 'catalog' ? CATALOG_HISTORY : CONTROL_PLANE_HISTORY;
-  return [latest, ...historical.map((item) => ({ version: item.version, features: [localizedFeature(item, locale)] }))];
+  return [latest, { version: '0.1.30', features: scope === 'catalog' ? previousCatalogFeatures : controlPlaneFeatures }, ...historical.map((item) => ({ version: item.version, features: [localizedFeature(item, locale)] }))];
 }
 
 export function searchDacaReleases(scope: DacaFeatureScope, locale: DacaFeatureLocale, query: string): readonly DacaRelease[] {

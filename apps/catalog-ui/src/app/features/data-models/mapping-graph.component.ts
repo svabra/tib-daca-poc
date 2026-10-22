@@ -282,7 +282,7 @@ export class MappingGraphComponent {
   @HostListener('document:pointerdown',['$event']) onDocumentPointerDown(event:PointerEvent):void{if(!(event.target as HTMLElement).closest('.field-context-menu'))this.closeMenu();}
   @HostListener('document:keydown.escape',['$event']) closeMenu(event?:Event):void{const open=Boolean(this.menu()||this.canvasMenu()||this.representationMenu()||this.edgeMenu());if(open&&event)event.preventDefault();this.menu.set(null);this.canvasMenu.set(null);this.representationMenu.set(null);this.edgeMenu.set(null);if(open)this.menuTrigger?.focus();}
   sourceIcon(type=this.facade.snapshot()?.sourceType): string { return type === 'csv' ? '/assets/providers/csv-metadata.svg' : type === 's3' ? '/assets/providers/amazon-s3.svg' : '/assets/providers/postgresql.svg'; }
-  sourceTypeLabel(type=this.facade.snapshot()?.sourceType): string { return type === 'csv' ? 'CSV-Strukturimport' : type === 's3' ? 'Amazon S3' : 'PostgreSQL'; }
+  sourceTypeLabel(type=this.facade.snapshot()?.sourceType): string { return type === 'csv' ? 'Strukturinventar' : type === 's3' ? 'Amazon S3' : 'PostgreSQL'; }
   fieldStatusLabel(fieldId:string):string{const status=this.facade.mappingStatusForField(fieldId);return status==='unmapped'?'Offen':MAPPING_STATUS_LABELS[status];}
   fieldAriaLabel(field:LogicalField):string{return `Logisches Feld ${field.name}, ${field.dataType}, Status ${this.fieldStatusLabel(field.id)}. ${this.canManage()?'Aktivieren, dann physische Spalte wählen. Umschalt+F10 öffnet Aktionen.':'Aktivieren, um Feldmerkmale anzuzeigen.'}`;}
   fieldPointerDown(fieldId:string,event:PointerEvent):void{if(event.button===0&&this.canManage())this.facade.beginConnection(fieldId,event.currentTarget);}

@@ -286,6 +286,7 @@ from .source_access import (
 from .source_access import (
     requests_for_owner as source_requests_for_owner,
 )
+from .structure_inventory_api import create_structure_inventory_router
 from .terminology_api import create_terminology_router
 from .workflow_seed import ONTOLOGY_URI, stable_id, term_uri
 
@@ -6913,6 +6914,7 @@ def create_app(
     app.include_router(create_modeling_router())
     app.include_router(create_representation_router())
     app.include_router(create_physical_csv_router())
+    app.include_router(create_structure_inventory_router())
     app.include_router(create_model_domain_router())
     app.include_router(create_modeling_assistance_router())
     app.include_router(create_terminology_router())

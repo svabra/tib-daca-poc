@@ -109,7 +109,7 @@ def test_import_round_trip_search_idempotency_and_csv_cannot_trigger_fixture_ada
     assert models.status_code == 200 and models.json()["total"] == 4
     sources = client.get("/api/v1/physical-sources", headers=ACTOR)
     source = next(s for s in sources.json()["items"] if s["id"] == result["sourceId"])
-    assert source["adapterType"] == "csv" and source["systemName"] == "CSV-Strukturimport"
+    assert source["adapterType"] == "csv" and source["systemName"] == "Strukturinventar"
     repeated = client.post("/api/v1/physical-model-csv/imports", json=request, headers=ACTOR)
     assert repeated.status_code == 200 and repeated.json()["reused"]
     assert repeated.json()["snapshot"]["snapshot"]["id"] == snapshot["id"]

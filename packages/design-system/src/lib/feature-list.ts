@@ -42,8 +42,12 @@ export const DACA_FEATURE_RELEASE = {
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
           {
-            title: "Physische Modelle aus CSV laden",
-            description: "Strukturinventare mit Vorschau, Suche und Organisationsauswahl als statische Datenquelle importieren. Tabellen und Felder öffnen direkt im Explorer; Originalangaben bleiben erhalten und identische Importe werden wiederverwendet.",
+            title: "Strukturinventare organisationsübergreifend zuordnen",
+            description: "Strukturinventare auch aus anderen Organisationen mit logischen Modellen verbinden, wenn für beide Bereiche eine Berechtigung besteht. Der Dialog verwendet die serverseitige Auswahlentscheidung; Speichern und Inspektion prüfen die Rechte erneut. Angebundene Quellen behalten ihre Organisationsgrenze.",
+          },
+          {
+            title: "Strukturinventare importieren und verwalten",
+            description: "CSV-Strukturinventare ohne technische Anbindung von angebundenen Datenquellen unterscheiden. Physische Modelle mit Vorschau, Suche und Originalangaben inspizieren. Inventare mit Bestätigung archivieren, wiederherstellen oder bei fehlenden Modellverknüpfungen löschen; das Inventarprotokoll hält Person und Zeitpunkt fest und bleibt nach dem Löschen erhalten.",
           },
           {
             title: "Mehrere physische Repräsentationen verbinden",
@@ -169,8 +173,12 @@ export const DACA_FEATURE_RELEASE = {
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
           {
-            title: "Load physical models from CSV",
-            description: "Import structure inventories as a static metadata source with preview, search and organization selection. Tables and fields open in the explorer, original declarations stay inspectable and identical imports are reused.",
+            title: "Attach structure inventories across organizations",
+            description: "Link inventories from other organizations when independently authorized for both the model and inventory. The picker uses server-side eligibility; saving and inspection recheck access. Connected sources retain their organization boundary.",
+          },
+          {
+            title: "Import and manage structure inventories",
+            description: "Distinguish endpoint-free CSV structure inventories from connected data sources. Inspect physical models with preview, search and original declarations. Confirm archival, restoration or deletion of unreferenced inventories; the inventory audit records actor and time and survives deletion.",
           },
           {
             title: "Connect multiple physical representations",

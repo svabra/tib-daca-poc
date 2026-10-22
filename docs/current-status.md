@@ -5,20 +5,42 @@ fixtures in the control-plane prototype remain inspectable, but they do not defi
 operating model or transfer catalog resources. Catalog UI, glossary, footer and metadata now use
 the central-catalog description in all supported languages.
 
-## Release 0.1.30
+## Release 0.1.31
 
-The release highlights cover CSV physical-model imports, multiple physical representations,
-editable mapping connections, free canvas layout with fullscreen/print, model domain assignments
-and searchable domain inventories, and the editable concept network with governed terminology drafts.
-The version overlay and searchable release archive describe these capabilities in German and English;
-0.1.29 remains available in the release history.
+Structure inventories are now distinguished from connected sources. Authorized users can archive,
+restore or delete unreferenced inventories with durable actor/time audit evidence. Inventories can
+also represent logical models in another organization when the user is independently authorized
+for both scopes; source ownership and snapshot references remain unchanged. The picker and API use
+one eligibility rule, while connected sources retain their organization boundary.
+The version overlay describes these changes in German and English. Release 0.1.30 retains its
+original six feature entries in the searchable archive. Migration 0036 adds inventory archival.
 
 ## Physical-model CSV loader
+
+The representation picker no longer requires identical model/inventory organizations. It requests
+model-specific source eligibility from the API. Active CSV inventories are selectable across
+organizations only with model edit rights and an independently authorized inventory scope;
+connected PostgreSQL/S3 sources retain the same-organization rule. Batch saves, individual mapping
+writes, workspace inspection and domain propagation apply the same compatibility rule with their
+existing read/write checks. Revoking either scope prevents the corresponding operation. Source
+ownership, organization metadata and imported snapshots are not rewritten to enable attachment.
+
+The source register now distinguishes **Angebundene Datenquelle** and **Strukturinventar** under
+**Registrierte Quellen und Strukturinventare**. CSV import creates an inventory without a technical
+endpoint; its tables remain physical models with origin **Aus Strukturinventar**. Inventory cards use
+**Metadaten importiert** and **Inventar öffnen**, and omit the old automatic CSV suffix in displayed names.
+Owners, deputies and stewards in the responsible organization can archive, restore or delete with
+confirmation and optimistic revision checks. Archived inventories disappear from active source/model
+selection but remain inspectable through **Archivierte Inventare anzeigen** and existing bindings.
+Deletion removes only unreferenced inventories; model bindings or mapping history require archival.
+The scoped **Inventarprotokoll** retains actor, action, revision and time even after deletion.
+Migration 0036 permits archival only for CSV inventories, without changing historical snapshots or
+requiring a backfill. All lifecycle changes and their audit evidence commit atomically.
 
 On the source page, the CSV import button sits below both information notices and immediately
 before the source register, keeping the page title first.
 
-Models and the visible-source register now expose **Physische Modelle aus CSV laden** with a native
+Models and the visible-source register now expose **Strukturinventar aus CSV laden** with a native
 modal, file validation, organization selection and a searchable table/field preview. Import is an
 explicit action; cancellation has no persistence effects. UTF-8/BOM and Windows-1252 inventories,
 quoted multiline descriptions and Excel CRCRLF record separators are supported. The corrected

@@ -1,6 +1,6 @@
 {
   "name": "bit-daca",
-  "version": "0.1.30",
+  "version": "0.1.31",
   "private": true,
   "description": "BIT central Data Catalog proof of concept",
   "workspaces": [

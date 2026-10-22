@@ -299,7 +299,16 @@ export interface PhysicalSnapshot {
   driftCount: number;
 }
 
+export interface StructureInventoryAuditEvent {
+  id: string; resourceId: string; action: string; actor: string; revision: number | null;
+  occurredAt: string; details: Record<string, unknown>;
+}
+
 export interface PhysicalSource {
+  representationAttachable?: boolean;
+  representationDisabledReason?: string | null;
+  lifecycle?: 'active' | 'archived' | 'retired';
+  inventoryManageable?: boolean;
   id: string;
   revision: number;
   name: string;

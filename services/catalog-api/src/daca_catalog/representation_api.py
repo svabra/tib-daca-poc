@@ -13,6 +13,7 @@ from .mapping_inconsistencies import sync_mapping_inconsistencies
 from .modeling_api import (
     ActorDep,
     SessionDep,
+    _compatible_representation_scope,
     _dataset_version,
     _require_etag,
     _require_snapshot_scope,
@@ -174,10 +175,9 @@ def create_representation_router() -> APIRouter:
         for snapshot_id, table_id in sorted(requested, key=lambda pair: str(pair)):
             snapshot = _require_snapshot_scope(session, actor, snapshot_id)
             source = session.get(PhysicalSource, snapshot.source_id)
-            if source.lifecycle != "active" or (source.department_code, source.organization_id) != (
-                dataset.department_code,
-                dataset.organization_id,
-            ):
+            existing_binding = session.get(LogicalModelRepresentation, representation_id(model_id, table_id))
+            source_usable = source.lifecycle == "active" or (source.lifecycle == "archived" and existing_binding is not None)
+            if not source_usable or not _compatible_representation_scope(source, dataset.department_code, dataset.organization_id):
                 raise HTTPException(
                     422, "Logical model and physical source must share an active scope"
                 )

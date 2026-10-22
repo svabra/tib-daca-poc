@@ -306,6 +306,13 @@ def _require_snapshot_scope(
     return snapshot
 
 
+def _compatible_representation_scope(source: PhysicalSource | None, department_code: str, organization_id: str) -> bool:
+    """Inventories may represent another scope; callers must authorize both scopes."""
+    return source is not None and (source.adapter_type == "csv" or (
+        source.department_code, source.organization_id
+    ) == (department_code, organization_id))
+
+
 def _validate_mapping_scope(
     session: Session,
     actor: str,
@@ -325,11 +332,10 @@ def _validate_mapping_scope(
     _require_version_scope(session, actor, logical_version)
     snapshot = _require_snapshot_scope(session, actor, body.physical_snapshot_id)
     source = session.get(PhysicalSource, snapshot.source_id)
-    if source is None or (
-        source.department_code,
-        source.organization_id,
-    ) != (dataset.department_code, dataset.organization_id):
+    if not _compatible_representation_scope(source, dataset.department_code, dataset.organization_id):
         raise HTTPException(422, "Logical model and physical snapshot must share one scope")
+    if source.lifecycle == "archived" and mapping is None:
+        raise HTTPException(409, "Das Strukturinventar ist archiviert. Für neue Mappings bitte zuerst wiederherstellen.")
     responsible = session.scalar(
         select(DataModelRoleAssignment).where(
             DataModelRoleAssignment.user_id == body.responsible_user_id,
@@ -823,12 +829,23 @@ def create_modeling_router() -> APIRouter:
         return Response(content=content, media_type=content_type(rdf_format))
 
     @router.get("/physical-sources", response_model=PhysicalSourceCollection)
-    def list_physical_sources(session: SessionDep, actor: ActorDep) -> dict[str, Any]:
+    def list_physical_sources(session: SessionDep, actor: ActorDep,
+                              include_archived: Annotated[bool, Query(alias="includeArchived")] = False,
+                              logical_model_id: Annotated[uuid.UUID | None, Query(alias="logicalModelId")] = None) -> dict[str, Any]:
         assignments = _require_any_assignment(session, actor)
-        scopes = {(item.department_code, item.organization_id) for item in assignments}
+        scopes = {(item.department_code, organization_id) for item in assignments
+                  for organization_id in _descendant_ids(session, item.organization_id)}
+        dataset = None
+        if logical_model_id is not None:
+            version = get_logical_version(session, logical_model_id)
+            _require_version_scope(session, actor, version, roles={"data_owner", "data_steward"})
+            dataset = _dataset_version(session, version)
         items = []
         for source in session.scalars(
-            select(PhysicalSource).where(PhysicalSource.lifecycle == "active").order_by(PhysicalSource.name)
+            select(PhysicalSource).where(
+                (PhysicalSource.lifecycle == "active") |
+                ((PhysicalSource.lifecycle == "archived") & (PhysicalSource.adapter_type == "csv") & include_archived)
+            ).order_by(PhysicalSource.name)
         ):
             # The synthetic VIBDBU demonstration is readable across catalog
             # organizations; ownership-scoped writes remain protected below.
@@ -850,7 +867,7 @@ def create_modeling_router() -> APIRouter:
                 if latest is not None
                 else None
             )
-            system_name = "CSV-Strukturimport" if source.adapter_type == "csv" else "S3 Object Storage" if source.adapter_type == "s3" else "PostgreSQL"
+            system_name = "Strukturinventar" if source.adapter_type == "csv" else "S3 Object Storage" if source.adapter_type == "s3" else "PostgreSQL"
             catalog_path = (
                 source.urn if source.adapter_type == "csv"
                 else f"s3://{database_name}/"
@@ -860,6 +877,16 @@ def create_modeling_router() -> APIRouter:
                 else source.config_ref or f"urn:daca:physical-source:{source.id}"
             )
             owner = session.get(DemoUser, source.created_by_user_id)
+            disabled_reason = None
+            if dataset is not None:
+                if (source.department_code, source.organization_id) not in scopes:
+                    disabled_reason = "Keine Modellierungsberechtigung für die Organisation dieser Quelle."
+                elif source.lifecycle != "active":
+                    disabled_reason = "Das Strukturinventar ist archiviert. Bitte zuerst wiederherstellen."
+                elif latest is None:
+                    disabled_reason = "Noch keine Strukturmetadaten importiert."
+                elif not _compatible_representation_scope(source, dataset.department_code, dataset.organization_id):
+                    disabled_reason = "Angebundene Quelle liegt ausserhalb des Modell-Organisationsbereichs."
             items.append(
                 {
                     "id": source.id,
@@ -867,6 +894,13 @@ def create_modeling_router() -> APIRouter:
                     "name": source.name,
                     "description": source.description,
                     "adapterType": source.adapter_type,
+                    "representationAttachable": disabled_reason is None if dataset is not None else None,
+                    "representationDisabledReason": disabled_reason,
+                    "inventoryManageable": source.adapter_type == "csv" and any(
+                        item.role in {"data_owner", "deputy_data_owner", "data_steward"}
+                        and item.department_code == source.department_code
+                        and source.organization_id in _descendant_ids(session, item.organization_id)
+                        for item in assignments),
                     "departmentCode": source.department_code,
                     "organizationId": source.organization_id,
                     "revision": source.revision,
@@ -1679,6 +1713,7 @@ def create_modeling_router() -> APIRouter:
                 continue
             try:
                 _require_version_scope(session, actor, session.get(LogicalModelVersion, version.logical_model_version_id))
+                _require_snapshot_scope(session, actor, version.physical_snapshot_id)
             except HTTPException as exc:
                 if exc.status_code == 403:
                     continue
@@ -1705,6 +1740,7 @@ def create_modeling_router() -> APIRouter:
         logical_version = session.get(LogicalModelVersion, version.logical_model_version_id)
         _require_version_scope(session, actor, logical_version)
         response.headers["ETag"] = _etag(mapping.revision)
+        _require_snapshot_scope(session, actor, version.physical_snapshot_id)
         return mapping_payload(session, mapping, version)
 
     @router.post("/asset-mappings/{mapping_id}/versions", response_model=AssetMappingResponse, status_code=201)

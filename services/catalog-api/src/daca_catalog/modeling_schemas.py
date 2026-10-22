@@ -399,6 +399,9 @@ class LogicalModelVersionCollection(ApiModel):
 
 
 class PhysicalSourceResponse(ApiModel):
+    inventory_manageable: bool = False
+    representation_attachable: bool | None = None
+    representation_disabled_reason: str | None = None
     id: uuid.UUID
     urn: str
     name: str
@@ -407,7 +410,7 @@ class PhysicalSourceResponse(ApiModel):
     department_code: str
     organization_id: str
     revision: int
-    lifecycle: Literal["active", "retired"]
+    lifecycle: Literal["active", "retired", "archived"]
     latest_snapshot_id: uuid.UUID | None
     latest_snapshot_sequence: int | None
     catalog_path: str

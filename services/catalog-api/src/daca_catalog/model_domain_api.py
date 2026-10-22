@@ -16,6 +16,7 @@ from .modeling_api import (
     _dataset_version,
     _require_etag,
     _require_scope,
+    _require_snapshot_scope,
     _require_version_scope,
 )
 from .modeling_domains import apply_domain_targets, physical_domain_state, physical_table_context
@@ -160,11 +161,19 @@ def create_model_domain_router():
             rebase_mapping_versions(session, model, version, actor)
             sync_mapping_inconsistencies(session, model.id)
         result = logical_version_payload(session, model, version)
-        result["mappings"] = [mapping_payload(session, root, current) for root, current in session.execute(
+        result["mappings"] = []
+        for root, current in session.execute(
             select(AssetMapping, AssetMappingVersion).join(AssetMappingVersion,
                 AssetMappingVersion.asset_mapping_id == AssetMapping.id).where(
                 AssetMapping.logical_model_id == model_id, AssetMapping.lifecycle == "active",
-                AssetMappingVersion.revision == AssetMapping.revision))]
+                AssetMappingVersion.revision == AssetMapping.revision)):
+            try:
+                _require_snapshot_scope(session, actor, current.physical_snapshot_id)
+            except HTTPException as error:
+                if error.status_code != 403:
+                    raise
+                continue
+            result["mappings"].append(mapping_payload(session, root, current))
         result["physicalDomainAssignments"] = []
         for target in body.physical_domain_targets:
             table, _, source_id = physical_table_context(session, target.physical_table_id)

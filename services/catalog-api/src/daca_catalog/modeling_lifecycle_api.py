@@ -17,6 +17,7 @@ from .modeling_api import (
     _require_etag,
     _require_publish_right,
     _require_scope,
+    _require_snapshot_scope,
     _require_version_scope,
 )
 from .modeling_core import canonical_hash
@@ -139,7 +140,7 @@ def _physical_source_payload(
             if database_name
             else source.config_ref or f"urn:daca:physical-source:{source.id}"
         ),
-        "systemName": "CSV-Strukturimport" if source.adapter_type == "csv" else "S3 Object Storage" if source.adapter_type == "s3" else "PostgreSQL",
+        "systemName": "Strukturinventar" if source.adapter_type == "csv" else "S3 Object Storage" if source.adapter_type == "s3" else "PostgreSQL",
         "databaseName": database_name,
         "ownerName": owner.display_name if owner is not None else source.created_by_user_id,
         "updatedAt": source.updated_at,
@@ -290,6 +291,7 @@ def create_modeling_lifecycle_router() -> APIRouter:
         if logical_version is None:
             raise HTTPException(500, "Asset mapping is missing its logical model version")
         _require_version_scope(session, actor, logical_version, roles={"data_owner", "data_steward"})
+        _require_snapshot_scope(session, actor, version.physical_snapshot_id)
         _require_etag(if_match, version.lock_version)
         if mapping.lifecycle == "retired":
             raise HTTPException(409, "Asset mapping is retired")
@@ -328,6 +330,7 @@ def create_modeling_lifecycle_router() -> APIRouter:
         if logical_version is None:
             raise HTTPException(500, "Asset mapping is missing its logical model version")
         _require_publish_right(session, actor, logical_version)
+        _require_snapshot_scope(session, actor, version.physical_snapshot_id)
         _require_etag(if_match, version.lock_version)
         if mapping.lifecycle == "retired":
             raise HTTPException(409, "Asset mapping is already retired")
@@ -433,8 +436,10 @@ def create_modeling_lifecycle_router() -> APIRouter:
             roles={"data_owner", "deputy_data_owner", "data_steward"},
         )
         _require_etag(if_match, source.revision)
-        if source.lifecycle == "retired":
-            raise HTTPException(409, "Physical source is retired")
+        if source.adapter_type == "csv":
+            raise HTTPException(422, "Strukturinventare werden über ihre Inventaraktionen verwaltet.")
+        if source.lifecycle != "active":
+            raise HTTPException(409, "Physical source is not active")
         if (body.department_code, body.organization_id) != (
             source.department_code,
             source.organization_id,

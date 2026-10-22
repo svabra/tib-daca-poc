@@ -36,6 +36,41 @@ live sources and earlier imports are not overwritten. A retired identical source
 Downgrade will fail if CSV sources remain: resolve their retention explicitly before removing
 support. The JSON columns have no automatic data-loss backfill or conversion.
 
+## Structure inventory lifecycle (migration 0036)
+
+An inventory binding may cross organization boundaries only when the actor is independently
+authorized for the logical model and the inventory. This is an API authorization rule, not a data
+copy or ownership transfer: `logical_model_representations` and mapping versions keep their real
+source/snapshot/table references. Connected sources retain exact model/source scope equality.
+Revoked inventory access prevents snapshot/workspace reads and further mapping writes even if
+the actor retains model permissions. No schema change or backfill is required for this rule.
+
+`0036_structure_inventory_archive` extends the `physical_sources.lifecycle` check: `active` and
+`retired` remain valid for all adapters; `archived` is valid only for `csv` structure inventories.
+No columns, snapshot revisions or historical mappings change, and no backfill is needed.
+Archival sets `retired_at`, restoration clears it; both advance `revision` and `updated_at` and
+recompute the content hash. The UI distinguishes endpoint-free inventories from connected sources.
+Default source/model lists exclude archives; explicit archive reads and existing snapshot references
+remain available under the same organization permissions. Existing bindings remain valid, while new
+bindings and new mappings require an active inventory. Downgrade requires resolving archived
+inventories explicitly before restoring the old lifecycle check.
+
+Inventory deletion locks the source and checks all logical representation bindings, mapping roots
+and historical mapping versions. References prevent deletion, including superseded/retired history.
+Unreferenced inventory snapshots, databases, schemas, tables, fields and drift reports are removed;
+owned domain/responsibility memberships cascade. Restrictive mapping foreign keys also protect
+against concurrent references. Audit records have no source foreign key and survive deletion.
+The delete operation and its audit entry commit atomically; failures roll back both.
+
+Append-only `audit_events` with `resource_type = structure-inventory` use the source UUID as
+`resource_id`, actions `imported`, `archived`, `restored`, `deleted`, plus actor, timestamp and source
+revision. Safe JSON `details` stores `name`, `urn`, `departmentCode`, `organizationId`, `lifecycle`;
+deletion additionally stores `snapshotCount` and `tableCount`. No CSV content or credentials are
+audited. Organization-scoped audit reads use these retained scope fields after source deletion.
+An identical reimport after deletion reuses the deterministic UUID, with a revision above all
+earlier source/inventory audit revisions so a stale pre-deletion ETag cannot modify the new source.
+Existing inventories need no synthetic imported event: only future actions append new evidence.
+
 ## Logical-to-physical consistency decisions
 
 `logical_mapping_inconsistencies` has one current record per logical model root and logical
@@ -115,9 +150,9 @@ reads it from the actual footer. It never denotes the number of S3 objects (`obj
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
-- Alembic head: `0035_csv_physical_models`
-- Schema fingerprint: `896608fa6ee605c1`
-- Migration fingerprint: `1c307ddeea93fc09`
+- Alembic head: `0036_structure_inventory_archive`
+- Schema fingerprint: `042f261dcabe0ed9`
+- Migration fingerprint: `5dee84956936be95`
 - Tables: `95`
 
 ## Domain status vocabulary
@@ -3328,7 +3363,7 @@ Constraints and indexes:
 
 ### `physical_sources`
 
-Credential-free physical metadata source definitions with PostgreSQL/S3/fixture/CSV adapter and secret-free configuration reference; CSV uploads are declared inventory metadata without a live connection.
+Credential-free physical metadata source definitions with PostgreSQL/S3/fixture/CSV adapter and secret-free configuration reference; CSV structure inventories have no live endpoint and alone support the archived lifecycle. Unreferenced inventories may be deleted while append-only inventory audit evidence survives.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -3354,7 +3389,7 @@ Constraints and indexes:
 - Unique `unnamed`: `urn`
 - Check `ck_physical_adapter`: `adapter_type IN ('postgresql', 's3', 'fixture', 'csv')`
 - Check `ck_physical_source_hash`: `length(content_hash) = 64`
-- Check `ck_physical_source_lifecycle`: `lifecycle IN ('active', 'retired')`
+- Check `ck_physical_source_lifecycle`: `lifecycle IN ('active', 'retired') OR (adapter_type = 'csv' AND lifecycle = 'archived')`
 - Check `ck_physical_source_revision`: `revision >= 1`
 - Foreign key `organization_id` → `administrative_organizations.id`; on delete `RESTRICT`
 - Foreign key `created_by_user_id` → `demo_users.id`

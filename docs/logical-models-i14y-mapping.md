@@ -9,17 +9,19 @@ counts and actions. Model titles and descriptions select the matching stored loc
 fall back to German. Changing language updates the overview immediately without reloading models;
 the specialist model editor still has untranslated German controls.
 
-## Release 0.1.30
+## Release 0.1.31
 
-The release highlights cover CSV physical-model imports, multiple physical representations,
-editable mapping connections, free canvas layout with fullscreen/print, model domain assignments
-and searchable domain inventories, and the editable concept network with governed terminology drafts.
-The version overlay and searchable release archive describe these capabilities in German and English;
-0.1.29 remains available in the release history.
+Structure inventories are now distinguished from connected sources. Authorized users can archive,
+restore or delete unreferenced inventories with durable actor/time audit evidence. Inventories can
+also represent logical models in another organization when the user is independently authorized
+for both scopes; source ownership and snapshot references remain unchanged. The picker and API use
+one eligibility rule, while connected sources retain their organization boundary.
+The version overlay describes these changes in German and English. Release 0.1.30 retains its
+original six feature entries in the searchable archive. Migration 0036 adds inventory archival.
 
 ## CSV inventories as physical models
 
-The models overview and source register expose **Physische Modelle aus CSV laden**. On the
+The models overview and source register expose **Strukturinventar aus CSV laden**. On the
 source page, the action is placed below both information notices and directly before the source
 register. A native
 modal reads a semicolon inventory, previews all tables grouped by literal `System` / `Tabelle`,
@@ -28,6 +30,34 @@ organization. Nothing persists before **Importieren**. Success opens the saved s
 and first object; all imported tables are visible in the tree under their source-system namespaces.
 They can then be assigned to domains, selected as physical representations or used in the existing
 logical-model derivation workflow. CSV is explicitly declared metadata, not a live PG/BIM/GIS connector.
+
+The register calls uploaded metadata collections **Strukturinventare** and technical connections
+**Angebundene Datenquellen**. A table is still a physical model, labeled **Aus Strukturinventar**
+in the inspector. Inventories open with **Inventar öffnen** and show **Metadaten importiert**.
+Active inventories can represent a model in another organization. This does not grant access:
+the actor needs model edit rights and an independent modeling assignment covering the inventory.
+`GET /api/v1/physical-sources?logicalModelId={id}` returns `representationAttachable` and
+`representationDisabledReason` for the selected model, including inherited organization scopes.
+The picker uses that server decision; batch/individual writes recheck both scopes and snapshot
+membership. Workspace reads recheck inventory access; domain propagation additionally requires
+write rights on each selected physical model. Connected sources still require the model's exact
+organization. No source is moved or copied into the model's organization. Regressions cover a
+cross-organization inventory, mappings and reload, domain propagation, revoked rights and rejection
+of a connected source across organizations.
+Archiving hides the inventory from active source/model selection, preserving immutable snapshots
+and existing bindings/mappings. The archive checkbox exposes inspection and restoration. Existing
+bindings can still participate in workspace saves; new bindings and new mappings require restoration.
+Deletion removes inventory-owned snapshots, structure and memberships only if no representation
+binding or mapping history references the inventory. Used inventories must be archived instead.
+
+`POST /api/v1/structure-inventories/{id}/archive`, `POST .../{id}/restore` and `DELETE .../{id}`
+require `If-Match` and an owner, deputy or steward assignment covering the inventory organization.
+The UI confirms each action before writing and preserves server conflict details in the dialog.
+`GET /api/v1/physical-sources?includeArchived=true` includes archived inventories for inspection;
+the default list excludes them. `GET /api/v1/structure-inventories/audit-events` reads the last 200
+inventory actions in the caller's authorized scopes, including deleted inventories. Import and
+lifecycle actions append audit evidence in the same transaction; a failed audit rolls back the action.
+Migration 0036 changes only the source lifecycle constraint. It needs no historical backfill.
 
 `POST /api/v1/physical-model-csv/preview` accepts base64 file bytes, validates encoding, syntax,
 headers, limits and field consistency, and returns counts, warnings, tables and a fingerprint.
@@ -49,8 +79,10 @@ classifications are metadata, not access-policy values; source value lists do no
 Migration `0035_csv_physical_models` adds the `csv` adapter discriminator and nullable original-record
 JSON on tables/columns. Existing source/snapshot/mapping history needs no backfill. Its schema and
 retention-aware downgrade are documented in `docs/data-model/catalog.md`. Browser tests cover file
-selection, preview, cancellation, immediate inspection, scoped idempotency and reload; Python tests
-cover Unicode/quoting, duplicate/fieldless records, bounds, permissions and atomic rollback.
+selection, preview, cancellation, immediate inspection, scoped idempotency and reload, plus archive,
+archive inspection, restoration, deletion confirmation and durable audit after reload. Python tests
+cover Unicode/quoting, duplicate/fieldless records, bounds, permissions, optimistic concurrency,
+historical mapping/binding deletion guards, stale ETags after reimport and atomic audit rollback.
 
 ## Responsibilities and data flow
 

@@ -79,7 +79,7 @@ export class PhysicalCsvImportComponent {
     this.preview.set(null); this.contentBase64 = ''; this.error.set(''); this.query.set('');
     if (!file) return;
     this.filename.set(file.name);
-    this.name.set(file.name.replace(/\.csv$/i, '') + ' · CSV-Struktur');
+    this.name.set(file.name.replace(/\.csv$/i, ''));
     if (!/\.csv$/i.test(file.name) || file.size === 0 || file.size > 2 * 1024 * 1024) {
       this.error.set('Bitte eine nicht leere CSV-Datei mit höchstens 2 MiB auswählen.'); return;
     }

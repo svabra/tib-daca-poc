@@ -27,4 +27,21 @@ describe('representation picker',()=>{
     component.cancel(new Event('cancel',{cancelable:true}));expect(close).toHaveBeenCalledOnce();expect(add).not.toHaveBeenCalled();
     component.attach();expect(add).toHaveBeenCalledWith({snapshot,table:snapshot.tables[0]});
   });
+  it('uses model-specific server permissions for inventories across organizations',()=>{
+    const inventory:PhysicalSource={id:'csv',revision:1,name:'Gebäude',connectorType:'csv',systemName:'Strukturinventar',databaseName:'SAP',department:'VBS',office:'armasuisse-immobilien',latestSnapshotId:'csv-snapshot',latestSnapshotSequence:1,latestSnapshot:null,catalogPath:'urn:daca:physical-source:csv',ownerName:'Owner',updatedAt:'',representationAttachable:true};
+    const denied={...inventory,id:'denied',representationAttachable:false,representationDisabledReason:'Keine Modellierungsberechtigung für die Organisation dieser Quelle.'};
+    const api={listPhysicalSources:vi.fn(()=>of([inventory,denied])),loadPhysicalSnapshot:vi.fn(()=>of({...FALLBACK_PHYSICAL_SNAPSHOT,id:'csv-snapshot',sourceType:'csv' as const}))};
+    TestBed.configureTestingModule({imports:[RepresentationPickerComponent],providers:[{provide:DataModelsApiService,useValue:api}]});
+    Object.defineProperty(HTMLDialogElement.prototype,'showModal',{configurable:true,value:function(this:HTMLDialogElement){this.setAttribute('open','');}});
+    const fixture=TestBed.createComponent(RepresentationPickerComponent);fixture.componentRef.setInput('model',FALLBACK_LOGICAL_MODEL);fixture.detectChanges();
+    const component=fixture.componentInstance;
+    expect(api.listPhysicalSources).toHaveBeenCalledWith(false,FALLBACK_LOGICAL_MODEL.id);
+    expect(component.canAttach(inventory)).toBe(true);expect(component.canAttach(denied)).toBe(false);
+    expect(component.disabledReason(denied)).toContain('Keine Modellierungsberechtigung');
+    component.selectSource(denied);expect(api.loadPhysicalSnapshot).not.toHaveBeenCalled();
+    component.selectSource(inventory);expect(component.snapshot()?.id).toBe('csv-snapshot');
+    component.selectedTable.set(component.snapshot()!.tables[0]);
+    const added=vi.fn();component.added.subscribe(added);component.attach();
+    expect(added).toHaveBeenCalledWith({snapshot:component.snapshot(),table:component.snapshot()!.tables[0]});
+  });
 });

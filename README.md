@@ -6,17 +6,19 @@ protected over both REST and direct PostgreSQL access.
 The original PoC catalog description is corrected in a new metadata revision, retaining its
 previous wording only as version history.
 
-## Release 0.1.30
+## Release 0.1.31
 
-The release highlights cover CSV physical-model imports, multiple physical representations,
-editable mapping connections, free canvas layout with fullscreen/print, model domain assignments
-and searchable domain inventories, and the editable concept network with governed terminology drafts.
-The version overlay and searchable release archive describe these capabilities in German and English;
-0.1.29 remains available in the release history.
+Structure inventories are now distinguished from connected sources. Authorized users can archive,
+restore or delete unreferenced inventories with durable actor/time audit evidence. Inventories can
+also represent logical models in another organization when the user is independently authorized
+for both scopes; source ownership and snapshot references remain unchanged. The picker and API use
+one eligibility rule, while connected sources retain their organization boundary.
+The version overlay describes these changes in German and English. Release 0.1.30 retains its
+original six feature entries in the searchable archive. Migration 0036 adds inventory archival.
 
 ## Physical models from CSV
 
-In **Datenmodelle** or **Sichtbare Datenquellen**, choose **Physische Modelle aus CSV laden**.
+In **Datenmodelle** or **Sichtbare Datenquellen**, choose **Strukturinventar aus CSV laden**.
 On the source page, this action sits below the information notices, immediately before the source register.
 Select a semicolon-delimited structure inventory (UTF-8 or Windows-1252, up to 2 MiB), inspect
 the searchable table/field preview and choose your responsible modeling organization. **Importieren**
@@ -27,6 +29,21 @@ records remain table notes. Exact names, raw types, multiline descriptions, valu
 classifications remain inspectable under **CSV-Originalangaben**. No data rows, credentials or
 live database connections are imported. Repeating identical content in the same scope reopens the
 existing snapshot. Different inventories create separate sources and never overwrite existing ones.
+
+The register distinguishes **Angebundene Datenquelle** (a configured technical connection) from
+**Strukturinventar** (imported structural metadata without an endpoint). Individual tables remain
+physical models, with origin **Aus Strukturinventar**. **Inventar öffnen** opens their structure.
+Authorized owners, deputies and stewards can archive, restore or delete inventories after confirmation.
+Archiving preserves snapshots and existing mappings; **Archivierte Inventare anzeigen** makes them
+available for inspection and restoration. Deletion removes imported structures only when no model
+binding or mapping history references them. **Inventarprotokoll** records imports, archival,
+restoration and deletion with actor and time, and remains readable after deletion.
+
+An active structure inventory can also represent a logical model in another organization when
+the user can edit that model and has a scoped modeling assignment for the inventory. The picker
+obtains eligibility and disabled reasons from the API for the selected model. Saving checks both
+permissions again; inventory ownership and snapshot identity stay unchanged. Connected sources
+continue to require the same organization as the logical model.
 
 ## Projects
 

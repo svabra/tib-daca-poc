@@ -12,6 +12,17 @@ describe('DataModelsApiService', () => {
   beforeEach(() => { TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(), { provide: DemoIdentityService, useValue: { userId, user: computed(() => ({ displayName: 'Cinthya Thor', email: 'cinthya.thor@vtg.admin.ch', organization: 'Verteidigung' })), headers: computed(() => new HttpHeaders({ 'X-DaCa-User': userId() })) } }] }); api = TestBed.inject(DataModelsApiService); http = TestBed.inject(HttpTestingController); });
   afterEach(() => { http.verify(); TestBed.resetTestingModule(); });
 
+  it('requests representation permissions for the selected model and preserves server decisions', () => {
+    let sources: readonly import('./data-models.models').PhysicalSource[] = [];
+    api.listPhysicalSources(false,'model-id').subscribe(value => sources = value);
+    const request = http.expectOne('/api/v1/physical-sources?logicalModelId=model-id');
+    expect(request.request.headers.get('X-DaCa-User')).toBe(userId());
+    request.flush({items:[{id:'csv',name:'Gebäude · CSV-Struktur',adapterType:'csv',representationAttachable:true},
+      {id:'denied',adapterType:'postgresql',representationAttachable:false,representationDisabledReason:'Keine Modellierungsberechtigung.'}]});
+    expect(sources[0].representationAttachable).toBe(true);expect(sources[0].name).toBe('Gebäude');
+    expect(sources[1].representationAttachable).toBe(false);expect(sources[1].representationDisabledReason).toBe('Keine Modellierungsberechtigung.');
+  });
+
   it('preserves actionable CSV line errors and never sends parsed cells as commands', () => {
     let message = '';
     api.previewPhysicalCsv('ZGF0YQ==').subscribe({error: (error: Error) => message = error.message});
@@ -28,7 +39,7 @@ describe('DataModelsApiService', () => {
     const request = http.expectOne('/api/v1/physical-model-csv/imports');
     request.flush({sourceId: 'source', reused: false, snapshot: {snapshot: {id: 'snap', sourceId: 'source', sourceAdapterType: 'csv', catalogPath: 'urn:daca:physical-source:source'}, databases: [{name: 'BIM', schemas: [{name: 'CSV', tables: [{id: 'table', name: 'Gebäude / Bauwerke', kind: 'table', importMetadata: {format: 'daca-structure-csv-v1', recordsWithoutField: []}, columns: [{id: 'field', name: 'Name', rawDataType: 'IfcLabel', normalizedDataType: 'string', nullable: true, importMetadata: {format: 'daca-structure-csv-v1', nullabilityKnown: false, records: [{Datentyp: 'IfcLabel', Klassifizierung: 'Projektabhängig'}]}}]}]}]}]}});
     expect(snapshot?.sourceType).toBe('csv');
-    expect(snapshot?.systemName).toBe('CSV-Strukturimport');
+    expect(snapshot?.systemName).toBe('Strukturinventar');
     expect(snapshot?.tables[0].databaseName).toBe('BIM');
     expect(snapshot?.tables[0].columns[0].importMetadata?.nullabilityKnown).toBe(false);
     expect(snapshot?.tables[0].columns[0].importMetadata?.records?.[0]['Klassifizierung']).toBe('Projektabhängig');

@@ -4,14 +4,15 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import Field
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 
 from .modeling_api import ActorDep, SessionDep, _require_any_assignment, _require_scope
 from .modeling_core import canonical_hash, stable_uuid
-from .modeling_service import persist_physical_import, snapshot_tree, utc_now
-from .models import AdministrativeOrganization, PhysicalSchemaSnapshot, PhysicalSource
+from .modeling_service import persist_physical_import, record_audit, snapshot_tree, utc_now
+from .models import AdministrativeOrganization, AuditEvent, PhysicalSchemaSnapshot, PhysicalSource
 from .physical_csv import CsvInventory, parse_inventory
 from .schemas import ApiModel
+from .structure_inventory_api import inventory_audit_details
 
 
 class CsvPreviewRequest(ApiModel):
@@ -61,22 +62,27 @@ def create_physical_csv_router() -> APIRouter:
         reused = source is not None
         if source is not None:
             if source.lifecycle != "active":
-                raise HTTPException(409, "Dieser CSV-Import wurde stillgelegt und kann nicht automatisch reaktiviert werden.")
+                raise HTTPException(409, "Dieses Strukturinventar ist archiviert oder stillgelegt. Bitte zuerst im Register wiederherstellen.")
             snapshot = session.scalar(select(PhysicalSchemaSnapshot).where(PhysicalSchemaSnapshot.source_id == source.id)
                                       .order_by(PhysicalSchemaSnapshot.sequence.desc()).limit(1))
             if snapshot is None:
                 raise HTTPException(409, "Zum bestehenden Import fehlt der Snapshot.")
         else:
+            previous_revision = session.scalar(select(func.max(AuditEvent.revision)).where(
+                AuditEvent.resource_id == str(source_id),
+                AuditEvent.resource_type.in_(["structure-inventory", "physical-source"]))) or 0
             source = PhysicalSource(
                 id=source_id, urn=f"urn:daca:physical-source:{source_id}", origin_catalog_id="urn:daca:catalog:bit-poc",
-                name=body.name.strip(), description=f"CSV-Strukturimport: {body.filename}. Nur deklarierte Metadaten; keine Live-Verbindung.",
+                name=body.name.strip(), description=f"Strukturinventar aus {body.filename}. Importierte Strukturmetadaten ohne technische Anbindung.",
                 adapter_type="csv", department_code=body.department_code, organization_id=body.organization_id,
-                revision=1, content_hash=canonical_hash({"fingerprint": inventory.fingerprint, "filename": body.filename}),
+                revision=previous_revision + 1, content_hash=canonical_hash({"fingerprint": inventory.fingerprint, "filename": body.filename}),
                 lifecycle="active", created_by_user_id=actor, created_at=utc_now(), updated_at=utc_now(),
             )
             session.add(source)
             session.flush()
             snapshot, _report = persist_physical_import(session, source, inventory, actor)
+            record_audit(session, "structure-inventory", source.id, "imported", actor, source.revision,
+                         inventory_audit_details(source))
         # The source, all 31 (or other) tables, fields and audit evidence commit together.
         result = {"sourceId": str(source.id), "reused": reused, "preview": inventory.preview(), "snapshot": snapshot_tree(session, snapshot)}
         session.commit()

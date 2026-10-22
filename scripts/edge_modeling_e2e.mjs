@@ -365,13 +365,90 @@ async function csvPhysicalModelsFlow() {
     await clickText('daca-physical-csv-import footer button','Importieren');
     await waitFor(`location.pathname==='/physical-models/${sourceId}' && document.querySelector('daca-physical-object-detail h2')`, 'Identical CSV import was duplicated');
     invariant(await evaluate("document.body.innerText.includes('Vorhandener CSV-Import')"), 'Idempotent import did not explain reuse');
+    if (!suppliedFile) {
+      // Exercise lifecycle actions only on this run's synthetic inventory.
+      await navigate('/physical-models', actor);
+      const card = `.source-card:has(a[href="/physical-models/${sourceId}"])`;
+      await waitFor(`document.querySelector(${JSON.stringify(card)})?.innerText.includes('Strukturinventar')`, 'Inventory terminology missing');
+      await clickText(`${card} daca-structure-inventory-actions button`, 'Archivieren');
+      await waitFor("document.querySelector('daca-structure-inventory-actions dialog[open]')", 'Archive confirmation missing');
+      await clickText('daca-structure-inventory-actions dialog[open] footer button', 'Inventar archivieren');
+      await waitFor(`!document.querySelector(${JSON.stringify(card)})`, 'Archived inventory remained in active register');
+      await evaluate("document.querySelector('.archive-toggle input').click()");
+      await waitFor(`document.querySelector(${JSON.stringify(card)})?.classList.contains('is-archived')`, 'Archive filter did not expose inventory');
+      await capturePageSegmentScreenshot('.source-register', 'structure-inventory-archived.png');
+      await clickText(`${card} a`, 'Inventar öffnen');
+      await waitFor(`document.querySelector('.inventory-detail-actions') && document.querySelectorAll('.table-row').length===${expected.tableCount}`, 'Archived inventory inspection unavailable');
+      await clickText('.table-select', 'Gebäude / Bauwerke');
+      await waitFor("document.querySelector('daca-physical-object-detail h2')", 'Archived object inspection unavailable');
+      invariant(await evaluate("document.body.innerText.includes('Archiviert')"), 'Archive status missing in inspector');
+      await clickText('.inventory-detail-actions daca-structure-inventory-actions button', 'Wiederherstellen');
+      await clickText('daca-structure-inventory-actions dialog[open] footer button', 'Inventar wiederherstellen');
+      await waitFor("!document.querySelector('daca-structure-inventory-actions dialog[open]') && [...document.querySelectorAll('.inventory-detail-actions button')].some(b=>b.textContent==='Archivieren')", 'Inventory restoration failed');
+      await navigate('/physical-models', actor);
+      await waitFor(`document.querySelector(${JSON.stringify(card)})`, 'Restored inventory absent from active register');
+      await clickText(`${card} daca-structure-inventory-actions button`, 'Löschen');
+      await clickText('daca-structure-inventory-actions dialog[open] footer button', 'Abbrechen');
+      invariant(expectStatus(await api(actor, '/api/v1/physical-sources'), 200, 'inventory after cancelled deletion').body.items.some(s=>s.id===sourceId), 'Cancel deleted inventory');
+      await clickText(`${card} daca-structure-inventory-actions button`, 'Löschen');
+      await clickText('daca-structure-inventory-actions dialog[open] footer button', 'Inventar endgültig löschen');
+      await waitFor(`!document.querySelector(${JSON.stringify(card)})`, 'Deleted inventory remained in register');
+      await navigate('/physical-models', actor);
+      await waitFor("document.querySelector('daca-structure-inventory-audit button')", 'Inventory audit entry missing');
+      await clickText('daca-structure-inventory-audit button', 'Inventarprotokoll');
+      await waitFor("[...document.querySelectorAll('daca-structure-inventory-audit tbody tr')].some(r=>r.innerText.includes('Gebaeude-QA')&&r.innerText.includes('Gelöscht')&&r.innerText.includes('christian.spider'))", 'Deleted inventory audit unavailable after reload');
+      await captureScreenshot('structure-inventory-audit.png');
+      await clickText('daca-structure-inventory-audit footer button', 'Schliessen');
+    }
     console.log(`PASS csv-physical-models: ${expected.tableCount} tables / ${expected.fieldCount} fields @ ${sourceId}`);
   } finally {
     if (sourceId && !suppliedFile) {
-      const sources=expectStatus(await api(actor,'/api/v1/physical-sources'),200,'find QA CSV source').body.items;
+      const sources=expectStatus(await api(actor,'/api/v1/physical-sources?includeArchived=true'),200,'find QA CSV source').body.items;
       const source=sources.find(item=>item.id===sourceId);
-      if(source) expectStatus(await api(actor,`/api/v1/physical-sources/${sourceId}/retire`,{method:'POST',etag:`"${source.revision}"`}),200,'retire only the QA CSV source');
+      if(source) expectStatus(await api(actor,`/api/v1/structure-inventories/${sourceId}`,{method:'DELETE',etag:`"${source.revision}"`}),204,'delete only the QA CSV source');
     }
+  }
+}
+
+async function inventoryRepresentationFlow() {
+  const actor='christian.man',stamp=Date.now(),sourceName=`Inventory scope QA ${stamp}`;
+  await navigate('/models',actor);
+  const reference=expectStatus(await api(actor,'/api/v1/logical-models/83cb48b4-32b4-5bc9-b613-1036c3cb2e77'),200,'read inventory model reference').body;
+  const contentBase64=Buffer.from(`Tabelle;Feldname;Datentyp;Kurzbeschreibung\nVEHICLE;VEHICLE_ID;CHAR;Synthetic inventory ${stamp}\n`,'utf8').toString('base64');
+  const preview=expectStatus(await api(actor,'/api/v1/physical-model-csv/preview',{method:'POST',body:{contentBase64}}),200,'preview cross-organization inventory').body;
+  const imported=expectStatus(await api(actor,'/api/v1/physical-model-csv/imports',{method:'POST',body:{contentBase64,fingerprint:preview.fingerprint,name:sourceName,filename:'inventory-scope-qa.csv',departmentCode:'VBS',organizationId:'vbs-armasuisse-immobilien'}}),201,'import cross-organization inventory').body;
+  try {
+    const created=expectStatus(await api(actor,'/api/v1/logical-models',{method:'POST',body:{
+      identifiers:[`INVENTORY-SCOPE-QA-${stamp}`],localizations:[{language:'de',title:sourceName,description:'Synthetic inventory scope regression.'}],
+      dataOwnerUserId:reference.dataOwnerUserId,deputyOwnerUserId:reference.deputyOwnerUserId,creator:{type:'Application',applicationName:'Inventory QA'},dataDomainId:null,
+      organizationUnitId:reference.organizationId,dataClassification:'internal',dateCreated:new Date().toISOString().slice(0,10),contactPoints:[{name:'Inventory QA',email:'inventory@example.test'}],publisher:reference.publisher,
+      accessRights:'urn:daca:access-rights:internal',entities:[{name:'vehicle_inventory',businessObject:'Fahrzeug',fields:[{name:'vehicle_id',dataType:'uuid',shortDescription:'Synthetic vehicle key',businessObject:'Fahrzeug',classification:'internal',nullable:false,minCount:1,maxCount:1}]}]
+    }}),201,'create inventory representation model');
+    invariant(created.body.organizationId!=='vbs-armasuisse-immobilien','inventory scope regression requires distinct organizations');
+    const route=`/models/${created.body.id}/mappings`;
+    await navigate(route,actor);
+    await waitFor("document.querySelector('.logical-node>header')",'empty inventory model canvas unavailable');
+    await evaluate("document.querySelector('.logical-node>header').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:200,clientY:300}))");
+    await clickText('.canvas-context-menu button','Neue physische Repräsentation');
+    await waitFor(`(() => {const button=[...document.querySelectorAll('.source-options button')].find(b=>b.textContent.includes(${JSON.stringify(sourceName)}));return button&&!button.disabled;})()`,'authorized inventory from another organization is disabled');
+    await clickText('.source-options button',sourceName);
+    await waitFor("document.querySelector('.representation-dialog .object-tree button')",'inventory tables unavailable in picker');
+    await clickText('.representation-dialog .object-tree button','VEHICLE');
+    await waitFor("document.querySelector('.representation-dialog daca-physical-object-detail')?.innerText.includes('VEHICLE_ID')",'inventory field inspection unavailable');
+    await capturePageSegmentScreenshot('.representation-dialog','inventory-cross-organization-picker.png');
+    await clickText('.representation-dialog footer button','Hinzufügen');
+    await waitFor("document.querySelectorAll('.physical-representation').length===1&&document.querySelector('.mapping-edge .edge-hit')",'inventory representation and automatic draft link missing');
+    await clickText('.draft-save-action>button','Entwurf speichern');
+    await waitFor("document.querySelector('.draft-save-action>button')?.disabled&&document.body.innerText.includes('Alle Mapping-Entwürfe wurden versioniert gespeichert')",'cross-organization inventory could not be saved');
+    await navigate(route,actor);
+    await waitFor("document.querySelectorAll('.physical-representation').length===1&&document.querySelector('.mapping-edge .edge-hit')",'cross-organization inventory did not survive reload');
+    await capturePageSegmentScreenshot('.mapping-shell','inventory-cross-organization-saved.png');
+    const mappings=expectStatus(await api(actor,`/api/v1/asset-mappings?logicalModelId=${created.body.id}`),200,'read persisted inventory mapping').body.items;
+    invariant(mappings.length===1&&mappings[0].physicalSnapshotId===imported.snapshot.snapshot.id&&mappings[0].status==='draft','inventory mapping lost its source snapshot or draft state');
+    console.log('PASS cross-organization inventory: picker, inspection, auto-link, save and reload');
+  } finally {
+    const source=expectStatus(await api(actor,'/api/v1/physical-sources'),200,'read own QA inventory for archival').body.items.find(s=>s.id===imported.sourceId);
+    if(source)expectStatus(await api(actor,`/api/v1/structure-inventories/${source.id}/archive`,{method:'POST',etag:`"${source.revision}"`}),200,'archive only this test-created inventory');
   }
 }
 
@@ -1124,7 +1201,13 @@ async function domainAssignmentFlow(physical) {
   expectStatus(await api('christian.man',`/api/v1/logical-models/${modelId}/mapping-drafts`,{method:'POST',etag:created.headers.etag,body:{logicalModelVersionId:created.body.versionId,representations:domainMemberships.map(({physicalSnapshotId,physicalTableId})=>({physicalSnapshotId,physicalTableId})),mappings:[]}}),200,'attach domain test representations without field links');
   const route=`/models/${modelId}/mappings`;
   await navigate(route,'christian.man');
-  await waitFor("document.querySelectorAll('.physical-representation').length===2&&document.querySelector('.logical-node .model-domain')?.textContent.includes('Keine Domäne')",'unassigned domain headers did not render');
+  try {
+    await waitFor("document.querySelectorAll('.physical-representation').length===2&&document.querySelector('.logical-node .model-domain')?.textContent.includes('Keine Domäne')",'unassigned domain headers did not render');
+  } catch (error) {
+    const context=await evaluate("({cards:document.querySelectorAll('.physical-representation').length,domain:document.querySelector('.logical-node .model-domain')?.textContent,errors:[...document.querySelectorAll('[role=alert]')].map(e=>e.textContent)})");
+    await captureScreenshot('domain-assignment-failure.png');
+    throw new Error(`${error.message}: ${JSON.stringify(context)}`);
+  }
   const pgId=await evaluate("[...document.querySelectorAll('.physical-representation')].find((card)=>!card.textContent.includes('.parquet')).dataset.representationTableId");
   await evaluate("document.querySelector('.field-endpoint').click();[...document.querySelectorAll('.physical-representation')].find((card)=>card.textContent.includes('.parquet')).querySelector('.column-endpoint').click()");
   await waitFor("document.querySelector('.mapping-dialog[open]')!==null",'local mapping editor did not open for domain rebase test');
@@ -1561,11 +1644,12 @@ try {
   await cdp.call('Network.setCacheDisabled', { cacheDisabled: true }, sessionId);
   await cdp.call('Network.setBypassServiceWorker', { bypass: true }, sessionId);
 
-  if(args.get('--flow')==='csv-import'){await csvPhysicalModelsFlow();} else if(args.get('--flow')==='concept-network'){await conceptNetworkEditingFlow();} else if(args.get('--flow')==='line-editing'){
+  if(args.get('--flow')==='csv-import'){await csvPhysicalModelsFlow();} else if(args.get('--flow')==='inventory-representation'){await inventoryRepresentationFlow();} else if(args.get('--flow')==='concept-network'){await conceptNetworkEditingFlow();} else if(args.get('--flow')==='line-editing'){
     invariant(args.get('--model-id')&&args.get('--snapshot-id'),'line-editing flow requires model-id and snapshot-id');
     await edgeEditingFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});
   } else {
   await csvPhysicalModelsFlow();
+  await inventoryRepresentationFlow();
   const logical = await logicalFirstFlow();
   console.log(`PASS logical-first: ${logical.modelId}`);
   const physical = await physicalFirstFlow();

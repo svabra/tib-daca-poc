@@ -1,11 +1,11 @@
-<button #trigger class="daca-button is-secondary csv-import-trigger" type="button" [disabled]="!identity.canEditModels()" (click)="open()">Physische Modelle aus CSV laden</button>
+<button #trigger class="daca-button is-secondary csv-import-trigger" type="button" [disabled]="!identity.canEditModels()" (click)="open()">Strukturinventar aus CSV laden</button>
 <dialog #dialog aria-labelledby="csv-import-title" (cancel)="close($event)" (close)="restoreFocus()">
-  <header><div><p class="daca-eyebrow">Strukturimport</p><h2 id="csv-import-title">Physische Modelle aus CSV laden</h2></div><button type="button" aria-label="Import abbrechen" [disabled]="saving()" (click)="close()">×</button></header>
-  <p>Tabellen und Felder als physische Modelle erfassen. Nach dem Import öffnet sich der Struktur-Explorer mit allen importierten Tabellen.</p>
+  <header><div><p class="daca-eyebrow">Strukturimport</p><h2 id="csv-import-title">Strukturinventar aus CSV laden</h2></div><button type="button" aria-label="Import abbrechen" [disabled]="saving()" (click)="close()">×</button></header>
+  <p>Ein Strukturinventar mit Tabellen und Feldern als physische Modelle erfassen. Nach dem Import öffnet sich der Struktur-Explorer mit allen importierten Tabellen.</p>
   <p class="help">Semikolon-CSV mit den Spalten Tabelle, Feldname und Datentyp; weitere Angaben wie System, Datenobjekt, Länge, Kurzbeschreibung, Kommentar, Klassifizierung, Dezimalstellen und Werteliste bleiben erhalten. UTF-8 und Windows-1252, maximal 2 MiB. Systemnamen bilden die Gliederung; es wird keine Live-Verbindung eingerichtet.</p>
   <div class="import-inputs">
     <label>CSV-Datei<input #fileInput type="file" accept=".csv,text/csv" [disabled]="saving()" (change)="selectFile($event)"></label>
-    <label>Bezeichnung<input type="text" maxlength="255" [ngModel]="name()" (ngModelChange)="name.set($event)" [disabled]="saving()"></label>
+    <label>Name des Strukturinventars<input type="text" maxlength="255" [ngModel]="name()" (ngModelChange)="name.set($event)" [disabled]="saving()"></label>
     <label>Verantwortliche Organisation<select [ngModel]="scopeId()" (ngModelChange)="scopeId.set($event)" [disabled]="saving()">@for (scope of scopes(); track scope.id) {<option [value]="scope.id">{{ scope.department }} · {{ scope.label }}</option>}</select></label>
   </div>
   @if (!scopes().length) {<p class="daca-alert is-warning">Für diese Identität ist keine zuweisbare Modellierungsorganisation verfügbar.</p>}
