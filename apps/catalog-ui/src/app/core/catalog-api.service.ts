@@ -11,6 +11,7 @@ import {
   DomainAuditEvent,
   DomainGlossaryFixtureState,
   DomainSummary,
+  DomainModelMemberships,
   GovernanceSubmission,
   GlossaryTermProposal,
   GlossaryTermSummary,
@@ -403,6 +404,10 @@ export class CatalogApiService {
     }).pipe(map((result) => (Array.isArray(result) ? result : result.items).map((item) => this.normalizeProduct(item))));
   }
 
+  loadDomainModels(domainId: string): Observable<DomainModelMemberships> {
+    return this.http.get<DomainModelMemberships>(`/api/v1/domains/${encodeURIComponent(domainId)}/models`, { headers: this.identity.headers() });
+  }
+
   loadDomainAuditEvents(domainId: string): Observable<readonly DomainAuditEvent[]> {
     return this.http.get<DomainAuditEvent[]>(`/api/v1/domains/${encodeURIComponent(domainId)}/audit-events`, { headers: this.identity.headers() });
   }
@@ -480,6 +485,7 @@ export class CatalogApiService {
   createGlossaryTermProposal(payload: {
     operation: GlossaryTermProposal['operation'];
     targetTermId?: string | null;
+    expectedTargetRevision?: number;
     sourceProductId?: string | null;
     autoAttach: boolean;
     domainIds: readonly string[];
@@ -492,6 +498,7 @@ export class CatalogApiService {
   }): Observable<GlossaryTermProposal> {
     const body = {
       operation: payload.operation,
+      ...(payload.expectedTargetRevision ? { expectedTargetRevision: payload.expectedTargetRevision } : {}),
       ...(payload.targetTermId ? { targetTermId: payload.targetTermId } : {}),
       sourceProductId: payload.sourceProductId,
       autoAttach: payload.autoAttach,

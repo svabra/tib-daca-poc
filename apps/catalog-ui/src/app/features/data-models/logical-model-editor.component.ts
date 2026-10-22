@@ -1,14 +1,16 @@
+import { DomainAssignmentChoice, ModelDomainDialogComponent } from './model-domain-dialog.component';
+import { PhysicalRepresentation } from './mapping-draft.facade';
 import { afterNextRender, ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, Injector, input, output, signal, viewChild } from '@angular/core';
 import { AbstractControl, FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { debounceTime, distinctUntilChanged, finalize, forkJoin, take } from 'rxjs';
+import { debounceTime, distinctUntilChanged, finalize, forkJoin, of, take } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService, ModelingPersona } from '../../core/demo-identity.service';
 import { I14yConceptsApiService } from '../domains/i14y-concepts-api.service';
 import { I14yConcept } from '../domains/i14y-concepts.models';
 import { DataModelWorkspaceNavComponent } from './data-model-workspace-nav.component';
 import { DataModelsApiService, LogicalModelExportFile, LogicalModelExportRepresentation, ModelingApiError } from './data-models-api.service';
-import { CreatorType, DataClassification, LogicalEntity, LogicalEntityWrite, LogicalField, LogicalFieldWrite, LogicalModel, LogicalModelAssistanceProvenance, LogicalModelCreator, LogicalModelWrite, PhysicalSnapshot, PhysicalSource, PhysicalTable } from './data-models.models';
+import { CreatorType, DataClassification, LogicalEntity, LogicalEntityWrite, LogicalField, LogicalFieldWrite, LogicalModel, LogicalModelAssistanceProvenance, LogicalModelCreator, LogicalModelWrite, PhysicalDomainTarget, PhysicalSnapshot, PhysicalSource, PhysicalTable } from './data-models.models';
 import { DatasetSummaryComponent } from './dataset-summary.component';
 import { LogicalModelGovernanceComponent } from './logical-model-governance.component';
 import { BusinessObjectTerm, FederalOrganization, ModelingAssistanceService, ModelingScope, TermdatEntry } from './modeling-assistance.service';
@@ -46,7 +48,7 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
 
 @Component({
   selector: 'daca-logical-model-editor', standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, DataModelWorkspaceNavComponent, DatasetSummaryComponent, LogicalModelGovernanceComponent, LogicalModelFieldHelpDirective, LogicalFieldCharacteristicsComponent],
+  imports: [ModelDomainDialogComponent, ReactiveFormsModule, RouterLink, DataModelWorkspaceNavComponent, DatasetSummaryComponent, LogicalModelGovernanceComponent, LogicalModelFieldHelpDirective, LogicalFieldCharacteristicsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (!embedded()) {
@@ -104,7 +106,11 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
             <label dacaFieldHelp="office">Amt / Verwaltungseinheit<select formControlName="office" (change)="officeChanged()"><option value="">Keine</option>@for(org of offices();track org.id){<option [value]="org.id" [disabled]="!canNavigateOrganization(org)">{{ org.displayName }}</option>}</select></label>
             <label dacaFieldHelp="division">Abteilung / Bereich<select formControlName="division" (change)="scopeChanged()"><option value="">Keine</option>@for(org of divisions();track org.id){<option [value]="org.id" [disabled]="!canNavigateOrganization(org)">{{ org.displayName }}</option>}</select></label>
             <label class="is-wide identifier-field" dacaFieldHelp="identifiers">Identifier *<span class="identifier-mode-control"><button type="button" class="identifier-mode-switch" role="switch" [attr.aria-checked]="form.controls.dataset.controls.identifierMode.value" aria-label="Organisations-abgeleiteten Identifier umschalten" (click)="toggleIdentifierMode()"><span class="identifier-mode-switch-thumb" aria-hidden="true"></span></button><span>Organisations-abgeleiteter Identifier</span></span><span class="identifier-input" [class.is-derived]="form.controls.dataset.controls.identifierMode.value">@if(form.controls.dataset.controls.identifierMode.value){<span class="identifier-prefix">{{ organizationIdentifierPrefix() }}</span>}<input formControlName="identifiers" (input)="identifierChanged()" placeholder="Eindeutiger Identifier ohne Leerzeichen"></span><small>@if(identifierAvailability()==='checking'){Identifier wird geprüft …}@else if(identifierAvailability()==='available'){Identifier ist katalogweit verfügbar.}@else if(identifierAvailability()==='taken'){Dieser Identifier ist bereits vergeben.}@else{Ein Identifier ist genau ein String ohne Leerzeichen.}</small></label>
-            <label dacaFieldHelp="dataDomainId">DaCa-Domäne * <a class="new-domain-link" routerLink="/domains" target="_blank" title="Öffnet die Domain-Registrierung in einem neuen Tab">Neue Domäne erstellen</a><select formControlName="dataDomainId" (change)="domainChanged()"><option value="">Bitte wählen</option>@for(domain of catalogApi.domains();track domain.id){<option [value]="domain.id">{{ domain.preferredLabel }}</option>}</select></label>
+            <label dacaFieldHelp="dataDomainId">DaCa-Domäne <a class="new-domain-link" routerLink="/domains" target="_blank" title="Öffnet die Domain-Registrierung in einem neuen Tab">Neue Domäne erstellen</a><select formControlName="dataDomainId" (change)="domainChanged()"><option value="">Bitte wählen</option>@for(domain of catalogApi.domains();track domain.id){<option [value]="domain.id">{{ domain.preferredLabel }}</option>}</select></label>
+            @if(!selectedDomain()){
+              <label>Data Owner für den Entwurf *<select formControlName="dataOwnerId" (change)="ownerChanged(true)"><option value="">Bitte wählen</option>@for(person of ownerPersonas();track person.userId){<option [value]="person.userId">{{ person.displayName }}</option>}</select></label>
+              <small>Die Domäne kann später im Canvas zugeordnet werden. Vor der Domänenprüfung ist sie erforderlich.</small>
+            }
             <label dacaFieldHelp="classification">Klassifizierung<select formControlName="classification"><option value="unclassified">Nicht klassifiziert</option><option value="internal">Intern</option><option value="confidential">Vertraulich</option><option value="secret">Geheim</option></select></label>
             <div class="role-assignment"><strong>Data Steward (Organisation)</strong><span>{{ organizationStewards() || 'Nicht zugewiesen' }}</span><small>Diese Rolle gilt organisationsweit und wird nicht am einzelnen Modell gespeichert.</small></div>
             <label dacaFieldHelp="creatorType">Ersteller-Typ<select formControlName="creatorType"><option value="">Nicht erfasst</option><option value="application">Applikation</option><option value="internal_organisation">Interne Verwaltungseinheit</option><option value="internal_person">Interne Person</option><option value="external_organisation_or_person">Externe Organisation/Person</option></select></label>
@@ -150,6 +156,7 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
       </form>
       }
     }
+    @if(domainSavePrompt();as prompt){<daca-model-domain-dialog [targetName]="form.controls.dataset.controls.titleDe.value" [initialDomainId]="form.controls.dataset.controls.dataDomainId.value" [fixedDomain]="true" [physicalOptions]="prompt.options" [busy]="saving()" [error]="error()||saveError()" (closed)="domainSavePrompt.set(null)" (confirmed)="confirmDomainSave($event)"/>}
   `,
   styles: [`
     .model-editor-heading{align-items:center}.editor-state{padding:2rem;box-shadow:none}.model-editor-form{display:grid;gap:1.25rem}.editor-section{box-shadow:none}.editor-section>header{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.1rem 1.25rem;border-bottom:1px solid var(--daca-border)}.editor-section>header>div{display:flex;align-items:center;gap:1rem}.editor-section>header>div>span{display:grid;place-items:center;width:38px;height:38px;background:var(--daca-federal-blue);color:#fff;font-weight:800}.editor-section h2{margin:0;font-size:1.12rem}.editor-section header small{color:var(--daca-muted)}.structure-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.5rem}.editor-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;padding:1.25rem}.editor-grid label{display:grid;align-content:start;gap:.4rem;color:#30363b;font-size:.72rem;font-weight:750}.editor-grid input,.editor-grid select,.editor-grid textarea{width:100%;min-height:42px;border:1px solid var(--daca-border-strong);border-radius:0;padding:.55rem .65rem;background:#fff;color:var(--daca-ink)}.validation-attempted input.ng-invalid,.validation-attempted select.ng-invalid,.validation-attempted textarea.ng-invalid{border-color:#b3162b!important;background:rgba(179,22,43,.10)!important}.editor-grid textarea{resize:vertical}.editor-grid label>small{color:var(--daca-muted);font-size:.64rem;font-weight:500}.editor-grid .is-wide{grid-column:1/-1}.termdat-feedback{display:flex;min-height:44px;align-items:center;justify-content:space-between;gap:.8rem;border-left:4px solid var(--daca-border-strong);padding:.7rem .85rem;background:#f4f6f7;color:var(--daca-muted);font-size:.72rem}.termdat-feedback.has-hits{border-left-color:#167347;background:#edf7f0;color:#174c32}.termdat-feedback button{min-height:40px;border:1px solid currentColor;padding:.45rem .75rem;background:#fff;color:inherit;font-weight:750;cursor:pointer}.termdat-loading{display:flex;align-items:center;gap:.65rem}.termdat-spinner{display:block;box-sizing:border-box;width:20px;height:20px;flex:0 0 20px;border:3px solid rgba(31,111,139,.34);border-top-color:#176783;border-radius:999px;animation:termdat-spinner-rotate .8s linear infinite;transform-origin:center}@keyframes termdat-spinner-rotate{to{transform:rotate(360deg)}}.termdat-modal{width:min(1040px,100%)}.termdat-modal li{grid-template-columns:minmax(0,1fr) minmax(390px,1.15fr);align-items:start}.termdat-result-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;gap:.55rem;width:100%}.termdat-result-actions .daca-button{width:100%;min-height:48px;padding:.65rem .85rem;font-weight:800;line-height:1.25;text-align:center;white-space:normal}.termdat-result-actions .daca-button:first-child{grid-column:1/-1}.termdat-result-actions .daca-button:disabled{font-weight:800}.termdat-adoption{display:grid;scroll-margin-block:1rem;gap:.75rem;margin:1rem 0;border-left:4px solid var(--daca-federal-blue);padding:1rem;background:#eef5f8}.termdat-adoption h3,.termdat-adoption p{margin:0}.termdat-overwrite-warning{border-left:4px solid #b26a00;padding:.65rem .8rem;background:#fff1c7;color:#4f3d00}.termdat-adoption-row{display:grid;grid-template-columns:minmax(8rem,.7fr) 1fr 1fr auto;align-items:start;gap:.7rem;border-top:1px solid var(--daca-border);padding-top:.7rem}.termdat-adoption-row>span{display:grid;gap:.2rem;white-space:pre-wrap}.termdat-adoption-row small{color:var(--daca-muted);font-weight:700;text-transform:uppercase}.termdat-adoption-row em{padding:.2rem .4rem;background:#fff1c7;color:#634c00;font-size:.67rem;font-style:normal;font-weight:750}.termdat-adoption-actions{display:flex;justify-content:flex-end;gap:.5rem}.termdat-adoption-actions .daca-button{min-width:190px;font-weight:800}.role-assignment{display:grid;align-content:start;gap:.25rem;border-left:4px solid var(--daca-blue);padding:.65rem .8rem;background:var(--daca-blue-soft);font-size:.7rem}.role-assignment small{color:var(--daca-muted);font-size:.62rem}.language-details{border:1px solid var(--daca-border);padding:.85rem}.language-details summary{cursor:pointer;font-weight:750}.language-details>div{display:grid;grid-template-columns:1fr 2fr;gap:.8rem;margin-top:1rem}.media-hint{display:grid;gap:.25rem;border-left:4px solid var(--daca-blue);padding:.8rem 1rem;background:var(--daca-blue-soft);font-size:.72rem}.media-hint span{color:var(--daca-muted)}.field-workbench{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(360px,.75fr);align-items:start;gap:.9rem;padding:.9rem;background:#f6f8f9}.field-browser{min-width:0;border:1px solid var(--daca-border);background:#fff}.field-browser>header{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.7rem .8rem;border-bottom:1px solid var(--daca-border)}.field-browser h3,.field-browser p{margin:.1rem 0}.field-browser h3{font-size:.95rem}.field-browser nav{display:flex}.field-browser nav button{min-height:36px;border:0;border-bottom:3px solid transparent;padding:.35rem .65rem;background:#fff;font-weight:750;cursor:pointer}.field-browser nav button.is-active{border-color:var(--daca-red);color:var(--daca-red-dark)}.field-table-wrap{overflow:auto}.field-table{width:100%;border-collapse:collapse;font-size:.67rem}.field-table th{padding:.55rem .65rem;background:#f2f5f7;color:var(--daca-muted);font-size:.57rem;text-align:left;text-transform:uppercase}.field-table td{border-top:1px solid var(--daca-border);padding:.48rem .65rem;vertical-align:middle}.field-table tr.is-selected{background:var(--daca-blue-soft);box-shadow:inset 4px 0 var(--daca-blue)}.field-select{display:grid;gap:.12rem;width:100%;border:0;padding:0;background:transparent;color:inherit;text-align:left;cursor:pointer}.field-select small{color:var(--daca-muted);font-size:.58rem}.remove-field{display:inline-flex;align-items:center;min-height:40px;border:0;padding:.5rem;background:transparent;color:var(--daca-red-dark);font-size:.61rem;font-weight:750;cursor:pointer}.remove-field:disabled{color:var(--daca-muted);cursor:not-allowed}.relation-list{display:grid;padding:.55rem}.relation-list>button{display:grid;grid-template-columns:1fr 1fr;gap:1rem;border:0;border-bottom:1px solid var(--daca-border);padding:.65rem;background:#fff;text-align:left;cursor:pointer}.relation-list>button.is-selected{background:var(--daca-blue-soft);box-shadow:inset 4px 0 var(--daca-blue)}.relation-list span{display:grid;gap:.2rem}.relation-list small{color:var(--daca-muted);font-size:.56rem;font-weight:800;text-transform:uppercase}.relation-list strong{overflow-wrap:anywhere;font-size:.68rem}.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}.field-panel-form{display:grid;gap:.6rem}.field-panel-actions{position:sticky;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:.5rem;border:1px solid var(--daca-border);border-top:4px solid var(--daca-red);padding:.65rem;background:#fff;box-shadow:0 -6px 16px #15293d18}.field-panel-actions span{color:var(--daca-muted);font-size:.62rem}.field-panel-actions .daca-button{min-height:40px;padding:.45rem .65rem;font-size:.66rem}.export-section{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.25rem;border-top:4px solid var(--daca-red);box-shadow:none}.export-section h2,.export-section p{margin:.25rem 0}.export-section>div:last-child{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.5rem}.editor-actions{position:sticky;z-index:5;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:1rem;border:1px solid var(--daca-border);border-top:4px solid var(--daca-red);padding:.9rem 1rem;background:#fff;box-shadow:0 -8px 20px #15293d18}.editor-actions>div{display:flex;align-items:center;flex-wrap:wrap;gap:.6rem}.editor-actions .editor-primary-actions{align-items:flex-start;justify-content:flex-end}.save-action{display:grid;justify-items:stretch;gap:.45rem;min-width:250px}.save-validation,.save-problem{max-width:430px;margin:0;border-left:4px solid var(--daca-red);padding:.6rem .75rem;background:#fff0f0;color:var(--daca-red-dark);font-size:.7rem;text-align:left}.save-problem{display:grid;gap:.45rem}.save-problem p{margin:0}.save-problem-action{font-weight:700}.save-validation ul,.save-problem ul{display:grid;gap:.25rem;margin:.4rem 0 0;padding-left:1.1rem}.save-validation li span,.save-problem li span{color:inherit;font-size:inherit;font-weight:800}.save-validation li button,.save-problem li button{border:0;padding:0;background:transparent;color:inherit;text-align:left;cursor:pointer;text-decoration:underline}.save-problem-technical{display:flex;align-items:center;justify-content:space-between;gap:.5rem;border-top:1px solid #b3162b55;padding-top:.45rem;color:#5f6970}.save-problem-technical small{font-size:.58rem;overflow-wrap:anywhere}.save-problem-technical .daca-button{min-height:30px;padding:.25rem .45rem;font-size:.62rem;white-space:nowrap}.editor-actions span,.publish-note{color:var(--daca-muted);font-size:.7rem}.publish-note{margin:-.75rem 0 0;text-align:right}@media(prefers-reduced-motion:reduce){.termdat-spinner{animation:none}}@media(max-width:1100px){.field-workbench{grid-template-columns:1fr}}@media(max-width:980px){.editor-grid{grid-template-columns:1fr 1fr}.termdat-modal li{grid-template-columns:minmax(0,1fr) minmax(340px,1fr)}.termdat-adoption-row{grid-template-columns:1fr 1fr}.termdat-adoption-row>strong,.termdat-adoption-row>em{grid-column:1/-1}.export-section,.editor-actions{align-items:flex-start;flex-direction:column}.export-section>div:last-child{justify-content:flex-start}.editor-actions>div:last-child{width:100%}.save-action{width:100%}}@media(max-width:820px){.model-editor-heading{align-items:flex-start;flex-direction:column}.editor-grid,.language-details>div,.termdat-adoption-row,.termdat-modal li{grid-template-columns:1fr}.termdat-result-actions,.termdat-adoption-actions{width:100%}.termdat-adoption-actions .daca-button{min-width:0}.termdat-feedback{align-items:stretch;flex-direction:column}.editor-actions{position:static}.editor-actions>div,.editor-actions .daca-button{width:100%}.editor-section>header{align-items:flex-start;flex-direction:column}.structure-actions,.structure-actions .daca-button{width:100%}.field-workbench{padding:.55rem}.field-table{min-width:640px}.relation-list>button{grid-template-columns:1fr}.field-panel-actions{position:static;align-items:stretch;flex-direction:column}.field-panel-actions .daca-button{width:100%}}@media(max-width:560px){.termdat-result-actions{grid-template-columns:1fr}.termdat-result-actions .daca-button:first-child{grid-column:auto}.termdat-result-actions .daca-button{min-height:44px}.termdat-adoption-actions{display:grid;grid-template-columns:1fr}.termdat-adoption-actions .daca-button{width:100%}}
@@ -208,7 +215,7 @@ export class LogicalModelEditorComponent {
   readonly assistanceProvenance = signal<readonly LogicalModelAssistanceProvenance[]>([]);
   readonly translationSuggestions = signal<readonly { field: string; label: string; current: string; suggestion: string; provenance: LogicalModelAssistanceProvenance }[]>([]);
   readonly form = this.fb.group({
-    dataset: this.fb.nonNullable.group({ titleDe: ['', [Validators.required, Validators.pattern(/\S/), Validators.maxLength(500)]], descriptionDe: ['', [Validators.required, Validators.pattern(/\S/), Validators.maxLength(8000)]], titleFr: ['', Validators.maxLength(500)], descriptionFr: ['', Validators.maxLength(8000)], titleIt: ['', Validators.maxLength(500)], descriptionIt: ['', Validators.maxLength(8000)], titleEn: ['', Validators.maxLength(500)], descriptionEn: ['', Validators.maxLength(8000)], titleRm: ['', Validators.maxLength(500)], descriptionRm: ['', Validators.maxLength(8000)], identifiers: ['', [Validators.required, Validators.pattern(LOGICAL_IDENTIFIER_PATTERN)]], identifierMode: false, department: ['vbs', Validators.required], office: 'vbs-armasuisse', division: 'vbs-armasuisse-immobilien', dataDomainId: ['', Validators.required], dataOwnerId: ['', Validators.required], deputyDataOwnerId: '', creatorType: this.fb.nonNullable.control<CreatorType | ''>(''), creatorName: ['', [Validators.pattern(/\S/), Validators.maxLength(255)]], creatorIdentifier: ['', Validators.maxLength(100)], creatorPersonName: ['', Validators.maxLength(255)], classification: this.fb.nonNullable.control<DataClassification>('unclassified'), dateCreated: [new Date().toISOString().slice(0,10), Validators.required] }),
+    dataset: this.fb.nonNullable.group({ titleDe: ['', [Validators.required, Validators.pattern(/\S/), Validators.maxLength(500)]], descriptionDe: ['', [Validators.required, Validators.pattern(/\S/), Validators.maxLength(8000)]], titleFr: ['', Validators.maxLength(500)], descriptionFr: ['', Validators.maxLength(8000)], titleIt: ['', Validators.maxLength(500)], descriptionIt: ['', Validators.maxLength(8000)], titleEn: ['', Validators.maxLength(500)], descriptionEn: ['', Validators.maxLength(8000)], titleRm: ['', Validators.maxLength(500)], descriptionRm: ['', Validators.maxLength(8000)], identifiers: ['', [Validators.required, Validators.pattern(LOGICAL_IDENTIFIER_PATTERN)]], identifierMode: false, department: ['vbs', Validators.required], office: 'vbs-armasuisse', division: 'vbs-armasuisse-immobilien', dataDomainId: [''], dataOwnerId: ['', Validators.required], deputyDataOwnerId: '', creatorType: this.fb.nonNullable.control<CreatorType | ''>(''), creatorName: ['', [Validators.pattern(/\S/), Validators.maxLength(255)]], creatorIdentifier: ['', Validators.maxLength(100)], creatorPersonName: ['', Validators.maxLength(255)], classification: this.fb.nonNullable.control<DataClassification>('unclassified'), dateCreated: [new Date().toISOString().slice(0,10), Validators.required] }),
     fields: this.fb.array([this.createField(1)]),
   });
   readonly organizationStewards = computed(() => this.identity.users()
@@ -246,6 +253,7 @@ export class LogicalModelEditorComponent {
       ['Identifier', dataset.identifiers],
       ['Departement', dataset.department],
       ['DaCa-Domäne', dataset.dataDomainId],
+      ['Data Owner', dataset.dataOwnerId],
       ['Fachliches Erstelldatum', dataset.dateCreated],
     ];
     for (const [field, control] of datasetFields) this.addControlIssue(issues, field, control);
@@ -342,7 +350,8 @@ export class LogicalModelEditorComponent {
   domainChanged(markDirty = true): void {
     const domain = this.selectedDomain();
     const controls = this.form.controls.dataset.controls;
-    const owner = domain?.ownerUserId ?? '';
+    if(this.model()||!domain){if(markDirty)this.form.markAsDirty();return;}
+    const owner = domain.ownerUserId;
     const deputy = domain?.deputyOwnerUserId ?? '';
     if (controls.dataOwnerId.value !== owner) controls.dataOwnerId.setValue(owner, { emitEvent: false });
     if (controls.deputyDataOwnerId.value !== deputy) controls.deputyDataOwnerId.setValue(deputy, { emitEvent: false });
@@ -427,7 +436,8 @@ export class LogicalModelEditorComponent {
       error: () => this.identifierAvailability.set('idle'),
     });
   }
-  ownerChanged(): void {
+  ownerChanged(clearDeputy=false): void {
+    if(clearDeputy)this.form.controls.dataset.controls.deputyDataOwnerId.setValue('');
     const owner = this.form.controls.dataset.controls.dataOwnerId.value;
     const scope = this.selectedOrganizationId();
     this.form.controls.dataset.controls.deputyDataOwnerId.setValue('');
@@ -642,7 +652,9 @@ export class LogicalModelEditorComponent {
       error: (error: Error) => this.error.set(error.message),
     });
   }
-  save(allowIncompleteDraft = false): void {
+  readonly domainSavePrompt=signal<{options:readonly PhysicalRepresentation[];allowIncompleteDraft:boolean}|null>(null);
+  confirmDomainSave(choice:DomainAssignmentChoice):void{const prompt=this.domainSavePrompt();if(!prompt)return;this.save(prompt.allowIncompleteDraft,choice.physicalDomainTargets);}
+  save(allowIncompleteDraft = false, physicalDomainTargets?:PhysicalDomainTarget[]): void {
     if (this.saving() || (this.model() && !this.canEditCurrentModel())) return;
     this.clearServerErrors();
     this.refreshCrossFieldErrors();
@@ -660,11 +672,18 @@ export class LogicalModelEditorComponent {
       if (!this.embedded()) this.activeTab.set(this.validationIssues()[0].field.startsWith('Feld ') ? 'fields' : 'model');
       return;
     }
+    const domainId=this.form.controls.dataset.controls.dataDomainId.value;
+    if(domainId&&domainId!==this.model()?.dataDomain.id&&physicalDomainTargets===undefined){
+      const origin=this.derivedOrigin(),current=this.model();
+      // No propagation is needed for a model without any physical counterpart.
+      const candidates=current?this.api.loadDomainCandidates(current.id):of(origin?[{snapshot:origin.snapshot,table:origin.table,persisted:false}]:[]);
+      this.saving.set(true);candidates.subscribe({next:(options)=>{this.saving.set(false);if(options.length)this.domainSavePrompt.set({options,allowIncompleteDraft});else this.save(allowIncompleteDraft,[]);},error:(error:Error)=>{this.saving.set(false);this.error.set(error.message);}});return;
+    }
     this.saving.set(true);
     this.error.set(null);
     this.notice.set(null);
     const current = this.model();
-    const value = this.value();
+    const value = {...this.value(),physicalDomainTargets:physicalDomainTargets??[]};
     const origin = this.derivedOrigin();
     const fieldMappings = this.fields.controls.flatMap((field) => field.controls.physicalColumnId.value ? [{
       physicalColumnId: field.controls.physicalColumnId.value,
@@ -683,6 +702,7 @@ export class LogicalModelEditorComponent {
         this.patch(body);
         this.form.markAsPristine();
         this.validationAttempted.set(false);
+        this.domainSavePrompt.set(null);
         this.notice.set('Der unabhängige Modellentwurf wurde versioniert gespeichert.');
         this.modelSaved.emit(body);
         if (!current && origin) void this.router.navigate(['/models', body.id, 'mappings'], { queryParams: { physicalSnapshotId: origin.snapshot.id, physicalTableId: origin.table.id } });
@@ -782,7 +802,7 @@ export class LogicalModelEditorComponent {
       department: dataset.department,
       office: dataset.office,
       organizationUnitId: this.selectedOrganizationId(),
-      dataDomainId: dataset.dataDomainId,
+      dataDomainId: dataset.dataDomainId||null,
       dataOwnerId: dataset.dataOwnerId,
       deputyDataOwnerId: dataset.deputyDataOwnerId || null,
       creator: this.creatorValue(dataset.creatorType, dataset.creatorName, dataset.creatorIdentifier, dataset.creatorPersonName),
@@ -884,7 +904,7 @@ export class LogicalModelEditorComponent {
     const dataset = this.form.controls.dataset.controls;
     const direct: Record<string, AbstractControl> = {
       identifiers: dataset.identifiers,
-      dataDomainId: dataset.dataDomainId,
+      dataDomainId: dataset.dataDomainId||null,
       dataOwnerUserId: dataset.dataOwnerId,
       deputyOwnerUserId: dataset.deputyDataOwnerId,
       organizationUnitId: dataset.division.value ? dataset.division : dataset.office,

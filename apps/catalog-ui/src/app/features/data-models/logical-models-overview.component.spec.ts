@@ -73,7 +73,7 @@ describe('LogicalModelsOverviewComponent',()=>{
     const fixture=TestBed.createComponent(LogicalModelsOverviewComponent);fixture.detectChanges();TestBed.tick();fixture.detectChanges();
     const component=fixture.componentInstance;const root=fixture.nativeElement as HTMLElement;
     const trigger=root.querySelector<HTMLButtonElement>('.models-actions button')!;
-    const dialog=root.querySelector<HTMLDialogElement>('dialog')!;
+    const dialog=root.querySelector<HTMLDialogElement>('.creation-dialog')!;
     const showModal=vi.fn(()=>dialog.setAttribute('open',''));
     Object.defineProperty(dialog,'showModal',{configurable:true,value:showModal});
     const focus=vi.spyOn(trigger,'focus');
@@ -96,7 +96,7 @@ describe('LogicalModelsOverviewComponent',()=>{
     ]});
     const fixture=TestBed.createComponent(LogicalModelsOverviewComponent);fixture.detectChanges();TestBed.tick();fixture.detectChanges();
     const trigger=(fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.models-actions button')!;
-    const dialog=(fixture.nativeElement as HTMLElement).querySelector<HTMLDialogElement>('dialog')!;
+    const dialog=(fixture.nativeElement as HTMLElement).querySelector<HTMLDialogElement>('.creation-dialog')!;
     const showModal=vi.fn();Object.defineProperty(dialog,'showModal',{configurable:true,value:showModal});
     expect(trigger.disabled).toBe(true);
     fixture.componentInstance.openCreationChoice();

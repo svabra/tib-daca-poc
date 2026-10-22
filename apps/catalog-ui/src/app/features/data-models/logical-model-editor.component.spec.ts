@@ -220,7 +220,8 @@ describe('LogicalModelEditorComponent contracts',()=>{
     expect(validation).not.toBeNull();
     expect(validation?.getAttribute('role')).toBe('alert');
     expect(validation?.textContent).toContain('Titel (Deutsch)');
-    expect(validation?.textContent).toContain('DaCa-Domäne');
+    expect(validation?.textContent).not.toContain('DaCa-Domäne');
+    expect(validation?.textContent).toContain('Data Owner');
     expect(validation?.textContent).toContain('Feld 1 – Feldname');
     expect(validation?.textContent).toContain('Feld 1 – Geschäftsobjekt');
     expect(validation?.textContent).not.toContain('I14Y-Concept-Links');
@@ -288,6 +289,9 @@ describe('LogicalModelEditorComponent contracts',()=>{
     }
     component.save();
 
+    expect(component.domainSavePrompt()?.options).toHaveLength(1);
+    expect(deriveLogicalModel).not.toHaveBeenCalled();
+    component.confirmDomainSave({domainId:component.form.controls.dataset.controls.dataDomainId.value,physicalDomainTargets:[]});
     expect(deriveLogicalModel).toHaveBeenCalledOnce();
     const request=deriveLogicalModel.mock.calls[0][1];
     expect(request.fieldMappings).toHaveLength(FALLBACK_PHYSICAL_SNAPSHOT.tables[0].columns.length-1);

@@ -4,6 +4,13 @@ import { MappingDraftFacade } from './mapping-draft.facade';
 import { FALLBACK_LOGICAL_MODEL, FALLBACK_MAPPINGS, FALLBACK_PHYSICAL_SNAPSHOT } from './mapping-fallback';
 import { MappingMatrixComponent } from './mapping-matrix.component';
 
+vi.mock('@bit-daca/design-system',async()=>{
+  const {Component}=await import('@angular/core');
+  class GlossaryTermStub {term='';explanation='';}
+  Component({selector:'daca-glossary-term',standalone:true,inputs:['term','explanation'],template:'<span [title]="explanation">{{term}}</span>'})(GlossaryTermStub);
+  return {DacaGlossaryTermComponent:GlossaryTermStub};
+});
+
 describe('MappingMatrixComponent', () => {
   it('offers the complete table alternative without requiring drag and drop', () => {
     TestBed.configureTestingModule({ imports: [MappingMatrixComponent], providers: [MappingDraftFacade] });

@@ -1955,8 +1955,8 @@ class DcatDatasetVersion(Base):
         ForeignKey("demo_users.id", ondelete="SET NULL")
     )
     creator: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    data_domain_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("domains.id", ondelete="RESTRICT"), nullable=False
+    data_domain_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("domains.id", ondelete="RESTRICT"), nullable=True
     )
     department_code: Mapped[str] = mapped_column(String(20), nullable=False)
     organization_id: Mapped[str] = mapped_column(
@@ -2475,7 +2475,7 @@ class LogicalConceptLink(Base):
 class PhysicalSource(Base):
     __tablename__ = "physical_sources"
     __table_args__ = (
-        CheckConstraint("adapter_type IN ('postgresql', 's3', 'fixture')", name="ck_physical_adapter"),
+        CheckConstraint("adapter_type IN ('postgresql', 's3', 'fixture', 'csv')", name="ck_physical_adapter"),
         CheckConstraint("lifecycle IN ('active', 'retired')", name="ck_physical_source_lifecycle"),
         CheckConstraint("revision >= 1", name="ck_physical_source_revision"),
         CheckConstraint("length(content_hash) = 64", name="ck_physical_source_hash"),
@@ -2597,12 +2597,15 @@ class PhysicalTable(Base):
     storage_location: Mapped[str | None] = mapped_column(String(2000))
     media_type: Mapped[str | None] = mapped_column(String(255))
     object_count: Mapped[int | None] = mapped_column(Integer)
+    row_count: Mapped[int | None] = mapped_column(BigInteger)
     size_bytes: Mapped[int | None] = mapped_column(BigInteger)
     schema_confidence: Mapped[str | None] = mapped_column(String(32))
     partition_keys: Mapped[list[str] | None] = mapped_column(JSON)
+    import_metadata: Mapped[dict | None] = mapped_column(JSON)
 
 
 class PhysicalColumn(Base):
+    import_metadata: Mapped[dict | None] = mapped_column(JSON)
     __tablename__ = "physical_columns"
     __table_args__ = (
         UniqueConstraint("physical_table_id", "name", name="uq_physical_column_name"),
@@ -2692,6 +2695,24 @@ class PhysicalDriftChange(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
+
+
+class LogicalModelRepresentation(Base):
+    """Immutable membership, independent of whether any fields are mapped."""
+
+    __tablename__ = "logical_model_representations"
+    __table_args__ = (
+        UniqueConstraint("logical_model_id", "physical_table_id", name="uq_model_representation_table"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    urn: Mapped[str] = mapped_column(String(700), unique=True, nullable=False)
+    logical_model_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("logical_models.id", ondelete="RESTRICT"), nullable=False)
+    physical_snapshot_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("physical_schema_snapshots.id", ondelete="RESTRICT"), nullable=False)
+    physical_table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("physical_tables.id", ondelete="RESTRICT"), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_by_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
 class AssetMapping(Base):

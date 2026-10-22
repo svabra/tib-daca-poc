@@ -14,7 +14,9 @@ vi.mock('@bit-daca/design-system',async()=>{
   const {Component}=await import('@angular/core');
   class StatusBadgeStub{}
   Component({selector:'daca-status-badge',standalone:true,template:'<ng-content />',inputs:['tone']})(StatusBadgeStub);
-  return{StatusBadgeComponent:StatusBadgeStub};
+  class GlossaryTermStub {term='';explanation='';}
+  Component({selector:'daca-glossary-term',standalone:true,inputs:['term','explanation'],template:'<span [title]="explanation">{{term}}</span>'})(GlossaryTermStub);
+  return{StatusBadgeComponent:StatusBadgeStub,DacaGlossaryTermComponent:GlossaryTermStub};
 });
 
 interface SelectionRequests {
@@ -28,10 +30,10 @@ function selectionRequests():SelectionRequests{return{model:new Subject(),snapsh
 function finish<T>(request:Subject<T>,value:T):void{request.next(value);request.complete();}
 
 describe('exact mapping suggestions',()=>{
-  it('suggests only exact, type-compatible 1:1 pairs and reports manual cases',()=>{
+  it('links exact names despite type conflicts and reports manual cases',()=>{
     const base=FALLBACK_LOGICAL_MODEL.fields[0];
     const fields=[
-      {...base,id:'logical-name',versionId:'logical-name',name:'name',dataType:'xsd:string'},
+      {...base,id:'logical-name',versionId:'logical-name',name:'NaMe',dataType:'xsd:string'},
       {...base,id:'logical-id',versionId:'logical-id',name:'org_unit_id',dataType:'xsd:integer'},
       {...base,id:'logical-missing',versionId:'logical-missing',name:'unit_label',dataType:'xsd:string'},
       {...base,id:'logical-ambiguous-a',versionId:'logical-ambiguous-a',name:'unit_type',dataType:'xsd:string'},
@@ -39,7 +41,7 @@ describe('exact mapping suggestions',()=>{
     ];
     const review=exactMappingSuggestions(fields,FALLBACK_PHYSICAL_SNAPSHOT.tables[0]);
 
-    expect(review.suggestions.map((item)=>[item.logicalField.name,item.physicalColumn.name])).toEqual([['name','name']]);
+    expect(review.suggestions.map((item)=>[item.logicalField.name,item.physicalColumn.name])).toEqual([['NaMe','name'],['org_unit_id','org_unit_id']]);
     expect(review.typeConflicts).toEqual(['org_unit_id: xsd:integer ↔ uuid']);
     expect(review.unmatched).toEqual(['unit_label']);
     expect(review.ambiguous).toEqual(['unit_type']);
@@ -70,6 +72,7 @@ describe('MappingWorkspaceComponent request ordering',()=>{
       listPhysicalSnapshots:vi.fn().mockReturnValueOnce(firstSnapshots.asObservable()).mockReturnValueOnce(secondSnapshots.asObservable()),
       loadLogicalModel:vi.fn((id:string)=>modelDetails.get(id)!.model.asObservable()),
       loadPhysicalSnapshot:vi.fn((id:string)=>snapshotDetails.get(id)!.snapshot.asObservable()),
+      listRepresentations:vi.fn(()=>of([])),
       listMappings:vi.fn((id:string)=>modelDetails.get(id)!.mappings.asObservable()),
       loadDrift:vi.fn((id:string)=>snapshotDetails.get(id)!.drift.asObservable()),
     };
@@ -111,16 +114,16 @@ describe('MappingWorkspaceComponent request ordering',()=>{
 
     // The newest identity-scoped selection finishes first.
     finish(second.model,{body:modelB,etag:'"1"'});
-    finish(second.snapshot,snapshotB);
     finish(second.mappings,[]);
+    finish(second.snapshot,snapshotB);
     finish(second.drift,null);
     fixture.detectChanges();
     expect(fixture.componentInstance.facade.model()?.id).toBe('model-b');
 
     // The previous identity returns later and must not overwrite model or selects.
     finish(first.model,{body:modelA,etag:'"1"'});
-    finish(first.snapshot,snapshotA);
     finish(first.mappings,[]);
+    finish(first.snapshot,snapshotA);
     finish(first.drift,null);
     fixture.detectChanges();
 
@@ -134,45 +137,104 @@ describe('MappingWorkspaceComponent request ordering',()=>{
     expect((fixture.nativeElement as HTMLElement).querySelector('h1')?.textContent).toContain('Fahrzeugbestand');
   });
 
-  it('reconciles each successful mapping write before a later write fails',()=>{
-    const identityId=signal('cinthya.thor');
-    const firstSave=new Subject<ApiResult<AssetMapping>>();
-    const secondSave=new Subject<ApiResult<AssetMapping>>();
-    const api={
-      listLogicalModels:vi.fn(()=>NEVER),listPhysicalSnapshots:vi.fn(()=>NEVER),
-      createMapping:vi.fn().mockReturnValueOnce(firstSave.asObservable()).mockReturnValueOnce(secondSave.asObservable()),
-    };
-    const route={queryParamMap:new BehaviorSubject(convertToParamMap({})),snapshot:{paramMap:convertToParamMap({}),data:{view:'graph'}}};
-    TestBed.configureTestingModule({
-      imports:[MappingWorkspaceComponent],
-      providers:[
-        {provide:DataModelsApiService,useValue:api},
-        {provide:DemoIdentityService,useValue:{userId:identityId.asReadonly()}},
-        {provide:CatalogApiService,useValue:{refreshWorkflowTasks:vi.fn()}},
-        {provide:ModelingAssistanceService,useValue:{myScopes:()=>of([])}},
-        {provide:ActivatedRoute,useValue:route},
-        {provide:Router,useValue:{navigate:vi.fn().mockResolvedValue(true)}},
-      ],
-    }).overrideComponent(MappingWorkspaceComponent,{set:{imports:[],template:''}});
+  it('keeps every draft and representation local when the atomic save fails',()=>{
+    const save=new Subject<{mappings: {clientId:string;mapping:AssetMapping}[]}>();
+    const api={listLogicalModels:()=>NEVER,listPhysicalSnapshots:()=>NEVER,saveWorkspaceDraft:vi.fn(()=>save.asObservable())};
+    TestBed.configureTestingModule({imports:[MappingWorkspaceComponent],providers:[
+      {provide:DataModelsApiService,useValue:api},
+      {provide:DemoIdentityService,useValue:{userId:signal('cinthya.thor')}},
+      {provide:CatalogApiService,useValue:{refreshWorkflowTasks:vi.fn()}},
+      {provide:ModelingAssistanceService,useValue:{myScopes:()=>of([])}},
+      {provide:ActivatedRoute,useValue:{queryParamMap:of(convertToParamMap({})),snapshot:{paramMap:convertToParamMap({}),data:{}}}},
+      {provide:Router,useValue:{navigate:vi.fn().mockResolvedValue(true)}},
+    ]}).overrideComponent(MappingWorkspaceComponent,{set:{imports:[],template:''}});
     const fixture=TestBed.createComponent(MappingWorkspaceComponent);fixture.detectChanges();
-    const component=fixture.componentInstance;const fieldId=FALLBACK_LOGICAL_MODEL.fields[0].id;const columnId=FALLBACK_PHYSICAL_SNAPSHOT.tables[0].columns[0].id;
-    component.facade.initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,[],null);
-    const baseWrite={logicalModelVersionId:FALLBACK_LOGICAL_MODEL.versionId,logicalFieldVersionIds:[fieldId],physicalSnapshotId:FALLBACK_PHYSICAL_SNAPSHOT.id,physicalColumnIds:[columnId],mappingType:'Direct' as const,classification:'internal' as const,transformationRule:null,comment:null,responsibleUserId:'cinthya.thor',validFrom:'2026-09-08',validTo:null};
-    const firstLocal=component.facade.upsertDraft({...baseWrite,comment:'first'});
-    const secondLocal=component.facade.upsertDraft({...baseWrite,comment:'second'});
-
+    const component=fixture.componentInstance;
+    component.facade.initialize(FALLBACK_LOGICAL_MODEL,null,[],null);
+    component.manageScopes.set([{role:'data_steward',organizationId:FALLBACK_LOGICAL_MODEL.office,descendantOrganizationIds:[FALLBACK_LOGICAL_MODEL.office],breadcrumb:[],delegatedOwnerUserId:null}]);
+    const table=FALLBACK_PHYSICAL_SNAPSHOT.tables[0];
+    component.addRepresentation(FALLBACK_PHYSICAL_SNAPSHOT,table);
+    expect(component.facade.pendingRepresentations()).toHaveLength(1);
+    const dirty=new Set(component.facade.dirtyIds());
+    component.addRepresentation(FALLBACK_PHYSICAL_SNAPSHOT,table);
+    expect(component.facade.pendingRepresentations()).toHaveLength(1);
+    expect(component.facade.dirtyIds()).toEqual(dirty);
+    component.loading.set(false);
+    expect(component.draftSaveDisabledReason()).toBeNull();
     component.saveMappings();
-    expect(api.createMapping).toHaveBeenCalledTimes(1);
-    const firstPersisted={...firstLocal,id:'mapping-first',versionId:'mapping-first-v1',lockVersion:1};
-    finish(firstSave,{body:firstPersisted,etag:'"1"'});
-    expect(api.createMapping).toHaveBeenCalledTimes(2);
-    expect(component.facade.mappings().some((mapping)=>mapping.id===firstPersisted.id)).toBe(true);
-    expect(component.facade.dirtyIds().has(firstLocal.id)).toBe(false);
-    expect(component.facade.dirtyIds().has(secondLocal.id)).toBe(true);
-
-    secondSave.error(new Error('Zweiter Entwurf kollidiert.'));
-    expect(component.saving()).toBe(false);
-    expect(component.error()).toContain('1 Entwurf/Entwürfe wurden bereits gespeichert');
-    expect(component.facade.dirtyIds()).toEqual(new Set([secondLocal.id]));
+    expect(component.draftSaveDisabledReason()).toContain('gerade gespeichert');
+    expect(api.saveWorkspaceDraft).toHaveBeenCalledOnce();
+    save.error(new Error('Versionskonflikt'));
+    expect(component.error()).toContain('keine Änderungen');
+    expect(component.draftSaveDisabledReason()).toBeNull();
+    expect(component.facade.dirtyIds()).toEqual(dirty);
+    expect(component.facade.pendingRepresentations()).toHaveLength(1);
+    const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
+    expect(component.canDeactivate()).toBe(false);
+    expect(confirm).toHaveBeenCalledOnce();confirm.mockRestore();
   });
+  it('explains the active save blocker and prevents unauthorized draft saves',()=>{
+    const api={listLogicalModels:()=>NEVER,listPhysicalSnapshots:()=>NEVER,saveWorkspaceDraft:vi.fn()};
+    TestBed.configureTestingModule({imports:[MappingWorkspaceComponent],providers:[
+      {provide:DataModelsApiService,useValue:api},
+      {provide:DemoIdentityService,useValue:{userId:signal('cinthya.thor')}},
+      {provide:CatalogApiService,useValue:{refreshWorkflowTasks:vi.fn()}},
+      {provide:ModelingAssistanceService,useValue:{myScopes:()=>of([])}},
+      {provide:ActivatedRoute,useValue:{queryParamMap:of(convertToParamMap({})),snapshot:{paramMap:convertToParamMap({}),data:{}}}},
+      {provide:Router,useValue:{navigate:vi.fn().mockResolvedValue(true)}},
+    ]}).overrideComponent(MappingWorkspaceComponent,{set:{imports:[],template:''}});
+    const fixture=TestBed.createComponent(MappingWorkspaceComponent);fixture.detectChanges();
+    const component=fixture.componentInstance;
+    component.facade.initialize(FALLBACK_LOGICAL_MODEL,null,[],null);
+    component.manageScopes.set([{role:'data_steward',organizationId:FALLBACK_LOGICAL_MODEL.office,descendantOrganizationIds:[FALLBACK_LOGICAL_MODEL.office],breadcrumb:[],delegatedOwnerUserId:null}]);
+    expect(component.draftSaveDisabledReason()).toContain('noch geladen');
+    component.loading.set(false);
+    expect(component.draftSaveDisabledReason()).toContain('Keine ungespeicherten Änderungen');
+    component.addRepresentation(FALLBACK_PHYSICAL_SNAPSHOT,FALLBACK_PHYSICAL_SNAPSHOT.tables[0]);
+    expect(component.draftSaveDisabledReason()).toBeNull();
+    component.manageScopes.set([]);
+    expect(component.draftSaveDisabledReason()).toContain('Data Owner oder Data Steward');
+    component.saveMappings();
+    expect(api.saveWorkspaceDraft).not.toHaveBeenCalled();
+    component.fallbackActive.set(true);
+    expect(component.draftSaveDisabledReason()).toContain('API-Verbindung');
+    component.fallbackActive.set(false);
+    component.facade.initialize({...FALLBACK_LOGICAL_MODEL,status:'review_pending'},null,[],null);
+    expect(component.draftSaveDisabledReason()).toContain('Domänenprüfung');
+    component.facade.initialize({...FALLBACK_LOGICAL_MODEL,status:'retired'},null,[],null);
+    expect(component.draftSaveDisabledReason()).toContain('stillgelegt');
+    component.saveReasonOpen.set(true);
+    const escape=new KeyboardEvent('keydown',{key:'Escape',cancelable:true});
+    component.dismissSaveReason(escape);
+    expect(component.saveReasonOpen()).toBe(false);
+    expect(escape.defaultPrevented).toBe(true);
+  });
+  it('opens the editor fullscreen, exits with Escape and restores scrolling on destruction',async()=>{
+    TestBed.configureTestingModule({imports:[MappingWorkspaceComponent],providers:[
+      {provide:DataModelsApiService,useValue:{listLogicalModels:()=>NEVER,listPhysicalSnapshots:()=>NEVER}},
+      {provide:DemoIdentityService,useValue:{userId:signal('cinthya.thor')}},
+      {provide:CatalogApiService,useValue:{refreshWorkflowTasks:vi.fn()}},
+      {provide:ModelingAssistanceService,useValue:{myScopes:()=>of([])}},
+      {provide:ActivatedRoute,useValue:{queryParamMap:of(convertToParamMap({})),snapshot:{paramMap:convertToParamMap({}),data:{}}}},
+      {provide:Router,useValue:{navigate:vi.fn().mockResolvedValue(true)}},
+    ]}).overrideComponent(MappingWorkspaceComponent,{set:{imports:[],template:'<section class="mapping-shell"><button class="fullscreen-toggle">Vollbild</button></section>'}});
+    const fixture=TestBed.createComponent(MappingWorkspaceComponent);fixture.detectChanges();
+    const component=fixture.componentInstance;
+    const button=(fixture.nativeElement as HTMLElement).querySelector('button')!;
+    const originalOverflow=document.body.style.overflow;
+    document.body.style.overflow='scroll';
+    try{
+      await component.toggleFullscreen(button);fixture.detectChanges();
+      expect(component.fullscreen()).toBe(true);
+      expect(document.body.style.overflow).toBe('hidden');
+      document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+      await Promise.resolve();fixture.detectChanges();
+      expect(component.fullscreen()).toBe(false);
+      expect(document.body.style.overflow).toBe('scroll');
+      await component.toggleFullscreen(button);
+      fixture.destroy();
+      expect(document.body.style.overflow).toBe('scroll');
+    }finally{document.body.style.overflow=originalOverflow;}
+  });
+
 });

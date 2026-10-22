@@ -13,9 +13,6 @@ from .governance import can_view_private_product
 from .modeling_seed import VIBDBU_PHYSICAL_SOURCE_ID
 from .models import (
     AdministrativeOrganization,
-    AssetMapping,
-    AssetMappingPhysicalColumn,
-    AssetMappingVersion,
     CatalogObjectResponsibility,
     DataModelRoleAssignment,
     DataProduct,
@@ -27,7 +24,6 @@ from .models import (
     DomainLocalization,
     LogicalModel,
     LogicalModelVersion,
-    PhysicalColumn,
     PhysicalDatabase,
     PhysicalDomainAssignment,
     PhysicalSchema,
@@ -142,7 +138,7 @@ def catalog_responsibilities(session: Session, actor: str, language: str = "de")
         item = add_object(f"logical_model:{model.id}", "logical_model",
                           label.title if label else model.urn,
                           label.description if label else "", f"/models/{model.id}",
-                          [str(dataset.data_domain_id)])
+                          [str(dataset.data_domain_id)] if dataset.data_domain_id else [])
         add_person(item, dataset.data_owner_user_id, "data_owner", "model_owner")
         add_person(item, dataset.deputy_owner_user_id, "deputy_data_owner", "model_deputy")
         if (dataset.organization_id, "data_steward") in scopes_by_user.get(model.created_by_user_id, set()):
@@ -151,19 +147,8 @@ def catalog_responsibilities(session: Session, actor: str, language: str = "de")
     source_domains: dict[tuple[uuid.UUID, str], set[str]] = defaultdict(set)
     for link in session.scalars(select(PhysicalDomainAssignment)):
         source_domains[(link.physical_source_id, link.physical_table_key)].add(str(link.domain_id))
-    mapped_tables = session.execute(
-        select(AssetMapping.physical_source_id, AssetMapping.logical_model_id, PhysicalTable.stable_key)
-        .join(AssetMappingVersion, AssetMappingVersion.asset_mapping_id == AssetMapping.id)
-        .join(AssetMappingPhysicalColumn, AssetMappingPhysicalColumn.asset_mapping_version_id == AssetMappingVersion.id)
-        .join(PhysicalColumn, PhysicalColumn.id == AssetMappingPhysicalColumn.physical_column_id)
-        .join(PhysicalTable, PhysicalTable.id == PhysicalColumn.physical_table_id)
-        .where(AssetMapping.lifecycle == "active", AssetMappingVersion.revision == AssetMapping.revision)
-        .distinct()
-    )
-    for source_id, model_id, table_key in mapped_tables:
-        domain_id = model_domains.get(model_id)
-        if domain_id:
-            source_domains[(source_id, table_key)].add(str(domain_id))
+    # Physical domain membership is explicit. Mapping to a logical model does not
+    # opt an unchecked physical object into the logical model's domain.
     actor_scopes = {row.organization_id for row in role_rows if row.user_id == actor}
     for source in session.scalars(select(PhysicalSource).where(PhysicalSource.lifecycle == "active")):
         if source.organization_id not in actor_scopes and source.id != VIBDBU_PHYSICAL_SOURCE_ID:

@@ -42,6 +42,30 @@ export const DACA_FEATURE_RELEASE = {
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
           {
+            title: "Physische Modelle aus CSV laden",
+            description: "Strukturinventare mit Vorschau, Suche und Organisationsauswahl als statische Datenquelle importieren. Tabellen und Felder öffnen direkt im Explorer; Originalangaben bleiben erhalten und identische Importe werden wiederverwendet.",
+          },
+          {
+            title: "Mehrere physische Repräsentationen verbinden",
+            description: "PostgreSQL-Tabellen und Views, S3-Parquet-Objekte und CSV-Modelle gemeinsam mit einem logischen Modell verbinden. Eindeutig namensgleiche Felder werden unabhängig von Gross- und Kleinschreibung als Entwürfe verknüpft; Typkonflikte bleiben sichtbar.",
+          },
+          {
+            title: "Beziehungen direkt im Canvas bearbeiten",
+            description: "Verbindungslinien per Kontextmenü löschen oder ihren Mapping-Typ und ihre Regel ändern. Erklärende Tooltips helfen bei der Typwahl; beide Linienenden lassen sich auf andere Felder desselben Modells ziehen. Änderungen bleiben Entwürfe bis zum Speichern.",
+          },
+          {
+            title: "Canvas frei anordnen, vergrössern und drucken",
+            description: "Modellkarten frei verschieben; dünne Verbindungen folgen den zugewandten Anschlüssen. Sticky-Steuerungen öffnen Vollbild oder drucken den Canvas mit Titel, Bundeslogo, Modellstand und Druckdatum. Darstellungen lassen sich ohne Löschen der Mappings ausblenden.",
+          },
+          {
+            title: "Domänen und zugehörige Modelle im Blick",
+            description: "Domänen direkt am logischen oder physischen Modell zuordnen und öffnen. Bei logischen Modellen lassen sich die physischen Repräsentationen für die Weitergabe auswählen. Domänen zeigen durchsuchbare Listen ihrer logischen und sichtbaren physischen Modelle.",
+          },
+          {
+            title: "Begriffsnetz als editierbarer Graph",
+            description: "Begriffe frei anordnen und ihre beschrifteten Beziehungen mit sichtbaren Anschlüssen bearbeiten, umhängen oder löschen. Fachliche Änderungen werden als Entwürfe zur Domänenfreigabe eingereicht. Personal enthält zehn verknüpfte Demobegriffe; Vollbild und Druck unterstützen die Übersicht.",
+          },
+          {
             title: 'Zentraler Datenkatalog',
             description: 'DaCa verwaltet Metadaten, Datenprodukte, Endpunkte, Herkunftsinformationen und Zugriffsregeln in einem zentralen Katalog. Die bisherigen Trust- und Sync-Einträge der Control Plane sind PoC-Prototypdaten.',
           },
@@ -144,6 +168,30 @@ export const DACA_FEATURE_RELEASE = {
         introduction: 'DaCa is the central data catalog of the BIT data platform and brings metadata, approvals and tasks together in one place.',
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
+          {
+            title: "Load physical models from CSV",
+            description: "Import structure inventories as a static metadata source with preview, search and organization selection. Tables and fields open in the explorer, original declarations stay inspectable and identical imports are reused.",
+          },
+          {
+            title: "Connect multiple physical representations",
+            description: "Connect PostgreSQL tables and views, S3 Parquet objects and CSV models to one logical model. Unique case-insensitive exact field names create draft links; type conflicts remain visible.",
+          },
+          {
+            title: "Edit relationships on the canvas",
+            description: "Use a connection context menu to delete a relationship or change its mapping type and rule. Tooltips explain each type; drag either endpoint to another field in the same model. Changes remain drafts until saved.",
+          },
+          {
+            title: "Arrange, expand and print the canvas",
+            description: "Move model cards freely; thin connections follow the facing ports. Sticky controls open fullscreen or print the canvas with its title, federal logo, model update and print date. Hide a drawing while retaining its mappings.",
+          },
+          {
+            title: "Explore domains and their models",
+            description: "Assign and open domains from logical and physical model headers. Select which physical representations receive a logical model’s domain. Domains list their logical and visible physical models with search and direct links.",
+          },
+          {
+            title: "Edit the concept network as a graph",
+            description: "Arrange concepts freely and edit, rewire or delete their labelled relationships through visible ports. Submit terminology drafts for domain approval. Personnel includes ten linked demo concepts; fullscreen and print support exploration.",
+          },
           {
             title: 'Central data catalog',
             description: 'DaCa manages metadata, data products, endpoints, provenance and access rules in one central catalog. Earlier Control Plane trust and sync records are PoC prototype data.',

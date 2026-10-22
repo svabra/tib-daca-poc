@@ -12,6 +12,28 @@ describe('DataModelsApiService', () => {
   beforeEach(() => { TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(), { provide: DemoIdentityService, useValue: { userId, user: computed(() => ({ displayName: 'Cinthya Thor', email: 'cinthya.thor@vtg.admin.ch', organization: 'Verteidigung' })), headers: computed(() => new HttpHeaders({ 'X-DaCa-User': userId() })) } }] }); api = TestBed.inject(DataModelsApiService); http = TestBed.inject(HttpTestingController); });
   afterEach(() => { http.verify(); TestBed.resetTestingModule(); });
 
+  it('preserves actionable CSV line errors and never sends parsed cells as commands', () => {
+    let message = '';
+    api.previewPhysicalCsv('ZGF0YQ==').subscribe({error: (error: Error) => message = error.message});
+    const request = http.expectOne('/api/v1/physical-model-csv/preview');
+    expect(request.request.body).toEqual({contentBase64: 'ZGF0YQ=='});
+    expect(request.request.headers.get('X-DaCa-User')).toBe(userId());
+    request.flush({detail: 'CSV-Zeile 42: falsche Spaltenzahl.'}, {status: 422, statusText: 'Unprocessable Entity'});
+    expect(message).toBe('CSV-Zeile 42: falsche Spaltenzahl.');
+  });
+
+  it('normalizes CSV snapshots while preserving system grouping and original field records', () => {
+    let snapshot: import('./data-models.models').PhysicalSnapshot | undefined;
+    api.importPhysicalCsv({contentBase64: 'ZGF0YQ==', name: 'Gebäude', filename: 'Gebäude.csv', departmentCode: 'VBS', organizationId: 'office', fingerprint: 'a'.repeat(64)}).subscribe(result => snapshot = result.snapshot);
+    const request = http.expectOne('/api/v1/physical-model-csv/imports');
+    request.flush({sourceId: 'source', reused: false, snapshot: {snapshot: {id: 'snap', sourceId: 'source', sourceAdapterType: 'csv', catalogPath: 'urn:daca:physical-source:source'}, databases: [{name: 'BIM', schemas: [{name: 'CSV', tables: [{id: 'table', name: 'Gebäude / Bauwerke', kind: 'table', importMetadata: {format: 'daca-structure-csv-v1', recordsWithoutField: []}, columns: [{id: 'field', name: 'Name', rawDataType: 'IfcLabel', normalizedDataType: 'string', nullable: true, importMetadata: {format: 'daca-structure-csv-v1', nullabilityKnown: false, records: [{Datentyp: 'IfcLabel', Klassifizierung: 'Projektabhängig'}]}}]}]}]}]}});
+    expect(snapshot?.sourceType).toBe('csv');
+    expect(snapshot?.systemName).toBe('CSV-Strukturimport');
+    expect(snapshot?.tables[0].databaseName).toBe('BIM');
+    expect(snapshot?.tables[0].columns[0].importMetadata?.nullabilityKnown).toBe(false);
+    expect(snapshot?.tables[0].columns[0].importMetadata?.records?.[0]['Klassifizierung']).toBe('Projektabhängig');
+  });
+
   it('writes the separated logical aggregate using the canonical backend contract', () => {
     const value: LogicalModelWrite = { title:{de:'Mitarbeitende',fr:'',it:'',en:'Employees'},description:{de:'Fachliches Modell',fr:'',it:'',en:''},identifiers:['VBS-HR-1'],department:'VBS',office:'vbs-verteidigung',dataDomainId:'domain-personal',dataOwnerId:'christian.spider',deputyDataOwnerId:'sibilla.micheli',creator:{type:'application',applicationName:'HR-Core'},classification:'internal',dateCreated:'2026-09-07',entityName:'Mitarbeitende',conceptIds:[],fields:[{businessObject:'Mitarbeitende',entityName:'Mitarbeitende',name:'personalnummer',dataType:'xsd:string',length:12,shortDescription:'Personalnummer',comment:null,sourceSystem:null,classification:'internal',precision:null,decimalPlaces:null,nullable:false,minCount:1,maxCount:1,order:1,valueListConceptId:null,conceptIds:[],primaryConceptId:null}] };
     api.createLogicalModel(value).subscribe();

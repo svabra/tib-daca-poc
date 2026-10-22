@@ -176,7 +176,7 @@ def test_physical_model_search_finds_tables_columns_and_s3_parquet(client, sessi
     assert by_column.status_code == 200, by_column.text
     assert by_column.json()["total"] >= 2
     assert s3_only.status_code == 200, s3_only.text
-    assert s3_only.json()["total"] == 1
+    assert s3_only.json()["total"] == 2
     model = s3_only.json()["items"][0]
     assert model["sourceType"] == "s3"
     assert model["modelType"] == "parquet"

@@ -102,4 +102,15 @@ describe('PhysicalAssetsComponent DAAIF source explorer', () => {
     configure(source.id, { logicalModelId: 'model-1' }); const fixture = TestBed.createComponent(PhysicalAssetsComponent); fixture.detectChanges(); const router = TestBed.inject(Router); const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true); const table = FALLBACK_PHYSICAL_SNAPSHOT.tables[0];
     fixture.componentInstance.deriveOrAttach(FALLBACK_PHYSICAL_SNAPSHOT, table); expect(api.quickDeriveLogicalModel).not.toHaveBeenCalled(); expect(navigate).toHaveBeenCalledWith(['/models', 'model-1', 'mappings'], { queryParams: { physicalSnapshotId: FALLBACK_PHYSICAL_SNAPSHOT.id, physicalTableId: table.id, suggest: '1' } });
   });
+  it('opens the precise snapshot and object requested by a domain model link', () => {
+    const second={...FALLBACK_PHYSICAL_SNAPSHOT.tables[0],id:'requested-table',name:'requested_object'};
+    const historic={...previousSnapshot,tables:[...previousSnapshot.tables,second]};
+    api.loadPhysicalSnapshot.mockReturnValueOnce(of(historic));
+    configure(source.id,{snapshotId:historic.id,tableId:second.id});
+    const fixture=TestBed.createComponent(PhysicalAssetsComponent);fixture.detectChanges();
+    expect(api.loadPhysicalSnapshot).toHaveBeenCalledWith(historic.id);
+    expect(fixture.componentInstance.selectedTableId()).toBe(second.id);
+    expect(fixture.componentInstance.activeSnapshot()?.id).toBe(historic.id);
+  });
+
 });

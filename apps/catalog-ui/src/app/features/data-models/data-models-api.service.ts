@@ -1,6 +1,7 @@
 import { HttpClient, HttpErrorResponse, HttpHeaders, HttpParams, HttpResponse } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { catchError, map, Observable, throwError, timeout } from 'rxjs';
+import { forkJoin, of, switchMap, catchError, map, Observable, throwError, timeout } from 'rxjs';
+import { CsvImportMetadata, CsvInventoryPreview, CsvInventoryWrite } from './physical-csv.models';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 import {
   ApiResult,
@@ -22,6 +23,8 @@ import {
   LogicalDerivationPreview,
   MappingStatus,
   MappingType,
+  PhysicalDomainState,
+  PhysicalDomainTarget,
   PhysicalSnapshot,
   PhysicalSource,
   PhysicalTable,
@@ -177,6 +180,20 @@ export class DataModelsApiService {
     ));
   }
 
+  assignLogicalDomain(model:LogicalModel,domainId:string,targets:PhysicalDomainTarget[]):Observable<ApiResult<LogicalModel>&{mappings:AssetMapping[];physicalDomainAssignments:(PhysicalDomainState&{physicalTableId:string})[]}>{
+    return this.identitySafeResponse(this.http.post<unknown>(`/api/v1/logical-models/${encodeURIComponent(model.id)}/domain-assignment`,{logicalModelVersionId:model.versionId,dataDomainId:domainId,physicalDomainTargets:targets},{headers:this.writeHeaders(`"${model.lockVersion}"`),observe:'response'})).pipe(map((result)=>({...result,body:this.normalizeLogicalModel(result.body),mappings:asArray(asRecord(result.body)['mappings']).map((item)=>this.normalizeMapping(item)),physicalDomainAssignments:asArray(asRecord(result.body)['physicalDomainAssignments']) as (PhysicalDomainState&{physicalTableId:string})[]})));
+  }
+  assignPhysicalDomain(tableId:string,domainId:string,target:PhysicalDomainTarget):Observable<PhysicalDomainState>{
+    return this.identitySafe(this.http.post<PhysicalDomainState>(`/api/v1/physical-tables/${encodeURIComponent(tableId)}/domain-assignment`,{dataDomainId:domainId,physicalDomainTargets:[target]},{headers:this.identity.headers()}));
+  }
+  loadPhysicalDomains(tableId:string):Observable<PhysicalDomainState>{return this.identitySafe(this.http.get<PhysicalDomainState>(`/api/v1/physical-tables/${encodeURIComponent(tableId)}/domains`,{headers:this.identity.headers()}));}
+  loadDomainCandidates(modelId:string):Observable<readonly {snapshot:PhysicalSnapshot;table:PhysicalTable;persisted:boolean}[]>{
+    return this.listRepresentations(modelId).pipe(switchMap((items)=>{
+      const ids=[...new Set(items.map((item)=>item.physicalSnapshotId))];
+      return (ids.length?forkJoin(ids.map((id)=>this.loadPhysicalSnapshot(id))):of([])).pipe(map((snapshots)=>items.flatMap((item)=>{const snapshot=snapshots.find((entry)=>entry.id===item.physicalSnapshotId),table=snapshot?.tables.find((entry)=>entry.id===item.physicalTableId);return snapshot&&table?[{snapshot,table,persisted:true}]:[];})));
+    }));
+  }
+
   createLogicalModel(value: LogicalModelWrite): Observable<ApiResult<LogicalModel>> {
     return this.identitySafeResponse(this.http.post<unknown>('/api/v1/logical-models', this.toLogicalModelPayload(value), {
       headers: this.identity.headers(), observe: 'response',
@@ -295,6 +312,16 @@ export class DataModelsApiService {
     }));
   }
 
+  previewPhysicalCsv(contentBase64: string): Observable<CsvInventoryPreview> {
+    return this.csvRequest(this.http.post<CsvInventoryPreview>('/api/v1/physical-model-csv/preview', {contentBase64}, {headers: this.identity.headers()}));
+  }
+
+  importPhysicalCsv(body: CsvInventoryWrite): Observable<{sourceId: string; reused: boolean; snapshot: PhysicalSnapshot}> {
+    return this.csvRequest(this.http.post<{sourceId: string; reused: boolean; snapshot: unknown}>(
+      '/api/v1/physical-model-csv/imports', body, {headers: this.identity.headers()},
+    )).pipe(map(result => ({...result, snapshot: this.normalizePhysicalSnapshot(result.snapshot)})));
+  }
+
   listPhysicalSources(): Observable<readonly PhysicalSource[]> {
     return this.identitySafe(this.http.get<CollectionResponse<unknown> | unknown[]>(
       '/api/v1/physical-sources', { headers: this.identity.headers() },
@@ -319,6 +346,24 @@ export class DataModelsApiService {
       `/api/v1/physical-sources/${encodeURIComponent(sourceId)}/imports`, fixtureVariant ? { fixtureVariant } : {},
       { headers: this.writeHeaders(`"${revision}"`), observe: 'response' },
     )).pipe(map((result) => ({ ...result, body: this.normalizePhysicalSnapshot(result.body) })));
+  }
+
+  listRepresentations(modelId: string): Observable<readonly {id: string; physicalSnapshotId: string; physicalTableId: string}[]> {
+    return this.identitySafe(this.http.get<{items: {id: string; physicalSnapshotId: string; physicalTableId: string}[]}>(
+      `/api/v1/logical-models/${encodeURIComponent(modelId)}/representations`, {headers: this.identity.headers()},
+    )).pipe(map((value) => value.items));
+  }
+
+  saveWorkspaceDraft(model: LogicalModel, representations: readonly {physicalSnapshotId: string; physicalTableId: string}[], drafts: readonly AssetMapping[]): Observable<{items: {physicalTableId:string}[]; mappings: {clientId: string; mapping: AssetMapping}[]}> {
+    const mappings = drafts.map((item) => ({clientId: item.id,
+      ...(item.id.startsWith('draft-mapping-') ? {} : {mappingId: item.id, versionId: item.versionId, lockVersion: item.lockVersion}),
+      value: this.mappingPayload(item),
+    }));
+    return this.identitySafe(this.http.post<{items:{physicalTableId:string}[];mappings: {clientId: string; mapping: unknown}[]}>(
+      `/api/v1/logical-models/${encodeURIComponent(model.id)}/mapping-drafts`,
+      {logicalModelVersionId: model.versionId, representations, mappings},
+      {headers: this.writeHeaders(`"${model.lockVersion}"`)},
+    )).pipe(map((result) => ({items:result.items,mappings: result.mappings.map((item) => ({clientId: item.clientId, mapping: this.normalizeMapping(item.mapping)}))})));
   }
 
   listMappings(logicalModelId?: string, physicalSnapshotId?: string): Observable<readonly AssetMapping[]> {
@@ -438,7 +483,8 @@ export class DataModelsApiService {
       dataOwnerUserId: value.dataOwnerId,
       deputyOwnerUserId: value.deputyDataOwnerId,
       creator,
-      dataDomainId: value.dataDomainId,
+      dataDomainId: value.dataDomainId||null,
+      physicalDomainTargets: value.physicalDomainTargets??[],
       organizationUnitId: value.organizationUnitId ?? value.office,
       dataClassification: value.classification,
       dateCreated: value.dateCreated,
@@ -596,7 +642,7 @@ export class DataModelsApiService {
       identifierMode: textValue(root['identifierMode']) === 'organization_derived' ? 'organization_derived' : 'manual',
       department: textValue(root['departmentCode'], 'VBS'),
       office: textValue(root['organizationUnitId'] ?? root['organizationId'], 'vbs-verteidigung'),
-      dataDomain: namedReference(root['dataDomain'], textValue(root['dataDomainId']), textValue(root['dataDomainLabel'], textValue(root['dataDomainId']))),
+      dataDomain: namedReference(root['dataDomain'], textValue(root['dataDomainId']), textValue(root['dataDomainLabel'], textValue(root['dataDomainId'], 'Keine Domäne zugeordnet'))),
       dataOwner: namedReference(root['dataOwner'], dataOwnerId, textValue(asRecord(root['dataOwner'])['displayName'], dataOwnerId)),
       deputyDataOwner: deputyId ? namedReference(root['deputyDataOwner'], deputyId, textValue(asRecord(root['deputyDataOwner'])['displayName'], deputyId)) : null,
       steward: stewardId ? namedReference(root['steward'], stewardId, textValue(asRecord(root['steward'])['displayName'], stewardId)) : null,
@@ -718,16 +764,20 @@ export class DataModelsApiService {
           const table = asRecord(tableValue);
           const kind = textValue(table['kind'], 'table');
           return {
-            id: textValue(table['id']), stableKey: textValue(table['stableKey']), schemaName: textValue(schema['name']), name: textValue(table['name']),
+            dataDomains: asArray(table['dataDomains']).map((value)=>{const item=asRecord(value);return{id:textValue(item['id']),displayName:textValue(item['displayName']),lifecycle:textValue(item['lifecycle'],'active') as 'active'|'retired'};}),domainVersion:textValue(table['domainVersion']),domainAssignable:booleanValue(table['domainAssignable'],true),
+            importMetadata: table['importMetadata'] as CsvImportMetadata | null,
+            id: textValue(table['id']), stableKey: textValue(table['stableKey']), databaseName: textValue(database['name']), schemaName: textValue(schema['name']), name: textValue(table['name']),
             kind: (['table', 'view', 'materialized_view', 'parquet'].includes(kind) ? kind : 'table') as PhysicalTable['kind'],
             storageLocation: nullableText(table['storageLocation']), mediaType: nullableText(table['mediaType']),
-            objectCount: nullableNumber(table['objectCount']), sizeBytes: nullableNumber(table['sizeBytes']),
+            objectCount: nullableNumber(table['objectCount']),
+            rowCount: nullableNumber(table['rowCount']), sizeBytes: nullableNumber(table['sizeBytes']),
             schemaConfidence: (['declared', 'embedded', 'inferred'].includes(textValue(table['schemaConfidence'])) ? textValue(table['schemaConfidence']) : null) as PhysicalTable['schemaConfidence'],
             partitionKeys: stringArray(table['partitionKeys']),
             comment: nullableText(table['comment']),
             columns: asArray(table['columns']).map((columnValue, index) => {
               const column = asRecord(columnValue);
               return {
+                rawDataType: textValue(column['rawDataType']), importMetadata: column['importMetadata'] as CsvImportMetadata | null,
                 id: textValue(column['id']), name: textValue(column['name']),
                 ordinalPosition: numberValue(column['ordinalPosition'], index + 1),
                 dataType: textValue(column['normalizedDataType'] ?? column['rawDataType']),
@@ -746,7 +796,7 @@ export class DataModelsApiService {
       id: textValue(snapshot['id']), sourceId: textValue(snapshot['sourceId']), sourceName: textValue(snapshot['sourceName'], textValue(snapshot['sourceId'])), sourceType,
       dataOwnerName: nullableText(snapshot['dataOwnerName']),
       catalogPath: textValue(snapshot['catalogPath'], firstDatabase['name'] ? `${sourceType === 's3' ? 's3' : 'postgresql'}://${textValue(firstDatabase['name'])}/` : ''),
-      systemName: sourceType === 's3' ? 'S3 Object Storage' : 'PostgreSQL', databaseName: textValue(firstDatabase['name'], textValue(root['databaseName'])),
+      systemName: sourceType === 'csv' ? 'CSV-Strukturimport' : sourceType === 's3' ? 'S3 Object Storage' : 'PostgreSQL', databaseName: textValue(firstDatabase['name'], textValue(root['databaseName'])),
       revision: numberValue(snapshot['sequence'], numberValue(snapshot['revision'], 1)), contentHash: textValue(snapshot['fingerprint'] ?? snapshot['contentHash']),
       importedAt: textValue(snapshot['importedAt']), importedBy: namedReference(snapshot['importedBy'], textValue(snapshot['importedByUserId']), textValue(snapshot['importedByUserId'])),
       tables, previousSnapshotId: nullableText(snapshot['predecessorSnapshotId'] ?? snapshot['previousSnapshotId']),
@@ -757,12 +807,12 @@ export class DataModelsApiService {
   private normalizePhysicalSource(value: unknown): PhysicalSource {
     const item = asRecord(value);
     const connector = textValue(item['connectorType'] ?? item['adapterType'] ?? item['adapterKind']);
-    const connectorType = (['fixture', 'postgresql', 's3', 'oracle'].includes(connector) ? connector : 'postgresql') as PhysicalSource['connectorType'];
+    const connectorType = (['fixture', 'postgresql', 's3', 'oracle', 'csv'].includes(connector) ? connector : 'postgresql') as PhysicalSource['connectorType'];
     return {
       id: textValue(item['id']), revision: numberValue(item['revision'], 1), name: textValue(item['name'], textValue(item['displayName'], 'PostgreSQL-Quelle')),
       description: nullableText(item['description']),
       connectorType,
-      systemName: textValue(item['systemName'], connectorType === 's3' ? 'S3 Object Storage' : 'PostgreSQL'), databaseName: textValue(item['databaseName']),
+      systemName: textValue(item['systemName'], connectorType === 'csv' ? 'CSV-Strukturimport' : connectorType === 's3' ? 'S3 Object Storage' : 'PostgreSQL'), databaseName: textValue(item['databaseName']),
       department: textValue(item['departmentCode'], 'VBS'), office: textValue(item['organizationId'], 'vbs-verteidigung'),
       latestSnapshotId: nullableText(item['latestSnapshotId']), latestSnapshotSequence: nullableNumber(item['latestSnapshotSequence']),
       latestSnapshot: item['latestSnapshot'] ? this.normalizePhysicalSnapshot(item['latestSnapshot']) : null,
@@ -796,6 +846,16 @@ export class DataModelsApiService {
       createdBy: namedReference(item['createdBy'], textValue(item['createdByUserId']), textValue(asRecord(item['createdBy'])['displayName'], textValue(item['createdByUserId']))),
       createdAt: textValue(item['createdAt']), updatedAt: textValue(item['updatedAt']),
     };
+  }
+
+  private csvRequest<T>(request: Observable<T>): Observable<T> {
+    return this.identitySafe(request.pipe(catchError((error: unknown) => {
+      if (error instanceof HttpErrorResponse && [409, 422].includes(error.status)) {
+        const detail = textValue(asRecord(error.error)['detail']);
+        if (detail) return throwError(() => new ModelingApiError(error.status === 409 ? 'conflict' : 'validation', error.status, detail));
+      }
+      return throwError(() => error);
+    })), 120000);
   }
 
   private identitySafe<T>(request: Observable<T>, timeoutMs = 8000): Observable<T> {

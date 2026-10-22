@@ -1,0 +1,13 @@
+# Connect DaCa to an existing S3 store on another Docker network.
+# docker compose -f compose.yaml -f compose.s3-existing.yaml up -d --build catalog-api catalog-ui
+services:
+  catalog-api:
+    environment:
+      DACA_PHYSICAL_S3_ENDPOINT_URL: ${DACA_PHYSICAL_S3_ENDPOINT_URL:-http://minio:9000}
+    networks:
+      - default
+      - existing-s3
+networks:
+  existing-s3:
+    external: true
+    name: ${DACA_EXISTING_S3_NETWORK:-daaif_default}

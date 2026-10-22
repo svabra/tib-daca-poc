@@ -1,3 +1,4 @@
+import { compatibleType } from './mapping-types';
 import { computed, Injectable, signal } from '@angular/core';
 import {
   AssetMapping,
@@ -7,18 +8,31 @@ import {
   LogicalModel,
   MappingStatus,
   PhysicalColumn,
+  PhysicalDomainState,
   PhysicalSnapshot,
+  PhysicalTable,
 } from './data-models.models';
 
 export type MappingView = 'graph' | 'table' | 'drift';
 
 export interface MappingEditorState {
   mappingId: string | null;
+  physicalSnapshotId?: string;
   logicalFieldVersionIds: string[];
   physicalColumnIds: string[];
 }
 
+export interface CanvasNodePosition { x: number; y: number; }
+
+export interface PhysicalRepresentation {
+  snapshot: PhysicalSnapshot;
+  table: PhysicalTable;
+  persisted: boolean;
+  preview?: boolean;
+}
+
 export interface PhysicalColumnContext extends PhysicalColumn {
+  snapshotId: string;
   tableId: string;
   tableName: string;
   schemaName: string;
@@ -27,7 +41,6 @@ export interface PhysicalColumnContext extends PhysicalColumn {
 
 @Injectable()
 export class MappingDraftFacade {
-  private localSequence = 0;
   private returnFocus: HTMLElement | null = null;
   private readonly modelState = signal<LogicalModel | null>(null);
   private readonly snapshotState = signal<PhysicalSnapshot | null>(null);
@@ -35,6 +48,11 @@ export class MappingDraftFacade {
   private readonly driftState = signal<DriftReport | null>(null);
   private readonly dirtyIdsState = signal<ReadonlySet<string>>(new Set());
 
+  readonly representations = signal<readonly PhysicalRepresentation[]>([]);
+  readonly canvasNodePositions = signal<ReadonlyMap<string, CanvasNodePosition>>(new Map());
+  readonly hiddenRepresentationIds = signal<ReadonlySet<string>>(new Set());
+  readonly visibleRepresentations = computed(() => this.representations().filter((item) => !this.hiddenRepresentationIds().has(item.table.id)));
+  readonly pendingRepresentations = computed(() => this.representations().filter((item) => !item.persisted && !item.preview));
   readonly model = this.modelState.asReadonly();
   readonly snapshot = this.snapshotState.asReadonly();
   readonly mappings = this.mappingsState.asReadonly();
@@ -50,14 +68,15 @@ export class MappingDraftFacade {
 
   readonly logicalFields = computed<readonly LogicalField[]>(() => this.model()?.fields ?? []);
   readonly physicalColumns = computed<readonly PhysicalColumnContext[]>(() =>
-    (this.snapshot()?.tables ?? []).flatMap((table) => table.columns.map((column) => ({
+    this.representations().flatMap(({ snapshot, table }) => table.columns.map((column) => ({
+      snapshotId: snapshot.id,
       ...column,
       tableId: table.id,
       tableName: table.name,
       schemaName: table.schemaName,
-      qualifiedName: table.kind === 'parquet' && table.storageLocation
+      qualifiedName: `${snapshot.sourceName} · #${snapshot.revision} · ` + (table.kind === 'parquet' && table.storageLocation
         ? `${table.storageLocation}#${column.name}`
-        : `${table.schemaName}.${table.name}.${column.name}`,
+        : `${snapshot.databaseName}.${table.schemaName}.${table.name}.${column.name}`),
     }))),
   );
   readonly selectedField = computed(() => this.logicalFields().find((field) => field.id === this.selectedLogicalFieldId()) ?? null);
@@ -75,9 +94,17 @@ export class MappingDraftFacade {
     return result;
   });
   readonly mappedFieldIds = computed(() => new Set(this.activeMappings().flatMap((mapping) => mapping.logicalFieldVersionIds)));
-  readonly hasDirtyMappings = computed(() => this.dirtyIds().size > 0);
+  readonly hasDirtyMappings = computed(() => this.dirtyIds().size > 0 || this.pendingRepresentations().length > 0);
 
-  initialize(model: LogicalModel, snapshot: PhysicalSnapshot, mappings: readonly AssetMapping[], drift: DriftReport | null): void {
+  clear(): void {
+    this.modelState.set(null);this.snapshotState.set(null);this.representations.set([]);
+    this.canvasNodePositions.set(new Map());this.hiddenRepresentationIds.set(new Set());
+    this.mappingsState.set([]);this.dirtyIdsState.set(new Set());this.driftState.set(null);
+    this.selectedMappingId.set(null);this.selectedLogicalFieldId.set(null);this.pendingLogicalFieldId.set(null);this.editor.set(null);
+  }
+
+  initialize(model: LogicalModel, snapshot: PhysicalSnapshot | null, mappings: readonly AssetMapping[], drift: DriftReport | null, representations?: readonly PhysicalRepresentation[]): void {
+    this.representations.set(representations ?? (snapshot?.tables ?? []).map((table) => ({ snapshot, table, persisted: true } as PhysicalRepresentation)));
     this.modelState.set(model);
     this.snapshotState.set(snapshot);
     this.mappingsState.set(mappings);
@@ -88,6 +115,66 @@ export class MappingDraftFacade {
     this.selectedLogicalFieldId.set(firstFieldId ?? firstFieldMapping?.logicalFieldVersionIds[0] ?? null);
     this.selectedMappingId.set(firstFieldMapping?.id ?? null);
     this.pendingLogicalFieldId.set(null);
+  }
+
+  updatePhysicalDomains(sourceId:string,tableKey:string,state:PhysicalDomainState):void{
+    const update=(snapshot:PhysicalSnapshot)=>snapshot.sourceId===sourceId?{...snapshot,tables:snapshot.tables.map((table)=>table.stableKey===tableKey?{...table,...state}:table)}:snapshot;
+    this.representations.update((items)=>items.map((item)=>({...item,snapshot:update(item.snapshot),table:item.snapshot.sourceId===sourceId&&item.table.stableKey===tableKey?{...item.table,...state}:item.table})));
+    this.snapshotState.update((snapshot)=>snapshot?update(snapshot):null);
+  }
+
+  moveCanvasNode(key: string, position: CanvasNodePosition): void {
+    this.canvasNodePositions.update((positions) => new Map(positions).set(key, {x: Math.max(15, position.x), y: Math.max(15, position.y)}));
+  }
+
+  hideRepresentation(tableId: string): void {
+    this.hiddenRepresentationIds.update((ids) => new Set(ids).add(tableId));
+    this.announcement.set('Darstellung entfernt. Über die Repräsentationsliste kann sie wieder angezeigt werden. Bindungen und Mappings bleiben erhalten.');
+  }
+
+  showRepresentation(tableId: string): void {
+    this.hiddenRepresentationIds.update((ids) => {const next=new Set(ids);next.delete(tableId);return next;});
+  }
+
+  addRepresentation(snapshot: PhysicalSnapshot, table: PhysicalTable): boolean {
+    this.showRepresentation(table.id);
+    const exists = this.representations().some((item) => item.table.id === table.id && !item.preview);
+    this.representations.update((items) => items.filter((item) => item.table.id !== table.id || !item.preview));
+    if (!exists) this.representations.update((items) => [...items, {snapshot, table, persisted: false}]);
+    this.activateSnapshot(snapshot);
+    return !exists;
+  }
+
+  activateSnapshot(snapshot: PhysicalSnapshot, drift: DriftReport | null = null): void {
+    this.snapshotState.set(snapshot);
+    this.driftState.set(drift);
+  }
+
+  rebaseAfterModelSave(model: LogicalModel, persisted: readonly AssetMapping[]): void {
+    const roots=new Map(this.logicalFields().map((field)=>[field.id,field.rootId]));
+    const current=new Map(model.fields.map((field)=>[field.rootId,field.id]));
+    const selectedRoot=roots.get(this.selectedLogicalFieldId()??'');
+    const drafts=this.mappings().filter((item)=>this.dirtyIds().has(item.id)).flatMap((item)=>{
+      const ids=item.logicalFieldVersionIds.map((id)=>current.get(roots.get(id)??''));
+      if(ids.some((id)=>!id))return [];
+      const saved=persisted.find((mapping)=>mapping.id===item.id);
+      return [{...item,logicalModelVersionId:model.versionId,logicalModelVersion:model.revision,
+        logicalFieldVersionIds:ids as string[],versionId:saved?.versionId??item.versionId,lockVersion:saved?.lockVersion??item.lockVersion}];
+    });
+    this.modelState.set(model);
+    const ids=new Set(drafts.map((item)=>item.id));
+    this.mappingsState.set([...persisted.filter((item)=>!ids.has(item.id)),...drafts]);
+    this.dirtyIdsState.set(ids);
+    this.selectedLogicalFieldId.set(current.get(selectedRoot??'')??model.fields[0]?.id??null);
+  }
+
+  refreshPersistedMappings(mappings: readonly AssetMapping[]): void {
+    const dirty=this.dirtyIds();
+    this.mappingsState.update((items)=>[...mappings.filter((item)=>!dirty.has(item.id)),...items.filter((item)=>dirty.has(item.id))]);
+  }
+
+  markRepresentationsSaved(tableIds?:ReadonlySet<string>): void {
+    this.representations.update((items) => items.map((item) => !tableIds||tableIds.has(item.table.id)?({...item, persisted: true, preview: false}):item));
   }
 
   selectField(fieldId: string): void {
@@ -152,13 +239,17 @@ export class MappingDraftFacade {
     if (trigger instanceof HTMLElement) this.returnFocus = trigger;
     this.selectMapping(mappingId);
     const currentFieldIds = new Set(this.logicalFields().map((field) => field.id));
-    const currentColumnIds = new Set(this.physicalColumns().map((column) => column.id));
+    const original=this.representations().find((item)=>item.snapshot.id===mapping.physicalSnapshotId)?.snapshot;
+    const candidates=[...this.representations().map((item)=>item.snapshot),...(this.snapshot()?[this.snapshot()!]:[])].filter((item)=>!original||item.sourceId===original.sourceId);
+    const latest=candidates.sort((left,right)=>right.revision-left.revision)[0];
+    const currentColumnIds = new Set(this.physicalColumns().filter((column)=>column.snapshotId===latest?.id).map((column) => column.id));
     this.editor.set({
       mappingId,
+      physicalSnapshotId: latest?.id,
       logicalFieldVersionIds: mapping.logicalFieldVersionIds.filter((id) => currentFieldIds.has(id)),
       physicalColumnIds: mapping.physicalColumnIds.filter((id) => currentColumnIds.has(id)),
     });
-    this.announcement.set(`Gebrochene Zuordnung ausgewählt. Wählen Sie gültige Spalten aus Snapshot ${this.snapshot()?.revision ?? 'aktuell'} und speichern Sie eine neue Entwurfsversion.`);
+    this.announcement.set(`Gebrochene Zuordnung ausgewählt. Wählen Sie gültige Spalten aus Snapshot ${latest?.revision ?? 'aktuell'} und speichern Sie eine neue Entwurfsversion.`);
   }
 
   closeEditor(restoreFocus = true): void {
@@ -166,11 +257,10 @@ export class MappingDraftFacade {
     if (restoreFocus) this.restoreFocus();
   }
 
-  upsertDraft(value: AssetMappingWrite): AssetMapping {
-    const editingId = this.editor()?.mappingId;
+  upsertDraft(value: AssetMappingWrite, editingId = this.editor()?.mappingId, restoreFocus = true): AssetMapping {
     const previous = editingId ? this.mappings().find((item) => item.id === editingId) : undefined;
     const now = new Date().toISOString();
-    const id = previous?.id ?? `draft-mapping-${++this.localSequence}`;
+    const id = previous?.id ?? `draft-mapping-${crypto.randomUUID()}`;
     const responsibleName = previous?.responsibleName
       ?? (value.responsibleUserId || 'Nicht zugewiesen');
     const next: AssetMapping = {
@@ -184,7 +274,14 @@ export class MappingDraftFacade {
       status: 'draft',
       version: previous?.version ?? 0,
       predecessorId: previous?.predecessorId ?? null,
-      validationResult: null,
+      validationResult: {valid: false, issues: [...(['Derived','Lookup','Transformed'].includes(value.mappingType)&&!value.transformationRule?.trim()?[{code:'missing_transformation_rule',severity:'error' as const,message:'Für diesen Mapping-Typ ist eine Transformations- oder Lookup-Regel erforderlich.'}]:[]),...value.logicalFieldVersionIds.flatMap((fieldId) => {
+        const field = this.logicalFields().find((item) => item.id === fieldId);
+        return value.physicalColumnIds.flatMap((columnId) => {
+          const column = this.physicalColumns().find((item) => item.id === columnId);
+          return field && column && compatibleType(field.dataType) !== compatibleType(column.dataType)
+            ? [{code: 'type_mismatch', severity: (['Direct','Renamed'].includes(value.mappingType)?'error':'warning') as 'error'|'warning', message: `Typkonflikt: ${field.dataType} ↔ ${column.dataType}; Prüfung erforderlich.`, logicalFieldVersionId: fieldId, physicalColumnId: columnId}] : [];
+        });
+      })]},
       lastValidatedAt: null,
       lastDriftCheckAt: previous?.lastDriftCheckAt ?? null,
       responsibleName,
@@ -200,8 +297,38 @@ export class MappingDraftFacade {
     const fieldNames = this.logicalFields().filter((field) => value.logicalFieldVersionIds.includes(field.id)).map((field) => field.name).join(', ');
     const targets = this.physicalColumns().filter((column) => value.physicalColumnIds.includes(column.id)).map((column) => column.qualifiedName).join(', ');
     this.announcement.set(`${fieldNames} wurde ${targets} zugeordnet. Die Zuordnung ist noch als Entwurf zu speichern.`);
-    this.closeEditor();
+    this.closeEditor(restoreFocus);
     return next;
+  }
+
+  reviseMapping(mappingId:string, patch:Partial<Pick<AssetMappingWrite,'mappingType'|'transformationRule'|'logicalFieldVersionIds'|'physicalColumnIds'>>):AssetMapping|null {
+    const mapping=this.activeMappings().find((item)=>item.id===mappingId);
+    return mapping?this.upsertDraft({...this.toWrite(mapping),...patch},mappingId,false):null;
+  }
+
+  rewireEndpoint(mappingId:string,fieldId:string,columnId:string,side:'logical'|'physical',replacementId:string):boolean {
+    const mapping=this.activeMappings().find((item)=>item.id===mappingId);
+    if(!mapping?.logicalFieldVersionIds.includes(fieldId)||!mapping.physicalColumnIds.includes(columnId))return false;
+    const originalId=side==='logical'?fieldId:columnId;
+    if(originalId===replacementId)return true;
+    const originalColumn=this.physicalColumns().find((item)=>item.id===columnId);
+    const replacementColumn=this.physicalColumns().find((item)=>item.id===replacementId);
+    if(side==='logical'&&!this.logicalFields().some((item)=>item.id===replacementId)||side==='physical'&&(!originalColumn||!replacementColumn||originalColumn.tableId!==replacementColumn.tableId||mapping.physicalSnapshotId!==replacementColumn.snapshotId)){
+      this.announcement.set('Linienende unverändert: Wählen Sie ein Feld im gleichen Modell und Snapshot.');return false;
+    }
+    const logicalFieldVersionIds=side==='logical'?mapping.logicalFieldVersionIds.map((id)=>id===fieldId?replacementId:id):[...mapping.logicalFieldVersionIds];
+    const physicalColumnIds=side==='physical'?mapping.physicalColumnIds.map((id)=>id===columnId?replacementId:id):[...mapping.physicalColumnIds];
+    if(new Set(logicalFieldVersionIds).size!==logicalFieldVersionIds.length||new Set(physicalColumnIds).size!==physicalColumnIds.length||this.activeMappings().some((item)=>item.id!==mappingId&&item.physicalSnapshotId===mapping.physicalSnapshotId&&item.logicalFieldVersionIds.some((id)=>logicalFieldVersionIds.includes(id))&&item.physicalColumnIds.some((id)=>physicalColumnIds.includes(id)))){
+      this.announcement.set('Linienende unverändert: Diese Verbindung ist bereits vorhanden.');return false;
+    }
+    this.reviseMapping(mappingId,{logicalFieldVersionIds,physicalColumnIds});
+    this.announcement.set('Linienende neu zugeordnet. Die Änderung ist noch als Entwurf zu speichern.');return true;
+  }
+
+  forgetRemovedMapping(id:string):void {
+    this.mappingsState.update((items)=>items.filter((item)=>item.id!==id));
+    this.dirtyIdsState.update((ids)=>{const next=new Set(ids);next.delete(id);return next;});
+    if(this.selectedMappingId()===id)this.selectedMappingId.set(null);
   }
 
   replaceSaved(localId: string, saved: AssetMapping): void {

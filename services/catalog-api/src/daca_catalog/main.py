@@ -67,6 +67,7 @@ from .i14y_public_api import I14YPublicApiPort, VerifiedI14YPublicApi
 from .i14y_publication import DisabledI14YPublicationAdapter, I14YPublicationPort
 from .logical_model_review_api import create_logical_model_review_router
 from .mapping_inconsistency_api import create_mapping_inconsistency_router
+from .model_domain_api import create_model_domain_router
 from .modeling_api import create_modeling_router
 from .modeling_assistance_api import create_modeling_assistance_router
 from .modeling_lifecycle_api import create_modeling_lifecycle_router
@@ -116,6 +117,7 @@ from .models import (
     WorkflowTask,
     utc_now,
 )
+from .physical_csv_api import create_physical_csv_router
 from .policy import (
     ActivePolicy,
     build_opa_bundle,
@@ -127,6 +129,7 @@ from .policy import (
 from .problems import install_problem_handlers
 from .product_activity import is_privileged_product_auditor
 from .product_activity import product_activity as build_product_activity
+from .representation_api import create_representation_router
 from .schemas import (
     AccessGovernanceCreate,
     AccessRenewalCreate,
@@ -2944,9 +2947,11 @@ def create_router() -> APIRouter:
         target = None
         existing_domain_ids: list[uuid.UUID] = []
         if body.target_term_id:
-            target = session.get(GlossaryTerm, body.target_term_id)
+            target = session.scalar(select(GlossaryTerm).where(GlossaryTerm.id == body.target_term_id).with_for_update())
             if target is None:
                 raise HTTPException(404, "Target glossary term not found")
+            if body.expected_target_revision is not None and target.revision != body.expected_target_revision:
+                raise HTTPException(409, "Der Begriff wurde zwischenzeitlich geändert. Der lokale Entwurf bleibt erhalten.")
             if target.lifecycle == "retired":
                 raise HTTPException(409, "A retired term cannot be changed")
             existing_domain_ids = list(
@@ -6906,6 +6911,9 @@ def create_app(
     install_problem_handlers(app)
     app.include_router(create_router())
     app.include_router(create_modeling_router())
+    app.include_router(create_representation_router())
+    app.include_router(create_physical_csv_router())
+    app.include_router(create_model_domain_router())
     app.include_router(create_modeling_assistance_router())
     app.include_router(create_terminology_router())
     app.include_router(create_modeling_lifecycle_router())

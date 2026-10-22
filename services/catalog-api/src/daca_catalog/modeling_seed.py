@@ -763,6 +763,8 @@ def seed_modeling_catalog(session: Session) -> None:
     _seed_armasuisse_personas(session)
     _seed_real_estate_journey(session)
     _seed_personnel_domain(session)
+    from .personnel_glossary_seed import seed_personnel_glossary
+    seed_personnel_glossary(session, PERSONNEL_DOMAIN_ID)
     _seed_i14y_cache(session)
     # The marker lives in the foundational schema while the modeling tables are
     # introduced by later migrations.  A downgrade to 0015 therefore preserves

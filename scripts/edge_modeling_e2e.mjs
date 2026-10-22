@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -35,6 +35,7 @@ class CdpClient {
       this.socket.addEventListener('open', resolve, { once: true });
       this.socket.addEventListener('error', reject, { once: true });
     });
+    this.socket.addEventListener('close', () => {for(const pending of this.pending.values())pending.reject(new Error('Browser connection closed'));this.pending.clear();});
     this.socket.addEventListener('message', (event) => {
       const message = JSON.parse(String(event.data));
       if (!message.id) return;
@@ -52,7 +53,8 @@ class CdpClient {
     const message = { id, method, params };
     if (sessionId) message.sessionId = sessionId;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { method, resolve, reject });
+      const timer=setTimeout(()=>{this.pending.delete(id);reject(new Error(`${method}: browser command timed out`));},30_000);
+      this.pending.set(id, { method, resolve:(value)=>{clearTimeout(timer);resolve(value);}, reject:(error)=>{clearTimeout(timer);reject(error);} });
       this.socket.send(JSON.stringify(message));
     });
   }
@@ -157,6 +159,23 @@ async function capturePageSegmentScreenshot(selector, filename, width = 1440, he
     clip: { ...rect, scale: 1 },
   }, sessionId);
   await writeFile(path.join(targetDirectory, filename), Buffer.from(result.data, 'base64'));
+}
+
+async function captureCanvasPrintPdf() {
+  if (!screenshotDirectory) return;
+  const html=await evaluate("document.querySelector('.mapping-print-frame').contentDocument.documentElement.outerHTML");
+  const {targetId}=await cdp.call('Target.createTarget',{url:'about:blank'});
+  try {
+    const {sessionId:printSession}=await cdp.call('Target.attachToTarget',{targetId,flatten:true});
+    await cdp.call('Page.enable',{},printSession);
+    const {frameTree}=await cdp.call('Page.getFrameTree',{},printSession);
+    await cdp.call('Page.setDocumentContent',{frameId:frameTree.frame.id,html},printSession);
+    await cdp.call('Runtime.evaluate',{expression:"new Promise((resolve)=>{if(document.readyState==='complete')resolve();else window.addEventListener('load',resolve,{once:true});}).then(()=>document.fonts.ready)",awaitPromise:true},printSession);
+    const {data}=await cdp.call('Page.printToPDF',{preferCSSPageSize:true,printBackground:true,displayHeaderFooter:false},printSession);
+    const pdf=Buffer.from(data,'base64');
+    invariant((pdf.toString('latin1').match(/\/Type\s*\/Page\b/g)??[]).length===1,'canvas print did not fit on one page');
+    await writeFile(path.join(path.resolve(screenshotDirectory),'mapping-canvas-print.pdf'),pdf);
+  } finally { await cdp.call('Target.closeTarget',{targetId}); }
 }
 
 async function captureWorkspaceScreenshot(filename) {
@@ -268,6 +287,92 @@ async function pressKey(key, code, windowsVirtualKeyCode) {
     type: 'keyUp', key, code, windowsVirtualKeyCode,
     nativeVirtualKeyCode: windowsVirtualKeyCode,
   }, sessionId);
+}
+
+async function csvPhysicalModelsFlow() {
+  const suppliedFile = args.get('--csv-file');
+  const actor = suppliedFile ? 'mirjam.keller' : 'christian.spider';
+  const file = suppliedFile ? path.resolve(suppliedFile) : path.join(profileDirectory, 'Gebaeude-QA.csv');
+  if (!suppliedFile) {
+    const rows = [
+      ['Datenobjekt','Tabelle','Feldname','Datentyp','Länge','Kurzbeschreibung','Kommentar','System','Klassifizierung','Dezimalstellen','Werteliste'],
+      ['Gebäude','VIBDBU','SGENR','CHAR','8',`CSV QA ${Date.now()}`,'','SAP','','',''],
+      ['Gebäude','VIBDBU','RGEBART','NUMC','2','Gebäudeart','','SAP','','','Gebäudeart'],
+      ['Gebäude','VIBDBU','VALIDFROM','DATS','10','Gültig ab','','SAP','','',''],
+      ['Gebäude','Gebäude / Bauwerke','Name','IfcLabel','','Gebäude ID; "Beispiel"\nZweite Zeile','','BIM','Projektabhängig','',''],
+      ['Gebäude','Gebäude / Bauwerke','Name','IfcLabel','','Zweite Beschreibung','','BIM','Projektabhängig','',''],
+      ['Gebäude','VIBDOBJASS','','','','Objekt','','SAP','','',''],
+      ['Gebäude','OWNER.RADON','YEAR','Integer','4','Baujahr','','ImmoGIS','Datensatzabhängig','10',''],
+    ];
+    const quote = value => /[;"\r\n]/.test(value) ? '"' + value.replaceAll('"','""') + '"' : value;
+    await writeFile(file, Buffer.from(rows.map(row => row.map(quote).join(';')).join('\r\r\n'), 'latin1'));
+  }
+  await navigate('/models', actor);
+  await waitFor("document.querySelector('.csv-import-trigger') && !document.querySelector('.csv-import-trigger').disabled", 'CSV loader entry missing');
+  const largePreview = await evaluate(`(async()=>{
+    const csv='Tabelle;Feldname;Datentyp;Kurzbeschreibung\\n'+Array.from({length:200},(_,i)=>'QA;FIELD_'+i+';CHAR;'+ 'x'.repeat(6000)).join('\\n');
+    const response=await fetch('/api/v1/physical-model-csv/preview',{method:'POST',headers:{'Content-Type':'application/json','X-DaCa-User':${JSON.stringify(actor)}},body:JSON.stringify({contentBase64:btoa(csv)})});
+    const body=await response.json();return {status:response.status,fieldCount:body.fieldCount};
+  })()`);
+  invariant(largePreview.status===200 && largePreview.fieldCount===200, 'CSV upload proxy rejected a valid inventory above 1 MiB');
+  const contentBase64 = (await readFile(file)).toString('base64');
+  const expected = expectStatus(await api(actor, '/api/v1/physical-model-csv/preview', {method:'POST', body:{contentBase64}}), 200, 'CSV preflight').body;
+  invariant(expected.tableCount === (suppliedFile ? 31 : 4) && expected.fieldCount === (suppliedFile ? 267 : 5), 'CSV table/field inventory changed unexpectedly');
+  const initialSources = expectStatus(await api(actor, '/api/v1/physical-sources'), 200, 'source list before preview').body.items.length;
+  let sourceId;
+  async function selectFile() {
+    await waitFor("document.querySelector('.csv-import-trigger') && !document.querySelector('.csv-import-trigger').disabled", 'CSV loader entry not ready after navigation');
+    await clickText('.csv-import-trigger', 'CSV');
+    await waitFor("document.querySelector('daca-physical-csv-import dialog')?.open", 'CSV dialog did not open');
+    if (!suppliedFile) await setControls({'daca-physical-csv-import .import-inputs select':'vbs-verteidigung'});
+    const {root} = await cdp.call('DOM.getDocument', {}, sessionId);
+    const {nodeId} = await cdp.call('DOM.querySelector', {nodeId: root.nodeId, selector:'daca-physical-csv-import input[type=file]'}, sessionId);
+    await cdp.call('DOM.setFileInputFiles', {nodeId, files:[file]}, sessionId);
+    await waitFor(`document.querySelector('.preview-count')?.textContent.includes('${expected.tableCount} physische Modelle')`, 'CSV preview did not load');
+  }
+  try {
+    await selectFile();
+    await pressKey('Escape','Escape',27);
+    await waitFor("!document.querySelector('daca-physical-csv-import dialog')?.open && document.activeElement?.classList.contains('csv-import-trigger')", 'Escape did not cancel CSV preview and restore focus');
+    invariant(expectStatus(await api(actor, '/api/v1/physical-sources'), 200, 'source list after cancel').body.items.length === initialSources, 'CSV cancellation persisted a source');
+    await selectFile();
+    invariant(await evaluate("document.querySelector('.import-warnings')?.innerText.includes('doppeltes Feld')"), 'Duplicate field explanation missing');
+    await setControls({'daca-physical-csv-import input[type=search]':'SAP'});
+    await waitFor("[...document.querySelectorAll('.table-list button small')].every(e=>e.textContent==='SAP')", 'CSV table search did not filter by system');
+    await setControls({'daca-physical-csv-import input[type=search]':''});
+    await clickText('.table-list button', 'Gebäude / Bauwerke');
+    await waitFor("document.querySelector('.table-preview')?.innerText.includes('Projektabhängig')", 'Original CSV classification missing');
+    await captureScreenshot('csv-models-preview.png');
+    await setViewport(412,915);
+    invariant(await evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), 'CSV dialog overflows the mobile page');
+    await captureScreenshot('csv-models-preview-mobile.png');
+    await setViewport(1440,900);
+    await clickText('daca-physical-csv-import footer button', 'Importieren');
+    await waitFor("location.pathname.startsWith('/physical-models/') && document.querySelector('daca-physical-object-detail h2')", 'CSV import did not immediately open physical models', 30000);
+    sourceId = await evaluate("location.pathname.split('/').pop()");
+    invariant(await evaluate(`document.querySelectorAll('.table-row').length===${expected.tableCount}`), 'Explorer did not show every imported physical model');
+    invariant(await evaluate("[...document.querySelectorAll('.database-node>summary strong')].map(e=>e.textContent).sort().join(',')==='BIM,ImmoGIS,SAP'"), 'Source systems were flattened in the physical explorer');
+    await clickText('.table-select', 'Gebäude / Bauwerke');
+    await waitFor("document.querySelector('.csv-originals')?.innerText.includes('Name')", 'Persisted CSV originals unavailable');
+    await evaluate("[...document.querySelectorAll('.csv-originals details')].find(e=>e.querySelector('summary')?.textContent.startsWith('Name ')).open=true");
+    invariant(await evaluate("document.querySelector('.csv-originals')?.innerText.includes('Projektabhängig')"), 'Original metadata not inspectable after import');
+    await capturePageSegmentScreenshot('.explorer-layout', 'csv-models-imported.png');
+    const source = expectStatus(await api(actor, '/api/v1/physical-sources'), 200, 'persisted CSV source').body.items.find(item=>item.id===sourceId);
+    invariant(source?.adapterType==='csv', 'Imported inventory masquerades as a live database');
+    await navigate(`/physical-models/${sourceId}`, actor);
+    await waitFor(`document.querySelectorAll('.table-row').length===${expected.tableCount}`, 'CSV models did not survive reload');
+    await navigate('/models', actor); await selectFile();
+    await clickText('daca-physical-csv-import footer button','Importieren');
+    await waitFor(`location.pathname==='/physical-models/${sourceId}' && document.querySelector('daca-physical-object-detail h2')`, 'Identical CSV import was duplicated');
+    invariant(await evaluate("document.body.innerText.includes('Vorhandener CSV-Import')"), 'Idempotent import did not explain reuse');
+    console.log(`PASS csv-physical-models: ${expected.tableCount} tables / ${expected.fieldCount} fields @ ${sourceId}`);
+  } finally {
+    if (sourceId && !suppliedFile) {
+      const sources=expectStatus(await api(actor,'/api/v1/physical-sources'),200,'find QA CSV source').body.items;
+      const source=sources.find(item=>item.id===sourceId);
+      if(source) expectStatus(await api(actor,`/api/v1/physical-sources/${sourceId}/retire`,{method:'POST',etag:`"${source.revision}"`}),200,'retire only the QA CSV source');
+    }
+  }
 }
 
 async function logicalFirstFlow() {
@@ -746,7 +851,7 @@ async function physicalFirstFlow() {
   invariant(mappings.every((mapping) => mapping.status === 'draft'), 'Derived mappings must start as drafts');
 
   await waitFor(
-    "[...document.querySelectorAll('.representation-panel a')].some((item) => item.textContent.includes('Bestehende Datenquelle hinzufügen'))",
+    "document.querySelector('.graph-canvas') !== null",
     'mapping workspace representation action did not finish rendering',
   );
 
@@ -775,42 +880,28 @@ async function physicalFirstFlow() {
   }
   await capturePageSegmentScreenshot('.mapping-shell', 'physical-derived-form-1440x900.png');
 
-  await clickText('.representation-panel a', 'Bestehende Datenquelle hinzufügen');
-  await waitFor("location.pathname === '/physical-models'", 'add-representation did not reopen the source explorer');
-  await waitFor(
-    "[...document.querySelectorAll('.source-card')].some((item) => item.textContent.includes('DAAIF S3 Parquet'))",
-    'second physical source did not finish loading',
-  );
-  const browsedSecond = await evaluate(`(() => {
-    const row = [...document.querySelectorAll('.source-card')]
-      .find((item) => item.textContent.includes('DAAIF S3 Parquet'));
-    const browse = [...(row?.querySelectorAll('a') ?? [])]
-      .find((item) => item.textContent.includes('Quelle öffnen'));
-    browse?.click();
-    return Boolean(browse);
-  })()`);
-  invariant(browsedSecond, 'second physical source could not be opened');
-  await waitFor(
-    "[...document.querySelectorAll('.object-tree button')].some((item) => item.textContent.includes('vehicle_inventory.parquet'))",
-    'second physical object did not appear in the hierarchy',
-  );
-  const selectedSecond = await evaluate(`(() => {
-    const object = [...document.querySelectorAll('.object-tree button')]
-      .find((item) => item.textContent.includes('vehicle_inventory.parquet'));
-    object?.click();
-    return Boolean(object);
-  })()`);
-  invariant(selectedSecond, 'second physical representation could not be selected');
-  await clickText('.object-detail button.daca-button', 'Mit Modell verbinden');
-  await waitFor(
-    "location.pathname.match(/^\\/models\\/[0-9a-f-]+\\/mappings$/) && document.querySelector('.suggestion-review') !== null",
-    'exact-match review did not open for the second representation',
-  );
-  const suggestionCount = await evaluate("document.querySelectorAll('.suggestion-review tbody tr').length");
-  invariant(suggestionCount > 0, 'second representation did not produce any exact 1:1 suggestions');
-  invariant(await evaluate("document.querySelector('.suggestion-review').textContent.includes('keine Fuzzy-Matches')"), 'suggestion review did not explain its strict matching rule');
-  await clickText('.suggestion-review button', 'als Entwurf übernehmen');
-  await waitFor("document.querySelector('.toolbar-actions button:last-child')?.disabled === false", 'accepted suggestions were not local drafts');
+  const mappingPath = await evaluate('location.pathname');
+  await evaluate(`document.querySelector('.graph-canvas').dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, cancelable:true, clientX:200, clientY:300}))`);
+  await waitFor("document.querySelector('.canvas-context-menu') !== null", 'canvas context menu did not open');
+  await clickText('.canvas-context-menu button', 'Neue physische Repräsentation');
+  await waitFor("document.querySelector('.representation-dialog[open]') !== null", 'representation dialog did not open');
+  await clickText('.representation-dialog footer button', 'Abbrechen');
+  invariant(await evaluate('location.pathname') === mappingPath, 'cancel left the mapping workspace');
+  await evaluate(`document.querySelector('.logical-node>header').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:200,clientY:300}))`);
+  await clickText('.canvas-context-menu button', 'Neue physische Repräsentation');
+  await waitFor("[...document.querySelectorAll('.source-options button')].some((item)=>item.textContent.includes('DAAIF S3 Parquet'))", 'S3 source not visible in picker');
+  await clickText('.source-options button', 'DAAIF S3 Parquet');
+  await waitFor("[...document.querySelectorAll('.representation-dialog .object-tree button')].some((item)=>item.textContent.includes('vehicle_inventory_mapping_demo.parquet'))", 'Parquet demo not visible in picker');
+  await clickText('.representation-dialog .object-tree button', 'vehicle_inventory_mapping_demo.parquet');
+  await waitFor("document.querySelector('.representation-dialog .object-detail')?.textContent.includes('VEHICLE_ID')", 'Parquet field inspection did not render');
+  invariant(await evaluate("document.querySelector('.representation-dialog .object-facts').textContent.includes('Parquet-Footer')"), 'Parquet footer row count label missing');
+  await capturePageSegmentScreenshot('.representation-dialog', 'representation-picker-parquet-1440x900.png');
+  await clickText('.representation-dialog footer button', 'Hinzufügen');
+  await waitFor("document.querySelectorAll('.physical-representation').length >= 2", 'both representations did not appear together');
+  invariant(await evaluate('location.pathname') === mappingPath, 'adding a representation left the canvas');
+  invariant(await evaluate("document.querySelector('.suggestion-review')?.textContent.includes('eindeutige Namenspaare')"), 'automatic name match result missing');
+  await waitFor("document.querySelector('.draft-save-action>button')?.disabled === false", 'accepted suggestions were not local drafts');
+  invariant(await evaluate("document.querySelector('.draft-save-reason')===null"),'enabled draft save still displays a blocking reason');
   await clickText('.toolbar-actions button', 'Entwurf speichern');
   await waitFor("document.body.innerText.includes('Alle Mapping-Entwürfe wurden versioniert gespeichert')", 'second representation mappings were not persisted');
   mappings = expectStatus(
@@ -820,8 +911,357 @@ async function physicalFirstFlow() {
   ).body.items;
   invariant(new Set(mappings.map((mapping) => mapping.physicalSnapshotId)).size === 2, 'logical model is not linked to two physical representations');
   invariant(await evaluate("document.querySelectorAll('.representation-list > button').length >= 2"), 'mapping workspace does not list both physical representations');
-  await captureScreenshot('mapping-multiple-representations-1440x900.png');
+  await navigate(mappingPath, 'christian.man');
+  await waitFor("document.querySelectorAll('.physical-representation').length >= 2", 'saved representations did not survive reload');
+  const saveHover=await evaluate(`(() => {
+    const trigger=document.querySelector('.draft-save-action');trigger.scrollIntoView({block:'center',behavior:'instant'});
+    const rect=trigger.getBoundingClientRect();return {x:rect.left+rect.width/2,y:rect.top+rect.height/2};
+  })()`);
+  await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:saveHover.x,y:saveHover.y},sessionId);
+  await waitFor("document.querySelector('.draft-save-reason')?.getBoundingClientRect().height>0",'disabled save reason did not appear on mouse hover');
+  invariant(await evaluate("document.querySelector('.draft-save-reason').textContent.includes('Keine ungespeicherten Änderungen')"),'disabled save reason does not explain the lack of local changes');
+  invariant(await evaluate("document.querySelector('.draft-save-action button').disabled"),'saved workspace unexpectedly enables save');
+  await captureScreenshot('mapping-save-disabled-reason-1440x900.png');
+  await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:2,y:2},sessionId);
+  await evaluate("document.querySelector('.toolbar-actions>button').focus()");
+  await cdp.call('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9},sessionId);
+  await cdp.call('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9},sessionId);
+  await waitFor("document.activeElement===document.querySelector('.draft-save-action')&&document.querySelector('.draft-save-reason')?.getBoundingClientRect().height>0",'disabled save reason is not keyboard accessible');
+  await cdp.call('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27},sessionId);
+  await cdp.call('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27},sessionId);
+  await waitFor("document.querySelector('.draft-save-reason')?.hidden===true",'Escape did not dismiss the save reason');
+  await evaluate('document.activeElement.blur()');
+  await capturePageSegmentScreenshot('.mapping-shell', 'mapping-multiple-representations-1440x900.png');
+  invariant(await evaluate("document.querySelector('.add-representation') === null && ![...document.querySelectorAll('.representation-panel button')].some((button)=>button.textContent.includes('Neue physische Repräsentation'))"), 'redundant add-representation button is still present');
+  const beforeDrag=await evaluate(`(() => {
+    const card=[...document.querySelectorAll('.physical-representation')].find((item)=>item.textContent.includes('vehicle_inventory_mapping_demo.parquet'));
+    const header=card.querySelector('header');header.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});
+    const rect=header.getBoundingClientRect();
+    return {id:card.dataset.representationTableId,x:rect.left+70,y:rect.top+25,left:card.offsetLeft,top:card.offsetTop};
+  })()`);
+  await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:beforeDrag.x,y:beforeDrag.y},sessionId);
+  await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',x:beforeDrag.x,y:beforeDrag.y,button:'left',buttons:1,clickCount:1},sessionId);
+  for(let step=1;step<=4;step++)await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:beforeDrag.x+step*75,y:beforeDrag.y+step*20,buttons:1},sessionId);
+  await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',x:beforeDrag.x+300,y:beforeDrag.y+80,button:'left',buttons:0,clickCount:1},sessionId);
+  await waitFor(`(() => {const card=document.querySelector('[data-representation-table-id="${beforeDrag.id}"]');return Math.abs(card.offsetLeft-${beforeDrag.left+300})<2&&Math.abs(card.offsetTop-${beforeDrag.top+80})<2;})()`, 'representation did not move with pointer drag');
+  invariant(await evaluate("document.querySelector('.representation-context-menu')===null"),'drag unexpectedly opened drawing actions');
+  await waitFor(`(() => {
+    const card=document.querySelector('[data-representation-table-id="${beforeDrag.id}"]'),column=card.querySelector('.column-endpoint'),canvas=document.querySelector('.graph-canvas');
+    const path=canvas.querySelector('path[data-edge-physical-column-id="'+column.dataset.physicalColumnId+'"]');
+    if(!path)return false;
+    const numbers=path.getAttribute('d').match(/-?[0-9]+(?:[.][0-9]+)?/g).map(Number),r=column.getBoundingClientRect(),c=canvas.getBoundingClientRect();
+    return Math.abs(numbers.at(-2)-(r.left-c.left-1))<2&&Math.abs(numbers.at(-1)-(r.top-c.top+r.height/2))<2;
+  })()`, 'edges did not follow the moved representation');
+  await evaluate("document.querySelector('.canvas-tools .fullscreen-toggle').click()");
+  await waitFor("document.querySelector('.mapping-shell.is-fullscreen')?.getBoundingClientRect().height >= innerHeight-1",'fullscreen editor did not fill the viewport');
+  await evaluate(`document.querySelector('.graph-canvas').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:250,clientY:250}))`);
+  await clickText('.canvas-context-menu button','Neue physische Repräsentation');
+  await waitFor("document.querySelector('.mapping-shell.is-fullscreen .representation-dialog[open]')!==null",'source picker is unavailable in fullscreen');
+  await clickText('.representation-dialog footer button','Abbrechen');
+  await capturePageSegmentScreenshot('.mapping-shell','mapping-editor-fullscreen-1440x900.png');
+  await evaluate("document.querySelector('.canvas-tools .fullscreen-toggle').click()");
+  await waitFor("document.querySelector('.mapping-shell.is-fullscreen')===null && document.body.style.overflow!=='hidden'",'fullscreen did not restore the page');
+  invariant(await evaluate("document.querySelector('.toolbar-actions .fullscreen-toggle')===null"),'fullscreen control remains in the editor toolbar');
+  const toolsBeforeScroll=await evaluate(`(() => {const scroll=document.querySelector('.graph-scroll'),tools=document.querySelector('.canvas-tools');scroll.scrollIntoView({block:'start',behavior:'instant'});const r=tools.getBoundingClientRect();scroll.scrollTop+=70;scroll.scrollLeft+=30;return {top:r.top,right:r.right};})()`);
+  await waitFor(`(() => {const r=document.querySelector('.canvas-tools').getBoundingClientRect();return Math.abs(r.top-${toolsBeforeScroll.top})<1&&Math.abs(r.right-${toolsBeforeScroll.right})<1;})()`, 'canvas controls moved when scrolling the graph');
+  await evaluate(`(() => {
+    const logical=document.querySelector('.logical-node>header');
+    for(let i=0;i<25;i++)logical.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',shiftKey:true,bubbles:true,cancelable:true}));
+  })()`);
+  await waitFor(`(() => {
+    const canvas=document.querySelector('.graph-canvas'),card=[...canvas.querySelectorAll('.physical-representation')].find((item)=>item.dataset.representationTableId!=='${beforeDrag.id}'),column=card.querySelector('.column-endpoint');
+    const path=canvas.querySelector('path[data-edge-physical-column-id="'+column.dataset.physicalColumnId+'"]');if(!path)return false;
+    const field=canvas.querySelector('[data-logical-field-id="'+path.dataset.edgeLogicalFieldId+'"]'),numbers=path.getAttribute('d').match(/-?[0-9]+(?:[.][0-9]+)?/g).map(Number),c=canvas.getBoundingClientRect(),f=field.getBoundingClientRect(),p=column.getBoundingClientRect();
+    return card.classList.contains('is-left-of-logical')&&field.classList.contains('has-left-port')&&Math.abs(numbers[0]-(f.left-c.left-1))<2&&Math.abs(numbers.at(-2)-(p.right-c.left+1))<2&&parseFloat(getComputedStyle(path).strokeWidth)<=1.5;
+  })()`, 'left-side physical representation did not use facing logical and physical ports');
+  await evaluate(`(() => {
+    const append=document.body.append.bind(document.body);
+    document.body.append=(...nodes)=>{append(...nodes);const frame=nodes.find((node)=>node instanceof HTMLIFrameElement&&node.classList.contains('mapping-print-frame'));if(frame){frame.contentWindow.print=()=>{window.__canvasPrintRequested=true;};document.body.append=append;}};
+    document.querySelector('.canvas-print').click();
+  })()`);
+  await waitFor('window.__canvasPrintRequested===true', 'canvas print button did not request printing');
+  invariant(await evaluate(`(() => {const d=document.querySelector('.mapping-print-frame').contentDocument;return d.querySelector('h1').textContent===document.querySelector('#mapping-graph-title').textContent&&d.querySelectorAll('.physical-representation').length===document.querySelectorAll('.physical-representation').length&&d.querySelector('.graph-canvas svg path')!==null&&d.querySelector('.canvas-tools,.mapping-side,.mapping-toolbar,.graph-scroll')===null;})()`), 'print output is missing the title or includes editor controls');
+  const printModel=expectStatus(await api('christian.man',`/api/v1/logical-models/${modelId}`),200,'read printed model revision').body;
+  invariant(await evaluate(`(() => {
+    const d=document.querySelector('.mapping-print-frame').contentDocument,logo=d.querySelector('.canvas-print-header img'),identity=d.querySelector('.canvas-print-identity'),dates=d.querySelectorAll('.canvas-print-meta time');
+    const header=logo.getBoundingClientRect(),right=identity.getBoundingClientRect();
+    return logo.naturalWidth>0&&header.width<=132&&header.left<right.left&&right.right>d.body.clientWidth/2&&identity.querySelector('strong').textContent==='Datenkatalog'&&identity.querySelector('small').textContent==='Data Platform BIT'&&dates.length===2&&dates[0].dateTime===${JSON.stringify(new Date(printModel.updatedAt).toISOString())}&&d.querySelector('.canvas-print-meta').textContent.includes('Version ${printModel.revision}')&&Math.abs(Date.now()-Date.parse(dates[1].dateTime))<60000;
+  })()`),'print branding, model revision or distinct print timestamp is missing');
+  await captureCanvasPrintPdf();
+  await evaluate(`(() => {const frame=document.querySelector('.mapping-print-frame');frame.style.cssText='position:fixed;left:0;top:0;width:1123px;height:794px;border:0;z-index:2000;background:white';})()`);
+  await captureScreenshot('mapping-canvas-print-1440x900.png');
+  await evaluate("document.querySelector('.mapping-print-frame').contentWindow.dispatchEvent(new Event('afterprint'))");
+  await evaluate(`document.querySelector('[data-representation-table-id="${beforeDrag.id}"] .physical-table-title').click()`);
+  await clickText('.representation-context-menu button','Darstellung der physischen Repräsentation entfernen');
+  await waitFor(`document.querySelector('[data-representation-table-id="${beforeDrag.id}"]')===null`,'remove drawing did not hide its card');
+  invariant(await evaluate("document.querySelector('.draft-save-action>button').disabled"),'removing a drawing dirtied persisted mappings');
+  await evaluate(`document.querySelector('[data-representation-id="${beforeDrag.id}"]').click()`);
+  await waitFor(`document.querySelector('[data-representation-table-id="${beforeDrag.id}"]')?.offsetLeft===${beforeDrag.left+300}`,'restoring a drawing lost its position');
+  const afterDrawingActions=expectStatus(await api('christian.man',`/api/v1/asset-mappings?logicalModelId=${modelId}`),200,'read mappings after canvas actions').body.items;
+  invariant(JSON.stringify(afterDrawingActions.map((item)=>item.versionId).sort())===JSON.stringify(mappings.map((item)=>item.versionId).sort()),'canvas actions modified mapping versions');
+
   return { sourceId: createdSource.id, sourceName, snapshotId, modelId };
+}
+
+async function edgeEditingFlow(physical) {
+  const route=`/models/${physical.modelId}/mappings?physicalSnapshotId=${physical.snapshotId}`;
+  await navigate(route,'christian.man');
+  await waitFor("document.querySelector('.mapping-edge .edge-hit')!==null",'interactive mapping lines did not render');
+  const before=expectStatus(await api('christian.man',`/api/v1/asset-mappings?logicalModelId=${physical.modelId}`),200,'read line-edit mappings').body.items;
+  const mapping=before.find((item)=>item.physicalSnapshotId===physical.snapshotId&&item.logicalFieldVersionIds.length===1&&item.physicalColumnIds.length===1);
+  invariant(mapping,'line-edit test requires a single-field PG mapping');
+  const mappingId=mapping.id,fieldId=mapping.logicalFieldVersionIds[0],columnId=mapping.physicalColumnIds[0];
+  const nextColumn=await evaluate(`(() => {const original=document.querySelector('[data-physical-column-id="${columnId}"]');return [...original.closest('.physical-representation').querySelectorAll('.column-endpoint')].find((item)=>item.dataset.physicalColumnId!=='${columnId}').dataset.physicalColumnId;})()`);
+  const nextField=before.find((item)=>item.id!==mappingId&&item.physicalSnapshotId===physical.snapshotId&&item.logicalFieldVersionIds.length===1&&!item.physicalColumnIds.includes(nextColumn)).logicalFieldVersionIds[0];
+  // Exercise the viewport-filling fallback here; native Escape always exits browser fullscreen.
+  await evaluate("document.querySelector('.mapping-shell').requestFullscreen=undefined;document.querySelector('.fullscreen-toggle').click()");
+  await waitFor("document.querySelector('.mapping-shell.is-fullscreen')?.getBoundingClientRect().height>=innerHeight-1",'line editor viewport did not open');
+  await evaluate('new Promise((resolve)=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  const edgePoint=()=>evaluate(`(() => {const path=document.querySelector('[data-edge-mapping-id="${mappingId}"] .edge-hit');for(const fraction of [.5,.35,.65,.2,.8]){const point=path.getPointAtLength(path.getTotalLength()*fraction),screen=new DOMPoint(point.x,point.y).matrixTransform(path.getScreenCTM());if(document.elementFromPoint(screen.x,screen.y)?.closest('.mapping-edge'))return {x:screen.x,y:screen.y};}throw new Error('No unobstructed hit point on the selected line');})()`);
+  const point=await edgePoint();
+  await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...point},sessionId);
+  await waitFor(`document.querySelector('[data-edge-mapping-id="${mappingId}"]').classList.contains('is-hovered')&&parseFloat(getComputedStyle(document.querySelector('[data-edge-mapping-id="${mappingId}"] .edge-line')).strokeWidth)>2`,'line hover did not thicken the actual edge');
+  await captureScreenshot('mapping-line-hover-1440x900.png');
+  await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',buttons:1,clickCount:1},sessionId);
+  await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',buttons:0,clickCount:1},sessionId);
+  await waitFor("document.querySelectorAll('.edge-handles circle').length===2",'selecting a line did not expose its two draggable ends');
+  await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:900,y:300},sessionId);
+  await waitFor(`parseFloat(getComputedStyle(document.querySelector('[data-edge-mapping-id="${mappingId}"] .edge-line')).strokeWidth)<=1.5`,'line remained thick after pointer departure');
+  async function dragEnd(side,targetSelector) {
+    await evaluate(`(() => {document.querySelector('[data-edge-handle="${side}"]').scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});document.querySelector(${JSON.stringify(targetSelector)}).scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});})()`);
+    await evaluate('new Promise((resolve)=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    const positions=await evaluate(`(() => {const handle=document.querySelector('[data-edge-handle="${side}"]'),target=document.querySelector(${JSON.stringify(targetSelector)}),a=handle.getBoundingClientRect(),b=target.getBoundingClientRect();return {from:{x:a.left+a.width/2,y:a.top+a.height/2},to:{x:b.left+b.width/2,y:b.top+b.height/2}};})()`);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...positions.from},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...positions.from,button:'left',buttons:1,clickCount:1},sessionId);
+    for(let step=1;step<=4;step++)await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:positions.from.x+(positions.to.x-positions.from.x)*step/4,y:positions.from.y+(positions.to.y-positions.from.y)*step/4,buttons:1},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...positions.to,button:'left',buttons:0,clickCount:1},sessionId);
+  }
+  await dragEnd('physical',`[data-physical-column-id="${nextColumn}"]`);
+  try {await waitFor(`document.querySelector('[data-edge-mapping-id="${mappingId}"] .edge-line')?.dataset.edgePhysicalColumnId==='${nextColumn}'`,'physical endpoint was not rewired within its table');}
+  catch(error){await captureScreenshot('mapping-line-drag-failure.png');throw new Error(error.message+' '+JSON.stringify(await evaluate(`({announcement:document.querySelector('p[aria-live="polite"]')?.textContent,fullscreen:document.querySelector('.mapping-shell')?.classList.contains('is-fullscreen')})`)));}
+  await dragEnd('logical',`[data-logical-field-id="${nextField}"]`);
+  await waitFor(`document.querySelector('[data-edge-mapping-id="${mappingId}"] .edge-line')?.dataset.edgeLogicalFieldId==='${nextField}'`,'logical endpoint was not rewired within its model');
+  async function openLineMenu() {
+    await evaluate(`document.querySelector('[data-edge-mapping-id="${mappingId}"] .edge-hit').scrollIntoView({block:'center',inline:'nearest',behavior:'instant'})`);
+    await evaluate('new Promise((resolve)=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    let p;
+    try{p=await edgePoint();}catch(error){await captureScreenshot('mapping-line-hit-failure.png');throw error;}
+
+    await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...p,button:'right',buttons:2,clickCount:1},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...p,button:'right',buttons:0,clickCount:1},sessionId);
+    await waitFor("document.querySelector('.edge-context-menu')!==null",'right click did not open line context actions');
+  }
+  await openLineMenu();
+  await evaluate(`(() => {const type=document.querySelector('select[aria-label="Mapping-Typ der Beziehung"]');type.value='Derived';type.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await waitFor("document.querySelector('.edge-context-menu textarea')!==null",'derived mapping did not offer its rule input');
+  await evaluate("(() => {const rule=document.querySelector('.edge-context-menu textarea');rule.value='concat(source_a, source_b)';rule.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  await captureScreenshot('mapping-line-context-menu-1440x900.png');
+  await cdp.call('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27},sessionId);
+  await cdp.call('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27},sessionId);
+  invariant(await evaluate("document.querySelector('.mapping-shell').classList.contains('is-fullscreen')"),'dismissing line menu exited fullscreen');
+  await clickText('.toolbar-actions button','Entwurf speichern');
+  await waitFor("document.querySelector('.draft-save-action>button').disabled&&document.body.innerText.includes('Alle Mapping-Entwürfe wurden versioniert gespeichert')",'line edits did not save');
+  const saved=expectStatus(await api('christian.man',`/api/v1/asset-mappings?logicalModelId=${physical.modelId}`),200,'read saved line edits').body.items.find((item)=>item.id===mappingId);
+  invariant(saved.status==='draft'&&saved.mappingType==='Derived'&&saved.transformationRule==='concat(source_a, source_b)'&&saved.physicalSnapshotId===mapping.physicalSnapshotId&&saved.logicalFieldVersionIds[0]===nextField&&saved.physicalColumnIds[0]===nextColumn&&saved.versionId!==mapping.versionId,'saved line changes lost endpoint, snapshot, type or successor identity');
+  await navigate(route,'christian.man');
+  await waitFor(`document.querySelector('[data-edge-mapping-id="${mappingId}"] .edge-line')?.dataset.edgePhysicalColumnId==='${nextColumn}'`,'line edits did not survive reload');
+  invariant(await evaluate(`document.querySelector('[data-edge-mapping-id="${mappingId}"] .edge-hit title')?.textContent.includes('aus einem oder mehreren Feldern')`),'assigned line type lacks its tooltip explanation');
+  await evaluate(`document.querySelector('[data-edge-mapping-id="${mappingId}"] .edge-hit').dispatchEvent(new MouseEvent('click',{bubbles:true}))`);
+  await waitFor("document.querySelector('.mapping-detail h2 .daca-glossary-trigger')?.textContent==='Derived'",'assigned inspector type did not render');
+  async function hoverAssignedType(selector) {
+    const point=await evaluate(`(() => {const trigger=[...document.querySelectorAll(${JSON.stringify(selector)})].find((item)=>item.textContent==='Derived');trigger.scrollIntoView({block:'center',behavior:'instant'});const r=trigger.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...point},sessionId);
+  }
+  await hoverAssignedType('.mapping-detail h2 .daca-glossary-trigger');
+  await waitFor("document.querySelector('.mapping-detail .daca-glossary-tooltip.is-visible')?.textContent.includes('aus einem oder mehreren Feldern')",'assigned inspector type tooltip did not appear on hover');
+  await waitFor(`(() => {const trigger=document.querySelector('.mapping-detail h2 .daca-glossary-trigger').getBoundingClientRect(),tip=document.querySelector('.mapping-detail .daca-glossary-tooltip.is-visible').getBoundingClientRect();return (tip.bottom<=trigger.top||tip.top>=trigger.bottom)&&tip.left>=0&&tip.right<=innerWidth;})()`,'type tooltip covers its assigned value or leaves the viewport');
+  await captureScreenshot('mapping-assigned-type-tooltip-1440x900.png');
+  await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:5,y:300},sessionId);
+  await evaluate("document.querySelector('.mapping-detail h2 .daca-glossary-trigger').focus()");
+  await waitFor("document.querySelector('.mapping-detail .daca-glossary-tooltip.is-visible')!==null",'assigned type tooltip is not keyboard accessible');
+  await cdp.call('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27},sessionId);
+  await cdp.call('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27},sessionId);
+  await waitFor("document.querySelector('.mapping-detail .daca-glossary-tooltip.is-visible')===null",'assigned type tooltip did not dismiss with Escape');
+  await clickText('.mapping-toolbar nav button','Tabelle');
+  await waitFor("document.querySelector('.mapping-matrix .daca-glossary-trigger')!==null",'assigned table types did not render');
+  await hoverAssignedType('.mapping-matrix .daca-glossary-trigger');
+  await waitFor("[...document.querySelectorAll('.mapping-matrix .daca-glossary-tooltip.is-visible')].some((item)=>item.textContent.includes('aus einem oder mehreren Feldern'))",'assigned table type tooltip did not appear on hover');
+  invariant(await evaluate("document.querySelector('.draft-save-action>button').disabled"),'inspecting a mapping type created unsaved changes');
+  await clickText('.mapping-toolbar nav button','Graph');
+  await waitFor(`document.querySelector('[data-edge-mapping-id="${mappingId}"] .edge-hit')!==null`,'graph did not return after tooltip inspection');
+  const representationCount=await evaluate('document.querySelectorAll(".physical-representation").length');
+  await openLineMenu();
+  await evaluate("window.__originalConfirm=window.confirm;window.confirm=()=>false");
+  await clickText('.edge-context-menu button','Beziehung löschen');
+  invariant(await evaluate(`document.querySelector('[data-edge-mapping-id="${mappingId}"]')!==null`),'canceling line deletion removed its edge');
+  await openLineMenu();
+  await evaluate('window.confirm=()=>true');
+  await clickText('.edge-context-menu button','Beziehung löschen');
+  await waitFor(`document.querySelector('[data-edge-mapping-id="${mappingId}"]')===null`,'deleting relationship did not remove its edge');
+  await evaluate('window.confirm=window.__originalConfirm;delete window.__originalConfirm');
+  invariant(await evaluate('document.querySelectorAll(".physical-representation").length')===representationCount,'relationship deletion removed a physical representation');
+  const deleted=expectStatus(await api('christian.man',`/api/v1/asset-mappings?logicalModelId=${physical.modelId}`),200,'read deleted relationship history').body.items.find((item)=>item.id===mappingId);
+  invariant(deleted.status==='superseded','line deletion did not preserve superseded history');
+  console.log(`PASS line-editing: ${mappingId}`);
+}
+
+async function domainAssignmentFlow(physical) {
+  const reference=expectStatus(await api('christian.man',`/api/v1/logical-models/${physical.modelId}`),200,'read domain test reference').body;
+  const domainId=reference.dataDomainId;
+  const domainSource=expectStatus(await api('christian.man','/api/v1/physical-sources',{method:'POST',body:{name:`Canvas Domain QA ${Date.now()}`,description:'Synthetic domain assignment fixture.',adapterType:'fixture',configRef:`fixture.canvas-domain-${Date.now()}`,departmentCode:reference.departmentCode,organizationId:reference.organizationId}}),201,'create isolated domain fixture source');
+  const imported=expectStatus(await api('christian.man',`/api/v1/physical-sources/${domainSource.body.id}/imports`,{method:'POST',etag:domainSource.headers.etag,body:{fixtureVariant:'baseline'}}),200,'import isolated domain fixture');
+  const domainTable=imported.body.databases.flatMap((database)=>database.schemas).flatMap((schema)=>schema.tables).find((table)=>table.name==='vehicle_inventory');
+  try {
+
+  const write={identifiers:[`EDGE-DOMAIN-${Date.now()}`],localizations:[{language:'de',title:'Canvas Domänenprüfung',description:'Synthetischer Entwurf für explizite Domänenzuordnungen.'}],
+    dataOwnerUserId:reference.dataOwnerUserId,deputyOwnerUserId:reference.deputyOwnerUserId,creator:{type:'Application',applicationName:'Canvas QA'},dataDomainId:null,
+    organizationUnitId:reference.organizationId,dataClassification:'internal',dateCreated:new Date().toISOString().slice(0,10),contactPoints:[{name:'Canvas QA',email:'canvas@example.test'}],publisher:reference.publisher,
+    accessRights:'urn:daca:access-rights:internal',entities:[{name:'vehicle_inventory',businessObject:'Fahrzeug',fields:[{name:'vehicle_id',dataType:'uuid',shortDescription:'Synthetischer Fahrzeugschlüssel',businessObject:'Fahrzeug',classification:'internal',nullable:false,minCount:1,maxCount:1}]}]};
+  const created=expectStatus(await api('christian.man','/api/v1/logical-models',{method:'POST',body:write}),201,'create model awaiting domain');
+  const modelId=created.body.id;
+  const memberships=expectStatus(await api('christian.man',`/api/v1/logical-models/${physical.modelId}/representations`),200,'read domain test representations').body.items;
+  const domainMemberships=[...memberships.filter((item)=>item.physicalSnapshotId!==physical.snapshotId),{physicalSnapshotId:imported.body.snapshot.id,physicalTableId:domainTable.id}];
+  expectStatus(await api('christian.man',`/api/v1/logical-models/${modelId}/mapping-drafts`,{method:'POST',etag:created.headers.etag,body:{logicalModelVersionId:created.body.versionId,representations:domainMemberships.map(({physicalSnapshotId,physicalTableId})=>({physicalSnapshotId,physicalTableId})),mappings:[]}}),200,'attach domain test representations without field links');
+  const route=`/models/${modelId}/mappings`;
+  await navigate(route,'christian.man');
+  await waitFor("document.querySelectorAll('.physical-representation').length===2&&document.querySelector('.logical-node .model-domain')?.textContent.includes('Keine Domäne')",'unassigned domain headers did not render');
+  const pgId=await evaluate("[...document.querySelectorAll('.physical-representation')].find((card)=>!card.textContent.includes('.parquet')).dataset.representationTableId");
+  await evaluate("document.querySelector('.field-endpoint').click();[...document.querySelectorAll('.physical-representation')].find((card)=>card.textContent.includes('.parquet')).querySelector('.column-endpoint').click()");
+  await waitFor("document.querySelector('.mapping-dialog[open]')!==null",'local mapping editor did not open for domain rebase test');
+  await clickText('.mapping-dialog button','Zuordnung übernehmen');
+  await waitFor("document.querySelector('.draft-save-action>button').disabled===false",'local mapping draft did not survive initial creation');
+  const openLogical=async()=>{await evaluate("document.querySelector('.logical-node>header').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:250,clientY:200}))");await waitFor("[...document.querySelectorAll('.canvas-context-menu button')].some((button)=>button.textContent==='Domäne zuordnen')",'logical domain context action missing');};
+  await openLogical();
+  const hover=await evaluate("(() => {const row=[...document.querySelectorAll('.canvas-context-menu button')].find((button)=>button.textContent==='Domäne zuordnen'),r=row.getBoundingClientRect();return{x:r.left+15,y:r.top+r.height/2,background:getComputedStyle(row).backgroundColor};})()");
+  await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:hover.x,y:hover.y},sessionId);
+  await waitFor(`(() => {const row=[...document.querySelectorAll('.canvas-context-menu button')].find((button)=>button.textContent==='Domäne zuordnen'),style=getComputedStyle(row);return style.backgroundColor!==${JSON.stringify(hover.background)}&&style.boxShadow.includes('inset');})()`,'menu hover does not highlight the entire row');
+  await captureScreenshot('model-domain-menu-hover-1440x900.png');
+  await openLogical();
+  await clickText('.canvas-context-menu button','Domäne zuordnen');
+  await waitFor("document.querySelectorAll('.model-domain-dialog input[type=checkbox]:checked').length===2&&!document.querySelector('.model-domain-dialog button:last-child').textContent.includes('Wird')",'physical models were not preselected for logical assignment');
+  await clickText('.model-domain-dialog footer button','Abbrechen');
+  invariant(expectStatus(await api('christian.man',`/api/v1/logical-models/${modelId}`),200,'read model after domain cancellation').body.dataDomainId===null,'cancelled domain assignment wrote the logical model');
+  await openLogical();await clickText('.canvas-context-menu button','Domäne zuordnen');
+  await waitFor(`document.querySelector('.model-domain-dialog select option[value="${domainId}"]')!==null`,'active domain option missing');
+  await evaluate(`(() => {const select=document.querySelector('.model-domain-dialog select');select.value=${JSON.stringify(domainId)};select.dispatchEvent(new Event('change',{bubbles:true}));const row=[...document.querySelectorAll('.physical-domain-choice')].find((row)=>!row.textContent.includes('.parquet')),checkbox=row.querySelector('input');checkbox.checked=false;checkbox.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await capturePageSegmentScreenshot('.model-domain-dialog','model-domain-propagation-1440x900.png');
+  await waitFor("document.querySelector('.model-domain-dialog footer button:last-child')?.disabled===false",'domain assignment is not ready to save');
+  await clickText('.model-domain-dialog footer button','Zuordnen');
+  await waitFor("document.querySelector('.model-domain-dialog')===null&&!document.querySelector('.logical-node .model-domain').textContent.includes('Keine Domäne')",'logical domain assignment did not update the header');
+  invariant(await evaluate("document.querySelector('.draft-save-action>button').disabled===false"),'logical assignment discarded the local mapping draft');
+  const pgState=expectStatus(await api('christian.man',`/api/v1/physical-tables/${pgId}/domains`),200,'read unchecked physical domain').body;
+  invariant(pgState.dataDomains.length===0,'unchecked physical object was assigned implicitly');
+  await evaluate(`document.querySelector('[data-representation-table-id="${pgId}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:250}))`);
+  await clickText('.representation-context-menu button','Domäne zuordnen');
+  await waitFor(`document.querySelector('.model-domain-dialog select option[value="${domainId}"]')!==null`,'physical domain modal missing');
+  invariant(await evaluate("document.querySelector('.model-domain-dialog fieldset')===null"),'physical assignment unexpectedly propagates to other objects');
+  await evaluate(`(() => {const select=document.querySelector('.model-domain-dialog select');select.value=${JSON.stringify(domainId)};select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await waitFor("document.querySelector('.model-domain-dialog footer button:last-child')?.disabled===false",'domain assignment is not ready to save');
+  await clickText('.model-domain-dialog footer button','Zuordnen');
+  await waitFor(`document.querySelector('.model-domain-dialog')===null&&!document.querySelector('[data-representation-table-id="${pgId}"] .model-domain').textContent.includes('Keine Domäne')`,'physical domain assignment did not update the header');
+  await clickText('.toolbar-actions button','Entwurf speichern');
+  await waitFor("document.querySelector('.draft-save-action>button').disabled===true&&document.body.innerText.includes('Alle Mapping-Entwürfe wurden versioniert gespeichert')",'mapping draft was not rebased after logical domain assignment');
+  await navigate(route,'christian.man');
+  await waitFor("document.querySelectorAll('.physical-representation .model-domain').length===2&&[...document.querySelectorAll('.model-domain')].every((label)=>!label.textContent.includes('Keine Domäne'))",'domain labels did not survive reload');
+  await evaluate(`document.querySelector('[data-representation-table-id="${pgId}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:250}))`);
+  invariant(await evaluate(`document.querySelector('.representation-context-menu a')?.getAttribute('href')==='/domains/${domainId}'&&document.querySelector('.representation-context-menu a')?.target==='_blank'`),'assigned physical domain cannot be opened');
+  await evaluate("document.querySelector('.logical-node>header').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:250,clientY:200}))");
+  invariant(await evaluate(`document.querySelector('.canvas-context-menu a')?.getAttribute('href')==='/domains/${domainId}'`),'assigned logical domain cannot be opened');
+  await capturePageSegmentScreenshot('.mapping-shell','model-domain-assigned-1440x900.png');
+  await navigate(`/domains/${domainId}`,'christian.man');
+  await waitFor(`document.querySelector('.domain-models a[href="/models/${modelId}"]')!==null&&document.querySelector('.domain-models a[href*="tableId=${pgId}"]')!==null`,'assigned models missing from domain detail');
+  await evaluate("(() => {const input=document.querySelector('.model-search input');input.value='Canvas Domänenprüfung';input.dispatchEvent(new Event('input',{bubbles:true}));})()");
+  await waitFor(`document.querySelector('.domain-models a[href="/models/${modelId}"]')!==null&&document.querySelectorAll('.model-lists section:last-child a').length===0`,'domain model search did not filter both lists');
+  await evaluate("(() => {const input=document.querySelector('.model-search input');input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));})()");
+  await capturePageSegmentScreenshot('.domain-models','domain-searchable-models-1440x900.png');
+  await evaluate(`document.querySelector('.domain-models a[href*="tableId=${pgId}"]').click()`);
+  await waitFor(`document.querySelector('daca-physical-object-detail')?.innerText.includes('vehicle_inventory')`,'domain model link did not inspect its exact object');
+  return {modelId};
+  } finally {expectStatus(await api('christian.spider',`/api/v1/physical-sources/${domainSource.body.id}/retire`,{method:'POST',etag:imported.headers.etag}),200,'retire only this test-created domain fixture source');}
+}
+
+async function personnelOntologyFlow() {
+  const domains=expectStatus(await api('christian.man','/api/v1/domains'),200,'read Personnel domain').body;
+  const personnel=domains.find(domain=>domain.preferredLabel==='Personal');
+  invariant(personnel,'Personal demo domain missing');
+  await navigate(`/domains/${personnel.id}`,'christian.man');
+  await waitFor("document.querySelectorAll('.semantic-graph .graph-node.is-term').length>=10",'Personnel ontology did not show its demo terms');
+  invariant(await evaluate("[...document.querySelectorAll('.graph-edge-label')].some(label=>label.textContent==='hat Oberbegriff')"),'ontology relationship labels missing');
+  invariant(await evaluate("document.querySelectorAll('.semantic-graph .graph-node.is-relation').length===0"),'internal term relations created duplicate graph nodes');
+  await capturePageSegmentScreenshot('.semantic-graph','personnel-ontology-1440x900.png');
+  await evaluate(`document.querySelector('[aria-label="Ontologie vergrössern"]').click()`);
+  await navigate(`/domains/${personnel.id}`,'christian.man',390,844);
+  await waitFor("document.querySelectorAll('.domain-term-list article').length>=10",'Personnel terms missing on mobile');
+  invariant(await evaluate("document.documentElement.scrollWidth<=innerWidth+2"),'domain detail overflows the mobile viewport');
+  await captureScreenshot('personnel-domain-390x844.png');
+  console.log('PASS personnel ontology and searchable domain models');
+}
+
+async function conceptNetworkEditingFlow() {
+  await navigate('/domains','christian.man');
+  const suffix=Date.now();
+  const domain=expectStatus(await api('sibilla.micheli','/api/v1/domains',{method:'POST',body:{ownerUserId:'kassandra.valdata',deputyOwnerUserId:'ariane.keller',localizations:[{language:'de',preferredLabel:`Begriffsnetz QA ${suffix}`,definition:'Isolierte synthetische Testdomäne für den Begriffsnetz-Editor.'}]}}),201,'create isolated concept network domain');
+  const approve=async(proposal)=>{let result=proposal;for(const review of proposal.reviews)result=expectStatus(await api(review.ownerUserId,`/api/v1/glossary/term-proposals/${proposal.id}/reviews/${review.domainId}/decision`,{method:'POST',etag:`"${proposal.revision}"`,body:{decision:'approve',comment:'Synthetische Editorprüfung.'}}),200,'approve synthetic concept change').body;return result;};
+  const create=async(label,relations=[])=>{const proposal=expectStatus(await api('christian.man','/api/v1/glossary/term-proposals',{method:'POST',body:{operation:'create',payload:{domainIds:[domain.body.id],localizations:[{language:'de',preferredLabel:label,definition:`Synthetischer Begriff ${label}.`}],relations}}}),201,'create synthetic concept proposal').body;return(await approve(proposal)).targetTermId;};
+  try {
+    const b=await create('Person'),a=await create('Mitarbeitende',[{relation:'broader',targetTermId:b}]),c=await create('Anstellung');
+    const route=`/domains/${domain.body.id}`;
+    await navigate(route,'christian.man');await waitFor("document.querySelectorAll('.network-editor .is-term').length===3",'editable concept cards missing');
+    await evaluate("document.querySelector('.network-editor').requestFullscreen=undefined;document.querySelector('.network-editor .fullscreen-toggle').click()");
+    await waitFor("document.querySelector('.network-editor.is-fullscreen')!==null",'concept editor fullscreen missing');
+    const bounds=async(selector)=>evaluate(`(() => {const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+15,left:r.left,top:r.top};})()`);
+    const aHeader=`[data-term-id="${a}"] header`;
+    const before=await bounds(aHeader);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',x:before.x,y:before.y,button:'left',buttons:1,clickCount:1},sessionId);
+    for(let step=1;step<=4;step++)await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:before.x+step*35,y:before.y+step*50,buttons:1},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',x:before.x+140,y:before.y+200,button:'left',buttons:0,clickCount:1},sessionId);
+    const moved=await bounds(aHeader);invariant(moved.left>before.left+100&&moved.top>before.top+40,'concept card did not move freely');
+    await evaluate(`document.querySelector(${JSON.stringify(aHeader)}).dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}))`);
+    await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    const aPosition=await evaluate(`document.querySelector('[data-term-id="${a}"]').style.cssText`);
+    const relation=()=>evaluate("[...document.querySelectorAll('.graph-relationship')].find(edge=>edge.dataset.edgeId.startsWith('relation:')).dataset.edgeId");
+    let edgeId=await relation();
+    const edgePoint=async()=>evaluate(`(() => {const p=document.querySelector('[data-edge-id="${edgeId}"] .edge-hit');for(const f of [.5,.3,.7]){const v=p.getPointAtLength(p.getTotalLength()*f),s=new DOMPoint(v.x,v.y).matrixTransform(p.getScreenCTM());if(document.elementFromPoint(s.x,s.y)?.closest('.graph-relationship'))return{x:s.x,y:s.y};}throw new Error('No reachable concept relationship point');})()`);
+    await captureScreenshot('concept-before-edge.png');
+    let point=await edgePoint();await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...point},sessionId);
+    await waitFor(`parseFloat(getComputedStyle(document.querySelector('[data-edge-id="${edgeId}"] .graph-edge')).strokeWidth)>2`,'concept edge hover missing');
+    await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'right',buttons:2,clickCount:1},sessionId);await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'right',buttons:0,clickCount:1},sessionId);
+    await waitFor("document.querySelector('.relation-dialog')!==null",'relationship context menu missing');
+    await evaluate("(() => {const select=document.querySelectorAll('.relation-dialog select')[1];select.value='related';select.dispatchEvent(new Event('change',{bubbles:true}));})()");
+    await captureScreenshot('concept-relationship-context-1440x900.png');await clickText('.relation-dialog button','Entwurf übernehmen');
+    await waitFor("document.querySelector('.relation-dialog')===null&&document.querySelectorAll('.edge-handles circle').length===2",'relationship edit did not expose draggable ends');
+    await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    const positions=await evaluate(`(() => {const from=document.querySelector('[data-edge-handle="target"]').getBoundingClientRect(),to=document.querySelector('[data-term-id="${c}"]').getBoundingClientRect();return{from:{x:from.left+from.width/2,y:from.top+from.height/2},to:{x:to.left+to.width/2,y:to.top+to.height/2}};})()`);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...positions.from,button:'left',buttons:1,clickCount:1},sessionId);
+    for(let step=1;step<=4;step++)await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:positions.from.x+(positions.to.x-positions.from.x)*step/4,y:positions.from.y+(positions.to.y-positions.from.y)*step/4,buttons:1},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...positions.to,button:'left',buttons:0,clickCount:1},sessionId);
+    try{await waitFor(`document.querySelector('[data-edge-id="${edgeId}"]')?.getAttribute('data-target-id')==='term:${c}'`,'rewired edge did not render its new target');}catch(error){await captureScreenshot('concept-drop-failure.png');throw new Error(error.message+' '+JSON.stringify(await evaluate(`({notice:document.querySelector('.network-editor [role=status]')?.textContent,alerts:[...document.querySelectorAll('[role=alert]')].map(item=>item.textContent),edges:[...document.querySelectorAll('.graph-relationship')].map(item=>({id:item.dataset.edgeId,target:item.dataset.targetId}))})`)));}
+    await evaluate(`document.querySelector('[data-edge-id="${edgeId}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}))`);
+    try{await waitFor(`document.querySelectorAll('.relation-dialog select')[2]?.value==='${c}'`,'dragging the concept endpoint did not rewire its target');}catch(error){await captureScreenshot('concept-rewire-failure.png');throw new Error(error.message+' '+JSON.stringify(await evaluate(`({from:${JSON.stringify(positions.from)},to:${JSON.stringify(positions.to)},notice:document.querySelector('.network-editor [role=status]')?.textContent,expected:${JSON.stringify({a,b,c})},selects:[...document.querySelectorAll('.relation-dialog select')].map(item=>item.value),alerts:[...document.querySelectorAll('[role=alert]')].map(item=>item.textContent),target:document.elementsFromPoint(${positions.to.x},${positions.to.y}).map(item=>item.tagName+'.'+item.classList).slice(0,8)})`)));}
+    await clickText('.relation-dialog button','Beziehung löschen');await waitFor("[...document.querySelectorAll('.graph-relationship')].every(edge=>!edge.dataset.edgeId.startsWith('relation:'))",'concept relationship deletion did not create a local draft');
+    await evaluate("document.querySelector('.network-editor .fullscreen-toggle').click()");
+    const reload=cdp.call('Page.reload',{ignoreCache:true},sessionId);await sleep(250);try{await cdp.call('Page.handleJavaScriptDialog',{accept:true},sessionId);}catch{}await reload;
+    await waitFor("document.querySelector('.network-editor')?.innerText.includes('Lokaler Entwurf wiederhergestellt')",'concept draft did not survive reload');
+    invariant(await evaluate(`document.querySelector('[data-term-id="${a}"]').style.cssText===${JSON.stringify(aPosition)}`),'concept arrangement did not survive reload');
+    await evaluate(`document.querySelector('[data-term-id="${a}"] header').dispatchEvent(new KeyboardEvent('keydown',{key:'F10',shiftKey:true,bubbles:true,cancelable:true}))`);
+    await waitFor("document.querySelector('.concept-context-menu')!==null",'concept keyboard context menu missing');await clickText('.concept-context-menu button','Neue Beziehung');
+    await evaluate(`document.querySelector('[data-term-id="${c}"]').click()`);await waitFor("document.querySelector('.relation-dialog')!==null",'keyboard connection did not start a new relation');await clickText('.relation-dialog button','Abbrechen');
+    await evaluate("document.querySelector('.network-editor').requestFullscreen=undefined;document.querySelector('.network-editor .fullscreen-toggle').click()");await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    const portDrag=await evaluate(`(() => {const from=document.querySelector('[data-term-id="${a}"] .ontology-port.is-right').getBoundingClientRect(),to=document.querySelector('[data-term-id="${c}"]').getBoundingClientRect();return{from:{x:from.left+from.width/2,y:from.top+from.height/2},to:{x:to.left+to.width/2,y:to.top+to.height/2}};})()`);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...portDrag.from,button:'left',buttons:1,clickCount:1},sessionId);
+    for(let step=1;step<=4;step++)await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:portDrag.from.x+(portDrag.to.x-portDrag.from.x)*step/4,y:portDrag.from.y+(portDrag.to.y-portDrag.from.y)*step/4,buttons:1},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...portDrag.to,button:'left',buttons:0,clickCount:1},sessionId);
+    await waitFor(`document.querySelector('.relation-dialog')?.getAttribute('data-target-id')==='${c}'`,'dragging a connection port did not select the target');await clickText('.relation-dialog button','Entwurf übernehmen');await captureScreenshot('concept-network-editable-1440x900.png');
+    await evaluate(`(() => {window.__conceptPrint=false;const append=document.body.append.bind(document.body);document.body.append=(...nodes)=>{append(...nodes);const frame=nodes.find(node=>node instanceof HTMLIFrameElement);if(frame){frame.contentWindow.print=()=>window.__conceptPrint=true;document.body.append=append;}};document.querySelector('.network-editor .canvas-print').click();})()`);
+    await waitFor('window.__conceptPrint===true','concept network printing failed');invariant(await evaluate("document.querySelector('.mapping-print-frame').contentDocument.querySelectorAll('.graph-node.is-term').length===3"),'concept printing clipped model cards');await evaluate("document.querySelector('.mapping-print-frame').remove()");
+    await clickText('.network-editor .draft-actions button','Änderungen einreichen');await waitFor("document.querySelector('.pending-proposals a')!==null",'concept changes were not submitted for domain approval');
+    const proposals=expectStatus(await api('christian.man','/api/v1/glossary/term-proposals'),200,'read submitted concept draft').body;
+    const proposed=proposals.find(value=>value.targetTermId===a&&value.status==='in_review');invariant(proposed&&proposed.reviewPayload.relations[0].targetTermId===c,'submitted relation does not match the edited graph');
+    await approve(proposed);await navigate(route,'christian.man');await waitFor("document.querySelector('.network-editor')!==null",'approved concept graph missing');
+    const persisted=expectStatus(await api('christian.man',`/api/v1/glossary/terms/${a}`),200,'read approved concept graph').body;
+    invariant(persisted.relations.length===1&&persisted.relations[0].targetTermId===c,'approved relationship did not persist');
+    console.log('PASS editable concept network: drag, edges, context menus, rewiring, drafts, print and approval');
+  } finally {expectStatus(await api('sibilla.micheli',`/api/v1/domains/${domain.body.id}/retire`,{method:'POST',etag:`"${domain.body.revision}"`,body:{}}),200,'retire only this synthetic editor domain');}
 }
 
 async function existingToExistingFlow(physical) {
@@ -1011,16 +1451,18 @@ async function existingToExistingFlow(physical) {
   await pressKey('Enter', 'Enter', 13);
   await waitFor("document.querySelector('.mapping-dialog[open]') === null", 'mapping dialog did not close');
   const saveFocused = await evaluate(`(() => {
-    const button = document.querySelector('.toolbar-actions button:last-child');
+    const button = document.querySelector('.draft-save-action>button');
     button?.focus();
     return document.activeElement === button && !button.disabled;
   })()`);
   invariant(saveFocused, 'workspace draft save is not keyboard-submittable');
   await pressKey('Enter', 'Enter', 13);
-  await waitFor(
-    "document.body.innerText.includes('versioniert gespeichert')",
-    'drift resolution successor was not persisted',
-  );
+  try {
+    await waitFor("document.body.innerText.includes('versioniert gespeichert')", 'drift resolution successor was not persisted');
+  } catch (error) {
+    const alerts = await evaluate("[...document.querySelectorAll('.daca-alert[role=alert]')].map((item)=>item.textContent)");
+    throw new Error(`${error.message}: ${JSON.stringify(alerts)}`);
+  }
   const resolved = expectStatus(
     await api('cinthya.thor', `/api/v1/asset-mappings?logicalModelId=${organizationModelId}`),
     200,
@@ -1119,15 +1561,26 @@ try {
   await cdp.call('Network.setCacheDisabled', { cacheDisabled: true }, sessionId);
   await cdp.call('Network.setBypassServiceWorker', { bypass: true }, sessionId);
 
+  if(args.get('--flow')==='csv-import'){await csvPhysicalModelsFlow();} else if(args.get('--flow')==='concept-network'){await conceptNetworkEditingFlow();} else if(args.get('--flow')==='line-editing'){
+    invariant(args.get('--model-id')&&args.get('--snapshot-id'),'line-editing flow requires model-id and snapshot-id');
+    await edgeEditingFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});
+  } else {
+  await csvPhysicalModelsFlow();
   const logical = await logicalFirstFlow();
   console.log(`PASS logical-first: ${logical.modelId}`);
   const physical = await physicalFirstFlow();
+  await edgeEditingFlow(physical);
   console.log(`PASS physical-first: ${physical.modelId} @ ${physical.snapshotId}`);
+  const domainAssignment = await domainAssignmentFlow(physical);
+  console.log(`PASS domain-assignment: ${domainAssignment.modelId}`);
+  await personnelOntologyFlow();
+  await conceptNetworkEditingFlow();
   const existing = await existingToExistingFlow(physical);
   console.log(`PASS existing-to-existing: ${existing.mappingId} @ ${existing.currentSnapshotId}`);
   console.log(`PASS mobile: ${JSON.stringify(existing.mobile)}`);
   const journeyTen = await dataModelJourneyTen();
   console.log(`PASS journey-10: ${journeyTen.modelId}`);
+  }
 } finally {
   try {
     if (cdp) await cdp.call('Browser.close');

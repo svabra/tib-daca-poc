@@ -7,13 +7,24 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import (
-    AssetMapping, AssetMappingLogicalField, AssetMappingVersion, DcatDatasetVersion,
-    LogicalEntityVersion, LogicalFieldVersion, LogicalMappingInconsistency,
-    LogicalModel, LogicalModelVersion, WorkflowTask,
-)
 from .modeling_service import (
-    create_mapping_successor, mapping_payload, mapping_write_from_payload, utc_now,
+    create_mapping_successor,
+    mapping_payload,
+    mapping_write_from_payload,
+    utc_now,
+)
+from .models import (
+    AssetMapping,
+    AssetMappingLogicalField,
+    AssetMappingVersion,
+    DcatDatasetVersion,
+    LogicalEntityVersion,
+    LogicalFieldVersion,
+    LogicalMappingInconsistency,
+    LogicalModel,
+    LogicalModelRepresentation,
+    LogicalModelVersion,
+    WorkflowTask,
 )
 
 
@@ -90,6 +101,8 @@ def sync_mapping_inconsistencies(session: Session, model_id: uuid.UUID) -> None:
     )}
     has_physical_history = session.scalar(select(AssetMapping.id).where(
         AssetMapping.logical_model_id == model_id).limit(1)) is not None
+    has_physical_history = has_physical_history or session.scalar(select(LogicalModelRepresentation.id).where(
+        LogicalModelRepresentation.logical_model_id == model_id).limit(1)) is not None
     mapped = set(session.scalars(
         select(LogicalFieldVersion.logical_field_id)
         .join(AssetMappingLogicalField, AssetMappingLogicalField.logical_field_version_id == LogicalFieldVersion.id)

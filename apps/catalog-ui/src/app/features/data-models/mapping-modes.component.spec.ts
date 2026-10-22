@@ -25,7 +25,7 @@ describe('mapping interaction modes', () => {
     expect(facade.editor()?.physicalColumnIds).toEqual(['column-valid']);
   });
 
-  it('draws edges in the fixed canvas coordinate system from source to target', () => {
+  it('draws edges from the current card positions before measurements are available', () => {
     const fixture = TestBed.createComponent(MappingGraphComponent);
     const mapping = FALLBACK_MAPPINGS[0];
 
@@ -35,7 +35,7 @@ describe('mapping interaction modes', () => {
       0,
     );
 
-    expect(path).toMatch(/^M 235 \d+ C 270 \d+, 300 \d+, 335 \d+$/);
+    expect(path).toMatch(/^M 236 \d+ C 271 \d+, 299 \d+, 334 \d+$/);
   });
 
   it('uses measured node centres when the physical snapshot card changes height', () => {
@@ -43,8 +43,8 @@ describe('mapping interaction modes', () => {
     const component = fixture.componentInstance;
     const mapping = FALLBACK_MAPPINGS[0];
     (component as unknown as { endpointPositions: { set(value: unknown): void } }).endpointPositions.set({
-      logical: new Map([[mapping.logicalFieldVersionIds[0], { x: 372, y: 148 }]]),
-      physical: new Map([[mapping.physicalColumnIds[0], { x: 648, y: 247 }]]),
+      logical: new Map([[mapping.logicalFieldVersionIds[0], { left: 150, right: 372, y: 148 }]]),
+      physical: new Map([[mapping.physicalColumnIds[0], { left: 648, right: 870, y: 247 }]]),
     });
 
     expect(component.edgePath(mapping.logicalFieldVersionIds[0], mapping.physicalColumnIds[0], 0))
@@ -55,7 +55,7 @@ describe('mapping interaction modes', () => {
     const fixture = TestBed.createComponent(MappingGraphComponent);
     fixture.detectChanges();
 
-    const snapshotCard = fixture.nativeElement.querySelector('.physical-nodes > header') as HTMLElement;
+    const snapshotCard = fixture.nativeElement.querySelector('.physical-representation > header') as HTMLElement;
     expect(snapshotCard.textContent).toContain('Data Ownerin: Christian Spider');
     expect(snapshotCard.textContent).toContain('postgresql://hr_core/');
     const providerIcon = snapshotCard.querySelector('img') as HTMLImageElement;

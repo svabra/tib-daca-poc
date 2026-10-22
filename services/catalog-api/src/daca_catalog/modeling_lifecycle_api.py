@@ -9,6 +9,7 @@ from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import Field, field_validator
 from sqlalchemy import select
 
+from .mapping_inconsistencies import sync_mapping_inconsistencies
 from .modeling_api import (
     ActorDep,
     SessionDep,
@@ -19,7 +20,6 @@ from .modeling_api import (
     _require_version_scope,
 )
 from .modeling_core import canonical_hash
-from .mapping_inconsistencies import sync_mapping_inconsistencies
 from .modeling_schemas import (
     AssetMappingResponse,
     AssetMappingWrite,
@@ -132,13 +132,14 @@ def _physical_source_payload(
         "latestSnapshotId": latest.id if latest else None,
         "latestSnapshotSequence": latest.sequence if latest else None,
         "catalogPath": (
-            f"s3://{database_name}/"
+            source.urn if source.adapter_type == "csv"
+            else f"s3://{database_name}/"
             if source.adapter_type == "s3" and database_name
             else f"postgresql://{database_name}/"
             if database_name
             else source.config_ref or f"urn:daca:physical-source:{source.id}"
         ),
-        "systemName": "S3 Object Storage" if source.adapter_type == "s3" else "PostgreSQL",
+        "systemName": "CSV-Strukturimport" if source.adapter_type == "csv" else "S3 Object Storage" if source.adapter_type == "s3" else "PostgreSQL",
         "databaseName": database_name,
         "ownerName": owner.display_name if owner is not None else source.created_by_user_id,
         "updatedAt": source.updated_at,

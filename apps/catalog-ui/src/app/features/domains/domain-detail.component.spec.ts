@@ -1,9 +1,11 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
+import { DemoIdentityService } from '../../core/demo-identity.service';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { FALLBACK_PRODUCT } from '../../core/catalog.seed';
-import { DomainSummary, GlossaryTermSummary } from '../../core/catalog.models';
+import { DomainSummary, DomainModelMemberships, GlossaryTermSummary } from '../../core/catalog.models';
 import { DomainDetailComponent } from './domain-detail.component';
 
 vi.mock('@bit-daca/design-system', async () => {
@@ -63,6 +65,7 @@ describe('DomainDetailComponent', () => {
 
   it('loads products through the domain endpoint and renders them in the accessible graph alternative', async () => {
     const api = {
+      loadGlossaryTermProposals:()=>of([]),loadDomainModels: vi.fn(() => of({logicalModels:[],physicalModels:[]})),
       loadDomain: vi.fn(() => of(DOMAIN)),
       loadDataProductsForDomain: vi.fn(() => of([PRODUCT])),
       loadGlossaryTerms: vi.fn(() => of([])),
@@ -72,6 +75,7 @@ describe('DomainDetailComponent', () => {
       imports: [DomainDetailComponent],
       providers: [
         provideRouter([]),
+        {provide:DemoIdentityService,useValue:{userId:signal('christian.man')}},
         { provide: CatalogApiService, useValue: api },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: DOMAIN_ID }) } } },
       ],
@@ -90,11 +94,12 @@ describe('DomainDetailComponent', () => {
     expect(textAlternative?.querySelector<HTMLAnchorElement>('a')?.getAttribute('href'))
       .toBe(`/products/${PRODUCT_ID}/overview`);
     expect(root.querySelector('.semantic-graph')?.getAttribute('aria-label'))
-      .toContain('mit 1 Produkten und 0 Termen');
+      .toContain('mit 1 Produkten und 0 Begriffen');
   });
 
   it('offers a domain-prefilled term proposal and exposes abbreviations in the term presentation', async () => {
     const api = {
+      loadGlossaryTermProposals:()=>of([]),loadDomainModels: vi.fn(() => of({logicalModels:[],physicalModels:[]})),
       loadDomain: vi.fn(() => of(DOMAIN)),
       loadDataProductsForDomain: vi.fn(() => of([])),
       loadGlossaryTerms: vi.fn(() => of([TERM])),
@@ -104,6 +109,7 @@ describe('DomainDetailComponent', () => {
       imports: [DomainDetailComponent],
       providers: [
         provideRouter([]),
+        {provide:DemoIdentityService,useValue:{userId:signal('christian.man')}},
         { provide: CatalogApiService, useValue: api },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: DOMAIN_ID }) } } },
       ],
@@ -121,4 +127,57 @@ describe('DomainDetailComponent', () => {
     expect(root.querySelector('.domain-term-list')?.textContent).toContain('AFV');
     expect(root.querySelector('.sr-only-graph')?.textContent).toContain('auch: GepFz, Panzerfahrzeug');
   });
+  it('connects shared term nodes directly, labels relations and searches both model lists', async () => {
+    const other = {...TERM,id:'other',preferredLabel:'Person',relations:[]};
+    const linked = {...TERM,relations:[{id:'relation',relationType:'broader' as const,targetTermId:'other',targetUri:'',targetLabel:'Person'}]};
+    const api = {
+      loadDomain:()=>of(DOMAIN),loadDataProductsForDomain:()=>of([]),loadGlossaryTerms:()=>of([linked,other]),loadDomainAuditEvents:()=>of([]),
+      loadGlossaryTermProposals:()=>of([]),loadDomainModels:()=>of({logicalModels:[{id:'logical',title:'Personalbestand',description:'Mitarbeitende',status:'draft',revision:2,organizationId:'BIT',fieldCount:5}],
+        physicalModels:[{id:'table',title:'s3://demo/personal.parquet',sourceId:'s3',sourceName:'Personaldaten',sourceType:'s3',modelType:'parquet',snapshotId:'snapshot',snapshotRevision:4}]}),
+    };
+    await TestBed.configureTestingModule({imports:[DomainDetailComponent],providers:[provideRouter([]),{provide:DemoIdentityService,useValue:{userId:signal('christian.man')}},{provide:CatalogApiService,useValue:api},{provide:ActivatedRoute,useValue:{snapshot:{paramMap:convertToParamMap({id:DOMAIN_ID})}}}]}).compileComponents();
+    const fixture=TestBed.createComponent(DomainDetailComponent);fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();
+    const root=fixture.nativeElement as HTMLElement;
+    expect(root.querySelectorAll('.graph-node.is-term')).toHaveLength(2);
+    expect(root.querySelectorAll('.graph-node.is-relation')).toHaveLength(0);
+    expect(root.querySelector('.semantic-graph')?.textContent).toContain('hat Oberbegriff');
+    expect(root.querySelector('.sr-only-graph')?.textContent).toContain('hat Oberbegriff zu Person');
+    expect(root.querySelector('a[href="/models/logical"]')).toBeTruthy();
+    expect(root.querySelector('a[href^="/physical-models/s3"]')?.getAttribute('href')).toBe('/physical-models/s3?snapshotId=snapshot&tableId=table');
+    const search=root.querySelector<HTMLInputElement>('.model-search input')!;
+    search.value='PARQUET';search.dispatchEvent(new Event('input'));fixture.detectChanges();
+    expect(root.querySelector('.model-lists')?.textContent).not.toContain('Personalbestand');
+    expect(root.querySelector('.model-lists')?.textContent).toContain('s3://demo/personal.parquet');
+    search.value='mitarbeitende';search.dispatchEvent(new Event('input'));fixture.detectChanges();
+    expect(root.querySelector('.model-lists')?.textContent).toContain('Personalbestand');
+    expect(root.querySelector('.model-lists')?.textContent).not.toContain('s3://demo/personal.parquet');
+    root.querySelector<HTMLButtonElement>('[aria-label="Ontologie vergrössern"]')!.click();fixture.detectChanges();
+    expect(fixture.componentInstance.networkEditor?.zoom()).toBe(1);
+  });
+
+  it('keeps terms available when model loading fails and offers a retry', async () => {
+    const api={loadDomain:()=>of(DOMAIN),loadDataProductsForDomain:()=>of([]),loadGlossaryTerms:()=>of([TERM]),loadDomainAuditEvents:()=>of([]),loadGlossaryTermProposals:()=>of([]),loadDomainModels:vi.fn(()=>throwError(()=>new Error('unavailable')))};
+    await TestBed.configureTestingModule({imports:[DomainDetailComponent],providers:[provideRouter([]),{provide:DemoIdentityService,useValue:{userId:signal('christian.man')}},{provide:CatalogApiService,useValue:api},{provide:ActivatedRoute,useValue:{snapshot:{paramMap:convertToParamMap({id:DOMAIN_ID})}}}]}).compileComponents();
+    const fixture=TestBed.createComponent(DomainDetailComponent);fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();
+    const root=fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('.domain-term-list')?.textContent).toContain(TERM.preferredLabel);
+    expect(root.querySelector('.domain-models [role="alert"]')?.textContent).toContain('konnten nicht geladen');
+    root.querySelector<HTMLButtonElement>('.domain-models button')!.click();expect(api.loadDomainModels).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancels stale scoped model requests when the identity changes', async () => {
+    const first=new Subject<DomainModelMemberships>(),second=new Subject<DomainModelMemberships>();
+    const userId=signal('christian.man');
+    const api={loadDomain:()=>of(DOMAIN),loadDataProductsForDomain:()=>of([]),loadGlossaryTerms:()=>of([]),loadDomainAuditEvents:()=>of([]),loadGlossaryTermProposals:()=>of([]),loadDomainModels:vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)};
+    await TestBed.configureTestingModule({imports:[DomainDetailComponent],providers:[provideRouter([]),{provide:DemoIdentityService,useValue:{userId}},{provide:CatalogApiService,useValue:api},{provide:ActivatedRoute,useValue:{snapshot:{paramMap:convertToParamMap({id:DOMAIN_ID})}}}]}).compileComponents();
+    const fixture=TestBed.createComponent(DomainDetailComponent);fixture.detectChanges();
+    userId.set('daca-test-editor');fixture.detectChanges();
+    expect(api.loadDomainModels).toHaveBeenCalledTimes(2);
+    expect(first.observed).toBe(false);
+    second.next({logicalModels:[],physicalModels:[]});second.complete();fixture.detectChanges();
+    expect(fixture.componentInstance.modelsLoading()).toBe(false);
+    expect(fixture.componentInstance.models().physicalModels).toHaveLength(0);
+    fixture.destroy();expect(second.observed).toBe(false);
+  });
+
 });

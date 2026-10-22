@@ -11,6 +11,31 @@ The RHOS presentation profile stores this model in the `daca_catalog` schema of 
 `evo1_oltp` database. Dedicated deployments continue to use the separate `daca_catalog`
 database and its `public` schema.
 
+## CSV structure inventories (migration 0035)
+
+`0035_csv_physical_models` extends the `physical_sources.adapter_type` check with `csv`
+and adds nullable `import_metadata` JSON on `physical_tables` and `physical_columns`.
+Existing sources, snapshots, mappings and audit history require no backfill and remain unchanged.
+CSV is a metadata upload over HTTP, not a product delivery adapter or live source connection.
+
+The versioned JSON format `daca-structure-csv-v1` stores all original header/value pairs:
+column `records` contains one or more descriptions of the same field, with
+`nullabilityKnown: false`; table `recordsWithoutField` retains declarations lacking a field name.
+Source classifications and value-list names stay original declarations, not policy assignments
+or newly created glossary terms. Character lengths are normalized only for string-like types;
+original lengths/scales (including source inconsistencies) remain in the records. Unknown types
+remain unknown. IFC Logical retains its three-valued semantics. Literal table/column names and
+source-system grouping are preserved; hashes of structured name tuples provide unambiguous keys.
+The `CSV` schema and system database names are inventory namespaces, not inferred live databases.
+
+Preview is read-only. Import validates the complete inventory and organization scope, then
+atomically commits a new source, immutable snapshot, all tables/fields and snapshot audit evidence.
+A content-derived source UUID plus transaction advisory lock makes retries and concurrent identical
+imports within the same organization idempotent. Changed inventories create separate sources;
+live sources and earlier imports are not overwritten. A retired identical source returns a conflict.
+Downgrade will fail if CSV sources remain: resolve their retention explicitly before removing
+support. The JSON columns have no automatic data-loss backfill or conversion.
+
 ## Logical-to-physical consistency decisions
 
 `logical_mapping_inconsistencies` has one current record per logical model root and logical
@@ -80,13 +105,20 @@ edits supersede fixture content; TERMDAT enrichment is future work, never inferr
 Migration `0030_site_glossary` removes only unreferenced legacy UI seed rows from the business
 terminology. A referenced row remains there as independently governed terminology.
 
+Representation membership is independent of field coverage: `logical_model_representations`
+pins a model root to a physical snapshot and table/view/Parquet object, even with zero mappings.
+Migration 0033 backfills the current non-superseded links only; historical mapping evidence remains
+unchanged. Batch workspace saves append memberships and mapping successors in one transaction.
+`physical_tables.row_count` is nullable for old snapshots and PostgreSQL sources; a Parquet import
+reads it from the actual footer. It never denotes the number of S3 objects (`object_count`).
+
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
-- Alembic head: `0032_mapping_inconsistencies`
-- Schema fingerprint: `dcd722fcaa9aa73c`
-- Migration fingerprint: `98308219c4510ea0`
-- Tables: `94`
+- Alembic head: `0035_csv_physical_models`
+- Schema fingerprint: `896608fa6ee605c1`
+- Migration fingerprint: `1c307ddeea93fc09`
+- Tables: `95`
 
 ## Domain status vocabulary
 
@@ -117,7 +149,7 @@ terminology. A referenced row remains there as independently governed terminolog
 - `product_context_graphs.graph` stores deterministic nodes and edges; flexible provenance/audit `details` contain metadata only.
 - `service_level_revisions.definition` stores typed best-effort usage, freshness, support-window, maintenance and review-date commitments. Draft and rejection text remains private; published definitions are immutable and supersession is recorded explicitly.
 - `source_catalog_entries` stores only searchable metadata, locations, synthetic object names and discoverability group IDs; it never stores hosts, credentials or connection strings. `source_access_requests.group_snapshot` and `source_access_grants.group_snapshot` freeze the trusted member IDs and group revision at submission time.
-- `dcat_dataset_versions.creator`, `contact_points` and `publisher` preserve validated typed DCAT metadata; multilingual titles and descriptions remain relational. DaCa domains in `data_domain_id` are never copied into DCAT/I14Y `themes`.
+- `dcat_dataset_versions.creator`, `contact_points` and `publisher` preserve validated typed DCAT metadata; multilingual titles and descriptions remain relational. DaCa domains in `data_domain_id` are never copied into DCAT/I14Y `themes`. Migration 0034 makes this FK nullable for unassigned logical drafts without altering existing values. Assignment appends a model/DCAT successor; review/publication require an active domain. Physical selection is an atomic command, excluded from logical content hashes; explicit source/stable-key memberships and assignment audit references are persisted separately.
 - `i14y_concepts.raw_payload` and `i14y_code_list_entries.raw_payload` retain tolerant source evidence from the public read-only API. A full concept refresh is staged and committed atomically; failed runs do not partially replace the last good cache.
 - Physical source `config_ref` selects server-side configuration and never contains a DSN or credentials. Snapshots and their hierarchy contain technical metadata only, never table rows.
 - Asset mapping M:N rows retain explicit order and role. Validation results and drift references are metadata evidence; a broken state is appended as a successor version instead of mutating a validated revision.
@@ -819,6 +851,16 @@ erDiagram
         string normalized_identifier UK
         datetime updated_at
     }
+    logical_model_representations {
+        uuid id PK
+        string urn UK
+        uuid logical_model_id FK
+        uuid physical_snapshot_id FK
+        uuid physical_table_id FK
+        string content_hash
+        string created_by_user_id FK
+        datetime created_at
+    }
     logical_model_reviews {
         uuid id PK
         uuid logical_model_id FK
@@ -896,6 +938,7 @@ erDiagram
         string relation
     }
     physical_columns {
+        json import_metadata
         uuid id PK
         uuid physical_table_id FK
         string stable_key
@@ -996,9 +1039,11 @@ erDiagram
         string storage_location
         string media_type
         integer object_count
+        bigint row_count
         bigint size_bytes
         string schema_confidence
         json partition_keys
+        json import_metadata
     }
     poc_product_fixtures {
         string id PK
@@ -1335,7 +1380,7 @@ erDiagram
     dcat_datasets ||--o{ dcat_dataset_versions : "dataset_id"
     demo_users ||--o{ dcat_dataset_versions : "data_owner_user_id"
     demo_users o|--o{ dcat_dataset_versions : "deputy_owner_user_id"
-    domains ||--o{ dcat_dataset_versions : "data_domain_id"
+    domains o|--o{ dcat_dataset_versions : "data_domain_id"
     administrative_organizations ||--o{ dcat_dataset_versions : "organization_id"
     dcat_catalogs ||--o{ dcat_datasets : "catalog_id"
     dcat_distributions ||--o{ dcat_distribution_versions : "distribution_id"
@@ -1393,6 +1438,10 @@ erDiagram
     demo_users o|--o{ logical_mapping_inconsistencies : "assigned_steward_user_id"
     logical_model_versions ||--o{ logical_model_assistance_provenance : "logical_model_version_id"
     logical_models ||--o| logical_model_identifier_reservations : "logical_model_id"
+    logical_models ||--o{ logical_model_representations : "logical_model_id"
+    physical_schema_snapshots ||--o{ logical_model_representations : "physical_snapshot_id"
+    physical_tables ||--o{ logical_model_representations : "physical_table_id"
+    demo_users ||--o{ logical_model_representations : "created_by_user_id"
     logical_models ||--o{ logical_model_reviews : "logical_model_id"
     logical_model_versions ||--o| logical_model_reviews : "submitted_version_id"
     domains ||--o{ logical_model_reviews : "domain_id"
@@ -2030,7 +2079,7 @@ Constraints and indexes:
 
 ### `dcat_dataset_versions`
 
-Immutable DCAT dataset revisions containing typed responsibility, organization, classification, contact and publisher metadata.
+Immutable DCAT dataset revisions containing typed responsibility, organization, classification, contact and publisher metadata. Logical drafts may have no domain; review and publication require an active one.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -2042,7 +2091,7 @@ Immutable DCAT dataset revisions containing typed responsibility, organization, 
 | `data_owner_user_id` | `VARCHAR(200)` | no | FK | — |
 | `deputy_owner_user_id` | `VARCHAR(200)` | yes | FK | — |
 | `creator` | `JSON` | no | — | — |
-| `data_domain_id` | `CHAR(32)` | no | FK | — |
+| `data_domain_id` | `CHAR(32)` | yes | FK | — |
 | `department_code` | `VARCHAR(20)` | no | — | — |
 | `organization_id` | `VARCHAR(100)` | no | FK | — |
 | `data_classification` | `VARCHAR(32)` | no | — | — |
@@ -2932,6 +2981,30 @@ Constraints and indexes:
 - Unique `uq_logical_model_identifier_normalized`: `normalized_identifier`
 - Foreign key `logical_model_id` → `logical_models.id`; on delete `CASCADE`
 
+### `logical_model_representations`
+
+Immutable, content-hashed membership binding a logical model root to an exact physical snapshot and object, independent of field mappings.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `urn` | `VARCHAR(700)` | no | UK | — |
+| `logical_model_id` | `CHAR(32)` | no | FK | — |
+| `physical_snapshot_id` | `CHAR(32)` | no | FK | — |
+| `physical_table_id` | `CHAR(32)` | no | FK | — |
+| `content_hash` | `VARCHAR(64)` | no | — | — |
+| `created_by_user_id` | `VARCHAR(200)` | no | FK | — |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Unique `unnamed`: `urn`
+- Unique `uq_model_representation_table`: `logical_model_id, physical_table_id`
+- Foreign key `logical_model_id` → `logical_models.id`; on delete `RESTRICT`
+- Foreign key `physical_snapshot_id` → `physical_schema_snapshots.id`; on delete `RESTRICT`
+- Foreign key `physical_table_id` → `physical_tables.id`; on delete `RESTRICT`
+- Foreign key `created_by_user_id` → `demo_users.id`
+
 ### `logical_model_reviews`
 
 Immutable domain-owner review snapshots, decisions and successor-version references for submitted logical models.
@@ -3094,10 +3167,11 @@ Constraints and indexes:
 
 ### `physical_columns`
 
-Snapshot-bound PostgreSQL column metadata with stable source-relative key and DaCa URN.
+Snapshot-bound PostgreSQL, Parquet or CSV inventory fields with normalized types, stable source-relative keys and DaCa URNs; import_metadata preserves original CSV records and unknown nullability.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
+| `import_metadata` | `JSON` | yes | — | — |
 | `id` | `CHAR(32)` | no | PK | — |
 | `physical_table_id` | `CHAR(32)` | no | FK | — |
 | `stable_key` | `VARCHAR(1800)` | no | — | — |
@@ -3141,7 +3215,7 @@ Constraints and indexes:
 
 ### `physical_domain_assignments`
 
-Explicit physical-table to domain links that remain available before any logical model mapping is created.
+Explicit current domain memberships keyed by physical source and stable table/object key, independent of imported snapshots and field mappings; audited editor assignments append memberships and preserve existing domains.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -3254,7 +3328,7 @@ Constraints and indexes:
 
 ### `physical_sources`
 
-Credential-free physical metadata source definitions with adapter and secret-free configuration reference.
+Credential-free physical metadata source definitions with PostgreSQL/S3/fixture/CSV adapter and secret-free configuration reference; CSV uploads are declared inventory metadata without a live connection.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -3278,7 +3352,7 @@ Credential-free physical metadata source definitions with adapter and secret-fre
 Constraints and indexes:
 
 - Unique `unnamed`: `urn`
-- Check `ck_physical_adapter`: `adapter_type IN ('postgresql', 's3', 'fixture')`
+- Check `ck_physical_adapter`: `adapter_type IN ('postgresql', 's3', 'fixture', 'csv')`
 - Check `ck_physical_source_hash`: `length(content_hash) = 64`
 - Check `ck_physical_source_lifecycle`: `lifecycle IN ('active', 'retired')`
 - Check `ck_physical_source_revision`: `revision >= 1`
@@ -3288,7 +3362,7 @@ Constraints and indexes:
 
 ### `physical_tables`
 
-Snapshot-bound table, view or materialized-view nodes in the physical metadata hierarchy.
+Snapshot-bound PostgreSQL table/view, S3 Parquet object or CSV inventory table metadata; import_metadata retains CSV records without field names. row_count comes only from an actual Parquet footer and is distinct from object_count.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -3303,9 +3377,11 @@ Snapshot-bound table, view or materialized-view nodes in the physical metadata h
 | `storage_location` | `VARCHAR(2000)` | yes | — | — |
 | `media_type` | `VARCHAR(255)` | yes | — | — |
 | `object_count` | `INTEGER` | yes | — | — |
+| `row_count` | `BIGINT` | yes | — | — |
 | `size_bytes` | `BIGINT` | yes | — | — |
 | `schema_confidence` | `VARCHAR(32)` | yes | — | — |
 | `partition_keys` | `JSON` | yes | — | — |
+| `import_metadata` | `JSON` | yes | — | — |
 
 Constraints and indexes:
 
@@ -3907,3 +3983,39 @@ Constraints and indexes:
 - Index `ix_workflow_task_source_access_request` on `source_access_request_id`
 
 <!-- END GENERATED: data-model. -->
+
+### Canvas relationship edits
+
+The atomic mapping-draft save may start a new `draft` successor from a current `draft`, `broken`,
+`review_pending` or `validated` asset-mapping version. It retains the same root identity and appends
+a version; the historical version is never edited, and validation never transfers to the successor.
+The model/snapshot/organization checks and current-version/ETag guards still apply. No new persisted
+shape or schema is introduced for line dragging, hover, context menus or endpoint handles. Deleting
+a persisted relationship uses the existing `superseded` successor; representation bindings survive.
+
+### Domain model browsing and the Personal demo vocabulary
+
+`GET /api/v1/domains/{domain_id}/models` is a read projection over existing current
+logical model/DCAT versions and explicit physical domain assignments joined to the latest
+snapshot per active source. It creates no membership from field mappings. Physical objects
+outside the caller's existing source scope are excluded; logical metadata remains catalog-wide.
+`personnel-glossary-demo-v1` adds ten synthetic `GlossaryTerm` records, German localizations,
+domain memberships, ten `GlossaryTermRelation` rows and creation audit events. Stable IDs and
+a `SeedMarker` make it additive and repeatable without overwriting later governance edits,
+retirements or deleted relationships. No migration or persisted JSON shape change is required.
+
+Structural drift evidence excludes current domain-assignment overlays; reimporting or removing an assigned object retains JSON-safe technical history and does not persist mutable domain membership inside snapshots.
+
+### Concept network editor drafts and layout
+
+Glossary edits continue to persist through `GlossaryTermProposal.requested_payload` and
+`review_payload`, existing per-domain reviews, workflow tasks and append-only audit records.
+The optional API-only `expectedTargetRevision` checks the locked current term at submission;
+it is not a new persisted proposal field and existing callers remain compatible.
+Browser `localStorage` key `daca.concept-network.layout.v1:<user>:<domain>` contains an object
+mapping stable `domain:`, `term:`, `product:` or `uri:` node IDs to finite `{x,y}` top-left
+coordinates. `sessionStorage` key `daca.concept-network.draft.v1:<user>:<domain>` contains
+`{bases: {<termId>: <revision>}, terms: [<GlossaryTermSummary>...]}` for unfinished semantic
+edits. These presentation/draft caches are scoped per user/domain, carry no authorization,
+and are not part of the authoritative catalog schema. Proposals and approval remain server-side;
+open proposals are reloaded from the existing governance API, rather than trusted browser state.

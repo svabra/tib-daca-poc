@@ -31,7 +31,7 @@ describe('MappingDriftComponent repair action', () => {
     const repair = root.querySelector<HTMLButtonElement>('.drift-actions button');
     expect(repair?.textContent).toContain('Zuordnung auflösen');
     repair!.click();
-    expect(facade.editor()).toEqual({ mappingId: broken.id, logicalFieldVersionIds: broken.logicalFieldVersionIds, physicalColumnIds: [] });
+    expect(facade.editor()).toEqual({ mappingId: broken.id, logicalFieldVersionIds: broken.logicalFieldVersionIds, physicalColumnIds: [], physicalSnapshotId: FALLBACK_PHYSICAL_SNAPSHOT.id });
 
     facade.initialize(FALLBACK_LOGICAL_MODEL, FALLBACK_PHYSICAL_SNAPSHOT, [broken], { ...drift, changes: [{ ...drift.changes[0], resolved: true }] });
     fixture.detectChanges();

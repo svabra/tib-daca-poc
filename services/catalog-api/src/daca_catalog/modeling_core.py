@@ -313,7 +313,7 @@ def fixture_s3_parquet_metadata(variant: str | None = None) -> dict[str, Any]:
     if variant == "drift":
         columns.append({"name": "snapshot_date", "dataType": "date32[day]", "nullable": False})
     location = "s3://vat-smoke-test/daca/physical-models/vehicle_inventory.parquet"
-    return {
+    metadata = {
         "databases": [{
             "name": "vat-smoke-test",
             "stableKey": "s3://vat-smoke-test",
@@ -336,6 +336,31 @@ def fixture_s3_parquet_metadata(variant: str | None = None) -> dict[str, Any]:
             }],
         }],
     }
+
+    # Build the offline demo schema from the very same Parquet fixture used by
+    # the S3 seed, so object size, row count and nullability cannot drift apart.
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from .s3_fixture_seed import synthetic_mapping_demo_table
+
+    buffer = pa.BufferOutputStream()
+    pq.write_table(synthetic_mapping_demo_table(), buffer)
+    data = buffer.getvalue()
+    footer = pq.read_metadata(pa.BufferReader(data))
+    location = "s3://vat-smoke-test/daca/physical-models/vehicle_inventory_mapping_demo.parquet"
+    metadata["databases"][0]["schemas"][0]["tables"].append({
+        "name": "vehicle_inventory_mapping_demo.parquet", "stableKey": location,
+        "kind": "parquet", "storageLocation": location, "mediaType": "application/vnd.apache.parquet",
+        "objectCount": 1, "rowCount": footer.num_rows, "sizeBytes": len(data),
+        "schemaConfidence": "embedded", "partitionKeys": [],
+        "comment": "Synthetisches Parquet-Demoobjekt; Grossschreibung demonstriert namensgleiches Mapping.",
+        "columns": [{"name": field.name, "dataType": str(field.type), "nullable": field.nullable,
+                     "numericPrecision": field.type.precision if pa.types.is_decimal(field.type) else None,
+                     "numericScale": field.type.scale if pa.types.is_decimal(field.type) else None}
+                    for field in footer.schema.to_arrow_schema()],
+    })
+    return metadata
 
 
 class FixtureS3PhysicalMetadataAdapter:
@@ -398,7 +423,8 @@ class S3ParquetPhysicalMetadataAdapter:
         for item in sorted(entries, key=lambda value: value.path):
             object_key = item.path.removeprefix(f"{self._bucket}/")
             parent = posixpath.dirname(object_key) or "(bucket root)"
-            parquet_schema = pq.read_schema(item.path, filesystem=filesystem)
+            footer = pq.read_metadata(item.path, filesystem=filesystem)
+            parquet_schema = footer.schema.to_arrow_schema()
             columns: list[dict[str, Any]] = []
             for position, field in enumerate(parquet_schema, start=1):
                 raw_type = str(field.type)
@@ -427,6 +453,7 @@ class S3ParquetPhysicalMetadataAdapter:
                 "storageLocation": location,
                 "mediaType": "application/vnd.apache.parquet",
                 "objectCount": 1,
+                "rowCount": footer.num_rows,
                 "sizeBytes": item.size,
                 "schemaConfidence": "embedded",
                 "partitionKeys": partition_keys,
@@ -603,13 +630,14 @@ def normalized_physical_metadata(raw: Mapping[str, Any]) -> dict[str, Any]:
                             "stableKey": str(column.get("stableKey") or f"{table_key}.{column_name}"),
                             "name": column_name,
                             "rawDataType": raw_type,
-                            "normalizedDataType": normalize_postgresql_type(raw_type),
+                            "normalizedDataType": column.get("normalizedDataType") or normalize_postgresql_type(raw_type),
                             "characterLength": column.get("characterLength"),
                             "numericPrecision": column.get("numericPrecision"),
                             "numericScale": column.get("numericScale"),
                             "nullable": bool(column.get("nullable", True)),
                             "ordinalPosition": int(column.get("ordinalPosition", fallback_position)),
                             "comment": column.get("comment"),
+                            "importMetadata": column.get("importMetadata"),
                         }
                     )
                 tables.append(
@@ -618,10 +646,12 @@ def normalized_physical_metadata(raw: Mapping[str, Any]) -> dict[str, Any]:
                         "name": table_name,
                         "kind": table.get("kind", "table"),
                         "comment": table.get("comment"),
+                        "importMetadata": table.get("importMetadata"),
                         "position": table_position,
                         "storageLocation": table.get("storageLocation"),
                         "mediaType": table.get("mediaType"),
                         "objectCount": table.get("objectCount"),
+                        "rowCount": table.get("rowCount"),
                         "sizeBytes": table.get("sizeBytes"),
                         "schemaConfidence": table.get("schemaConfidence"),
                         "partitionKeys": list(table.get("partitionKeys") or []),

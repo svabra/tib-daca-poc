@@ -1,4 +1,6 @@
 import {
+  afterNextRender,
+  Injector,
   ChangeDetectionStrategy,
   Component,
   ElementRef,
@@ -59,6 +61,7 @@ let tooltipSequence = 0;
 })
 export class DacaGlossaryTermComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   readonly term = input.required<string>();
   readonly display = input<string | null>(null);
   readonly explanation = input<string | null>(null);
@@ -72,7 +75,7 @@ export class DacaGlossaryTermComponent {
 
   open(): void {
     this.visible.set(true);
-    queueMicrotask(() => this.position());
+    afterNextRender(() => this.position(), { injector: this.injector });
   }
 
   toggle(event: Event): void {

@@ -601,3 +601,8 @@ export interface SourceAccessRequest {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface DomainModelMemberships {
+  logicalModels: readonly { id: string; title: string; description: string; status: string; revision: number; organizationId: string; fieldCount: number }[];
+  physicalModels: readonly { id: string; title: string; sourceId: string; sourceName: string; sourceType: string; modelType: string; snapshotId: string; snapshotRevision: number }[];
+}

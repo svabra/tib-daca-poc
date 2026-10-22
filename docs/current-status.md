@@ -5,6 +5,132 @@ fixtures in the control-plane prototype remain inspectable, but they do not defi
 operating model or transfer catalog resources. Catalog UI, glossary, footer and metadata now use
 the central-catalog description in all supported languages.
 
+## Release 0.1.30
+
+The release highlights cover CSV physical-model imports, multiple physical representations,
+editable mapping connections, free canvas layout with fullscreen/print, model domain assignments
+and searchable domain inventories, and the editable concept network with governed terminology drafts.
+The version overlay and searchable release archive describe these capabilities in German and English;
+0.1.29 remains available in the release history.
+
+## Physical-model CSV loader
+
+On the source page, the CSV import button sits below both information notices and immediately
+before the source register, keeping the page title first.
+
+Models and the visible-source register now expose **Physische Modelle aus CSV laden** with a native
+modal, file validation, organization selection and a searchable table/field preview. Import is an
+explicit action; cancellation has no persistence effects. UTF-8/BOM and Windows-1252 inventories,
+quoted multiline descriptions and Excel CRCRLF record separators are supported. The corrected
+Gebäude.csv contains 31 tables, 270 declarations and 267 unique fields across SAP, ImmoGIS and BIM.
+Duplicate compatible field definitions retain all source records; conflicting definitions reject the
+whole file. Two entries without field names remain table notes. Missing nullability is shown as
+unknown, and raw SAP/IFC types, source lengths/scales, classifications and value-list names stay
+inspectable. CSV models use the existing snapshot explorer, representation picker and mappings.
+The explorer preserves multiple source-system namespaces and opens the first imported object.
+
+The HTTP metadata loader enforces modeling organization permissions, size/row/table limits and
+preview fingerprints. One atomic transaction writes a CSV source, immutable snapshot, tables,
+fields and audit evidence. Concurrent identical imports in the same scope reopen the same snapshot;
+changed inventories create separate sources. Live PostgreSQL/S3 imports are unaffected. Migration
+0035 adds CSV source support and nullable original-metadata JSON, with no historical backfill.
+
+## Physical representations in the canvas
+
+The blank-canvas/model-header context menu opens a source/object picker.
+All attached PostgreSQL and S3/Parquet structures appear together. Unique case-insensitive exact
+names become local draft links, including visible type conflicts; ambiguous names remain manual.
+The dialog and source explorer share metadata-only object inspection. An explicit membership
+preserves objects without field links. **Entwurf speichern** commits bindings and mapping drafts
+atomically; failures preserve local changes, and leaving warns before discarding unsaved work.
+Model and mapping version checks and existing organizational permissions remain server-enforced.
+
+Assigned mapping-type values in the table and inspector expose the same central explanations on
+hover, keyboard focus or tap using the shared glossary tooltip. Graph lines expose the assigned
+type and explanation in their SVG tooltip and accessible label; selected-type controls and options
+also carry the description. On small screens, type triggers retain a 40 px touch target. Tooltips
+are positioned from their rendered bounds so the assigned value remains visible. Inspecting a type
+never changes the mapping or creates a draft.
+
+Connection lines have an invisible 14 px hit area; only the visible line thickens temporarily
+on hover; keyboard focus has a separate outline. Right-click or Shift+F10 opens relationship actions with a mapping-type
+selector, a plain-language description and, where applicable, a transformation/lookup-rule input.
+Selecting a line exposes both draggable ends. Each end can be moved to another field in the same
+logical model or the same physical table/object and snapshot; the menu provides equivalent field
+selectors for keyboard use. Invalid drops, duplicate field pairs, Escape and pointer cancellation
+preserve the previous connection. Type, rule and endpoint edits remain local until **Entwurf
+speichern**, which creates an unvalidated successor even for a previously validated or submitted
+mapping; history, snapshot identity, version checks and write permissions remain intact.
+
+**Beziehung löschen** removes a local relationship immediately or confirms retirement of a saved
+relationship into its superseded history. Physical representation bindings remain. For a mapping
+with one logical field and several physical targets, deletion removes only the selected target;
+remaining targets become a local draft. Shared multi-field mappings are identified in the menu:
+type/rule changes apply to the whole mapping, rewiring replaces the selected field in that mapping,
+and deleting such a shared relationship retires the entire mapping after confirmation.
+
+A stationary **+** control at the canvas viewport’s top right opens fullscreen (**−** exits).
+The adjacent printer control prints only the complete visible graph and its model-specific canvas
+title, fitted to one A4 landscape sheet, including cards outside the current scroll viewport.
+A compact federal-administration logo appears at the upper left; the upper right reads
+**Datenkatalog**, with **Data Platform BIT** below it. The print header separately labels the
+logical model's last saved update and revision (**Modellstand**) and the current **Druckdatum**,
+both in Swiss date format and the Europe/Zurich time zone. Header space is reserved before scaling
+the graph; the logo is loaded before printing.
+Hidden representations, editor panels and canvas controls are omitted. Connections use thin
+1 px lines (1.5 px when selected) and attach to the facing sides of cards: a representation to
+the left uses the logical field’s left port and the physical column’s right port. Simultaneous
+left/right representations use both logical ports. Drag logical and physical card headers
+to arrange the canvas, or use arrow keys on a focused header (Shift for larger steps). Connections
+follow their field ports. Clicking or opening the context menu on a physical card offers
+**Darstellung der physischen Repräsentation entfernen**; this hides its drawing and connections
+without deleting bindings or mappings or creating an unsaved draft. Selecting it in the
+representation list restores the card. Layout and visibility survive Graph/Table/Drift switches
+within the workspace; they reset when the workspace is reloaded. New representations are added
+through the blank-canvas or logical-header context menu (also Shift+F10).
+
+The Parquet seed targets the existing configured S3 store and only writes the dedicated
+`vehicle_inventory_mapping_demo.parquet` object, with three synthetic rows and uppercase fields.
+A real import persists footer row count, replacing the former misleading object-count-as-row-count
+label. The optional existing-S3 Compose overlay connects DaCa to a running store without creating
+another storage service. Migration 0033 backfills current non-superseded representation bindings.
+
+
+When **Entwurf speichern** is disabled, hovering over it or focusing it with Tab explains the
+active blocker: no unsaved representation/mapping changes, loading or saving, the local fallback,
+a locked model lifecycle state, or missing organizational write scope. Escape dismisses the hint.
+The same check controls the button and save handler. Existing persisted drafts, type conflicts and
+drift do not independently block saving new local drafts.
+
+### Domain actions in the mapping editor
+
+Logical and physical card headers display their current catalog domain (or explicitly show that
+none is assigned). Right-click or Shift+F10 on the logical header or a physical card offers
+**Domäne zuordnen** only when unassigned and writable; existing domains offer **Zugehörige Domäne
+anzeigen**, opening the domain detail in a separate tab. Menu hover and keyboard focus highlight
+the whole enabled row with a red background, left edge and underlined label.
+
+Assigning a logical model opens a modal that preselects all writable physical representations,
+including hidden cards and memberships without field links. Uncheck any object to leave its
+physical domain membership unchanged. Retired sources are disabled with a reason. Existing
+physical domains are retained; the chosen domain is added explicitly. The same selection appears
+before saving a changed domain in the full model editor or saving a physically derived model.
+Cancel writes nothing. Domain actions preserve local mapping drafts, positions and visibility.
+
+Physical assignments reuse `physical_domain_assignments`, keyed by source and stable table/object
+key, so imported snapshots remain immutable and subsequent imports retain the catalog assignment.
+Physical membership is explicit, never inferred merely from a field mapping. Logical assignment
+creates an immutable model/DCAT successor and rebases mappings; the response contains persisted
+versions so local drafts can be rebased without discarding them. It does not transfer model
+ownership; the domain register still determines the reviewer. The server validates active domains,
+organization/write scope, source lifecycle, snapshot membership, model ETags and physical-assignment
+hashes. The selected set is committed atomically; conflicts retain the dialog and local drafts.
+
+Migration **0034_unassigned_model_domains** permits `dcat_dataset_versions.data_domain_id` to be
+NULL for logical drafts awaiting assignment. Existing domain values and history are unchanged;
+there is no automatic backfill from logical mappings to physical domains. Review/publication
+still requires an active domain. Downgrade requires resolving any unassigned drafts first.
+
 ## Catalog documentation and responsibilities
 
 Glossary-word triggers now use a light-gray wavy underline. Tooltip and glossary navigation behavior is unchanged; DAAIF applies the same visual marker to its separate application glossary.
@@ -146,9 +272,9 @@ marks the technical I14Y decision as provisional no-match, creates the logical d
 pinned 1:1 mappings in one transaction, and routes straight to the mapping workspace. The graph
 describes the forward edge as `1:1 · wird repräsentiert durch`; its reverse reading is
 `abgeleitet aus`. One logical
-model can list and switch among multiple versioned physical representations; exact type-compatible
-name matches are reviewed before becoming ordinary local drafts, with M:N and transformation
-mappings still available manually.
+model displays multiple versioned physical representations together; unique case-insensitive exact
+name matches become local drafts immediately, including visible type conflicts. Ambiguous names,
+M:N and transformation mappings remain manual. The active representation selects the drift view.
 The physical snapshot card in the mapping graph names the scope's Data Owner, displays the
 matching data-source-type icon, and shows the complete canonical catalog path and pinned revision.
 Graph edges use the rendered connector centres, keeping their endpoints aligned after metadata
@@ -219,3 +345,36 @@ browser journey and keeps failure evidence for three days only. Persistence chan
 Keep this file, `README.md`, the relevant design document, and the feature list current whenever
 a user-visible workflow changes. The catalogue's required model-level reference is generated under
 `docs/data-model/`; do not edit generated sections by hand.
+
+
+The domain detail page lists explicitly assigned logical models and visible physical models,
+with a shared search over names, descriptions, source and type. Logical membership uses the
+current model revision; physical membership uses `PhysicalDomainAssignment` and the latest
+source snapshot, including objects without mappings. It follows the existing catalog-wide
+logical metadata and scoped physical-source read rules; historical/removed objects are not
+duplicated. Links open the logical editor or the exact snapshot/object in the source explorer.
+The Personal demo includes ten deterministic synthetic glossary terms and ten SKOS relations
+(person, employees, employment, personnel number, organizational unit, position, function,
+employment percentage and entry/exit dates). The ontology renders shared term nodes with
+labelled direct relationships, zoom/scroll controls and a readable text equivalent. The
+idempotent `personnel-glossary-demo-v1` seed preserves subsequent edits and retirements;
+these are local demo concepts, not asserted TERMDAT or I14Y imports.
+
+Structural drift evidence excludes current domain-assignment overlays; reimporting or removing an assigned object retains JSON-safe technical history and does not persist mutable domain membership inside snapshots.
+
+
+The domain concept network now uses an interactive editor canvas: every domain-to-term and
+term-to-term edge is explicitly drawn with a label and endpoints. All cards (including domain,
+product and external-reference cards) can be freely moved with pointer or arrow keys. Connections
+follow their facing sides; wide invisible hit regions keep thin edges selectable, with hover
+emphasis, context-menu SKOS type/target/source editing and deletion. Both endpoints can be
+rewired onto other terms in the same domain. Term names and definitions are editable while
+preserving other language labels and domain memberships. The canvas provides sticky fullscreen
+plus/print controls, zoom, automatic layout, keyboard menus and a text alternative.
+Layout is browser-local per identity/domain; unfinished semantic drafts survive a reload in the
+same tab and are protected on navigation. `Änderungen einreichen` submits existing glossary
+update proposals with an expected term revision. It never directly publishes terminology;
+the existing responsible domain owners still approve the proposals. Open proposals by the
+current author reload as an explicitly pending preview with review links. If one of several
+term submissions fails, already submitted proposals are retained and only remaining drafts
+are retried. No new terminology store or SQL schema is introduced.

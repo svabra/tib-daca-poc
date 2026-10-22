@@ -6,7 +6,9 @@ vi.mock('@bit-daca/design-system',async()=>{
   const {Component}=await import('@angular/core');
   class StatusBadgeStub{}
   Component({selector:'daca-status-badge',standalone:true,template:'<ng-content />',inputs:['tone']})(StatusBadgeStub);
-  return{StatusBadgeComponent:StatusBadgeStub};
+  class GlossaryTermStub {term='';explanation='';}
+  Component({selector:'daca-glossary-term',standalone:true,inputs:['term','explanation'],template:'<span [title]="explanation">{{term}}</span>'})(GlossaryTermStub);
+  return{StatusBadgeComponent:StatusBadgeStub,DacaGlossaryTermComponent:GlossaryTermStub};
 });
 
 describe('mapping workspace snapshot contract', () => {

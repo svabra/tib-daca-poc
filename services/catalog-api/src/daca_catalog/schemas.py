@@ -1435,6 +1435,7 @@ class GlossaryTermDraft(ApiModel):
 
 
 class GlossaryTermProposalCreate(ApiModel):
+    expected_target_revision: int | None = Field(default=None, ge=1)
     operation: Literal["create", "update", "retire"] = "create"
     target_term_id: uuid.UUID | None = None
     source_product_id: uuid.UUID | None = None

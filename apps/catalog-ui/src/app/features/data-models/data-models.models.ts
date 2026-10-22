@@ -1,3 +1,4 @@
+import { CsvImportMetadata } from './physical-csv.models';
 export interface MultiLanguageText {
   de: string;
   fr: string;
@@ -217,7 +218,8 @@ export interface LogicalModelWrite {
   department: string;
   office: string;
   organizationUnitId?: string;
-  dataDomainId: string;
+  dataDomainId: string | null;
+  physicalDomainTargets?: PhysicalDomainTarget[];
   dataOwnerId: string;
   deputyDataOwnerId: string | null;
   creator: LogicalModelCreator | null;
@@ -240,6 +242,8 @@ export interface LogicalModelWrite {
 }
 
 export interface PhysicalColumn {
+  rawDataType?: string;
+  importMetadata?: CsvImportMetadata | null;
   id: string;
   name: string;
   ordinalPosition: number;
@@ -251,15 +255,25 @@ export interface PhysicalColumn {
   comment: string | null;
 }
 
+export interface ModelDomainReference extends NamedReference { lifecycle: 'active' | 'retired'; }
+export interface PhysicalDomainState { dataDomains: ModelDomainReference[]; domainVersion: string; }
+export interface PhysicalDomainTarget { physicalTableId: string; physicalSnapshotId: string; expectedDomainVersion: string; }
+
 export interface PhysicalTable {
+  importMetadata?: CsvImportMetadata | null;
   id: string;
   stableKey: string;
+  dataDomains?: ModelDomainReference[];
+  domainVersion?: string;
+  domainAssignable?: boolean;
+  databaseName?: string;
   schemaName: string;
   name: string;
   kind: 'table' | 'view' | 'materialized_view' | 'parquet';
   storageLocation: string | null;
   mediaType: string | null;
   objectCount: number | null;
+  rowCount?: number | null;
   sizeBytes: number | null;
   schemaConfidence: 'declared' | 'embedded' | 'inferred' | null;
   partitionKeys: string[];
@@ -273,7 +287,7 @@ export interface PhysicalSnapshot {
   sourceName: string;
   dataOwnerName: string | null;
   catalogPath: string;
-  sourceType: 'postgresql' | 's3' | 'fixture';
+  sourceType: 'postgresql' | 's3' | 'fixture' | 'csv';
   systemName: string;
   databaseName: string;
   revision: number;
@@ -290,7 +304,7 @@ export interface PhysicalSource {
   revision: number;
   name: string;
   description?: string | null;
-  connectorType: 'postgresql' | 's3' | 'oracle' | 'fixture';
+  connectorType: 'postgresql' | 's3' | 'oracle' | 'fixture' | 'csv';
   systemName: string;
   databaseName: string;
   department: string;

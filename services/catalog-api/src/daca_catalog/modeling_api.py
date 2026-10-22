@@ -17,11 +17,13 @@ from .i14y_concepts import (
     normalize_code_list_export,
     normalize_concept,
 )
+from .mapping_inconsistencies import rebase_mapping_versions, sync_mapping_inconsistencies
 from .modeling_core import (
     FixturePhysicalMetadataAdapter,
     PostgreSQLPhysicalMetadataAdapter,
     S3ParquetPhysicalMetadataAdapter,
 )
+from .modeling_domains import apply_domain_targets
 from .modeling_rdf import content_type, export_logical_dcat, export_logical_shacl
 from .modeling_schemas import (
     AssetMappingCollection,
@@ -48,7 +50,6 @@ from .modeling_schemas import (
     PhysicalSourceCollection,
 )
 from .modeling_seed import VIBDBU_PHYSICAL_SOURCE_ID
-from .mapping_inconsistencies import rebase_mapping_versions, sync_mapping_inconsistencies
 from .modeling_service import (
     clone_logical_version,
     clone_mapping_version,
@@ -210,6 +211,8 @@ def _normalize_logical_write_scope(session: Session, body: LogicalModelWrite) ->
     body.organization_unit_id = organization.id
     body.organization_id = organization.id
     body.department_code = organization.department_code
+    if body.data_domain_id is None:
+        return
     domain = session.get(Domain, body.data_domain_id)
     if domain is None or domain.lifecycle != "active":
         raise HTTPException(422, "dataDomainId must identify an active DaCa domain")
@@ -622,6 +625,7 @@ def create_modeling_router() -> APIRouter:
         )
         _validate_owner_assignments(session, body)
         model, version = create_logical_model(session, body, actor)
+        apply_domain_targets(session, actor, body.data_domain_id, body.physical_domain_targets, body.department_code, body.organization_id)
         session.commit()
         response.headers["ETag"] = _etag(version.lock_version)
         return logical_version_payload(session, model, version)
@@ -708,6 +712,11 @@ def create_modeling_router() -> APIRouter:
         version = get_logical_version(session, model.id, version_id, lock=True)
         _require_version_scope(session, actor, version)
         _require_scope(session, actor, body.department_code, body.organization_id)
+        existing_dataset = _dataset_version(session, version)
+        if existing_dataset.data_domain_id is not None or body.data_domain_id is not None:
+            # Domain membership and its reviewer do not transfer model ownership.
+            body.data_owner_user_id = existing_dataset.data_owner_user_id
+            body.deputy_owner_user_id = existing_dataset.deputy_owner_user_id
         _validate_owner_assignments(session, body)
         _require_etag(if_match, version.lock_version)
         if version.revision != model.revision:
@@ -731,6 +740,7 @@ def create_modeling_router() -> APIRouter:
             actor,
             action="draft-revised",
         )
+        apply_domain_targets(session, actor, body.data_domain_id, body.physical_domain_targets, body.department_code, body.organization_id)
         rebase_mapping_versions(session, model, successor, actor)
         sync_mapping_inconsistencies(session, model.id)
         session.commit()
@@ -767,7 +777,7 @@ def create_modeling_router() -> APIRouter:
             action="submitted",
         )
         dataset = _dataset_version(session, successor)
-        domain = session.get(Domain, dataset.data_domain_id)
+        domain = session.get(Domain, dataset.data_domain_id) if dataset.data_domain_id else None
         if domain is None or domain.lifecycle != "active":
             raise HTTPException(409, "The selected domain is no longer active")
         review = LogicalModelReview(
@@ -840,9 +850,10 @@ def create_modeling_router() -> APIRouter:
                 if latest is not None
                 else None
             )
-            system_name = "S3 Object Storage" if source.adapter_type == "s3" else "PostgreSQL"
+            system_name = "CSV-Strukturimport" if source.adapter_type == "csv" else "S3 Object Storage" if source.adapter_type == "s3" else "PostgreSQL"
             catalog_path = (
-                f"s3://{database_name}/"
+                source.urn if source.adapter_type == "csv"
+                else f"s3://{database_name}/"
                 if source.adapter_type == "s3" and database_name
                 else f"postgresql://{database_name}/"
                 if database_name
@@ -896,6 +907,8 @@ def create_modeling_router() -> APIRouter:
             roles={"data_owner", "deputy_data_owner", "data_steward"},
         )
         _require_etag(if_match, source.revision)
+        if source.adapter_type == "csv":
+            raise HTTPException(422, "CSV-Strukturen werden über den CSV-Loader mit Dateivorschau importiert.")
         settings = request.app.state.settings
         if source.adapter_type == "postgresql":
             if settings.daca_physical_metadata_adapter not in {"postgresql", "all"}:
@@ -976,7 +989,7 @@ def create_modeling_router() -> APIRouter:
         actor: ActorDep,
         q: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
         source_type: Annotated[
-            str | None, Query(alias="sourceType", pattern="^(fixture|postgresql|s3)$")
+            str | None, Query(alias="sourceType", pattern="^(fixture|postgresql|s3|csv)$")
         ] = None,
     ) -> dict[str, Any]:
         """Search the latest imported structures using catalog metadata only."""
@@ -1385,6 +1398,7 @@ def create_modeling_router() -> APIRouter:
         )
         _validate_owner_assignments(session, logical_body)
         model, version = create_logical_model(session, logical_body, actor)
+        apply_domain_targets(session, actor, logical_body.data_domain_id, logical_body.physical_domain_targets, logical_body.department_code, logical_body.organization_id)
         logical_fields = list(
             session.scalars(
                 select(LogicalFieldVersion)
@@ -1512,7 +1526,7 @@ def create_modeling_router() -> APIRouter:
                     )
                 )
             }
-            matched_domain = session.get(Domain, dataset_version.data_domain_id)
+            matched_domain = session.get(Domain, dataset_version.data_domain_id) if dataset_version.data_domain_id else None
             if (
                 field_names == physical_names
                 and matched_domain is not None

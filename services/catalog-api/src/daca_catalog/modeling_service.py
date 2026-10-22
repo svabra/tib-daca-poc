@@ -17,6 +17,7 @@ from .modeling_core import (
     normalized_physical_metadata,
     stable_uuid,
 )
+from .modeling_domains import domain_reference, physical_domain_state
 from .modeling_schemas import (
     AssetMappingWrite,
     LogicalModelWrite,
@@ -47,12 +48,13 @@ from .models import (
     LogicalEntityVersion,
     LogicalField,
     LogicalFieldVersion,
+    LogicalMappingInconsistency,
     LogicalModel,
     LogicalModelAssistanceProvenance,
     LogicalModelIdentifierReservation,
+    LogicalModelRepresentation,
     LogicalModelReview,
     LogicalModelVersion,
-    LogicalMappingInconsistency,
     PhysicalColumn,
     PhysicalDatabase,
     PhysicalDriftChange,
@@ -222,6 +224,8 @@ def logical_version_payload(session: Session, model: LogicalModel, version: Logi
             AssetMapping.logical_model_id == model.id, AssetMapping.lifecycle == "active"
         )
     )
+    has_mapping = has_mapping or session.scalar(select(LogicalModelRepresentation.id).where(
+        LogicalModelRepresentation.logical_model_id == model.id).limit(1)) is not None
     distributions = list(
         session.execute(
             select(DcatDistributionVersion, DcatDistribution)
@@ -266,6 +270,7 @@ def logical_version_payload(session: Session, model: LogicalModel, version: Logi
         "organizationId": dataset_version.organization_id,
         "organizationUnitId": dataset_version.organization_id,
         "dataDomainId": dataset_version.data_domain_id,
+        "dataDomainLabel": domain_reference(session, dataset_version.data_domain_id)["displayName"] if dataset_version.data_domain_id else None,
         "dataClassification": dataset_version.data_classification,
         "hasPhysicalMapping": bool(has_mapping),
         "mappingInconsistencyCount": session.scalar(
@@ -425,7 +430,8 @@ def logical_summary_payload(session: Session, model: LogicalModel,
         "hasPhysicalMapping": session.scalar(select(AssetMapping.id).where(
             AssetMapping.logical_model_id == model.id,
             AssetMapping.lifecycle == "active",
-        ).limit(1)) is not None,
+        ).limit(1)) is not None or session.scalar(select(LogicalModelRepresentation.id).where(
+            LogicalModelRepresentation.logical_model_id == model.id).limit(1)) is not None,
         "mappingInconsistencyCount": session.scalar(select(func.count(LogicalMappingInconsistency.id)).where(
             LogicalMappingInconsistency.logical_model_id == model.id,
             LogicalMappingInconsistency.status != "resolved",
@@ -495,7 +501,7 @@ def create_dcat_dataset_version(
         {
             "identifiers": body.identifiers,
             "localizations": [item.model_dump(mode="json") for item in body.localizations],
-            "dataDomainId": str(body.data_domain_id),
+            "dataDomainId": str(body.data_domain_id) if body.data_domain_id else None,
             "revision": revision,
         }
     )
@@ -517,8 +523,8 @@ def create_dcat_dataset_version(
         dataset.revision = revision
         dataset.content_hash = digest
         dataset.updated_at = utc_now()
-    domain = session.get(Domain, body.data_domain_id)
-    if domain is None or domain.lifecycle != "active":
+    domain = session.get(Domain, body.data_domain_id) if body.data_domain_id else None
+    if body.data_domain_id is not None and (domain is None or domain.lifecycle != "active"):
         raise HTTPException(422, "dataDomainId must identify an active DaCa domain")
     version = DcatDatasetVersion(
         id=uuid.uuid4(),
@@ -556,8 +562,8 @@ def populate_dcat_dataset_version(
     if dataset_version is None:
         raise HTTPException(500, "Logical model is missing its DCAT dataset version")
     dataset = session.get(DcatDataset, dataset_version.dataset_id)
-    domain = session.get(Domain, body.data_domain_id)
-    if dataset is None or domain is None or domain.lifecycle != "active":
+    domain = session.get(Domain, body.data_domain_id) if body.data_domain_id else None
+    if dataset is None or (body.data_domain_id is not None and (domain is None or domain.lifecycle != "active")):
         raise HTTPException(422, "dataDomainId must identify an active DaCa domain")
     digest = canonical_hash(
         {
@@ -758,7 +764,7 @@ def create_logical_model(
 ) -> tuple[LogicalModel, LogicalModelVersion]:
     model_id = model_id or uuid.uuid4()
     now = utc_now()
-    content_hash = canonical_hash(body.model_dump(mode="json", by_alias=True))
+    content_hash = canonical_hash(body.model_dump(mode="json", by_alias=True, exclude={"physical_domain_targets"}))
     model = LogicalModel(
         id=model_id,
         urn=f"urn:daca:logical-model:{model_id}",
@@ -920,7 +926,7 @@ def write_logical_version(
     if existing_structure:
         raise HTTPException(409, "Logical model versions are immutable")
     populate_dcat_dataset_version(session, version, body)
-    serialized = body.model_dump(mode="json", by_alias=True)
+    serialized = body.model_dump(mode="json", by_alias=True, exclude={"physical_domain_targets"})
     content_hash = canonical_hash(serialized)
     version.comment = body.comment
     version.content_hash = content_hash
@@ -1221,6 +1227,8 @@ def create_logical_successor(
         raise HTTPException(422, "Source version does not belong to the logical model")
     if model.lifecycle != "active":
         raise HTTPException(409, "A retired logical model cannot be changed")
+    if status in {"review_pending", "published"} and body.data_domain_id is None:
+        raise HTTPException(422, "Assign an active domain before review or publication")
     if status not in {"draft", "review_pending", "changes_requested", "published", "superseded", "retired"}:
         raise HTTPException(422, "Unsupported logical model status")
     source_dataset_version = session.get(DcatDatasetVersion, source.dataset_version_id)
@@ -1243,7 +1251,7 @@ def create_logical_successor(
         lock_version=model.revision,
         status="draft",
         identifier_mode=body.identifier_mode,
-        content_hash=canonical_hash(body.model_dump(mode="json", by_alias=True)),
+        content_hash=canonical_hash(body.model_dump(mode="json", by_alias=True, exclude={"physical_domain_targets"})),
         created_by_user_id=actor,
         updated_by_user_id=actor,
         created_at=utc_now(),
@@ -1345,14 +1353,18 @@ def snapshot_tree(session: Session, snapshot: PhysicalSchemaSnapshot) -> dict[st
                     {
                         "id": table.id,
                         "stableKey": table.stable_key,
+                        "domainAssignable": source is not None and source.lifecycle == "active",
+                        **physical_domain_state(session, snapshot.source_id, table.stable_key),
                         "urn": table.urn,
                         "name": table.name,
                         "kind": table.kind,
                         "comment": table.comment,
+                        "importMetadata": table.import_metadata,
                         "position": table.position,
                         "storageLocation": table.storage_location,
                         "mediaType": table.media_type,
                         "objectCount": table.object_count,
+                        "rowCount": table.row_count,
                         "sizeBytes": table.size_bytes,
                         "schemaConfidence": table.schema_confidence,
                         "partitionKeys": table.partition_keys or [],
@@ -1370,6 +1382,7 @@ def snapshot_tree(session: Session, snapshot: PhysicalSchemaSnapshot) -> dict[st
                                 "nullable": column.nullable,
                                 "ordinalPosition": column.ordinal_position,
                                 "comment": column.comment,
+                                "importMetadata": column.import_metadata,
                             }
                             for column in columns
                         ],
@@ -1413,7 +1426,8 @@ def snapshot_tree(session: Session, snapshot: PhysicalSchemaSnapshot) -> dict[st
         else None
     )
     catalog_path = (
-        f"s3://{database_name}/"
+        source.urn if source is not None and source.adapter_type == "csv"
+        else f"s3://{database_name}/"
         if source is not None and source.adapter_type == "s3" and database_name
         else f"postgresql://{database_name}/"
         if database_name
@@ -1457,7 +1471,8 @@ def snapshot_metadata_for_diff(session: Session, snapshot: PhysicalSchemaSnapsho
                                 **{
                                     key: value
                                     for key, value in table.items()
-                                    if key not in {"id", "urn", "columns"}
+                                    # Current catalog assignments are not imported structure metadata.
+                                    if key not in {"id", "urn", "columns", "dataDomains", "domainVersion", "domainAssignable"}
                                 },
                                 "columns": [
                                     {
@@ -1542,10 +1557,12 @@ def persist_physical_import(
                     name=table_data["name"],
                     kind=table_data["kind"],
                     comment=table_data["comment"],
+                    import_metadata=table_data.get("importMetadata"),
                     position=table_data["position"],
                     storage_location=table_data.get("storageLocation"),
                     media_type=table_data.get("mediaType"),
                     object_count=table_data.get("objectCount"),
+                    row_count=table_data.get("rowCount"),
                     size_bytes=table_data.get("sizeBytes"),
                     schema_confidence=table_data.get("schemaConfidence"),
                     partition_keys=table_data.get("partitionKeys") or [],
@@ -1570,6 +1587,7 @@ def persist_physical_import(
                             nullable=column_data["nullable"],
                             ordinal_position=column_data["ordinalPosition"],
                             comment=column_data["comment"],
+                            import_metadata=column_data.get("importMetadata"),
                         )
                     )
     session.flush()
@@ -1779,7 +1797,7 @@ def drift_report_payload(session: Session, snapshot: PhysicalSchemaSnapshot) -> 
 
 
 def create_asset_mapping(
-    session: Session, body: AssetMappingWrite, actor: str
+    session: Session, body: AssetMappingWrite, actor: str, *, mapping_id: uuid.UUID | None = None
 ) -> tuple[AssetMapping, AssetMappingVersion]:
     logical_version = session.get(LogicalModelVersion, body.logical_model_version_id)
     snapshot = session.get(PhysicalSchemaSnapshot, body.physical_snapshot_id)
@@ -1790,7 +1808,7 @@ def create_asset_mapping(
         raise HTTPException(422, "Mapping references an unknown logical model")
     if logical_model.lifecycle != "active":
         raise HTTPException(409, "A mapping cannot be created for a retired logical model")
-    mapping_id = uuid.uuid4()
+    mapping_id = mapping_id or uuid.uuid4()
     digest = canonical_hash(body.model_dump(mode="json", by_alias=True))
     mapping = AssetMapping(
         id=mapping_id,
@@ -1881,6 +1899,19 @@ def replace_mapping_references(
         database.snapshot_id != body.physical_snapshot_id for _column, database in physical_rows
     ):
         raise HTTPException(422, "All physical columns must belong to the selected snapshot")
+    # Individual mapping APIs and derivations establish the same durable
+    # membership as batch saves, so removing the last link never loses its card.
+    for table_id in {column.physical_table_id for column, _database in physical_rows}:
+        identity = uuid.uuid5(uuid.NAMESPACE_URL, f"daca:representation:{mapping.logical_model_id}:{table_id}")
+        if session.get(LogicalModelRepresentation, identity) is None:
+            payload = {"logicalModelId": str(mapping.logical_model_id),
+                       "physicalSnapshotId": str(body.physical_snapshot_id), "physicalTableId": str(table_id)}
+            session.add(LogicalModelRepresentation(id=identity, urn=f"urn:daca:representation:{identity}",
+                logical_model_id=mapping.logical_model_id, physical_snapshot_id=body.physical_snapshot_id,
+                physical_table_id=table_id, content_hash=canonical_hash(payload),
+                created_by_user_id=version.created_by_user_id, created_at=utc_now()))
+            record_audit(session, "logical-model-representation", identity, "attached", version.created_by_user_id, 1, payload)
+    session.flush()
     for position, field_id in enumerate(body.logical_field_version_ids):
         session.add(
             AssetMappingLogicalField(

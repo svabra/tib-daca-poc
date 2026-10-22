@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { PhysicalCsvImportComponent } from './physical-csv-import.component';
 import { RouterLink } from '@angular/router';
 import { StatusBadgeComponent } from '@bit-daca/design-system';
 import { finalize } from 'rxjs';
@@ -9,7 +10,7 @@ import { LogicalModelStatus, LogicalModelSummary } from './data-models.models';
 
 @Component({
   selector: 'daca-logical-models-overview', standalone: true,
-  imports: [RouterLink, StatusBadgeComponent],
+  imports: [RouterLink, StatusBadgeComponent, PhysicalCsvImportComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="daca-page-heading models-heading">
@@ -20,6 +21,7 @@ import { LogicalModelStatus, LogicalModelSummary } from './data-models.models';
       <button #newModelTrigger class="daca-button" type="button" [disabled]="!identity.canEditModels()" (click)="openCreationChoice()">{{ i18n.t('newLogicalModel') }}</button>
       <a class="daca-button is-secondary" routerLink="/physical-models">{{ i18n.t('visibleSources') }}</a>
       <a class="daca-button is-secondary" routerLink="/mappings">{{ i18n.t('mappingWorkspace') }}</a>
+      <daca-physical-csv-import />
     </div>
 
     <dialog #creationDialog class="creation-dialog" aria-labelledby="creation-dialog-title" (close)="restoreCreationFocus()">

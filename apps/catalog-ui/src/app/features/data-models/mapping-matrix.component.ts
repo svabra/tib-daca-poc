@@ -1,10 +1,13 @@
+import { DacaGlossaryTermComponent } from '@bit-daca/design-system';
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { AssetMapping, MappingStatus, MAPPING_STATUS_LABELS } from './data-models.models';
 import { MappingDraftFacade } from './mapping-draft.facade';
+import { mappingTypeDescription } from './mapping-types';
 
 @Component({
   selector: 'daca-mapping-matrix',
   standalone: true,
+  imports: [DacaGlossaryTermComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="mapping-matrix" aria-labelledby="mapping-matrix-title">
@@ -31,7 +34,7 @@ import { MappingDraftFacade } from './mapping-draft.facade';
                         <small>{{ field.nullable ? 'Optional' : 'Pflichtfeld' }} · Position {{ field.order }}</small>
                       </td>
                     }
-                    <td><strong>{{ mapping.mappingType }}</strong><small>{{ mapping.classification }}</small>@if (mapping.logicalFieldVersionIds.length > 1) {<small>{{ mapping.logicalFieldVersionIds.length }} logische Quellen</small>}</td>
+                    <td><strong><daca-glossary-term class="mapping-type-value" [term]="mapping.mappingType" [explanation]="typeDescription(mapping.mappingType)" /></strong><small>{{ mapping.classification }}</small>@if (mapping.logicalFieldVersionIds.length > 1) {<small>{{ mapping.logicalFieldVersionIds.length }} logische Quellen</small>}</td>
                     <td><div class="target-chips">@for (columnId of mapping.physicalColumnIds; track columnId) {<span>{{ columnLabel(columnId) }}</span>}</div></td>
                     <td><span [class]="'mapping-status is-'+mapping.status">{{ statusLabel(mapping.status) }}</span>@if (mapping.validationResult?.issues?.length) {<small>{{ mapping.validationResult!.issues[0].message }}</small>}</td>
                     <td><button class="row-action" type="button" [attr.aria-label]="actionAriaLabel(mapping.status,field.name)" (click)="$event.stopPropagation();activateMapping(mapping,$event.currentTarget)">{{ actionLabel(mapping.status) }}</button></td>
@@ -58,6 +61,7 @@ import { MappingDraftFacade } from './mapping-draft.facade';
   `],
 })
 export class MappingMatrixComponent {
+  readonly typeDescription=mappingTypeDescription;
   readonly facade=inject(MappingDraftFacade);
   mappingsFor(fieldId:string):readonly AssetMapping[]{return this.facade.activeMappings().filter((mapping)=>mapping.logicalFieldVersionIds.includes(fieldId));}
   openCount():number{return this.facade.logicalFields().filter((field)=>!this.facade.mappedFieldIds().has(field.id)).length;}

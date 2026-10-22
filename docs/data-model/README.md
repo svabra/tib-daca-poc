@@ -44,7 +44,7 @@ Update generated sections with `npm run docs:data-model`. Validate them with
 
 | Persistence context | Storage | Tables | Alembic head | Migration fingerprint |
 |---|---|---:|---|---|
-| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 94 | `0032_mapping_inconsistencies` | `98308219c4510ea0` |
+| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 95 | `0035_csv_physical_models` | `1c307ddeea93fc09` |
 | [Control-plane data model](control-plane.md) | PostgreSQL (`daca_control_plane`) | 6 | `20260803_0001` | `ff3a5ea9ca863788` |
 | [Sample data-product model](sample-data-product.md) | PostgreSQL (`daca_sample`) | 4 | `0004_vibdbu_buildings` | `62c6765d78832f77` |
 
@@ -121,6 +121,7 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.logical_mapping_inconsistencies`
 - `catalog.logical_model_assistance_provenance`
 - `catalog.logical_model_identifier_reservations`
+- `catalog.logical_model_representations`
 - `catalog.logical_model_reviews`
 - `catalog.logical_model_versions`
 - `catalog.logical_models`

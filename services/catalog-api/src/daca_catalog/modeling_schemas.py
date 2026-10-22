@@ -222,6 +222,12 @@ class DcatDataServiceResponse(DcatDataServiceWrite):
     retired_at: datetime | None
 
 
+class PhysicalDomainTarget(ApiModel):
+    physical_table_id: uuid.UUID
+    physical_snapshot_id: uuid.UUID
+    expected_domain_version: str = Field(min_length=64, max_length=64)
+
+
 class LogicalModelWrite(ApiModel):
     identifiers: list[str] = Field(min_length=1)
     localizations: list[LogicalLocalization] = Field(min_length=1)
@@ -229,7 +235,7 @@ class LogicalModelWrite(ApiModel):
     deputy_owner_user_id: str | None = Field(default=None, max_length=200)
     creator: CreatorReference | None = None
     identifier_mode: Literal["manual", "organization_derived"] = "manual"
-    data_domain_id: uuid.UUID
+    data_domain_id: uuid.UUID | None = None
     organization_unit_id: str | None = Field(default=None, min_length=1, max_length=100)
     department_code: str | None = Field(default=None, min_length=1, max_length=20)
     organization_id: str | None = Field(default=None, min_length=1, max_length=100)
@@ -242,6 +248,7 @@ class LogicalModelWrite(ApiModel):
     media_format_hint: str | None = Field(default=None, max_length=255)
     comment: str | None = Field(default=None, max_length=4000)
     concept_ids: list[uuid.UUID] = Field(default_factory=list)
+    physical_domain_targets: list[PhysicalDomainTarget] = Field(default_factory=list, max_length=500)
     entities: list[LogicalEntityWrite] = Field(min_length=1)
     distributions: list[DcatDistributionWrite] = Field(default_factory=list)
     data_services: list[DcatDataServiceWrite] = Field(default_factory=list)
@@ -344,7 +351,8 @@ class LogicalModelSummary(ApiModel):
     department_code: str
     organization_id: str
     organization_unit_id: str
-    data_domain_id: uuid.UUID
+    data_domain_id: uuid.UUID | None
+    data_domain_label: str | None = None
     data_classification: Classification
     has_physical_mapping: bool
     mapping_inconsistency_count: int = Field(default=0, ge=0)
@@ -395,7 +403,7 @@ class PhysicalSourceResponse(ApiModel):
     urn: str
     name: str
     description: str | None
-    adapter_type: Literal["fixture", "postgresql", "s3"]
+    adapter_type: Literal["fixture", "postgresql", "s3", "csv"]
     department_code: str
     organization_id: str
     revision: int
@@ -419,6 +427,7 @@ class PhysicalImportRequest(ApiModel):
 
 
 class PhysicalColumnResponse(ApiModel):
+    import_metadata: dict[str, Any] | None = None
     id: uuid.UUID
     stable_key: str
     urn: str
@@ -433,7 +442,20 @@ class PhysicalColumnResponse(ApiModel):
     comment: str | None
 
 
-class PhysicalTableResponse(ApiModel):
+class ModelDomainReference(ApiModel):
+    id: uuid.UUID
+    display_name: str
+    lifecycle: Literal["active", "retired"]
+
+
+class PhysicalDomainState(ApiModel):
+    data_domains: list[ModelDomainReference]
+    domain_version: str
+
+
+class PhysicalTableResponse(PhysicalDomainState):
+    import_metadata: dict[str, Any] | None = None
+    domain_assignable: bool = True
     id: uuid.UUID
     stable_key: str
     urn: str
@@ -444,6 +466,7 @@ class PhysicalTableResponse(ApiModel):
     storage_location: str | None = None
     media_type: str | None = None
     object_count: int | None = None
+    row_count: int | None = None
     size_bytes: int | None = None
     schema_confidence: Literal["declared", "embedded", "inferred"] | None = None
     partition_keys: list[str] = Field(default_factory=list)
@@ -476,7 +499,7 @@ class PhysicalSnapshotSummary(ApiModel):
     source_name: str
     data_owner_name: str | None = None
     catalog_path: str
-    source_adapter_type: Literal["fixture", "postgresql", "s3"]
+    source_adapter_type: Literal["fixture", "postgresql", "s3", "csv"]
     sequence: int
     predecessor_snapshot_id: uuid.UUID | None
     fingerprint: str
@@ -499,7 +522,7 @@ class PhysicalModelSummary(ApiModel):
     snapshot_id: uuid.UUID
     source_id: uuid.UUID
     source_name: str
-    source_type: Literal["fixture", "postgresql", "s3"]
+    source_type: Literal["fixture", "postgresql", "s3", "csv"]
     model_type: Literal["table", "view", "materialized_view", "parquet"]
     qualified_name: str
     database_name: str
