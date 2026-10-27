@@ -1,3 +1,5 @@
+import { LogicalFieldMoveDialogComponent } from './logical-field-move-dialog.component';
+import { NgTemplateOutlet } from '@angular/common';
 import { DomainAssignmentChoice, ModelDomainDialogComponent } from './model-domain-dialog.component';
 import { PhysicalRepresentation } from './mapping-draft.facade';
 import { afterNextRender, ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, Injector, input, output, signal, viewChild } from '@angular/core';
@@ -27,7 +29,7 @@ export interface LogicalModelValidationIssue {
   message: string;
 }
 
-const LOGICAL_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_.-]{0,254}$/;
+const LOGICAL_NAME_PATTERN = /^[\p{L}_][\p{L}\p{M}0-9_.-]{0,254}$/u;
 const LOGICAL_IDENTIFIER_PATTERN = /^\S+$/;
 
 export function normalizeFieldConceptSelection(
@@ -48,7 +50,7 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
 
 @Component({
   selector: 'daca-logical-model-editor', standalone: true,
-  imports: [ModelDomainDialogComponent, ReactiveFormsModule, RouterLink, DataModelWorkspaceNavComponent, DatasetSummaryComponent, LogicalModelGovernanceComponent, LogicalModelFieldHelpDirective, LogicalFieldCharacteristicsComponent],
+  imports: [LogicalFieldMoveDialogComponent, NgTemplateOutlet, ModelDomainDialogComponent, ReactiveFormsModule, RouterLink, DataModelWorkspaceNavComponent, DatasetSummaryComponent, LogicalModelGovernanceComponent, LogicalModelFieldHelpDirective, LogicalFieldCharacteristicsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (!embedded()) {
@@ -87,10 +89,11 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
       @if (fieldPanelOnly()) {
         <form [formGroup]="form" (ngSubmit)="save(true)" class="field-panel-form" [class.validation-attempted]="validationAttempted()">
           @if (fields.at(selectedFieldIndex()); as selectedField) {
-            <daca-logical-field-characteristics [field]="selectedField" [businessObjects]="businessObjects()" [concepts]="concepts()" [conceptReferences]="fieldConceptReferences()" [compact]="true" />
+            <daca-logical-field-characteristics [canMove]="!!model() && canRemoveFields()" (moveRequested)="openFieldMove($event)" [field]="selectedField" [businessObjects]="businessObjects()" [concepts]="concepts()" [conceptReferences]="fieldConceptReferences()" [compact]="true" />
           }
           <button class="remove-field" type="button" [disabled]="fields.length===1 || !canRemoveFields()" (click)="removeSelectedField()">Logisches Feld entfernen</button>
           <footer class="field-panel-actions"><span>{{ form.dirty ? 'Ungespeicherte Änderungen' : 'Alle Änderungen gespeichert' }}</span><button class="daca-button" type="submit" [disabled]="saving() || !form.dirty || !canEditCurrentModel()">{{ saving() ? 'Wird gespeichert …' : 'Feldmerkmale speichern' }}</button></footer>
+          <ng-container [ngTemplateOutlet]="saveFeedback" />
         </form>
       } @else {
       <form [formGroup]="form" (ngSubmit)="save()" class="model-editor-form" [class.is-embedded]="embedded()" [class.validation-attempted]="validationAttempted()">
@@ -127,6 +130,7 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
 
         <section class="daca-card editor-section structure-section" [hidden]="!embedded() && activeTab()!=='fields'" [attr.role]="embedded() ? null : 'tabpanel'" [attr.id]="embedded() ? null : 'model-panel-fields'" [attr.aria-labelledby]="embedded() ? null : 'model-tab-fields'">
           <header><div><span>01</span><div><p class="daca-eyebrow">SHACL-Strukturebene</p><h2>Logische Entitäten und Felder</h2></div></div><div class="structure-actions"><button class="daca-button is-secondary" type="button" (click)="addEntity()">Entität hinzufügen</button><button class="daca-button" type="button" (click)="addField()">Feld hinzufügen</button></div></header>
+          <div class="editor-grid" aria-label="Entitäten bearbeiten">@for(entity of entityRepresentatives();track entity){<label>Entitätsname (für alle zugehörigen Felder)<input [value]="entity.controls.entityName.value" [disabled]="!canEditCurrentModel()" (change)="renameEntity(entity,$any($event.target).value)"></label>}</div>
           <div class="field-workbench field-list" formArrayName="fields">
             <section class="field-browser" aria-labelledby="field-browser-title">
               <header><div><p class="daca-eyebrow">Struktur</p><h3 id="field-browser-title">{{ fields.length }} Felder</h3></div><nav aria-label="Darstellung der Modellstruktur"><button type="button" [class.is-active]="structureView()==='table'" [attr.aria-pressed]="structureView()==='table'" (click)="structureView.set('table')">Tabelle</button><button type="button" [class.is-active]="structureView()==='relation'" [attr.aria-pressed]="structureView()==='relation'" (click)="structureView.set('relation')">Relation</button></nav></header>
@@ -136,7 +140,7 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
                 <div class="relation-list">@for(field of fields.controls;track field;let index=$index){<button type="button" [class.is-selected]="selectedFieldIndex()===index" (click)="selectField(index)"><span><small>Logisch</small><strong>{{ field.controls.entityName.value }}.{{ field.controls.name.value || 'Unbenannt' }}</strong></span><span><small>Physisch</small><strong>{{ field.controls.physicalColumnName.value || 'Keine Repräsentation' }}</strong></span></button>}</div>
               }
             </section>
-            @if(fields.at(selectedFieldIndex());as selectedField){<daca-logical-field-characteristics [field]="selectedField" [businessObjects]="businessObjects()" [concepts]="concepts()" [conceptReferences]="fieldConceptReferences()" />}
+            @if(fields.at(selectedFieldIndex());as selectedField){<daca-logical-field-characteristics [canMove]="!!model() && canRemoveFields()" (moveRequested)="openFieldMove($event)" [field]="selectedField" [businessObjects]="businessObjects()" [concepts]="concepts()" [conceptReferences]="fieldConceptReferences()" />}
           </div>
         </section>
 
@@ -149,13 +153,15 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
           <div class="editor-primary-actions">
             <button class="daca-button is-secondary" type="button" [disabled]="!canSubmitForReview()" [attr.title]="submitBlockedReason()" (click)="submitForReview()">Zur Domänenfreigabe einreichen</button>
             @if(model()?.status === 'published'){<button class="daca-button is-secondary" type="button" [disabled]="!canPublishCurrentModel() || saving()" (click)="retire()">Modell stilllegen</button>}
-            <div class="save-action"><button class="daca-button" type="submit" [disabled]="saving() || !canEditCurrentModel() || model()?.status === 'retired' || model()?.status === 'review_pending'">{{ saving() ? 'Wird gespeichert …' : 'Als Entwurf speichern' }}</button>@if(saveProblem();as problem){<section class="save-problem" role="alert" aria-live="assertive"><strong>{{ saveProblemTitle(problem) }}</strong><p>{{ problem.message }}</p>@if(problem.suggestedAction){<p class="save-problem-action">{{ problem.suggestedAction }}</p>}@if(validationIssues().length){<ul>@for(issue of validationIssues();track issue.field + issue.message){<li><button type="button" (click)="focusIssue(issue)"><span>{{ issue.field }}:</span> {{ issue.message }}</button></li>}</ul>}<div class="save-problem-technical"><small>Technische Details · Fehlercode {{ supportErrorCode(problem) }} · HTTP {{ problem.status }} · Request-ID {{ problem.requestId || 'nicht verfügbar' }}@if(problem.technicalDetails){ · {{ problem.technicalDetails.category }} · {{ problem.technicalDetails.sqlState }} · {{ problem.technicalDetails.constraint }} · {{ problem.technicalDetails.timestamp }}}</small><button type="button" class="daca-button is-secondary" (click)="copyErrorMessage(problem)">{{ errorCopied() ? 'Kopiert' : 'Copy Error Message' }}</button></div></section>}@else if(validationAttempted() && validationIssues().length){<section class="save-validation" role="alert" aria-live="assertive"><strong>Bitte korrigieren Sie folgende Angaben:</strong><ul>@for(issue of validationIssues();track issue.field + issue.message){<li><button type="button" (click)="focusIssue(issue)"><span>{{ issue.field }}:</span> {{ issue.message }}</button></li>}</ul></section>}</div>
+            <div class="save-action"><button class="daca-button" type="submit" [disabled]="saving() || !canEditCurrentModel() || model()?.status === 'retired' || model()?.status === 'review_pending'">{{ saving() ? 'Wird gespeichert …' : 'Als Entwurf speichern' }}</button><ng-container [ngTemplateOutlet]="saveFeedback" /></div>
           </div>
         </footer>
         @if (model()?.status === 'review_pending') { <p class="publish-note">Die Aufgabe liegt beim primären Domain Owner der gewählten Domäne. Der Entscheid erfolgt über den persönlichen Prüfauftrag.</p> }
       </form>
       }
     }
+    <ng-template #saveFeedback>@if(saveProblem();as problem){<section class="save-problem" role="alert" aria-live="assertive"><strong>{{ saveProblemTitle(problem) }}</strong><p>{{ problem.message }}</p>@if(unmappedServerIssues().length){<ul class="server-validation-issues">@for(issue of unmappedServerIssues();track issue.location + issue.message){<li><strong>{{ serverIssueLabel(issue.location) }}:</strong> {{ issue.message }}</li>}</ul>}@if(problem.suggestedAction){<p class="save-problem-action">{{ problem.suggestedAction }}</p>}@if(validationIssues().length){<ul>@for(issue of validationIssues();track issue.field + issue.message){<li><button type="button" (click)="focusIssue(issue)"><span>{{ issue.field }}:</span> {{ issue.message }}</button></li>}</ul>}<div class="save-problem-technical"><small>Technische Details · Fehlercode {{ supportErrorCode(problem) }} · HTTP {{ problem.status }} · Request-ID {{ problem.requestId || 'nicht verfügbar' }}@if(problem.technicalDetails){ · {{ problem.technicalDetails.category }} · {{ problem.technicalDetails.sqlState }} · {{ problem.technicalDetails.constraint }} · {{ problem.technicalDetails.timestamp }}}</small><button type="button" class="daca-button is-secondary" (click)="copyErrorMessage(problem)">{{ errorCopied() ? 'Kopiert' : 'Copy Error Message' }}</button></div></section>}@else if(saveError()){<p class="save-problem" role="alert">{{ saveError() }}</p>}@else if(validationAttempted() && validationIssues().length){<section class="save-validation" role="alert" aria-live="assertive"><strong>Bitte korrigieren Sie folgende Angaben:</strong><ul>@for(issue of validationIssues();track issue.field + issue.message){<li><button type="button" (click)="focusIssue(issue)"><span>{{ issue.field }}:</span> {{ issue.message }}</button></li>}</ul></section>}</ng-template>
+    @if(fieldMoveOpen() && model();as current){<daca-logical-field-move-dialog [source]="current" [fieldId]="fields.at(selectedFieldIndex()).controls.id.value||''" [fieldName]="fields.at(selectedFieldIndex()).controls.name.value||''" [sourceEntity]="fields.at(selectedFieldIndex()).controls.entityName.value||''" [editableOrganizations]="moveOrganizations()" (closed)="closeFieldMove()" (moved)="fieldMoved($event.body,$event.etag)"/>}
     @if(domainSavePrompt();as prompt){<daca-model-domain-dialog [targetName]="form.controls.dataset.controls.titleDe.value" [initialDomainId]="form.controls.dataset.controls.dataDomainId.value" [fixedDomain]="true" [physicalOptions]="prompt.options" [busy]="saving()" [error]="error()||saveError()" (closed)="domainSavePrompt.set(null)" (confirmed)="confirmDomainSave($event)"/>}
   `,
   styles: [`
@@ -177,7 +183,11 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
 export class LogicalModelEditorComponent {
   readonly id = input<string>(); readonly sourceSnapshotId = input<string>();
   readonly physicalSnapshotId = input<string>(); readonly physicalTableId = input<string>();
+  readonly mappingDraftsPending = input(false);
+  readonly workspaceSaving = input(false);
   readonly embedded = input(false); readonly fieldPanelOnly = input(false); readonly selectedFieldId = input<string>(); readonly modelSaved = output<LogicalModel>();
+  readonly draftChanged = output<{modelId:string;versionId:string;value:LogicalModelWrite}>();
+  private patchingModel=false;
   readonly identity = inject(DemoIdentityService); readonly catalogApi = inject(CatalogApiService);
   private readonly api = inject(DataModelsApiService); private readonly conceptsApi = inject(I14yConceptsApiService); private readonly assistance = inject(ModelingAssistanceService); private readonly router = inject(Router); private readonly fb = inject(FormBuilder); private readonly injector = inject(Injector);
   readonly model = signal<LogicalModel | null>(null); readonly concepts = signal<readonly I14yConcept[]>([]); readonly loading = signal(false); readonly saving = signal(false); readonly exporting = signal<LogicalModelExportRepresentation | null>(null); readonly error = signal<string | null>(null); readonly saveError = signal<string | null>(null); readonly saveProblem = signal<ModelingApiError | null>(null); readonly errorCopied = signal(false); readonly notice = signal<string | null>(null); readonly etag = signal('');
@@ -185,8 +195,21 @@ export class LogicalModelEditorComponent {
   readonly activeTab = signal<'status' | 'model' | 'fields'>('model');
   readonly selectedFieldIndex = signal(0);
   readonly structureView = signal<'table' | 'relation'>('table');
+  readonly fieldMoveOpen=signal(false);
+  private fieldMoveTrigger:HTMLElement|null=null;
+  readonly moveOrganizations=computed(()=>[...new Set(this.modelingScopes().filter((scope)=>scope.role==='data_owner'||scope.role==='data_steward').flatMap((scope)=>scope.descendantOrganizationIds??[]))]);
+  openFieldMove(trigger:EventTarget|null):void{
+    if(!this.model()||!this.canRemoveFields()||this.saving())return;
+    if(this.form.dirty||this.mappingDraftsPending()){this.error.set('Speichern oder verwerfen Sie zuerst alle offenen Feld- und Zuordnungsänderungen.');return;}
+    if(this.fields.length<=1){this.error.set('Das letzte Feld kann nicht verschoben werden. Ein logisches Modell benötigt mindestens ein Feld.');return;}
+    this.fieldMoveTrigger=trigger instanceof HTMLElement?trigger:null;this.fieldMoveOpen.set(true);
+  }
+  closeFieldMove():void{this.fieldMoveOpen.set(false);this.fieldMoveTrigger?.focus();}
+  fieldMoved(model:LogicalModel,etag:string):void{this.model.set(model);this.etag.set(etag);this.patch(model);this.form.markAsPristine();this.closeFieldMove();this.notice.set('Das Feld wurde ins Zielmodell verschoben. Die physischen Zuordnungen wurden nicht übertragen.');this.modelSaved.emit(model);this.catalogApi.refreshWorkflowTasks();}
+
   readonly canPublishCurrentModel = computed(() => this.identity.canPublishModel(this.model()));
   readonly canEditCurrentModel = computed(() => {
+    if(this.workspaceSaving()||this.saving())return false;
     const current = this.model();
     if (!current) return this.identity.canEditModels();
     return this.identity.canEditModels() && this.modelingScopes().some((scope) => scope.descendantOrganizationIds?.includes(current.office));
@@ -270,10 +293,10 @@ export class LogicalModelEditorComponent {
       const number = index + 1;
       const controls = field.controls;
       const fieldControls: Array<[string, AbstractControl, string?]> = [
-        [`Feld ${number} – Entität`, controls.entityName, 'Verwenden Sie einen technischen Namen, der mit einem Buchstaben oder Unterstrich beginnt. Erlaubt sind Buchstaben A–Z, Zahlen, Punkt, Bindestrich und Unterstrich.'],
+        [`Feld ${number} – Entität`, controls.entityName, 'Verwenden Sie einen technischen Namen, der mit einem Buchstaben oder Unterstrich beginnt. Erlaubt sind Unicode-Buchstaben (einschliesslich Umlauten), Zahlen, Punkt, Bindestrich und Unterstrich.'],
         [`Feld ${number} – Geschäftsobjekt der Entität`, controls.entityBusinessObjectVersionId],
         [`Feld ${number} – Entitätskommentar`, controls.entityComment],
-        [`Feld ${number} – Feldname`, controls.name, 'Verwenden Sie einen technischen Namen, der mit einem Buchstaben oder Unterstrich beginnt. Erlaubt sind Buchstaben A–Z, Zahlen, Punkt, Bindestrich und Unterstrich.'],
+        [`Feld ${number} – Feldname`, controls.name, 'Verwenden Sie einen technischen Namen, der mit einem Buchstaben oder Unterstrich beginnt. Erlaubt sind Unicode-Buchstaben (einschliesslich Umlauten), Zahlen, Punkt, Bindestrich und Unterstrich.'],
         [`Feld ${number} – Geschäftsobjekt`, controls.businessObjectVersionId],
         [`Feld ${number} – Datentyp`, controls.dataType],
         [`Feld ${number} – Länge`, controls.length],
@@ -337,6 +360,10 @@ export class LogicalModelEditorComponent {
     });
     this.form.valueChanges.subscribe(() => {
       if (this.validationAttempted()) this.refreshCrossFieldErrors();
+      const model=this.model();
+      if(!this.patchingModel&&this.fieldPanelOnly()&&model&&this.form.dirty&&this.canEditCurrentModel()){
+        this.draftChanged.emit({modelId:model.id,versionId:model.versionId,value:this.value()});
+      }
     });
     this.form.controls.dataset.controls.identifiers.valueChanges.pipe(debounceTime(250), distinctUntilChanged()).subscribe(() => this.checkIdentifierAvailability());
     this.form.controls.dataset.controls.titleDe.valueChanges.subscribe((title) => {
@@ -511,11 +538,13 @@ export class LogicalModelEditorComponent {
   createField(order: number, field?: LogicalField, entity?: LogicalEntity, entityName = 'Entitaet_1') {
     const selection=normalizeFieldConceptSelection(field?.conceptReferences.map((item)=>item.id)??[],field?.primaryConceptId,field?.valueListConcept?.id);
     return this.fb.group({
-      id:field?.rootId??'',versionId:field?.versionId??'',entityId:entity?.rootId??'',entityName:[entity?.name??field?.entityName??entityName,[Validators.required,Validators.pattern(LOGICAL_NAME_PATTERN)]],entityBusinessObject:entity?.businessObject??field?.businessObject??'',entityBusinessObjectVersionId:[entity?.businessObjectVersionId??'',Validators.required],entityComment:[entity?.comment??'',Validators.maxLength(4000)],entityOrder:entity?.order??order,name:[field?.name??'',[Validators.required,Validators.pattern(LOGICAL_NAME_PATTERN)]],businessObject:field?.businessObject??'',businessObjectVersionId:[field?.businessObjectVersionId??'',Validators.required],dataType:[field?.dataType??'string',Validators.required],length:[field?.length??null as number|null,Validators.min(1)],precision:[field?.precision??null as number|null,Validators.min(0)],decimalPlaces:[field?.decimalPlaces??null as number|null,Validators.min(0)],order:[field?.order??order,[Validators.required,Validators.min(1)]],nullable:field?.nullable??true,minCount:[field?.minCount??0,Validators.min(0)],maxCount:[field?.maxCount??1 as number|null,Validators.min(1)],classification:this.fb.nonNullable.control<DataClassification>(field?.classification??'unclassified'),sourceSystem:[field?.sourceSystem??'',Validators.maxLength(255)],shortDescription:[field?.shortDescription??'',[Validators.required,Validators.pattern(/\S/),Validators.maxLength(4000)]],comment:[field?.comment??'',Validators.maxLength(4000)],
+      id:field?.rootId??'',versionId:field?.versionId??'',entityId:entity?.rootId??'',entityName:[entity?.name??field?.entityName??entityName,[Validators.required,Validators.pattern(LOGICAL_NAME_PATTERN)]],entityBusinessObject:entity?.businessObject??field?.businessObject??'',entityBusinessObjectVersionId:[entity?.businessObjectVersionId??'',Validators.required],entityComment:[entity?.comment??'',Validators.maxLength(4000)],entityOrder:Math.max(1,entity?.order??order),name:[field?.name??'',[Validators.required,Validators.pattern(LOGICAL_NAME_PATTERN)]],businessObject:field?.businessObject??'',businessObjectVersionId:[field?.businessObjectVersionId??'',Validators.required],dataType:[field?.dataType??'string',Validators.required],length:[field?.length??null as number|null,Validators.min(1)],precision:[field?.precision??null as number|null,Validators.min(0)],decimalPlaces:[field?.decimalPlaces??null as number|null,Validators.min(0)],order:[Math.max(1,field?.order??order),[Validators.required,Validators.min(1)]],nullable:field?.nullable??true,minCount:[field?.minCount??0,Validators.min(0)],maxCount:[field?.maxCount??1 as number|null,Validators.min(1)],classification:this.fb.nonNullable.control<DataClassification>(field?.classification??'unclassified'),sourceSystem:[field?.sourceSystem??'',Validators.maxLength(255)],shortDescription:[field?.shortDescription??'',[Validators.required,Validators.pattern(/\S/),Validators.maxLength(4000)]],comment:[field?.comment??'',Validators.maxLength(4000)],
       conceptIds:this.fb.nonNullable.control<string[]>(selection.conceptIds),primaryConceptId:selection.primaryConceptId??'',valueListConceptId:field?.valueListConcept?.id??'',
       physicalColumnId:this.fb.nonNullable.control(''),physicalColumnName:this.fb.nonNullable.control(''),conceptMode:this.fb.nonNullable.control<'unresolved'|'none'|'linked'>(selection.conceptIds.length?'linked':'none'),
     });
   }
+  entityRepresentatives(){const seen=new Set<string>();return this.fields.controls.filter((field)=>{const key=field.controls.entityId.value||field.controls.entityName.value||'';if(seen.has(key))return false;seen.add(key);return true;});}
+  renameEntity(entity:ReturnType<LogicalModelEditorComponent['createField']>,name:string):void{if(!this.canEditCurrentModel())return;const key=entity.controls.entityId.value||entity.controls.entityName.value;for(const field of this.fields.controls){if((field.controls.entityId.value||field.controls.entityName.value)===key)field.controls.entityName.setValue(name);}this.form.markAsDirty();}
   addField(): void {
     const previous = this.fields.at(this.fields.length - 1);
     const entity = previous ? {
@@ -716,6 +745,7 @@ export class LogicalModelEditorComponent {
   submitForReview(): void { const current = this.model(); if (!current || !this.canSubmitForReview()) return; this.saving.set(true);this.error.set(null);this.saveError.set(null); this.api.submitLogicalModel(current.id, current.versionId, this.etag()).pipe(finalize(() => this.saving.set(false))).subscribe({ next: ({ body, etag }) => { this.model.set(body); this.etag.set(etag);this.patch(body);this.form.markAsPristine();this.catalogApi.refreshWorkflowTasks(); this.notice.set(`Der Prüfauftrag wurde an ${this.selectedDomain()?.ownerName ?? 'den primären Domain Owner'} übermittelt.`); }, error: (error: Error) => this.error.set(error.message) }); }
   retire(): void { const current = this.model(); if (!current || current.status !== 'published' || !this.canPublishCurrentModel() || !window.confirm(`«${current.title.de || current.identifiers[0]}» stilllegen? Die Versionshistorie bleibt erhalten.`)) return; this.saving.set(true); this.error.set(null); this.api.retireLogicalModel(current.id, current.versionId, this.etag()).pipe(finalize(() => this.saving.set(false))).subscribe({ next: ({ body, etag }) => { this.model.set(body); this.etag.set(etag); this.notice.set('Das Modell wurde stillgelegt; die Versionshistorie bleibt erhalten.'); }, error: (error: Error) => this.error.set(error.message) }); }
   private patch(model: LogicalModel): void {
+    this.patchingModel=true;
     const persistedIdentifier = model.identifiers[0] ?? '';
     const knownPrefix = model.office === 'vbs-armasuisse-immobilien' ? 'vbs_ar_ai_' : model.office === 'vbs-armasuisse' ? 'vbs_ar_' : `${model.department.toLocaleLowerCase('de-CH')}_`;
     const identifierSuffix = model.identifierMode === 'organization_derived' && persistedIdentifier.startsWith(knownPrefix)
@@ -738,6 +768,7 @@ export class LogicalModelEditorComponent {
     this.departmentChanged(false); this.scopeChanged();
     this.assistanceProvenance.set(model.assistanceProvenance ?? []);
     this.form.markAsPristine();
+    this.patchingModel=false;
   }
   private selectFieldById(fieldId: string | undefined): void {
     if (!fieldId) { this.selectedFieldIndex.set(Math.min(this.selectedFieldIndex(), Math.max(0, this.fields.length - 1))); return; }
@@ -919,15 +950,17 @@ export class LogicalModelEditorComponent {
       const language = ['De', 'Fr', 'It', 'En', 'Rm'][index] ?? 'De';
       return dataset[`${localization[2]}${language}` as keyof typeof dataset] ?? null;
     }
-    const fieldMatch = /^entities\.\d+\.fields\.(\d+)\.(\w+)$/.exec(normalized);
+    const entityNames = [...new Set(this.fields.controls.map((field) => field.controls.entityName.value))];
+    const fieldsInEntity = (index: number) => this.fields.controls.filter((field) => field.controls.entityName.value === entityNames[index]);
+    const fieldMatch = /^entities\.(\d+)\.fields\.(\d+)\.(\w+)$/.exec(normalized);
     if (fieldMatch) {
-      const field = this.fields.at(Number(fieldMatch[1]));
-      const fieldKey = ({ position: 'order', valueListConceptId: 'valueListConceptId', conceptIds: 'conceptIds' } as Record<string,string>)[fieldMatch[2]] ?? fieldMatch[2];
+      const field = fieldsInEntity(Number(fieldMatch[1]))[Number(fieldMatch[2])];
+      const fieldKey = ({ position: 'order', valueListConceptId: 'valueListConceptId', conceptIds: 'conceptIds' } as Record<string,string>)[fieldMatch[3]] ?? fieldMatch[3];
       return field?.controls[fieldKey as keyof typeof field.controls] ?? null;
     }
     const entityMatch = /^entities\.(\d+)\.(name|businessObjectVersionId)$/.exec(normalized);
     if (entityMatch) {
-      const field = this.fields.at(Number(entityMatch[1]));
+      const field = fieldsInEntity(Number(entityMatch[1]))[0];
       return entityMatch[2] === 'name' ? field?.controls.entityName ?? null : field?.controls.entityBusinessObjectVersionId ?? null;
     }
     return null;
@@ -948,12 +981,20 @@ export class LogicalModelEditorComponent {
     else issues.push({ field, message: 'Der Wert ist ungültig.' });
   }
   saveProblemTitle(problem: ModelingApiError): string {
+    if (problem.errorCode === 'DACA-LM-ASSISTANCE-ORIGIN') return 'Herkunft der Sprachassistenz nicht speicherbar';
     if (problem.kind === 'validation') return 'Bitte Eingaben korrigieren';
     if (problem.status === 412 || problem.status === 428) return 'Aktualisierte Version vorhanden';
     if (problem.errorCode === 'DACA-LM-IDENTIFIER-DUPLICATE') return 'Identifier bereits vergeben';
     return 'Speichern nicht möglich';
   }
   supportErrorCode(problem: ModelingApiError): string { return problem.errorCode || (problem.kind === 'validation' ? 'DACA-LM-CLIENT-VALIDATION' : 'DACA-LM-UNCLASSIFIED'); }
+  unmappedServerIssues() {
+    return this.saveProblem()?.issues.filter((issue) => !this.controlForServerLocation(issue.location)) ?? [];
+  }
+  serverIssueLabel(location: string): string {
+    if (location.startsWith('body.assistanceProvenance')) return 'Herkunft der Sprachassistenz';
+    return location === 'body' ? 'Modell' : location.replace(/^body\./, '');
+  }
   focusIssue(issue?: LogicalModelValidationIssue): void {
     const datasetControl: Record<string, string> = {
       'Titel (Deutsch)': 'titleDe', 'Beschreibung (Deutsch)': 'descriptionDe',
@@ -999,6 +1040,7 @@ export class LogicalModelEditorComponent {
       `HTTP-Status: ${problem.status}`,
       `Request-ID: ${problem.requestId || 'nicht verfügbar'}`,
       `Meldung: ${problem.message}`,
+      ...problem.issues.map((issue) => `${this.serverIssueLabel(issue.location)}: ${issue.message}`),
       problem.suggestedAction ? `Empfohlene Aktion: ${problem.suggestedAction}` : '',
       technical ? `Technik: ${technical.category}; SQLSTATE=${technical.sqlState}; Constraint=${technical.constraint}; Zeitpunkt=${technical.timestamp}` : '',
     ].filter(Boolean).join('\n');
@@ -1021,7 +1063,7 @@ export class LogicalModelEditorComponent {
   private loadCachedConcept(conceptId:string):void{this.conceptsApi.load(conceptId).subscribe({next:(detail)=>this.concepts.update((items)=>items.some((item)=>item.id===detail.id)?items.map((item)=>item.id===detail.id?detail:item):[...items,detail]),error:()=>undefined});}
   knownDataType(value:string|null):boolean{return Boolean(value&&['string','integer','decimal','date','datetime','boolean','time','uuid','json','binary','array'].includes(value));}
   private tableTitle(table:PhysicalTable):string{return table.name.toLocaleUpperCase('de-CH')===table.name?table.name:table.name.split(/[_-]+/).map((part)=>part.charAt(0).toLocaleUpperCase('de-CH')+part.slice(1)).join(' ');}
-  private logicalName(value:string):string{const normalized=value.trim().replace(/[^A-Za-z0-9_.-]+/g,'_');return /^[A-Za-z_]/.test(normalized)?normalized:`_${normalized}`;}
+  private logicalName(value:string):string{const normalized=value.trim().replace(/[^\p{L}\p{M}0-9_.-]+/gu,'_');return /^[\p{L}_]/u.test(normalized)?normalized:`_${normalized}`;}
   private saveExport(file:LogicalModelExportFile):void{const objectUrl=URL.createObjectURL(file.blob);const anchor=document.createElement('a');anchor.href=objectUrl;anchor.download=file.filename;anchor.hidden=true;document.body.append(anchor);try{anchor.click();this.notice.set(`${file.filename} wurde heruntergeladen.`);}finally{anchor.remove();URL.revokeObjectURL(objectUrl);}}
   private creatorFormValue(creator:LogicalModelCreator|null):{creatorName:string;creatorIdentifier:string;creatorPersonName:string}{if(!creator)return{creatorName:'',creatorIdentifier:'',creatorPersonName:''};switch(creator.type){case'application':return{creatorName:creator.applicationName,creatorIdentifier:'',creatorPersonName:''};case'internal_organisation':return{creatorName:creator.englishName,creatorIdentifier:creator.organizationId,creatorPersonName:''};case'internal_person':return{creatorName:creator.userId,creatorIdentifier:'',creatorPersonName:''};case'external_organisation_or_person':return{creatorName:creator.organizationName,creatorIdentifier:'',creatorPersonName:creator.personName??''};}}
   private creatorValue(type:CreatorType|'',name:string,identifier:string,personName:string):LogicalModelCreator|null{switch(type){case'application':return{type,applicationName:name.trim()};case'internal_organisation':return{type,organizationId:identifier.trim(),englishName:name.trim()};case'internal_person':return{type,userId:name.trim()};case'external_organisation_or_person':return{type,organizationName:name.trim(),personName:personName.trim()||null};default:return null;}}

@@ -1,11 +1,11 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 import { CatalogI18nService } from '../../core/catalog-i18n.service';
 import { DataModelsApiService } from './data-models-api.service';
-import { AssetMapping, LogicalModel, PhysicalSource } from './data-models.models';
+import { AssetMapping, LogicalModel, PhysicalSnapshot, PhysicalSource } from './data-models.models';
 import { FALLBACK_LOGICAL_MODEL, FALLBACK_PHYSICAL_SNAPSHOT } from './mapping-fallback';
 import { PhysicalAssetsComponent } from './physical-assets.component';
 
@@ -22,6 +22,7 @@ describe('PhysicalAssetsComponent DAAIF source explorer', () => {
   const pendingSource: PhysicalSource = { ...source, id: 'vibdbu-source', revision: 1, name: 'SAP VIBDBU Gebäudebestand', databaseName: 'daca_sample', catalogPath: 'postgresql://daca_sample/', ownerName: 'Mirjam Keller', office: 'vbs-armasuisse-immobilien', latestSnapshotId: null, latestSnapshotSequence: null };
   const previousSnapshot = { ...FALLBACK_PHYSICAL_SNAPSHOT, id: 'fallback-hr-snapshot-1', revision: 1, previousSnapshotId: null };
   const api = {
+    returnedSources: vi.fn(() => of([])),
     listPhysicalSources: vi.fn(() => of([source, pendingSource])), listPhysicalSnapshots: vi.fn(() => of([FALLBACK_PHYSICAL_SNAPSHOT, previousSnapshot])), loadPhysicalSnapshot: vi.fn(() => of(FALLBACK_PHYSICAL_SNAPSHOT)), listMappings: vi.fn(() => of([] as AssetMapping[])), importPhysicalSource: vi.fn(() => of({ body: FALLBACK_PHYSICAL_SNAPSHOT, etag: '"4"' })), quickDeriveLogicalModel: vi.fn(() => of({ body: FALLBACK_LOGICAL_MODEL as LogicalModel, etag: '"1"' })),
   };
 
@@ -101,6 +102,21 @@ describe('PhysicalAssetsComponent DAAIF source explorer', () => {
   it('returns to mapping suggestions when adding another representation', () => {
     configure(source.id, { logicalModelId: 'model-1' }); const fixture = TestBed.createComponent(PhysicalAssetsComponent); fixture.detectChanges(); const router = TestBed.inject(Router); const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true); const table = FALLBACK_PHYSICAL_SNAPSHOT.tables[0];
     fixture.componentInstance.deriveOrAttach(FALLBACK_PHYSICAL_SNAPSHOT, table); expect(api.quickDeriveLogicalModel).not.toHaveBeenCalled(); expect(navigate).toHaveBeenCalledWith(['/models', 'model-1', 'mappings'], { queryParams: { physicalSnapshotId: FALLBACK_PHYSICAL_SNAPSHOT.id, physicalTableId: table.id, suggest: '1' } });
+  });
+  it('clears loaded metadata on return and ignores earlier in-flight snapshots', () => {
+    configure(source.id);
+    const fixture = TestBed.createComponent(PhysicalAssetsComponent); fixture.detectChanges();
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const pending = new Subject<PhysicalSnapshot>();
+    api.loadPhysicalSnapshot.mockReturnValueOnce(pending);
+    fixture.componentInstance.activateSource(source);
+    fixture.componentInstance.accessReturned();
+    pending.next(FALLBACK_PHYSICAL_SNAPSHOT); pending.complete();
+    expect(fixture.componentInstance.sources()).toEqual([]);
+    expect(fixture.componentInstance.snapshots()).toEqual([]);
+    expect(fixture.componentInstance.snapshotSummaries()).toEqual([]);
+    expect(fixture.componentInstance.mappings()).toEqual([]);
+    expect(navigate).toHaveBeenCalledWith(['/physical-models']);
   });
   it('opens the precise snapshot and object requested by a domain model link', () => {
     const second={...FALLBACK_PHYSICAL_SNAPSHOT.tables[0],id:'requested-table',name:'requested_object'};

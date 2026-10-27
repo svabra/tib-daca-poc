@@ -153,7 +153,7 @@ def parse_inventory(content_base64: str) -> CsvInventory:
                 table["columns"].append(column)
         if not tables:
             raise ValueError("Die CSV-Datei enthält keine Tabellen.")
-        warnings.insert(0, "Nullability ist im CSV nicht angegeben. Längen und Dezimalstellen bleiben als Originalangaben erhalten; sie werden nicht als verifizierte Datenbankpräzision interpretiert.")
+        warnings.insert(0, "Nullability wird beim CSV-Import nicht als Datenbankregel übernommen. Längen und Dezimalstellen bleiben als Originalangaben erhalten; sie werden nicht als verifizierte Datenbankpräzision interpretiert.")
         return CsvInventory({"databases": list(databases.values())}, list(tables.values()), warnings, encoding, row_count)
     except (csv.Error, StopIteration) as exc:
         raise ValueError(f"Ungültige CSV-Struktur bei Zeile {reader.line_num}: {exc}") from exc

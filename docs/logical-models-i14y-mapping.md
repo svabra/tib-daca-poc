@@ -1,5 +1,200 @@
 # Logical models, I14Y concepts, physical models, and mappings
 
+## AdA physical-model import journey
+
+Journey 14, **Import physisches Datenmodell – AdA**, lives at
+`/documentation/journeys/import-physical-model-ada`, with a searchable tile in the journey index,
+role, prerequisites, outcome, repeatability and six actionable steps. Its three-dot menu belongs
+to that tile as a sibling of the navigation link, avoiding nested interactive elements.
+The same component is also available in the AdA detail header beside duration and difficulty.
+Both placements use the same download, authorization, confirmation and scoped reset; successful
+resets navigate to the fresh importer. Other journey detail headers do not offer AdA actions.
+The models and sources pages expose their CSV importer without journey controls.
+It provides **AdA-Beispielinventar herunterladen** and **AdA-Import zurücksetzen**. Reset first
+loads the example for a chosen authorized organization, displays its persisted name and explains
+permanent structure removal and reference guards. Cancellation makes no mutation. Success opens
+a fresh sources page and blank CSV importer in that same organization. Changing identity
+or scope invalidates pending responses; an in-flight reset cannot be submitted twice or cancelled.
+
+Journey start/reset navigation uses `importCsv=1&organizationId=…`. The importer waits for the
+requested authorized scope, opens after render and consumes these query parameters with
+replacement navigation. Reloading the sources page therefore does not reopen the popup.
+
+`GET /api/v1/import-journeys/ada/inventory.csv` serves the versioned, packaged metadata example
+to modeling actors. `GET /api/v1/import-journeys/ada` resolves the source from `departmentCode`
+and `organizationId` with current scoped owner/steward authorization. `POST …/ada/reset` accepts
+that scope and the displayed source revision as `If-Match`. The server computes the source ID
+from its own CSV fingerprint, serializes against import and calls the shared inventory removal
+service. Missing examples are an idempotent success; references and stale revisions are errors.
+The local CLI `npm run journey:ada:reset -- --demo-user christian.man --yes` uses those same
+HTTP endpoints through a local demo session. Without `--yes` it only previews the target.
+
+The journey endpoints prefer the authenticated local session cookie, so a normal download link
+works without custom headers. A conflicting demo header cannot override the session identity;
+an invalid session does not fall back to a header. Header-only clients retain the existing
+demo-auth boundary when no cookie is present. All journey endpoints require demo auth to be
+enabled and recheck the actor's active roles. With multiple scopes, reset requires an explicit
+organization choice instead of guessing from the order of role assignments.
+
+Both the models overview and source register open the existing CSV importer. Its labelled drop
+zone accepts exactly one CSV, shares file/size validation and stale-response protection with the
+keyboard-accessible file picker, and performs preview only. Saving blocks further drops. The
+user chooses the inventory name and organization, reviews table/field counts and imports before
+the source and immutable snapshot are created. Cancellation does not persist metadata.
+
+The [AdA model proposal](../examples/ada-bewirtschaftung/README.md) exercises this journey with
+11 tables / 62 fields, PostgreSQL DDL, three fictional people and administrative records. It
+covers person/status, assignment/rank history, organization, service/call-up/participation and
+qualifications. Extra CSV declarations for PK/FK, defaults and nullability are preserved as
+original records, rather than projected into verified snapshot constraints. The existing warning
+about unknown CSV nullability remains accurate. Import does not execute SQL or load person rows.
+No catalog migration or live Army connection is introduced. Persistent storage and example
+boundaries are documented in [the data-model reference](data-model/ada-bewirtschaftung-example.md).
+
+## Workspace context without duplicate selectors
+
+The selection bar above dataset attributes has been removed, including the logical-model
+dropdown, active-representation dropdown and visible-sources shortcut. Model/deep-link
+resolution and saved membership loading remain intact. Representation cards select the active
+snapshot and load its drift report; new representations use the existing canvas picker.
+Users navigate between logical models through the model overview. The heading and dataset
+attributes follow the current model context, including after an identity change.
+
+## Relationship deletion is a draft edit
+
+**Beziehung löschen** and **Verbindung entfernen** immediately hide the selected relationship
+without a confirmation dialog. No HTTP mutation or audit event occurs at that point. New local
+mapping drafts are discarded; persisted mappings enter `pendingRemovals`, retaining their ID,
+version ID and optimistic lock. Counters, matrix, inspector and graph use the local removal;
+refreshing mappings cannot bring a pending removal back. Navigation warnings include removals.
+Reloading/discarding an unsaved workspace restores the stored relationship. Removing one target
+from a multi-target mapping continues to use an ordinary local mapping revision.
+
+The workspace save request accepts `removals` alongside model, representation and mapping edits.
+Each removal checks model membership, current scoped owner/steward rights, physical-source access,
+exact mapping version and lock. Duplicate removals or editing and removing the same mapping in
+one request are rejected. A successful save appends an immutable `superseded` version with the
+existing audit evidence; physical objects and fields remain intact. Any later failure rolls back
+the complete transaction, and the UI retains its pending removals. Saving field characteristics
+separately rebases pending removal locks without making their lines visible again.
+
+## Live field-name preview and workspace save
+
+The compact editor emits unsaved field changes with model/version identity on every form edit.
+`MappingDraftFacade.logicalDraft` holds a local write DTO; `logicalFields` overlays its names
+by stable field root ID. Saved model objects, field version IDs, mapping IDs and revisions remain
+unchanged. Graph, matrix, inspector and mapping dialogs share this projection. Initial form
+hydration does not emit a draft. The field panel stays mounted across Graph/Table/Drift switches
+so its unsaved controls survive. Model/identity changes clear the projection; stale editor events
+are ignored. Navigation/beforeunload protection includes pending logical changes.
+
+**Entwurf speichern** is enabled for a logical-only draft. The existing workspace endpoint accepts
+an optional `logicalModel` write beside mapping/representation changes. It applies the same scoped
+role, owner and version checks as model editing; organization/domain changes use their existing
+dialogs instead. One transaction saves mapping drafts, creates the logical successor, rebases all
+surviving mapping references, synchronizes inconsistencies and commits. The response includes
+the new logical model and current mappings filtered by source access, allowing the UI to replace
+its preview with authoritative versions without losing the selected field. Any failure rolls back
+the whole operation and retains the local form/draft. The separate field-save action still works.
+
+## Move a field to another logical model
+
+The field panel cannot rename its parent entity. A small magnifying glass beside **Entität**
+opens a searchable list of other logical models (name, identifier, organization), followed by
+the selected model's entities. Uneditable scopes and models in review are disabled. Entity-wide
+renaming remains in the full model editor's separate entity section and updates every member.
+Saved field data and local mapping drafts must be settled before a move.
+
+The second dialog step names the field, source model/entity and destination model/entity. It
+explicitly explains removal from the source, retention of mapping history without transferring
+physical links, and the creation of two new drafts requiring review. The user must acknowledge
+this warning and type the exact field name before **Feld jetzt verschieben** becomes available.
+Cancellation does not write; errors retain the selection and show the server message.
+
+`POST /logical-models/{model_id}/fields/{field_id}/move` accepts source/target version IDs,
+target model ID and target entity root ID; actor identity comes from authentication. Both
+model roots are row-locked in stable UUID order, then current Data Owner/Data Steward scopes
+are checked independently for both models. Stale versions, review/retired models, a target
+entity outside the target version, duplicate case-insensitive field names and removal of the
+source model's last field are rejected. An emptied source entity is retired when other fields
+remain elsewhere in that model. All mutations and audit events commit together.
+
+The old field root is retired; its immutable versions remain owned by the source entity. A new
+target field root carries the same field metadata and concept pins, appended after the target's
+existing fields. No physical bindings or representation permissions are copied. Existing
+mapping reconciliation supersedes source relationships containing the removed field, rebases
+surviving links and records missing mappings for the destination. An append-only `moved` audit
+event links both model revisions, source field root and new target root. No schema migration is
+needed; the data-model reference documents the new persisted audit details.
+
+## Hold and drag new field connections
+
+Holding a logical or physical field for 350 ms starts a document-tracked drag with a red
+source dot, moving dot and preview line. Both directions resolve to the same logical-field /
+physical-column pair. A valid drop creates a `Direct` draft using the actual target snapshot,
+the field classification, current responsible person and current start date. The existing
+blue endpoint ports indicate the connection; line status continues to indicate draft/review.
+The draft is persisted only through the existing save action and server authorization/validation.
+
+Drops must target a currently visible, non-preview physical representation and a current logical
+field. Unknown fields, duplicate pairs and incompatible direct types are rejected with an accessible
+status message; transformations remain available through the mapping dialog. Escape, pointer
+cancellation, leaving the browser viewport, window blur and early movement cancel the gesture. Permission is
+checked again on release. Native clicks after a held drag are suppressed to avoid opening a
+second mapping dialog. Short clicks, keyboard alternatives and existing line rewiring are retained.
+No persistence schema changes are required for this gesture.
+
+Connected-source cards expose their existing three actions through a three-dot context menu:
+open source (including the current logical-model context), import/reimport and drift checking,
+and voluntary permission return. All items use the same compact menu typography. Import remains
+disabled without the scoped permission or while running; return is shown only when permitted
+and invokes the existing confirmation. The menu has a source-specific accessible name, keyboard
+focus/navigation and dismissal via Escape, Tab or an outside click. Confirmation cancellation
+returns focus to the three-dot button. CSV inventories retain their separate lifecycle controls.
+
+## Field characteristics and save validation
+
+The public API and persisted `position` remain zero-based. The catalog UI's `order` is one-based:
+read `position + 1`, write `order - 1`, for both entities and fields. New manual fields start at 1;
+derived fields, historical models and repeated saves retain their exact persisted positions.
+Legacy UI-shaped responses with an explicit `order` already use the display convention.
+
+Technical entity/field names and derivation bindings accept Unicode letters (including umlauts),
+combining marks after the initial letter/underscore, ASCII digits, dot, hyphen and underscore.
+Whitespace, leading digits, slashes and names over 255 characters remain invalid. Names are
+preserved rather than transliterated by the editor.
+
+The full model editor and compact mapping field panel share save feedback. Unmapped server issues
+such as assistance provenance remain visible alongside error code, request ID and support details;
+multi-entity validation resolves the entity index before marking its field. A known assistance
+origin constraint failure reports a catalog compatibility error rather than asking the user to
+correct unidentified fields. Errors preserve the unsaved form.
+
+Migration 0038 broadens `ck_model_assistance_origin` to match API writes. It retains historical
+`machine` and `accepted` rows unchanged, exposes their canonical API names on reads and accepts
+those aliases on writes. The SQLAlchemy model now declares the existing provider/hash checks
+as well as the origin constraint, so tests built from metadata enforce the deployed rules.
+
+## Personal return of connected-source access
+
+The source card and explorer offer **Berechtigungen zurückgeben** for connected sources.
+The confirmed action persists a personal denial, including when access is inherited from an
+organization role or the VIBDBU demonstration exception. CSV inventories keep their existing
+archive/restore/delete actions. Denied sources are excluded from search, documentation projections,
+representation membership responses and workspace physical metadata; direct reads, exports,
+imports, physical-domain edits, mapping actions and derivation enforce the same denial.
+Logical models and historical mappings remain stored, and logical-only views stay accessible
+according to their original permissions. Neither source lifecycle nor organization roles change.
+
+The returned-source section reveals only the source name, organization and restoration status.
+A reasoned restoration request creates one workflow task for each eligible active Data Owner in
+the source organization or an authorized ancestor organization, excluding the requester.
+At decision time the server rechecks roles and underlying requester access. Approval lifts only
+the personal opt-out; rejection needs a reason and permits reapplication. All tasks for the
+request complete together. Source-row locks serialize return/request/decision operations, while
+the recorded access revision prevents approval of an earlier return cycle. No eligible owner
+means the request fails with 409. There is no self-service restoration or automatic seed reset.
+
 This document defines the four metadata layers added to the standalone DaCa catalog.  They are
 related through explicit, version-pinned references; none of them is a replacement for an
 existing data product, DaCa glossary term, or I14Y MappingTable.

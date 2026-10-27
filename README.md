@@ -1,10 +1,72 @@
 # BIT DaCa
 
+Release **0.1.32** adds personal source-access return and owner-reviewed restoration, draft-only
+mapping edits, improved field editing and the repeatable AdA CSV-import journey. Release 0.1.31
+notes remain in the version history. For a separate local UI-regression stack, set
+`DACA_UI_REGRESSION_BASE_URL` before running the regression command or committing; explicit
+`--base-url` takes precedence and the pre-commit hook runs the same full regression gate.
+
+The **Import physisches Datenmodell – AdA** tile under **Documentation → User Journeys**
+opens a six-step guide. The tile and the guide header beside duration/difficulty share a
+three-dot menu that downloads the versioned AdA example inventory
+and resets its import in a selected authorized organization. Confirmation
+removes only that exact CSV inventory and its structures, then reopens an empty importer.
+Logical/model-history references block reset; audit evidence and unrelated sources remain.
+The equivalent local command is `npm run journey:ada:reset -- --demo-user christian.man --yes`;
+omit `--yes` for a preview. Journey actions live on the tile and detail header; CSV-import controls on the models
+and sources pages stay separate. See the [example guide](examples/ada-bewirtschaftung/README.md).
+
+The physical-model CSV journey supports both model and source entry points, file selection or
+an explicit drag-and-drop area, preview, organization selection and persisted inventory inspection.
+The [AdA administration example](examples/ada-bewirtschaftung/README.md) supplies an importable
+CSV with 11 tables / 62 fields, PostgreSQL DDL and fictional administrative records. It is a
+proposed source model, separate from DaCa application persistence and official Army systems.
+
+The mapping workspace opens directly in its model context without the redundant selection bar.
+Physical representations are selected through their cards; the existing model overview and
+canvas representation picker provide navigation and additions.
+
+Deleting a relationship line immediately removes it from the local draft without confirmation.
+Only **Entwurf speichern** persists the removal, together with other workspace edits. Reloading
+and discarding an unsaved draft restores the stored relationship; failed saves retain the draft.
+
+Field names update the graph, mapping table and inspector immediately as a local preview.
+Typing makes no catalog write. **Entwurf speichern** commits pending field characteristics,
+representations and mappings together; failures preserve the local draft for correction.
+
+Field characteristics show the entity as read-only. The magnifying glass opens a search for
+another logical model and destination entity. Moving a field requires a warning review, an
+explicit acknowledgement and retyping its name. Both models receive drafts atomically;
+physical mappings stay in the source history and do not move with the field.
+
+In the mapping graph, hold a logical or physical field for 350 ms and drag its red point
+and red preview line onto a field of the opposite model type. A compatible, nonduplicate pair
+creates a direct draft with blue endpoints; save it with the existing draft action. Invalid
+or cancelled drops leave mappings unchanged. Click selection, keyboard actions and existing
+line-end rewiring remain available.
+
+Connected source cards group opening, metadata import/drift checks and personal access return
+in a compact three-dot actions menu. Existing permissions and return confirmation still apply;
+keyboard navigation, Escape and outside-click dismissal keep the menu accessible.
+
+Logical field characteristics display order starting at 1; the Angular API boundary converts
+to and from the existing zero-based `position` contract without shifting saved mappings.
+Technical entity and field names accept Unicode letters, including umlauts. Save failures list
+server validation details even in the compact mapping field panel. Migration 0038 aligns
+assistance provenance origins with the API while preserving immutable historical evidence.
+
 **DaCa** is the central **Data Catalog** of the BIT data platform. This proof of concept contains
 the catalog, an administrative control-plane prototype, and a synthetic ESTV data product
 protected over both REST and direct PostgreSQL access.
 The original PoC catalog description is corrected in a new metadata revision, retaining its
 previous wording only as version history.
+
+Connected source cards and detail pages support **Berechtigungen zurückgeben**: a confirmed,
+personal opt-out removes the source from the user's visible sources and blocks direct catalog
+structure access, including inherited role access. Other users and stored models remain intact.
+The separate returned-source section supports reasoned reapplication; another current Data Owner
+must approve through My Tasks. CSV inventories, external database accounts and data-product
+delivery permissions are unchanged. Migration 0037 persists this state across restarts and seeds.
 
 ## Release 0.1.31
 

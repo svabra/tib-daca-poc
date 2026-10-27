@@ -27,6 +27,8 @@ import {
   PhysicalDomainTarget,
   PhysicalSnapshot,
   PhysicalSource,
+  PhysicalSourceRestorationRequest,
+  ReturnedPhysicalSource,
   StructureInventoryAuditEvent,
   PhysicalTable,
 } from './data-models.models';
@@ -165,6 +167,13 @@ export class DataModelsApiService {
       `/api/v1/logical-models/${encodeURIComponent(id)}`,
       { headers: this.identity.headers(), observe: 'response' },
     )).pipe(map((result) => ({ ...result, body: this.normalizeLogicalModel(result.body) })));
+  }
+
+  moveLogicalField(modelId:string, fieldId:string, body:{sourceVersionId:string;targetModelId:string;targetVersionId:string;targetEntityId:string}):Observable<ApiResult<LogicalModel>> {
+    return this.identitySafeResponse(this.http.post<unknown>(
+      `/api/v1/logical-models/${encodeURIComponent(modelId)}/fields/${encodeURIComponent(fieldId)}/move`,
+      body, {headers:this.identity.headers(),observe:'response'},
+    )).pipe(map((result)=>({...result,body:this.normalizeLogicalModel(result.body)})));
   }
 
   listLogicalModelVersions(id: string): Observable<readonly LogicalModel[]> {
@@ -333,6 +342,18 @@ export class DataModelsApiService {
     return this.identitySafe(this.http.get<StructureInventoryAuditEvent[]>('/api/v1/structure-inventories/audit-events', {headers: this.identity.headers()}));
   }
 
+  adaImportJourney(departmentCode: string, organizationId: string): Observable<PhysicalSource | null> {
+    return this.identitySafe(this.http.get<{source: unknown | null}>('/api/v1/import-journeys/ada', {
+      headers: this.identity.headers(), params: {departmentCode, organizationId},
+    })).pipe(map(result => result.source ? this.normalizePhysicalSource(result.source) : null));
+  }
+
+  resetAdaImport(departmentCode: string, organizationId: string, revision: number): Observable<unknown> {
+    return this.csvRequest(this.http.post('/api/v1/import-journeys/ada/reset', {departmentCode, organizationId}, {
+      headers: this.writeHeaders(`"${revision}"`),
+    }));
+  }
+
   listPhysicalSources(includeArchived = false, logicalModelId?: string): Observable<readonly PhysicalSource[]> {
     let params = new HttpParams();
     if (includeArchived) params = params.set('includeArchived', 'true');
@@ -340,6 +361,26 @@ export class DataModelsApiService {
     return this.identitySafe(this.http.get<CollectionResponse<unknown> | unknown[]>(
       '/api/v1/physical-sources', { headers: this.identity.headers(), params },
     )).pipe(map((response) => (Array.isArray(response) ? response : response.items).map((item) => this.normalizePhysicalSource(item))));
+  }
+
+  relinquishSourceAccess(sourceId: string): Observable<unknown> {
+    return this.csvRequest(this.http.post(`/api/v1/physical-sources/${encodeURIComponent(sourceId)}/access/relinquish`, {}, {headers: this.identity.headers()}));
+  }
+
+  returnedSources(): Observable<ReturnedPhysicalSource[]> {
+    return this.csvRequest(this.http.get<ReturnedPhysicalSource[]>('/api/v1/physical-source-access/mine', {headers: this.identity.headers()}));
+  }
+
+  requestSourceRestoration(sourceId: string, reason: string): Observable<PhysicalSourceRestorationRequest> {
+    return this.csvRequest(this.http.post<PhysicalSourceRestorationRequest>(`/api/v1/physical-sources/${encodeURIComponent(sourceId)}/access/requests`, {reason}, {headers: this.identity.headers()}));
+  }
+
+  sourceRestorationInbox(): Observable<PhysicalSourceRestorationRequest[]> {
+    return this.csvRequest(this.http.get<PhysicalSourceRestorationRequest[]>('/api/v1/physical-source-access-requests/inbox', {headers: this.identity.headers()}));
+  }
+
+  decideSourceRestoration(id: string, decision: 'approve' | 'reject', comment: string): Observable<PhysicalSourceRestorationRequest> {
+    return this.csvRequest(this.http.post<PhysicalSourceRestorationRequest>(`/api/v1/physical-source-access-requests/${encodeURIComponent(id)}/decision`, {decision, comment}, {headers: this.identity.headers()}));
   }
 
   listPhysicalSnapshots(sourceId?: string): Observable<readonly PhysicalSnapshot[]> {
@@ -368,16 +409,16 @@ export class DataModelsApiService {
     )).pipe(map((value) => value.items));
   }
 
-  saveWorkspaceDraft(model: LogicalModel, representations: readonly {physicalSnapshotId: string; physicalTableId: string}[], drafts: readonly AssetMapping[]): Observable<{items: {physicalTableId:string}[]; mappings: {clientId: string; mapping: AssetMapping}[]}> {
+  saveWorkspaceDraft(model: LogicalModel, representations: readonly {physicalSnapshotId: string; physicalTableId: string}[], drafts: readonly AssetMapping[], logicalDraft:LogicalModelWrite|null=null, removals:readonly AssetMapping[]=[]): Observable<{removedMappingIds?:string[];items: {physicalTableId:string}[]; mappings: {clientId: string; mapping: AssetMapping}[];logicalModel?:LogicalModel;currentMappings?:readonly AssetMapping[]}> {
     const mappings = drafts.map((item) => ({clientId: item.id,
       ...(item.id.startsWith('draft-mapping-') ? {} : {mappingId: item.id, versionId: item.versionId, lockVersion: item.lockVersion}),
       value: this.mappingPayload(item),
     }));
-    return this.identitySafe(this.http.post<{items:{physicalTableId:string}[];mappings: {clientId: string; mapping: unknown}[]}>(
+    return this.identitySafe(this.http.post<{removedMappingIds?:string[];items:{physicalTableId:string}[];mappings: {clientId: string; mapping: unknown}[];logicalModel?:unknown;currentMappings?:unknown[]}>(
       `/api/v1/logical-models/${encodeURIComponent(model.id)}/mapping-drafts`,
-      {logicalModelVersionId: model.versionId, representations, mappings},
+      {logicalModelVersionId: model.versionId, representations, mappings,...(removals.length?{removals:removals.map((item)=>({mappingId:item.id,versionId:item.versionId,lockVersion:item.lockVersion}))}:{}),...(logicalDraft?{logicalModel:this.toLogicalModelPayload(logicalDraft)}:{})},
       {headers: this.writeHeaders(`"${model.lockVersion}"`)},
-    )).pipe(map((result) => ({items:result.items,mappings: result.mappings.map((item) => ({clientId: item.clientId, mapping: this.normalizeMapping(item.mapping)}))})));
+    )).pipe(map((result) => ({items:result.items,removedMappingIds:result.removedMappingIds??[],...(result.logicalModel?{logicalModel:this.normalizeLogicalModel(result.logicalModel),currentMappings:result.currentMappings?.map((item)=>this.normalizeMapping(item))??[]}:{}),mappings: result.mappings.map((item) => ({clientId: item.clientId, mapping: this.normalizeMapping(item.mapping)}))})));
   }
 
   listMappings(logicalModelId?: string, physicalSnapshotId?: string): Observable<readonly AssetMapping[]> {
@@ -515,7 +556,7 @@ export class DataModelsApiService {
         businessObject: entity.businessObject,
         businessObjectVersionId: entity.businessObjectVersionId ?? null,
         comment: entity.comment,
-        position: entity.order,
+        position: entity.order - 1,
         fields: entity.fields.map((field) => ({
           ...(field.id ? { id: field.id } : {}),
           businessObject: field.businessObject,
@@ -534,7 +575,7 @@ export class DataModelsApiService {
           nullable: field.nullable,
           minCount: field.minCount,
           maxCount: field.maxCount,
-          position: field.order,
+          position: field.order - 1,
           conceptIds: field.conceptIds,
           conceptMatchExplicitlyNone: field.conceptMatchExplicitlyNone ?? false,
         })),
@@ -603,7 +644,7 @@ export class DataModelsApiService {
         nullable: booleanValue(field['nullable'], true),
         minCount: numberValue(field['minCount'], booleanValue(field['nullable'], true) ? 0 : 1),
         maxCount: nullableNumber(field['maxCount']) ?? 1,
-        order: numberValue(field['position'] ?? field['order'], fieldIndex + 1),
+        order: typeof field['position'] === 'number' ? numberValue(field['position'], fieldIndex) + 1 : numberValue(field['order'], fieldIndex + 1),
         valueListConcept: field['valueListConcept']
           ? this.normalizeConceptReference(field['valueListConcept'])
           : valueListConceptId ? this.normalizeConceptReference({ id: valueListConceptId }) : null,
@@ -619,7 +660,7 @@ export class DataModelsApiService {
         businessObject: textValue(entity['businessObject'], entityName),
         businessObjectVersionId: nullableText(entity['businessObjectVersionId']),
         comment: nullableText(entity['comment']),
-        order: numberValue(entity['position'] ?? entity['order'], entityIndex + 1),
+        order: typeof entity['position'] === 'number' ? numberValue(entity['position'], entityIndex) + 1 : numberValue(entity['order'], entityIndex + 1),
         fields: entityFields,
       };
     });
@@ -825,6 +866,7 @@ export class DataModelsApiService {
     return {
       id: textValue(item['id']), revision: numberValue(item['revision'], 1), name: connectorType === 'csv' ? textValue(item['name']).replace(/\s*·\s*CSV-Struktur$/, '') : textValue(item['name'], textValue(item['displayName'], 'PostgreSQL-Quelle')),
       lifecycle: textValue(item['lifecycle'],'active') as PhysicalSource['lifecycle'], inventoryManageable: booleanValue(item['inventoryManageable'],false),
+      canRelinquishAccess: booleanValue(item['canRelinquishAccess'], false),
       representationAttachable: typeof item['representationAttachable'] === 'boolean' ? item['representationAttachable'] : undefined,
       representationDisabledReason: nullableText(item['representationDisabledReason']),
       description: nullableText(item['description']),

@@ -52,6 +52,31 @@ def _inventory(session, actor: str, source_id: uuid.UUID, if_match: str | None) 
     return source
 
 
+def remove_structure_inventory(session, actor: str, source_id: uuid.UUID, if_match: str | None) -> Response:
+    """Shared guarded removal used by inventory deletion and the example-import reset."""
+    source = _inventory(session, actor, source_id, if_match)
+    snapshots = select(PhysicalSchemaSnapshot.id).where(PhysicalSchemaSnapshot.source_id == source.id)
+    used = (session.scalar(select(AssetMapping.id).where(AssetMapping.physical_source_id == source.id).limit(1))
+            or session.scalar(select(AssetMappingVersion.id).where(AssetMappingVersion.physical_snapshot_id.in_(snapshots)).limit(1))
+            or session.scalar(select(LogicalModelRepresentation.id).where(LogicalModelRepresentation.physical_snapshot_id.in_(snapshots)).limit(1)))
+    if used:
+        raise HTTPException(409, "Das Strukturinventar wird von Modellverknüpfungen oder historischen Mappings verwendet. Bitte stattdessen archivieren.")
+    details = inventory_audit_details(source)
+    details["snapshotCount"] = session.scalar(select(func.count()).select_from(PhysicalSchemaSnapshot).where(PhysicalSchemaSnapshot.source_id == source.id))
+    details["tableCount"] = session.scalar(select(func.count()).select_from(PhysicalTable).join(PhysicalSchema).join(PhysicalDatabase).where(PhysicalDatabase.snapshot_id.in_(snapshots)))
+    record_audit(session, "structure-inventory", source.id, "deleted", actor, source.revision + 1, details)
+    try:
+        # Immutable mapping/representation FKs guard concurrent references too.
+        session.execute(delete(PhysicalDriftReport).where(PhysicalDriftReport.source_id == source.id))
+        session.execute(delete(PhysicalSchemaSnapshot).where(PhysicalSchemaSnapshot.source_id == source.id))
+        session.delete(source)
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(409, "Das Strukturinventar wurde inzwischen verknüpft. Bitte neu laden und stattdessen archivieren.") from None
+    return Response(status_code=204)
+
+
 def create_structure_inventory_router() -> APIRouter:
     router = APIRouter(prefix="/api/v1/structure-inventories", tags=["structure inventories"])
 
@@ -106,27 +131,6 @@ def create_structure_inventory_router() -> APIRouter:
     @router.delete("/{source_id}", status_code=204)
     def remove(source_id: uuid.UUID, session: SessionDep, actor: ActorDep,
                if_match: Annotated[str | None, Header(alias="If-Match")] = None):
-        source = _inventory(session, actor, source_id, if_match)
-        snapshots = select(PhysicalSchemaSnapshot.id).where(PhysicalSchemaSnapshot.source_id == source.id)
-        used = (session.scalar(select(AssetMapping.id).where(AssetMapping.physical_source_id == source.id).limit(1))
-                or session.scalar(select(AssetMappingVersion.id).where(AssetMappingVersion.physical_snapshot_id.in_(snapshots)).limit(1))
-                or session.scalar(select(LogicalModelRepresentation.id).where(LogicalModelRepresentation.physical_snapshot_id.in_(snapshots)).limit(1)))
-        if used:
-            raise HTTPException(409, "Das Strukturinventar wird von Modellverknüpfungen oder historischen Mappings verwendet. Bitte stattdessen archivieren.")
-        details = inventory_audit_details(source)
-        details["snapshotCount"] = session.scalar(select(func.count()).select_from(PhysicalSchemaSnapshot).where(PhysicalSchemaSnapshot.source_id == source.id))
-        details["tableCount"] = session.scalar(select(func.count()).select_from(PhysicalTable).join(PhysicalSchema).join(PhysicalDatabase).where(PhysicalDatabase.snapshot_id.in_(snapshots)))
-        record_audit(session, "structure-inventory", source.id, "deleted", actor, source.revision + 1, details)
-        try:
-            # Owned structure and membership rows cascade. Immutable mapping/representation
-            # FKs are the final guard against concurrent references created after the check.
-            session.execute(delete(PhysicalDriftReport).where(PhysicalDriftReport.source_id == source.id))
-            session.execute(delete(PhysicalSchemaSnapshot).where(PhysicalSchemaSnapshot.source_id == source.id))
-            session.delete(source)
-            session.commit()
-        except IntegrityError:
-            session.rollback()
-            raise HTTPException(409, "Das Strukturinventar wurde inzwischen verknüpft. Bitte neu laden und stattdessen archivieren.") from None
-        return Response(status_code=204)
+        return remove_structure_inventory(session, actor, source_id, if_match)
 
     return router

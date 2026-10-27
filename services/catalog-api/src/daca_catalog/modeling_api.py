@@ -39,6 +39,7 @@ from .modeling_schemas import (
     I14yConceptResponse,
     I14ySyncRunResponse,
     I14ySyncStatusResponse,
+    LogicalFieldMoveRequest,
     LogicalModelCollection,
     LogicalModelResponse,
     LogicalModelVersionCollection,
@@ -67,6 +68,7 @@ from .modeling_service import (
     mapping_payload,
     mapping_write_from_payload,
     persist_physical_import,
+    record_audit,
     snapshot_tree,
     utc_now,
     validate_mapping_version,
@@ -97,6 +99,7 @@ from .models import (
     PhysicalTable,
     WorkflowTask,
 )
+from .physical_source_access import require_source_access, returned_source_ids
 
 SessionDep = Annotated[Session, Depends(get_session)]
 
@@ -302,6 +305,7 @@ def _require_snapshot_scope(
     source = session.get(PhysicalSource, snapshot.source_id)
     if source is None:
         raise HTTPException(500, "Physical snapshot is missing its source")
+    require_source_access(session, actor, source.id)
     _require_scope(session, actor, source.department_code, source.organization_id)
     return snapshot
 
@@ -753,6 +757,62 @@ def create_modeling_router() -> APIRouter:
         response.headers["ETag"] = _etag(successor.lock_version)
         return logical_version_payload(session, model, successor)
 
+    @router.post("/logical-models/{model_id}/fields/{field_id}/move", response_model=LogicalModelResponse)
+    def move_logical_field(
+        model_id: uuid.UUID, field_id: uuid.UUID, body: LogicalFieldMoveRequest,
+        response: Response, session: SessionDep, actor: ActorDep,
+    ) -> dict[str, Any]:
+        if model_id == body.target_model_id:
+            raise HTTPException(422, "Wählen Sie ein anderes logisches Modell als Ziel.")
+        # Stable lock order prevents opposite-direction moves from deadlocking.
+        models = {key: get_logical_model(session, key, lock=True)
+                  for key in sorted([model_id, body.target_model_id], key=str)}
+        source_model, target_model = models[model_id], models[body.target_model_id]
+        source = get_logical_version(session, model_id, lock=True)
+        target = get_logical_version(session, body.target_model_id, lock=True)
+        for version in (source, target):
+            _require_version_scope(session, actor, version, roles={"data_owner", "data_steward"})
+            if version.status in {"review_pending", "retired", "superseded"}:
+                raise HTTPException(409, "Ein beteiligtes Modell ist in Prüfung oder nicht mehr bearbeitbar.")
+        if source.id != body.source_version_id or target.id != body.target_version_id:
+            raise HTTPException(409, "Ein Modell wurde inzwischen geändert. Laden Sie beide Modelle neu.")
+        source_write = logical_write_from_payload(logical_version_payload(session, source_model, source))
+        target_write = logical_write_from_payload(logical_version_payload(session, target_model, target))
+        source_entity = next((entity for entity in source_write.entities
+                              if any(field.id == field_id for field in entity.fields)), None)
+        if source_entity is None:
+            raise HTTPException(404, "Das Feld gehört nicht zur aktuellen Version des Ausgangsmodells.")
+        field = next(field for field in source_entity.fields if field.id == field_id)
+        target_entity = next((entity for entity in target_write.entities if entity.id == body.target_entity_id), None)
+        if target_entity is None:
+            raise HTTPException(422, "Die Zielentität gehört nicht zur aktuellen Version des Zielmodells.")
+        if sum(len(entity.fields) for entity in source_write.entities) <= 1:
+            raise HTTPException(409, "Das letzte Feld kann nicht verschoben werden. Ein logisches Modell benötigt mindestens ein Feld.")
+        if any(item.name.casefold() == field.name.casefold() for item in target_entity.fields):
+            raise HTTPException(409, "Die Zielentität enthält bereits ein Feld mit diesem Namen.")
+        # Existing roots and historical versions retain their ownership. Retire the
+        # source root and create a target root, with explicit audit lineage below.
+        moved = field.model_copy(deep=True, update={"id": None, "position": max(item.position for item in target_entity.fields) + 1})
+        target_entity.fields.append(moved)
+        source_entity.fields = [item for item in source_entity.fields if item.id != field_id]
+        source_write.entities = [entity for entity in source_write.entities if entity.fields]
+        successor = create_logical_successor(session, source_model, source, source_write, actor, action="field-moved-out")
+        target_successor = create_logical_successor(session, target_model, target, target_write, actor, action="field-moved-in")
+        for model, version in ((source_model, successor), (target_model, target_successor)):
+            rebase_mapping_versions(session, model, version, actor)
+            sync_mapping_inconsistencies(session, model.id)
+        target_payload = logical_version_payload(session, target_model, target_successor)
+        new_field = next(item for entity in target_payload["entities"] if entity["id"] == body.target_entity_id
+                         for item in entity["fields"] if item["name"] == field.name)
+        record_audit(session, "logical-field", field_id, "moved", actor, source_model.revision, details={
+            "sourceModelId": str(model_id), "sourceVersionId": str(successor.id),
+            "targetModelId": str(target_model.id), "targetVersionId": str(target_successor.id),
+            "targetEntityId": str(body.target_entity_id), "targetFieldId": str(new_field["id"]),
+        })
+        session.commit()
+        response.headers["ETag"] = _etag(successor.lock_version)
+        return logical_version_payload(session, source_model, successor)
+
     @router.post(
         "/logical-models/{model_id}/versions/{version_id}/submit",
         response_model=LogicalModelResponse,
@@ -841,12 +901,15 @@ def create_modeling_router() -> APIRouter:
             _require_version_scope(session, actor, version, roles={"data_owner", "data_steward"})
             dataset = _dataset_version(session, version)
         items = []
+        returned = returned_source_ids(session, actor)
         for source in session.scalars(
             select(PhysicalSource).where(
                 (PhysicalSource.lifecycle == "active") |
                 ((PhysicalSource.lifecycle == "archived") & (PhysicalSource.adapter_type == "csv") & include_archived)
             ).order_by(PhysicalSource.name)
         ):
+            if source.id in returned:
+                continue
             # The synthetic VIBDBU demonstration is readable across catalog
             # organizations; ownership-scoped writes remain protected below.
             if (source.department_code, source.organization_id) not in scopes and source.id != VIBDBU_PHYSICAL_SOURCE_ID:
@@ -896,6 +959,7 @@ def create_modeling_router() -> APIRouter:
                     "adapterType": source.adapter_type,
                     "representationAttachable": disabled_reason is None if dataset is not None else None,
                     "representationDisabledReason": disabled_reason,
+                    "canRelinquishAccess": source.adapter_type != "csv" and source.lifecycle == "active",
                     "inventoryManageable": source.adapter_type == "csv" and any(
                         item.role in {"data_owner", "deputy_data_owner", "data_steward"}
                         and item.department_code == source.department_code
@@ -933,6 +997,7 @@ def create_modeling_router() -> APIRouter:
             raise HTTPException(404, "Physical source not found")
         if source.lifecycle == "retired":
             raise HTTPException(409, "A retired physical source cannot be imported")
+        require_source_access(session, actor, source.id)
         _require_scope(
             session,
             actor,
@@ -1010,10 +1075,11 @@ def create_modeling_router() -> APIRouter:
         if source_id:
             statement = statement.where(PhysicalSchemaSnapshot.source_id == source_id)
         rows = session.execute(statement.order_by(PhysicalSchemaSnapshot.imported_at.desc())).all()
+        returned = returned_source_ids(session, actor)
         items = [
             snapshot_tree(session, snapshot)["snapshot"]
             for snapshot, source in rows
-            if (source.department_code, source.organization_id) in scopes or source.id == VIBDBU_PHYSICAL_SOURCE_ID
+            if source.id not in returned and ((source.department_code, source.organization_id) in scopes or source.id == VIBDBU_PHYSICAL_SOURCE_ID)
         ]
         return {"items": items, "total": len(items)}
 
@@ -1031,10 +1097,11 @@ def create_modeling_router() -> APIRouter:
         scopes = {(item.department_code, item.organization_id) for item in assignments}
         needle = (q or "").strip().casefold()
         items: list[dict[str, Any]] = []
+        returned = returned_source_ids(session, actor)
         for source in session.scalars(
             select(PhysicalSource).where(PhysicalSource.lifecycle == "active").order_by(PhysicalSource.name)
         ):
-            if (source.department_code, source.organization_id) not in scopes:
+            if source.id in returned or (source.department_code, source.organization_id) not in scopes:
                 continue
             if source_type and source.adapter_type != source_type:
                 continue
@@ -1096,6 +1163,7 @@ def create_modeling_router() -> APIRouter:
         if snapshot is None:
             raise HTTPException(404, "Physical snapshot not found")
         source = session.get(PhysicalSource, snapshot.source_id)
+        require_source_access(session, actor, source.id)
         assignments = _require_any_assignment(session, actor)
         scopes = {(item.department_code, item.organization_id) for item in assignments}
         if (source.department_code, source.organization_id) not in scopes and source.id != VIBDBU_PHYSICAL_SOURCE_ID:
@@ -1110,6 +1178,7 @@ def create_modeling_router() -> APIRouter:
         if snapshot is None:
             raise HTTPException(404, "Physical snapshot not found")
         source = session.get(PhysicalSource, snapshot.source_id)
+        require_source_access(session, actor, source.id)
         _require_scope(session, actor, source.department_code, source.organization_id)
         return drift_report_payload(session, snapshot)
 
@@ -1143,6 +1212,7 @@ def create_modeling_router() -> APIRouter:
         if row is None:
             raise HTTPException(404, "Physical table not found")
         table, _schema, _database, snapshot, source = row
+        require_source_access(session, actor, source.id)
         _require_scope(
             session,
             actor,
@@ -1263,6 +1333,7 @@ def create_modeling_router() -> APIRouter:
             if row is None:
                 raise HTTPException(404, "Physical table not found")
             table, snapshot, source = row
+            require_source_access(session, actor, source.id)
             _require_scope(
                 session,
                 actor,
@@ -1500,6 +1571,7 @@ def create_modeling_router() -> APIRouter:
         if row is None:
             raise HTTPException(404, "Physical table not found")
         table, snapshot, source, physical_schema = row
+        require_source_access(session, actor, source.id)
         _require_scope(
             session,
             actor,

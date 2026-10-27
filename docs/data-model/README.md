@@ -7,6 +7,10 @@ and synchronization tables retain historical PoC configuration, not the product 
 
 ## Boundaries and sources of truth
 
+The [AdA administration example](ada-bewirtschaftung-example.md) is a proposed external physical
+model supplied as CSV/DDL with fictional rows. Its 11 tables are not DaCa application tables;
+only imported structure metadata uses the existing catalog inventory/snapshot persistence.
+
 - SQLAlchemy `Base.metadata` is the source for tables, columns, keys, constraints and indexes.
 - Alembic is the immutable migration history; every current head and a migration fingerprint are recorded.
 - PostgreSQL bootstrap and sample-product migrations are the source for roles, functions and RLS objects.
@@ -44,7 +48,7 @@ Update generated sections with `npm run docs:data-model`. Validate them with
 
 | Persistence context | Storage | Tables | Alembic head | Migration fingerprint |
 |---|---|---:|---|---|
-| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 95 | `0036_structure_inventory_archive` | `5dee84956936be95` |
+| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 97 | `0038_model_assistance_origins` | `29d9de1bb3a3d761` |
 | [Control-plane data model](control-plane.md) | PostgreSQL (`daca_control_plane`) | 6 | `20260803_0001` | `ff3a5ea9ca863788` |
 | [Sample data-product model](sample-data-product.md) | PostgreSQL (`daca_sample`) | 4 | `0004_vibdbu_buildings` | `62c6765d78832f77` |
 
@@ -135,6 +139,8 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.physical_drift_reports`
 - `catalog.physical_schema_snapshots`
 - `catalog.physical_schemas`
+- `catalog.physical_source_access_requests`
+- `catalog.physical_source_access_states`
 - `catalog.physical_sources`
 - `catalog.physical_tables`
 - `catalog.poc_product_fixtures`

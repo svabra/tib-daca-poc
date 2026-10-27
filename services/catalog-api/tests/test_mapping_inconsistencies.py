@@ -1,12 +1,24 @@
 from __future__ import annotations
 
-from daca_catalog.mapping_inconsistencies import rebase_mapping_versions, sync_mapping_inconsistencies
+from daca_catalog.mapping_inconsistencies import (
+    rebase_mapping_versions,
+    sync_mapping_inconsistencies,
+)
 from daca_catalog.modeling_seed import PERSONNEL_MODEL_ID, VEHICLE_MODEL_ID, seed_modeling_catalog
 from daca_catalog.modeling_service import (
-    create_logical_successor, get_logical_version, logical_version_payload,
-    logical_write_from_payload, mapping_write_from_payload,
+    create_logical_successor,
+    get_logical_version,
+    logical_version_payload,
+    logical_write_from_payload,
+    mapping_write_from_payload,
 )
-from daca_catalog.models import AssetMapping, AssetMappingVersion, LogicalMappingInconsistency, LogicalModel, WorkflowTask
+from daca_catalog.models import (
+    AssetMapping,
+    AssetMappingVersion,
+    LogicalMappingInconsistency,
+    LogicalModel,
+    WorkflowTask,
+)
 from sqlalchemy import select
 
 

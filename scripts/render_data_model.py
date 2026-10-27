@@ -63,7 +63,7 @@ CATALOG_TABLES = {
     "logical_fields": "Versioned nested field roots with stable URNs, origin identifiers, content hashes and soft retirement.",
     "logical_model_versions": "Immutable structural and workflow revisions pinned to one authoritative DCAT dataset version.",
     "logical_models": "Versioned logical model roots that can exist without products, distributions or physical assets.",
-    "logical_model_assistance_provenance": "Version-bound DeepL and TERMDAT provenance for accepted or edited multilingual model values.",
+    "logical_model_assistance_provenance": "Immutable version-bound DeepL and TERMDAT provenance with provider/hash checks; canonical machine_translated, accepted_suggestion, edited and source_import origins coexist with historical machine/accepted aliases, which normalize only at the API boundary.",
     "logical_model_identifier_reservations": "Case-folded catalog-wide logical-model identifier reservations, atomically owned by one logical-model root.",
     "logical_model_representations": "Immutable, content-hashed membership binding a logical model root to an exact physical snapshot and object, independent of field mappings.",
     "logical_model_reviews": "Immutable domain-owner review snapshots, decisions and successor-version references for submitted logical models.",
@@ -75,6 +75,8 @@ CATALOG_TABLES = {
     "physical_schema_snapshots": "Immutable, fingerprinted observations of a physical source schema.",
     "physical_schemas": "Snapshot-bound schema nodes in the physical metadata hierarchy.",
     "physical_sources": "Credential-free physical metadata source definitions with PostgreSQL/S3/fixture/CSV adapter and secret-free configuration reference; CSV structure inventories have no live endpoint and alone support the archived lifecycle. Unreferenced inventories may be deleted while append-only inventory audit evidence survives.",
+    "physical_source_access_states": "Revisioned personal opt-outs overriding inherited connected-source access until another Data Owner approves restoration; seeds never reset these states.",
+    "physical_source_access_requests": "Reasoned source-restoration applications tied to an access-state revision, with current Data Owner decisions and linked workflow tasks; approval grants no new organization role.",
     "physical_tables": "Snapshot-bound PostgreSQL table/view, S3 Parquet object or CSV inventory table metadata; import_metadata retains CSV records without field names. row_count comes only from an actual Parquet footer and is distinct from object_count.",
     "access_requests": (
         "Requests by people or machines for time-bounded access, including renewals linked "

@@ -305,6 +305,7 @@ export interface StructureInventoryAuditEvent {
 }
 
 export interface PhysicalSource {
+  canRelinquishAccess?: boolean;
   representationAttachable?: boolean;
   representationDisabledReason?: string | null;
   lifecycle?: 'active' | 'archived' | 'retired';
@@ -324,6 +325,27 @@ export interface PhysicalSource {
   catalogPath: string;
   ownerName: string;
   updatedAt: string;
+}
+
+export interface PhysicalSourceRestorationRequest {
+  id: string;
+  sourceId: string;
+  sourceName: string;
+  organization: string;
+  requesterId: string;
+  requesterName: string;
+  reason: string;
+  status: 'submitted' | 'approved' | 'rejected';
+  decisionBy: string | null;
+  decisionComment: string | null;
+}
+
+export interface ReturnedPhysicalSource {
+  sourceId: string;
+  sourceName: string;
+  organization: string;
+  revision: number;
+  request: PhysicalSourceRestorationRequest | null;
 }
 
 export interface LogicalDerivationField {

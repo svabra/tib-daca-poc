@@ -5,8 +5,8 @@ import { BehaviorSubject, NEVER, of, Subject } from 'rxjs';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DataModelsApiService } from './data-models-api.service';
-import { ApiResult, AssetMapping, DriftReport, LogicalModel, LogicalModelSummary, PhysicalSnapshot } from './data-models.models';
-import { FALLBACK_LOGICAL_MODEL, FALLBACK_PHYSICAL_SNAPSHOT } from './mapping-fallback';
+import { ApiResult, AssetMapping, DriftReport, LogicalModel, LogicalModelSummary, LogicalModelWrite, PhysicalSnapshot } from './data-models.models';
+import { FALLBACK_LOGICAL_MODEL, FALLBACK_MAPPINGS, FALLBACK_PHYSICAL_SNAPSHOT } from './mapping-fallback';
 import { ModelingAssistanceService } from './modeling-assistance.service';
 import { exactMappingSuggestions, MappingWorkspaceComponent } from './mapping-workspace.component';
 
@@ -52,7 +52,7 @@ describe('exact mapping suggestions',()=>{
 describe('MappingWorkspaceComponent request ordering',()=>{
   afterEach(()=>TestBed.resetTestingModule());
 
-  it('keeps the deep-link selects and heading facade on the newest identity response',()=>{
+  it('keeps the deep-linked model, snapshot and heading on the newest identity response',()=>{
     const identityId=signal('kassandra.valdata');
     const queryParams=new BehaviorSubject(convertToParamMap({logicalModelId:'model-b',physicalSnapshotId:'snapshot-b'}));
     const firstModels=new Subject<readonly LogicalModelSummary[]>();
@@ -90,8 +90,6 @@ describe('MappingWorkspaceComponent request ordering',()=>{
       ],
     }).overrideComponent(MappingWorkspaceComponent,{set:{imports:[],template:`
       <h1>{{ facade.model()?.title?.de }}</h1>
-      <select aria-label="Logisches Modell" [value]="selectedModelId()">@for (model of modelOptions(); track model.id) {<option [value]="model.id" [selected]="model.id===selectedModelId()">{{ model.id }}</option>}</select>
-      <select aria-label="Physischer Snapshot" [value]="selectedSnapshotId()">@for (snapshot of snapshotOptions(); track snapshot.id) {<option [value]="snapshot.id" [selected]="snapshot.id===selectedSnapshotId()">{{ snapshot.id }}</option>}</select>
     `}});
 
     const fixture=TestBed.createComponent(MappingWorkspaceComponent);
@@ -120,16 +118,13 @@ describe('MappingWorkspaceComponent request ordering',()=>{
     fixture.detectChanges();
     expect(fixture.componentInstance.facade.model()?.id).toBe('model-b');
 
-    // The previous identity returns later and must not overwrite model or selects.
+    // The previous identity returns later and must not overwrite the selected model or snapshot.
     finish(first.model,{body:modelA,etag:'"1"'});
     finish(first.mappings,[]);
     finish(first.snapshot,snapshotA);
     finish(first.drift,null);
     fixture.detectChanges();
 
-    const selects=(fixture.nativeElement as HTMLElement).querySelectorAll('select');
-    expect(selects[0].value).toBe('model-b');
-    expect(selects[1].value).toBe('snapshot-b');
     expect(fixture.componentInstance.selectedModelId()).toBe('model-b');
     expect(fixture.componentInstance.selectedSnapshotId()).toBe('snapshot-b');
     expect(fixture.componentInstance.facade.model()?.id).toBe('model-b');
@@ -150,8 +145,11 @@ describe('MappingWorkspaceComponent request ordering',()=>{
     ]}).overrideComponent(MappingWorkspaceComponent,{set:{imports:[],template:''}});
     const fixture=TestBed.createComponent(MappingWorkspaceComponent);fixture.detectChanges();
     const component=fixture.componentInstance;
-    component.facade.initialize(FALLBACK_LOGICAL_MODEL,null,[],null);
+    component.facade.initialize(FALLBACK_LOGICAL_MODEL,null,FALLBACK_MAPPINGS,null);
     component.manageScopes.set([{role:'data_steward',organizationId:FALLBACK_LOGICAL_MODEL.office,descendantOrganizationIds:[FALLBACK_LOGICAL_MODEL.office],breadcrumb:[],delegatedOwnerUserId:null}]);
+    const logicalDraft={fields:[{id:FALLBACK_LOGICAL_MODEL.fields[0].rootId,name:'LiveName'}]} as LogicalModelWrite;
+    component.facade.previewLogicalDraft(FALLBACK_LOGICAL_MODEL.id,FALLBACK_LOGICAL_MODEL.versionId,logicalDraft);
+    component.removeMapping(FALLBACK_MAPPINGS[0].id);
     const table=FALLBACK_PHYSICAL_SNAPSHOT.tables[0];
     component.addRepresentation(FALLBACK_PHYSICAL_SNAPSHOT,table);
     expect(component.facade.pendingRepresentations()).toHaveLength(1);
@@ -164,11 +162,15 @@ describe('MappingWorkspaceComponent request ordering',()=>{
     component.saveMappings();
     expect(component.draftSaveDisabledReason()).toContain('gerade gespeichert');
     expect(api.saveWorkspaceDraft).toHaveBeenCalledOnce();
+    expect(api.saveWorkspaceDraft).toHaveBeenCalledWith(FALLBACK_LOGICAL_MODEL,expect.any(Array),expect.any(Array),logicalDraft,[FALLBACK_MAPPINGS[0]]);
     save.error(new Error('Versionskonflikt'));
     expect(component.error()).toContain('keine Änderungen');
     expect(component.draftSaveDisabledReason()).toBeNull();
     expect(component.facade.dirtyIds()).toEqual(dirty);
     expect(component.facade.pendingRepresentations()).toHaveLength(1);
+    expect(component.facade.pendingRemovals()).toEqual([FALLBACK_MAPPINGS[0]]);
+    expect(component.facade.logicalDraft()).toBe(logicalDraft);
+    expect(component.facade.logicalFields()[0].name).toBe('LiveName');
     const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
     expect(component.canDeactivate()).toBe(false);
     expect(confirm).toHaveBeenCalledOnce();confirm.mockRestore();
@@ -190,6 +192,12 @@ describe('MappingWorkspaceComponent request ordering',()=>{
     expect(component.draftSaveDisabledReason()).toContain('noch geladen');
     component.loading.set(false);
     expect(component.draftSaveDisabledReason()).toContain('Keine ungespeicherten Änderungen');
+    component.facade.initialize(FALLBACK_LOGICAL_MODEL,null,FALLBACK_MAPPINGS,null);
+    const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
+    component.removeMapping(FALLBACK_MAPPINGS[0].id);
+    expect(confirm).not.toHaveBeenCalled();expect(api.saveWorkspaceDraft).not.toHaveBeenCalled();
+    expect(component.facade.pendingRemovals()).toEqual([FALLBACK_MAPPINGS[0]]);
+    expect(component.draftSaveDisabledReason()).toBeNull();confirm.mockRestore();
     component.addRepresentation(FALLBACK_PHYSICAL_SNAPSHOT,FALLBACK_PHYSICAL_SNAPSHOT.tables[0]);
     expect(component.draftSaveDisabledReason()).toBeNull();
     component.manageScopes.set([]);

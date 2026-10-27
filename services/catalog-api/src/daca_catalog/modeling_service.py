@@ -23,6 +23,7 @@ from .modeling_schemas import (
     LogicalModelWrite,
     MappingIssue,
     MappingValidation,
+    canonical_assistance_origin,
 )
 from .models import (
     AssetMapping,
@@ -352,7 +353,7 @@ def logical_version_payload(session: Session, model: LogicalModel, version: Logi
                 "sourceModifiedAt": item.source_modified_at,
                 "retrievedAt": item.retrieved_at,
                 "payloadHash": item.payload_hash,
-                "origin": item.origin,
+                "origin": canonical_assistance_origin(item.origin),
             }
             for item in assistance_provenance
         ],

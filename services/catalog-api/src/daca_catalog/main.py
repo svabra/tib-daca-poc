@@ -65,6 +65,7 @@ from .governance import (
 )
 from .i14y_public_api import I14YPublicApiPort, VerifiedI14YPublicApi
 from .i14y_publication import DisabledI14YPublicationAdapter, I14YPublicationPort
+from .import_journey_api import create_import_journey_router
 from .logical_model_review_api import create_logical_model_review_router
 from .mapping_inconsistency_api import create_mapping_inconsistency_router
 from .model_domain_api import create_model_domain_router
@@ -118,6 +119,7 @@ from .models import (
     utc_now,
 )
 from .physical_csv_api import create_physical_csv_router
+from .physical_source_access_api import create_physical_source_access_router
 from .policy import (
     ActivePolicy,
     build_opa_bundle,
@@ -6914,7 +6916,9 @@ def create_app(
     app.include_router(create_modeling_router())
     app.include_router(create_representation_router())
     app.include_router(create_physical_csv_router())
+    app.include_router(create_import_journey_router())
     app.include_router(create_structure_inventory_router())
+    app.include_router(create_physical_source_access_router())
     app.include_router(create_model_domain_router())
     app.include_router(create_modeling_assistance_router())
     app.include_router(create_terminology_router())

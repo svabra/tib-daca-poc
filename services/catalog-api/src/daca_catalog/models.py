@@ -1420,6 +1420,9 @@ class WorkflowTask(Base):
     source_access_request_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("source_access_requests.id", ondelete="CASCADE")
     )
+    physical_source_access_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("physical_source_access_requests.id", ondelete="CASCADE"), index=True
+    )
     domain_change_request_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("domain_change_requests.id", ondelete="SET NULL")
     )
@@ -2230,6 +2233,15 @@ class LogicalModelReview(Base):
 
 class LogicalModelAssistanceProvenance(Base):
     __tablename__ = "logical_model_assistance_provenance"
+    __table_args__ = (
+        CheckConstraint("provider IN ('deepl', 'termdat')", name="ck_model_assistance_provider"),
+        CheckConstraint(
+            "origin IN ('machine', 'accepted', 'machine_translated', 'accepted_suggestion', 'edited', 'source_import')",
+            name="ck_model_assistance_origin",
+        ),
+        CheckConstraint("length(source_text_hash) = 64 AND length(payload_hash) = 64",
+                        name="ck_model_assistance_hashes"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
     logical_model_version_id: Mapped[uuid.UUID] = mapped_column(
@@ -2821,6 +2833,43 @@ class AssetMappingLogicalField(Base):
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     role: Mapped[str] = mapped_column(String(50), nullable=False, default="source")
+
+
+class PhysicalSourceAccessState(Base):
+    """Personal opt-out takes precedence over inherited catalog source access."""
+
+    __tablename__ = "physical_source_access_states"
+    source_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("physical_sources.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("demo_users.id", ondelete="CASCADE"), primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    relinquished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    restored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PhysicalSourceAccessRequest(Base):
+    """A request only lifts an opt-out; it never grants organization roles."""
+
+    __tablename__ = "physical_source_access_requests"
+    __table_args__ = (
+        CheckConstraint("status IN ('submitted', 'approved', 'rejected')",
+                        name="ck_physical_source_access_request_status"),
+        Index("uq_physical_source_access_request_open", "source_id", "requester_id", unique=True,
+              postgresql_where=text("status = 'submitted'"),
+              sqlite_where=text("status = 'submitted'")),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    source_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("physical_sources.id", ondelete="CASCADE"), nullable=False)
+    requester_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    access_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="submitted")
+    decision_by: Mapped[str | None] = mapped_column(ForeignKey("demo_users.id"))
+    decision_comment: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class AssetMappingPhysicalColumn(Base):

@@ -50,6 +50,7 @@ from .models import (
     PhysicalSource,
     PhysicalTable,
 )
+from .physical_source_access import require_source_access, returned_source_ids
 
 
 class DomainAssignmentWrite(ApiModel):
@@ -96,8 +97,9 @@ def create_model_domain_router():
                 "organizationId": value["organizationId"], "fieldCount": value["fieldCount"]})
         scopes = {(row.department_code, row.organization_id) for row in _assignments(session, actor)}
         physical = []
+        returned = returned_source_ids(session, actor)
         for source in session.scalars(select(PhysicalSource).where(PhysicalSource.lifecycle == "active")):
-            if (source.department_code, source.organization_id) not in scopes:
+            if source.id in returned or (source.department_code, source.organization_id) not in scopes:
                 continue
             snapshot = session.scalar(select(PhysicalSchemaSnapshot).where(
                 PhysicalSchemaSnapshot.source_id == source.id).order_by(PhysicalSchemaSnapshot.sequence.desc()).limit(1))
@@ -120,6 +122,7 @@ def create_model_domain_router():
     def read_physical_domains(table_id: uuid.UUID, session: SessionDep, actor: ActorDep):
         table, _snapshot_id, source_id = physical_table_context(session, table_id)
         source = session.get(PhysicalSource, source_id)
+        require_source_access(session, actor, source.id)
         _require_scope(session, actor, source.department_code, source.organization_id)
         return physical_domain_state(session, source_id, table.stable_key)
 
@@ -128,6 +131,7 @@ def create_model_domain_router():
                                session: SessionDep, actor: ActorDep):
         table, _snapshot_id, source_id = physical_table_context(session, table_id)
         source = session.get(PhysicalSource, source_id)
+        require_source_access(session, actor, source.id)
         if len(body.physical_domain_targets) != 1 or body.physical_domain_targets[0].physical_table_id != table_id:
             raise HTTPException(422, "Select exactly this physical object")
         apply_domain_targets(session, actor, body.data_domain_id, body.physical_domain_targets,

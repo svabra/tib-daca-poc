@@ -1,11 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
+import { PhysicalImportJourneyComponent } from '../data-models/physical-import-journey.component';
 import { POC_GUIDE_CAPABILITIES, POC_GUIDE_LIMITS, POC_GUIDE_STATUS_LABELS, POC_JOURNEYS } from './poc-guide.data';
 
 @Component({
   selector: 'daca-poc-guide-overview',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, PhysicalImportJourneyComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="daca-page-heading poc-guide-heading" data-poc-guide-overview>
@@ -44,6 +45,7 @@ import { POC_GUIDE_CAPABILITIES, POC_GUIDE_LIMITS, POC_GUIDE_STATUS_LABELS, POC_
 
     <div class="poc-guide-grid" aria-label="Verfügbare Customer Journeys">
       @for (journey of filteredJourneys(); track journey.id) {
+        <div class="poc-guide-card-shell" [class.has-journey-actions]="journey.id === 'import-physical-model-ada'" [id]="'journey-' + journey.id">
         <a class="daca-card poc-guide-card" [routerLink]="['/documentation/journeys', journey.id]" [attr.data-poc-guide-journey]="journey.id">
           <span class="poc-guide-card-number">{{ journey.number }}</span>
           <div class="poc-guide-card-main">
@@ -60,6 +62,10 @@ import { POC_GUIDE_CAPABILITIES, POC_GUIDE_LIMITS, POC_GUIDE_STATUS_LABELS, POC_
           </dl>
           <strong>Journey öffnen <span aria-hidden="true">→</span></strong>
         </a>
+        @if(journey.id === 'import-physical-model-ada') {
+          <daca-physical-import-journey class="journey-card-actions" (reset)="restartAdaImport($event)" />
+        }
+        </div>
       }
     </div>
     @if (filteredJourneys().length === 0) { <p class="poc-guide-empty" role="status">Keine Journey gefunden. Passen Sie Suchtext oder Tag an.</p> }
@@ -94,8 +100,17 @@ import { POC_GUIDE_CAPABILITIES, POC_GUIDE_LIMITS, POC_GUIDE_STATUS_LABELS, POC_
       <a class="daca-button is-secondary" routerLink="/poc-simulation">Simulationen öffnen</a>
     </section>
   `,
+  styles: [`
+    .poc-guide-card-shell{position:relative;min-width:0}.poc-guide-card-shell>.poc-guide-card{box-sizing:border-box;height:100%}
+    .poc-guide-card-shell.has-journey-actions>.poc-guide-card{padding-inline-end:4rem}
+    .journey-card-actions{position:absolute;top:1rem;right:1rem;z-index:2}
+  `],
 })
 export class PocGuideOverviewComponent {
+  private readonly router = inject(Router);
+  restartAdaImport(event: {organizationId: string}): void {
+    void this.router.navigate(['/physical-models'], {queryParams: {importCsv: '1', organizationId: event.organizationId}});
+  }
   readonly journeys = POC_JOURNEYS;
   readonly query = signal('');
   readonly selectedTag = signal<string | null>(null);

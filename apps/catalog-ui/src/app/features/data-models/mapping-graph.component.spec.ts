@@ -238,3 +238,66 @@ describe('MappingGraphComponent field context menu', () => {
   });
 
 });
+
+
+describe('MappingGraphComponent hold-to-connect', () => {
+  afterEach(() => { vi.useRealTimers(); TestBed.resetTestingModule(); });
+  function setup() {
+    TestBed.configureTestingModule({imports: [MappingGraphComponent], providers: [MappingDraftFacade]});
+    const facade=TestBed.inject(MappingDraftFacade);
+    facade.initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,[],null);
+    const fixture=TestBed.createComponent(MappingGraphComponent);
+    fixture.componentRef.setInput('canManage',true);
+    fixture.componentRef.setInput('responsibleUserId','cinthya.thor');
+    fixture.detectChanges();
+    const root=fixture.nativeElement as HTMLElement;
+    const logical=root.querySelector<HTMLElement>('[data-logical-field-id="field-valid"]')!;
+    const physical=root.querySelector<HTMLElement>('[data-physical-column-id="column-valid"]')!;
+    return {facade,fixture,root,logical,physical};
+  }
+  function pointer(element:EventTarget,type:string,x=100,y=100) {
+    const event=new MouseEvent(type,{bubbles:true,cancelable:true,button:0,clientX:x,clientY:y});
+    Object.defineProperty(event,'pointerId',{value:12});element.dispatchEvent(event);
+  }
+  for(const reverse of [false,true]) it(`draws a red preview and creates one draft ${reverse?'physical to logical':'logical to physical'}`,()=>{
+    vi.useFakeTimers();const {facade,fixture,root,logical,physical}=setup();
+    const source=reverse?physical:logical,target=reverse?logical:physical;
+    pointer(source,'pointerdown');vi.advanceTimersByTime(349);fixture.detectChanges();
+    expect(root.querySelector('.connection-preview')).toBeNull();
+    vi.advanceTimersByTime(1);fixture.detectChanges();
+    expect(root.querySelectorAll('.connection-preview circle')).toHaveLength(2);
+    pointer(document,'pointermove',300,240);fixture.detectChanges();
+    expect(root.querySelector('.connection-preview path')?.getAttribute('d')).toContain('300 240');
+    pointer(target,'pointerup',300,240);source.click();fixture.detectChanges();
+    expect(root.querySelector('.connection-preview')).toBeNull();
+    expect(facade.mappings()).toHaveLength(1);expect(facade.mappings()[0].status).toBe('draft');
+    expect(facade.mappings()[0].logicalFieldVersionIds).toEqual(['field-valid']);
+    expect(facade.mappings()[0].physicalColumnIds).toEqual(['column-valid']);
+    expect(facade.editor()).toBeNull();expect(facade.pendingLogicalFieldId()).toBeNull();
+  });
+  it('cancels early movement, escape, pointer cancellation and drops on the same side',()=>{
+    vi.useFakeTimers();const {facade,fixture,root,logical}=setup();
+    pointer(logical,'pointerdown');pointer(document,'pointermove',115,100);vi.advanceTimersByTime(400);
+    expect(fixture.componentInstance.connectionDrag()).toBeNull();
+    for(const cancel of ['escape','pointercancel','same-side']) {
+      pointer(logical,'pointerdown');vi.advanceTimersByTime(350);fixture.detectChanges();
+      if(cancel==='escape')logical.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+      else pointer(cancel==='same-side'?logical:document,cancel==='same-side'?'pointerup':'pointercancel');
+      fixture.detectChanges();expect(root.querySelector('.connection-preview')).toBeNull();
+    }
+    expect(facade.mappings()).toHaveLength(0);
+  });
+  it('preserves short-click interaction and prevents a viewer or lost permission from drawing a link',()=>{
+    vi.useFakeTimers();const {facade,fixture,logical,physical}=setup();
+    pointer(logical,'pointerdown');pointer(logical,'pointerup');logical.click();physical.click();
+    expect(facade.editor()?.logicalFieldVersionIds).toEqual(['field-valid']);
+    facade.closeEditor(false);
+    fixture.componentRef.setInput('canManage',false);fixture.detectChanges();
+    pointer(logical,'pointerdown');vi.advanceTimersByTime(400);
+    expect(fixture.componentInstance.connectionDrag()).toBeNull();
+    fixture.componentRef.setInput('canManage',true);fixture.detectChanges();
+    pointer(logical,'pointerdown');vi.advanceTimersByTime(350);
+    fixture.componentRef.setInput('canManage',false);fixture.detectChanges();pointer(physical,'pointerup');
+    expect(facade.mappings()).toHaveLength(0);
+  });
+});

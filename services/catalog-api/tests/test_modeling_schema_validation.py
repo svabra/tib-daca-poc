@@ -3,9 +3,8 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from pydantic import ValidationError
-
 from daca_catalog.modeling_schemas import LogicalModelWrite
+from pydantic import ValidationError
 
 
 def test_logical_model_accepts_omitted_i14y_concepts() -> None:

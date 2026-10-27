@@ -49,6 +49,7 @@ from .models import (
     PhysicalSchemaSnapshot,
     PhysicalSource,
 )
+from .physical_source_access import require_source_access, returned_source_ids
 from .schemas import ApiModel
 
 
@@ -283,6 +284,7 @@ def _selected_snapshot(
         if source is None or source.lifecycle != "active" or not _compatible_representation_scope(source, dataset_version.department_code, dataset_version.organization_id):
             continue
         try:
+            require_source_access(session, actor, source.id)
             _require_scope(session, actor, source.department_code, source.organization_id)
         except HTTPException as error:
             if error.status_code != 403:
@@ -307,6 +309,7 @@ def _selected_snapshot(
             PhysicalSource.department_code == dataset_version.department_code,
             PhysicalSource.organization_id == dataset_version.organization_id,
             PhysicalSource.lifecycle == "active",
+            PhysicalSource.id.not_in(returned_source_ids(session, actor)),
         )
         .order_by(PhysicalSchemaSnapshot.imported_at.desc())
         .limit(1)

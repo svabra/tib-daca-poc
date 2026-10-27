@@ -42,6 +42,46 @@ export const DACA_FEATURE_RELEASE = {
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
           {
+            title: 'AdA-Import herunterladen und zurücksetzen',
+            description: 'Die AdA-Journey unter Dokumentation erklärt den Import in sechs Schritten. Das Drei-Punkte-Menü auf ihrer Kachel und im Kopf der Anleitung lädt die CSV herunter und setzt den Beispielimport nach Bestätigung zurück. Modellverknüpfungen sperren den Reset; Audit und andere Quellen bleiben erhalten. Auch per lokalem Reset-Befehl erreichbar.',
+          },
+          {
+            title: 'CSV-Import mit Drag-and-drop und AdA-Beispiel',
+            description: 'Ein Strukturinventar per Dateiauswahl oder in die markierte Fläche laden, vorprüfen und importieren. Ein AdA-Modellvorschlag mit 11 Tabellen und 62 Feldern steht als CSV und PostgreSQL-Schema mit fiktiven Beispieldaten bereit.',
+          },
+          {
+            title: 'Kompakter Mapping-Arbeitsplatz',
+            description: 'Die doppelte Auswahlleiste entfällt. Das logische Modell kommt aus der Navigation; physische Repräsentationen wählen Sie direkt über ihre Karten.',
+          },
+          {
+            title: 'Beziehungslinien im Entwurf entfernen',
+            description: 'Linien ohne Nachfrage aus dem lokalen Entwurf entfernen. Erst Entwurf speichern übernimmt die Entfernung dauerhaft und erhält die Historie. Bei einem Fehler bleibt die Entfernung vorgemerkt.',
+          },
+          {
+            title: 'Feldnamen sofort im Modell sehen',
+            description: 'Änderungen erscheinen sofort in Graph, Tabelle und Zuordnungen. Sie bleiben temporär, bis Entwurf speichern Feldmerkmale und Zuordnungen gemeinsam übernimmt. Bei Fehlern bleibt der lokale Entwurf erhalten.',
+          },
+          {
+            title: 'Felder bewusst in andere logische Modelle verschieben',
+            description: 'Die Lupe neben der schreibgeschützten Entität öffnet die Modellsuche. Vor dem Verschieben bestätigen Sie die Folgen und geben den Feldnamen erneut ein. Beide Modelle werden gemeinsam versioniert; physische Zuordnungen bleiben in der Ausgangshistorie.',
+          },
+          {
+            title: 'Felder durch Halten und Ziehen verbinden',
+            description: 'Ein logisches oder physisches Feld kurz halten und den roten Punkt mit Linie auf die Gegenseite ziehen. Passende Verbindungen erhalten blaue Endpunkte und bleiben bis zum Speichern Entwürfe.',
+          },
+          {
+            title: 'Quellenaktionen im Drei-Punkte-Menü',
+            description: 'Öffnen, Import mit Driftprüfung und Berechtigungsrückgabe liegen in einem kompakten Kontextmenü mit einheitlicher Schriftgrösse. Berechtigungen und Bestätigung bleiben erhalten; das Menü ist per Tastatur bedienbar.',
+          },
+          {
+            title: 'Feldmerkmale zuverlässig bearbeiten und speichern',
+            description: 'Die Reihenfolge beginnt im Editor bei 1 und bleibt beim Speichern stabil. Technische Feld- und Entitätsnamen erlauben Umlaute. Übersetzungs- und TERMDAT-Herkunft lässt sich speichern; verständliche Fehlerdetails erscheinen auch im kompakten Mapping-Editor.',
+          },
+          {
+            title: 'Quellenberechtigungen freiwillig zurückgeben',
+            description: 'Eigenen Zugriff auf angebundene Quellen nach Bestätigung zurückgeben, auch bei geerbten Rechten. Die Quelle verschwindet aus der persönlichen Auswahl; Direktzugriffe sind gesperrt. Erneuter Zugriff braucht einen begründeten Antrag und die Freigabe eines anderen Data Owners unter Meine Aufgaben. Andere Personen, Modelle und CSV-Inventare bleiben erhalten.',
+          },
+          {
             title: "Strukturinventare organisationsübergreifend zuordnen",
             description: "Strukturinventare auch aus anderen Organisationen mit logischen Modellen verbinden, wenn für beide Bereiche eine Berechtigung besteht. Der Dialog verwendet die serverseitige Auswahlentscheidung; Speichern und Inspektion prüfen die Rechte erneut. Angebundene Quellen behalten ihre Organisationsgrenze.",
           },
@@ -172,6 +212,46 @@ export const DACA_FEATURE_RELEASE = {
         introduction: 'DaCa is the central data catalog of the BIT data platform and brings metadata, approvals and tasks together in one place.',
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
+          {
+            title: 'Download and reset the AdA import',
+            description: 'The AdA journey in Documentation explains the import in six steps. The three-dot menu on its tile and detail header downloads the CSV and resets its scoped import after confirmation. Model references block reset; audit and other sources remain. A local command uses the same workflow.',
+          },
+          {
+            title: 'CSV drag-and-drop and AdA example',
+            description: 'Load a structure inventory through the file picker or labelled drop area, review and import it. An AdA proposal with 11 tables and 62 fields includes CSV, PostgreSQL DDL and fictional sample records.',
+          },
+          {
+            title: 'A more compact mapping workspace',
+            description: 'The duplicate selection bar is removed. Navigation sets the logical model; select physical representations directly through their cards.',
+          },
+          {
+            title: 'Remove relationship lines in the draft',
+            description: 'Remove lines locally without a confirmation prompt. Only Save draft persists the removal and retains history. Failed saves keep the removal pending.',
+          },
+          {
+            title: 'See field-name changes immediately',
+            description: 'Edits appear immediately in the graph, table and mappings. They remain temporary until Save draft commits field characteristics and mappings together. Failed saves retain the local draft.',
+          },
+          {
+            title: 'Move fields to other logical models deliberately',
+            description: 'The magnifying glass beside the read-only entity opens model search. Review the consequences, acknowledge them and retype the field name to move it. Both model revisions save atomically; physical mappings remain in source history.',
+          },
+          {
+            title: 'Connect fields by holding and dragging',
+            description: 'Hold a logical or physical field, then drag the red point and line to the other side. Compatible connections have blue endpoints and remain drafts until saved.',
+          },
+          {
+            title: 'Source actions in a three-dot menu',
+            description: 'Open, import with drift checking and permission return share one compact, keyboard-accessible menu with consistent typography. Existing permissions and confirmation remain in place.',
+          },
+          {
+            title: 'Edit and save field characteristics reliably',
+            description: 'Editor order starts at 1 and remains stable across saves. Technical field and entity names accept Unicode letters. Translation and TERMDAT provenance saves correctly; actionable errors also appear in the compact mapping editor.',
+          },
+          {
+            title: 'Voluntarily return source permissions',
+            description: 'Return personal access to connected sources after confirmation, including inherited access. The source disappears from your selection and direct access is blocked. Renewed access requires a reasoned request and approval by another Data Owner in My Tasks. Other people, models and CSV inventories retain their existing behavior.',
+          },
           {
             title: "Attach structure inventories across organizations",
             description: "Link inventories from other organizations when independently authorized for both the model and inventory. The picker uses server-side eligibility; saving and inspection recheck access. Connected sources retain their organization boundary.",

@@ -1511,6 +1511,7 @@ class WorkflowTaskResponse(ApiModel):
         "governance_correction",
         "service_level_approval",
         "source_access_review",
+        "physical_source_access_review",
         "domain_change_review",
         "domain_change_decision",
         "glossary_term_review",
@@ -1530,6 +1531,7 @@ class WorkflowTaskResponse(ApiModel):
     governance_submission_id: uuid.UUID | None = None
     service_level_revision_id: uuid.UUID | None = None
     source_access_request_id: uuid.UUID | None = None
+    physical_source_access_request_id: uuid.UUID | None = None
     domain_change_request_id: uuid.UUID | None = None
     glossary_term_proposal_id: uuid.UUID | None = None
     logical_model_review_id: uuid.UUID | None = None

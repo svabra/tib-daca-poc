@@ -1,9 +1,80 @@
 import { FALLBACK_LOGICAL_MODEL, FALLBACK_MAPPINGS, FALLBACK_PHYSICAL_SNAPSHOT } from './mapping-fallback';
 import { MappingDraftFacade } from './mapping-draft.facade';
+import { LogicalModelWrite } from './data-models.models';
 
 describe('MappingDraftFacade', () => {
   let facade: MappingDraftFacade;
   beforeEach(() => { facade = new MappingDraftFacade(); facade.initialize(FALLBACK_LOGICAL_MODEL, FALLBACK_PHYSICAL_SNAPSHOT, FALLBACK_MAPPINGS, null); });
+
+  it('stages persisted removals locally, keeps them hidden on refresh, and discards them on reload',()=>{
+    const mapping=FALLBACK_MAPPINGS[0];facade.selectMapping(mapping.id);
+    facade.stageMappingRemoval(mapping.id);facade.stageMappingRemoval(mapping.id);
+    expect(facade.activeMappings().some((item)=>item.id===mapping.id)).toBe(false);
+    expect(facade.pendingRemovals()).toEqual([mapping]);expect(facade.selectedMapping()).toBeNull();
+    expect(facade.hasDirtyMappings()).toBe(true);expect(mapping.status).toBe('validated');
+    facade.refreshPersistedMappings(FALLBACK_MAPPINGS);
+    expect(facade.mappings().some((item)=>item.id===mapping.id)).toBe(false);
+    const rebased={...mapping,versionId:'new-version',lockVersion:2};
+    facade.rebaseAfterModelSave(FALLBACK_LOGICAL_MODEL,[rebased,...FALLBACK_MAPPINGS.slice(1)]);
+    expect(facade.pendingRemovals()[0].versionId).toBe('new-version');
+    expect(facade.mappings().some((item)=>item.id===mapping.id)).toBe(false);
+    facade.initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,FALLBACK_MAPPINGS,null);
+    expect(facade.pendingRemovals()).toEqual([]);expect(facade.activeMappings()).toContain(mapping);
+    facade.stageMappingRemoval(mapping.id);facade.markRemovalsSaved([mapping.id]);expect(facade.hasDirtyMappings()).toBe(false);
+  });
+
+  it('removes a new local relationship without scheduling a server deletion',()=>{
+    facade.createDirectConnection('field-valid','column-valid','cinthya.thor');
+    const id=facade.selectedMappingId()!;facade.stageMappingRemoval(id);
+    expect(facade.pendingRemovals()).toEqual([]);expect(facade.dirtyIds().size).toBe(0);
+    expect(facade.hasDirtyMappings()).toBe(false);
+  });
+
+  it('previews names by stable field root without changing saved identity, mappings or revisions',()=>{
+    const original=facade.model()!,field=original.fields[0];
+    const write={fields:[{id:field.rootId,name:'NeueGrösse'}]} as LogicalModelWrite;
+    facade.previewLogicalDraft(original.id,original.versionId,write);
+    expect(facade.logicalFields()[0].name).toBe('NeueGrösse');
+    expect(facade.logicalFields()[0].id).toBe(field.id);
+    expect(facade.model()).toBe(original);expect(facade.mappings()).toBe(FALLBACK_MAPPINGS);
+    expect(facade.hasDirtyMappings()).toBe(false);expect(facade.hasWorkspaceChanges()).toBe(true);
+    facade.previewLogicalDraft('other-model',original.versionId,{fields:[]} as unknown as LogicalModelWrite);
+    expect(facade.logicalDraft()).toBe(write);
+    facade.rebaseAfterModelSave(original,FALLBACK_MAPPINGS);
+    expect(facade.logicalDraft()).toBeNull();expect(facade.logicalFields()[0].name).toBe(field.name);
+    facade.previewLogicalDraft(original.id,original.versionId,write);facade.clear();expect(facade.logicalDraft()).toBeNull();
+  });
+
+  it('creates a direct drag connection as an unsaved draft with the selected column snapshot', () => {
+    expect(facade.createDirectConnection('field-valid', 'column-valid', 'cinthya.thor')).toBe(true);
+    const mapping = facade.selectedMapping()!;
+    expect(mapping.logicalFieldVersionIds).toEqual(['field-valid']);
+    expect(mapping.physicalColumnIds).toEqual(['column-valid']);
+    expect(mapping.physicalSnapshotId).toBe(FALLBACK_PHYSICAL_SNAPSHOT.id);
+    expect(mapping.responsibleUserId).toBe('cinthya.thor');
+    expect(mapping.classification).toBe('internal');
+    expect(mapping.status).toBe('draft');
+    expect(facade.dirtyIds().has(mapping.id)).toBe(true);
+    expect(facade.editor()).toBeNull();
+    expect(facade.createDirectConnection('field-valid', 'column-valid', 'cinthya.thor')).toBe(false);
+    expect(facade.dirtyIds().size).toBe(1);
+  });
+
+  it('rejects incompatible, hidden, preview and unknown drag targets without creating mappings', () => {
+    const original = facade.mappings();
+    expect(facade.createDirectConnection('field-valid', 'column-type', 'cinthya.thor')).toBe(false);
+    expect(facade.announcement()).toContain('Datentypen');
+    expect(facade.createDirectConnection('foreign-field', 'column-valid', 'cinthya.thor')).toBe(false);
+    expect(facade.createDirectConnection('field-valid', 'foreign-column', 'cinthya.thor')).toBe(false);
+    expect(facade.createDirectConnection('field-valid', 'column-valid', '')).toBe(false);
+    facade.hideRepresentation('table-org-unit');
+    expect(facade.createDirectConnection('field-valid', 'column-valid', 'cinthya.thor')).toBe(false);
+    facade.showRepresentation('table-org-unit');
+    facade.representations.update((items) => items.map((item) => ({...item, preview: true})));
+    expect(facade.createDirectConnection('field-valid', 'column-valid', 'cinthya.thor')).toBe(false);
+    expect(facade.mappings()).toBe(original);
+    expect(facade.hasDirtyMappings()).toBe(false);
+  });
 
   it('keeps graph and matrix interactions in one shared draft state', () => {
     facade.beginConnection('field-valid');

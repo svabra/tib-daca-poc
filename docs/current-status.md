@@ -1,5 +1,92 @@
 # Current status
 
+Release **0.1.32** packages the source-access workflow, mapping/editor changes and AdA import
+journey described below. All managed UI/API/package/image versions advance together; release
+0.1.31 notes are retained separately. The mandatory UI-regression hook can target an isolated
+local stack through `DACA_UI_REGRESSION_BASE_URL`, with the same complete suite and assertions.
+
+The searchable documentation journey index includes **Import physisches Datenmodell – AdA**
+(journey 14), with six steps, prerequisites, role, outcome and repeatability. Its tile includes a
+labelled, keyboard-accessible three-dot menu. The AdA detail header offers the same menu beside
+duration and difficulty, with the same reset navigation and guards. Models and source pages
+contain no journey menu.
+The tile downloads the exact packaged AdA CSV and offers a scoped reset with confirmation and the
+persisted inventory name. The backend computes the target from its own example fingerprint and
+the authorized organization, never a caller-supplied source ID. Reset shares inventory deletion
+guards, optimistic revision checking and append-only deletion audit; logical representations or
+mapping history block removal. An absent example is an idempotent success. Imports and resets
+serialize on the same source key. Successful UI resets navigate from the journey tile to a fresh
+CSV importer on the sources page in the selected scope. The one-use import query parameters are
+removed from the URL after opening. Errors retain the confirmation target.
+`journey:ada:reset` uses a local authenticated demo session, previews by default and requires
+`--yes` to reset; no catalog-wide reset, direct database access or forced deletion is included.
+
+The supplied physical-model import journey is already supported through both Datenmodelle and
+Datenquellen. The CSV dialog now adds a visible drag-and-drop target while retaining the file
+picker, generation-safe preview, validation and explicit import step. Multiple dropped files are
+rejected; dropping during import is ignored. Preview/cancellation never persist a source.
+
+The versioned [AdA example](../examples/ada-bewirtschaftung/README.md) provides 11 tables and 62
+fields as compatible CSV metadata plus executable PostgreSQL DDL and entirely fictional rows.
+PK/FK/default/nullability declarations remain inspectable CSV originals; structured CSV nullability
+continues to be unknown. SQL constraints are separately validated in an isolated example database.
+This is a proposed administrative source model, not an official Army system schema or a DaCa seed.
+
+The mapping workspace no longer shows the model dropdown, active-representation dropdown or
+the adjacent visible-sources button. Model context comes from navigation/deep links, and
+representation cards still select the active snapshot for drift inspection.
+
+Relationship removal now follows the workspace draft flow. The graph and inspector remove a
+line locally without a confirmation dialog or immediate API mutation. Persisted removals carry
+their original mapping version/lock in a pending list; new local mappings are simply discarded.
+Save draft atomically appends superseded mapping versions with other model/mapping changes.
+Failures keep removals pending; existing field-save rebasing updates their expected versions.
+
+The mapping field panel now publishes a local draft on each edit. Field names immediately
+appear in the graph, matrix, inspector and mapping dialogs, using unchanged stable field IDs.
+The saved model/revision stays unchanged while typing. Switching Graph/Table/Drift retains the
+field form. The workspace save action accepts field-only drafts and commits model characteristics
+and mappings atomically, rebasing references to the new immutable model version. Failed saves
+retain all draft inputs; navigation warnings include unsaved field characteristics.
+
+The entity in field characteristics is read-only, with a magnifying-glass action for moving the
+saved field to an entity of another logical model. The searchable popup checks editable scopes
+and requires acknowledgement plus the exact field name after explaining removal and mapping
+consequences. Pending field/mapping edits must be saved or discarded first. Both model revisions
+are locked and saved in one transaction; stale versions, duplicate names, unavailable rights and
+moving the last field are rejected. Physical mappings are not transferred; their history remains.
+
+In the mapping graph, hold a logical or physical field for 350 ms and drag its red point
+and red preview line onto a field of the opposite model type. A compatible, nonduplicate pair
+creates a direct draft with blue endpoints; save it with the existing draft action. Invalid
+or cancelled drops leave mappings unchanged. Click selection, keyboard actions and existing
+line-end rewiring remain available.
+
+Connected-source cards now use one labelled three-dot button instead of three differently sized
+action buttons. Its compact menu contains open source, import/reimport with drift checks and
+voluntary access return. Disabled imports and conditional return permissions are preserved.
+Arrow keys, Home/End, Escape and Tab support keyboard use; cancelling the return confirmation
+restores focus to the menu trigger. CSV inventory actions and source detail actions are unchanged.
+
+Logical-model editing now converts zero-based API entity/field positions to one-based order
+controls and back on save, including directly derived physical models. Unicode technical names
+work consistently in the editor, logical writes and derivation bindings. Field-panel saves show
+actionable server errors; issues outside form inputs are listed explicitly, and errors for later
+entities mark their actual fields. Migration 0038 allows the public assistance-origin vocabulary
+(`machine_translated`, `accepted_suggestion`, `edited`, `source_import`) alongside historical
+`machine`/`accepted` evidence. Historical rows are not rewritten; API reads normalize aliases.
+
+Connected sources support personal voluntary access return. Confirmation on a source card or
+detail page persists an opt-out that overrides inherited organization access and the VIBDBU
+read exception. Sources disappear from the actor's source register, search and physical selectors;
+direct structure access, import and derivation return 403. Other people retain their access.
+The separate returned-source section exposes only names, organizations and request status.
+Restoration requires a reason and approval by another current organization Data Owner through
+My Tasks. The first decision closes every linked review task; rejection permits a new request.
+Sources, snapshots, logical models and mappings remain persisted. Seeds cannot reset opt-outs.
+Migration 0037 adds personal states and restoration requests without changing existing access.
+CSV inventories, external database accounts and product-delivery policies are outside this flow.
+
 DaCa is the central data catalog of the BIT data platform. Earlier trust and synchronization
 fixtures in the control-plane prototype remain inspectable, but they do not define the catalog's
 operating model or transfer catalog resources. Catalog UI, glossary, footer and metadata now use

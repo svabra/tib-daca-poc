@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { I14yConcept } from '../domains/i14y-concepts.models';
 import { I14yConceptReference } from './data-models.models';
@@ -17,7 +17,7 @@ import { BusinessObjectTerm } from './modeling-assistance.service';
         <span class="field-position">Position {{ value('order') ?? '–' }}</span>
       </header>
       <div class="field-editor-grid">
-        <label dacaFieldHelp="entityName">Entität *<input formControlName="entityName" placeholder="z. B. Mitarbeitende"></label>
+        <div class="entity-assignment"><div class="entity-label"><label for="field-entity-name" dacaFieldHelp="entityName">Entität *</label><button type="button" class="entity-search" aria-label="Andere Entität suchen und Feld verschieben" title="Andere Entität suchen und Feld verschieben" [disabled]="!canMove()" (click)="moveRequested.emit($event.currentTarget)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg></button></div><input id="field-entity-name" formControlName="entityName" readonly></div>
         <label dacaFieldHelp="entityBusinessObject">Geschäftsobjekt der Entität *<select formControlName="entityBusinessObjectVersionId"><option value="">Bitte wählen</option>@for(term of businessObjects();track term.versionId){<option [value]="term.versionId">{{ businessObjectLabel(term) }} · v{{ term.revision }}</option>}</select></label>
         <label dacaFieldHelp="fieldName">Feldname *<input formControlName="name"></label>
         <label dacaFieldHelp="fieldBusinessObject">Geschäftsobjekt des Felds *<select formControlName="businessObjectVersionId"><option value="">Bitte wählen</option>@for(term of businessObjects();track term.versionId){<option [value]="term.versionId">{{ businessObjectLabel(term) }} · v{{ term.revision }}</option>}</select></label>
@@ -44,6 +44,8 @@ import { BusinessObjectTerm } from './modeling-assistance.service';
     </section>
   `,
   styles: [`
+    @media(max-width:820px),(pointer:coarse){.entity-label .entity-search{width:44px;height:44px}}
+    .entity-assignment{display:grid;align-content:start;gap:.35rem}.entity-label{display:flex;align-items:center;justify-content:space-between;gap:.4rem}.entity-search{display:grid;place-items:center;width:28px;height:28px;flex:none;border:0;background:transparent;color:var(--daca-blue);cursor:pointer}.entity-search:disabled{opacity:.4;cursor:default}.entity-search svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8}.entity-assignment input[readonly]{background:#f3f5f6;color:var(--daca-muted)}
     .field-characteristics{min-width:0;border:1px solid var(--daca-border);border-top:4px solid var(--daca-red);background:#fff}.field-characteristics>header{display:flex;align-items:start;justify-content:space-between;gap:.75rem;padding:.8rem .9rem;border-bottom:1px solid var(--daca-border)}.field-characteristics h3,.field-characteristics p{margin:.1rem 0}.field-characteristics h3{overflow-wrap:anywhere;font-size:1rem}.field-position{color:var(--daca-muted);font-size:.62rem;font-weight:750;white-space:nowrap}.field-editor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;padding:.9rem}.field-characteristics.is-compact .field-editor-grid{grid-template-columns:1fr;padding:.75rem}.field-editor-grid label{display:grid;align-content:start;gap:.35rem;min-width:0;color:#30363b;font-size:.68rem;font-weight:750}.field-editor-grid input,.field-editor-grid select,.field-editor-grid textarea{box-sizing:border-box;width:100%;min-height:40px;border:1px solid var(--daca-border-strong);border-radius:0;padding:.5rem .55rem;background:#fff;color:var(--daca-ink)}.field-editor-grid textarea{resize:vertical}.field-editor-grid .concept-multi{min-height:8rem}.field-editor-grid label>small{color:var(--daca-muted);font-size:.61rem;font-weight:500}.field-editor-grid .is-wide{grid-column:1/-1}.field-editor-grid .is-hidden{display:none}.i14y-reset{display:inline-flex;align-items:center;width:max-content;min-height:40px;border:0;padding:0;background:transparent;color:var(--daca-blue);font-size:.62rem;font-weight:750;text-decoration:underline;cursor:pointer}.concept-decision{border-left:4px solid var(--daca-blue);padding:.7rem;background:var(--daca-blue-soft)}.physical-binding{display:grid;gap:.2rem;border-left:4px solid var(--daca-blue);padding:.65rem .75rem;background:#f2f7f9;font-size:.66rem}.physical-binding span{font-family:monospace;font-weight:750}.physical-binding small{color:var(--daca-muted)}@media(max-width:560px){.field-editor-grid{grid-template-columns:1fr}}
   `],
 })
@@ -53,6 +55,8 @@ export class LogicalFieldCharacteristicsComponent {
   readonly concepts = input<readonly I14yConcept[]>([]);
   readonly conceptReferences = input<readonly I14yConceptReference[]>([]);
   readonly compact = input(false);
+  readonly canMove = input(false);
+  readonly moveRequested = output<EventTarget|null>();
 
   value(name: string): any { return this.field().get(name)?.value; }
   businessObjectLabel(term: BusinessObjectTerm): string { return term.labels.find((item) => item.language === 'de')?.preferredLabel ?? term.urn; }

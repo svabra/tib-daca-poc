@@ -108,6 +108,17 @@ def integrity_problem(exc: IntegrityError) -> CatalogProblem:
             [{"location": "body.entities", "message": "Feldnamen müssen innerhalb einer Entität eindeutig sein.", "type": "unique"}],
             safe_technical,
         )
+    if constraint == "ck_model_assistance_origin":
+        return CatalogProblem(
+            503,
+            "Herkunft der Sprachassistenz nicht speicherbar",
+            "Die Herkunft einer Übersetzung oder eines TERMDAT-Vorschlags wird von dieser Katalogversion nicht unterstützt. Ihre Änderungen bleiben im Editor erhalten.",
+            "urn:daca:problem:logical-model:assistance-origin",
+            "DACA-LM-ASSISTANCE-ORIGIN",
+            "Versuchen Sie es nach Aktualisierung des Katalogs erneut. Besteht das Problem weiter, kopieren Sie die technische Meldung für den Support.",
+            [{"location": "body.assistanceProvenance", "message": "Die Herkunftsangabe der Sprachassistenz konnte nicht verarbeitet werden.", "type": "provenance"}],
+            safe_technical,
+        )
     if sql_state in {"23502", "23503", "23514"}:
         return CatalogProblem(
             422,

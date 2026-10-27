@@ -34,6 +34,7 @@ from .models import (
     SiteGlossaryLocalization,
     SiteGlossaryTerm,
 )
+from .physical_source_access import returned_source_ids
 
 
 def _localized(rows: list[Any], language: str) -> Any | None:
@@ -150,7 +151,10 @@ def catalog_responsibilities(session: Session, actor: str, language: str = "de")
     # Physical domain membership is explicit. Mapping to a logical model does not
     # opt an unchecked physical object into the logical model's domain.
     actor_scopes = {row.organization_id for row in role_rows if row.user_id == actor}
+    returned = returned_source_ids(session, actor)
     for source in session.scalars(select(PhysicalSource).where(PhysicalSource.lifecycle == "active")):
+        if source.id in returned:
+            continue
         if source.organization_id not in actor_scopes and source.id != VIBDBU_PHYSICAL_SOURCE_ID:
             continue
         latest = session.scalar(select(PhysicalSchemaSnapshot).where(

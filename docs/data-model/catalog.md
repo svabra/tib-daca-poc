@@ -1,5 +1,70 @@
 # Catalog data model
 
+## Deferred relationship removals
+
+Unsaved workspace removals exist only in Angular memory. On Save draft, the optional `removals`
+batch identifies mapping roots with their current version ID and lock. The catalog appends an
+existing `asset_mapping_versions` successor with status `superseded`, original logical/physical
+references, validation and drift evidence, and the standard `superseded` audit event. No record is
+deleted. These writes share the workspace transaction with model, representation, mapping and
+inconsistency changes; failed saves leave no partial successor or audit event. No migration is
+required because the existing version/audit structures already represent this lifecycle.
+
+## Atomic workspace model edits
+
+The mapping workspace may supply an optional logical-model write when saving its local field
+preview. This uses the existing immutable logical/entity/field version structures and existing
+mapping successor/rebase rules, with model audit action `workspace-draft-revised`. The model,
+mapping versions, representation memberships, audit and inconsistency records commit in one
+transaction. Typing-time drafts exist only in Angular memory and never create persisted JSON,
+audit events or versions. No migration or new stored structure is required. Mapping responses
+remain filtered by the acting user's physical-source access.
+
+## Cross-model field moves
+
+The move endpoint appends one version to each affected logical model in a single transaction,
+locking both model roots in UUID order and comparing source/target version IDs. Existing field
+roots keep their historical ownership: the source root (and an emptied source entity) is retired,
+while a new root under the target entity stores copied field metadata and concept pins. The
+source must retain at least one field. Historical field/model versions are never rewritten.
+
+Existing reconciliation appends superseded mapping versions for relationships containing the
+removed field and draft successors for surviving relationships. Physical links and representation
+memberships are not copied to the destination. Existing inconsistency records/tasks cover its
+newly unmapped field. `audit_events` receives model actions `field-moved-out` / `field-moved-in`
+and a `logical-field` action `moved` whose resource ID is the source field root. Its JSON details
+contain `sourceModelId`, `sourceVersionId`, `targetModelId`, `targetVersionId`, `targetEntityId`
+and `targetFieldId` (all UUID strings); version IDs refer to the resulting successors. No field
+values or credentials enter this evidence. These additions reuse existing tables and constraints.
+
+## Assistance origin compatibility (migration 0038)
+
+`0038_model_assistance_origins` expands the existing provenance origin check to permit the API's
+`machine_translated`, `accepted_suggestion`, `edited` and `source_import` values. Historical
+`machine` and `accepted` values remain valid without updates to immutable records; API reads
+expose canonical aliases and new writes normalize legacy spellings. Downgrade validates the old
+constraint and refuses a rollback if modern evidence exists, rather than rewriting or deleting it.
+Provider and 64-character hash checks are also declared in SQLAlchemy metadata, matching migration
+0022, so schema-created test databases enforce these persisted invariants.
+
+Logical entity/field `position` storage stays zero-based. The one-based editor order is a UI/API
+conversion and requires no data backfill, revision rewriting or mapping migration.
+
+## Personal source access (migration 0037)
+
+`physical_source_access_states` stores one row per physical source and person. A null `restored_at`
+marks a current voluntary opt-out; revision increments on restoration and subsequent return.
+The denial takes precedence over inherited organization roles and synthetic VIBDBU visibility.
+Seeds never rewrite it. There is no backfill: absent states retain existing authorization.
+
+`physical_source_access_requests` retains reasoned restoration applications and their decisions,
+bound to the exact access revision. A partial unique index permits only one submitted request per
+source/person. `workflow_tasks.physical_source_access_request_id` links the Data Owner review
+tasks. Source-row locking serializes changes; approval revalidates the approver's current role,
+excludes self-approval and restores no missing organization roles. Append-only audit events contain
+identifiers and decision metadata, without request reasons or physical data payloads. CSV inventory
+lifecycle, source ownership, existing snapshots and mappings are independent of personal access.
+
 The central catalog owns product metadata, workflows, access governance and semantic evidence.
 Migration `0031_central_catalog_description` publishes revision 2 of the original PoC DCAT
 catalog description when revision 1 still contains the superseded seed wording.
@@ -150,10 +215,10 @@ reads it from the actual footer. It never denotes the number of S3 objects (`obj
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
-- Alembic head: `0036_structure_inventory_archive`
-- Schema fingerprint: `042f261dcabe0ed9`
-- Migration fingerprint: `5dee84956936be95`
-- Tables: `95`
+- Alembic head: `0038_model_assistance_origins`
+- Schema fingerprint: `7a6014ebc42d3573`
+- Migration fingerprint: `29d9de1bb3a3d761`
+- Tables: `97`
 
 ## Domain status vocabulary
 
@@ -1044,6 +1109,25 @@ erDiagram
         string name
         integer position
     }
+    physical_source_access_requests {
+        uuid id PK
+        uuid source_id FK
+        string requester_id FK
+        integer access_revision
+        text reason
+        string status
+        string decision_by FK
+        text decision_comment
+        datetime created_at
+        datetime decided_at
+    }
+    physical_source_access_states {
+        uuid source_id PK,FK
+        string user_id PK,FK
+        integer revision
+        datetime relinquished_at
+        datetime restored_at
+    }
     physical_sources {
         uuid id PK
         string urn UK
@@ -1356,6 +1440,7 @@ erDiagram
         uuid governance_submission_id FK
         uuid service_level_revision_id FK
         uuid source_access_request_id FK
+        uuid physical_source_access_request_id FK
         uuid domain_change_request_id FK
         uuid glossary_term_proposal_id FK
         uuid logical_model_review_id FK
@@ -1504,6 +1589,11 @@ erDiagram
     physical_schema_snapshots o|--o{ physical_schema_snapshots : "predecessor_snapshot_id"
     demo_users ||--o{ physical_schema_snapshots : "imported_by_user_id"
     physical_databases ||--o{ physical_schemas : "physical_database_id"
+    physical_sources ||--o{ physical_source_access_requests : "source_id"
+    demo_users ||--o{ physical_source_access_requests : "requester_id"
+    demo_users o|--o{ physical_source_access_requests : "decision_by"
+    physical_sources ||--o| physical_source_access_states : "source_id"
+    demo_users ||--o| physical_source_access_states : "user_id"
     administrative_organizations ||--o{ physical_sources : "organization_id"
     demo_users ||--o{ physical_sources : "created_by_user_id"
     physical_schemas ||--o{ physical_tables : "physical_schema_id"
@@ -1552,6 +1642,7 @@ erDiagram
     governance_submissions o|--o{ workflow_tasks : "governance_submission_id"
     service_level_revisions o|--o{ workflow_tasks : "service_level_revision_id"
     source_access_requests o|--o{ workflow_tasks : "source_access_request_id"
+    physical_source_access_requests o|--o{ workflow_tasks : "physical_source_access_request_id"
     domain_change_requests o|--o{ workflow_tasks : "domain_change_request_id"
     glossary_term_proposals o|--o{ workflow_tasks : "glossary_term_proposal_id"
     logical_model_reviews o|--o{ workflow_tasks : "logical_model_review_id"
@@ -2978,7 +3069,7 @@ Constraints and indexes:
 
 ### `logical_model_assistance_provenance`
 
-Version-bound DeepL and TERMDAT provenance for accepted or edited multilingual model values.
+Immutable version-bound DeepL and TERMDAT provenance with provider/hash checks; canonical machine_translated, accepted_suggestion, edited and source_import origins coexist with historical machine/accepted aliases, which normalize only at the API boundary.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -2997,6 +3088,9 @@ Version-bound DeepL and TERMDAT provenance for accepted or edited multilingual m
 
 Constraints and indexes:
 
+- Check `ck_model_assistance_hashes`: `length(source_text_hash) = 64 AND length(payload_hash) = 64`
+- Check `ck_model_assistance_origin`: `origin IN ('machine', 'accepted', 'machine_translated', 'accepted_suggestion', 'edited', 'source_import')`
+- Check `ck_model_assistance_provider`: `provider IN ('deepl', 'termdat')`
 - Foreign key `logical_model_version_id` → `logical_model_versions.id`; on delete `CASCADE`
 
 ### `logical_model_identifier_reservations`
@@ -3360,6 +3454,48 @@ Constraints and indexes:
 - Unique `uq_physical_schema_name`: `physical_database_id, name`
 - Foreign key `physical_database_id` → `physical_databases.id`; on delete `CASCADE`
 - Index `ix_physical_schema_database` on `physical_database_id, position`
+
+### `physical_source_access_requests`
+
+Reasoned source-restoration applications tied to an access-state revision, with current Data Owner decisions and linked workflow tasks; approval grants no new organization role.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `source_id` | `CHAR(32)` | no | FK | — |
+| `requester_id` | `VARCHAR(200)` | no | FK | — |
+| `access_revision` | `INTEGER` | no | — | — |
+| `reason` | `TEXT` | no | — | — |
+| `status` | `VARCHAR(32)` | no | — | `submitted` |
+| `decision_by` | `VARCHAR(200)` | yes | FK | — |
+| `decision_comment` | `TEXT` | yes | — | — |
+| `created_at` | `DATETIME` | no | — | — |
+| `decided_at` | `DATETIME` | yes | — | — |
+
+Constraints and indexes:
+
+- Check `ck_physical_source_access_request_status`: `status IN ('submitted', 'approved', 'rejected')`
+- Foreign key `source_id` → `physical_sources.id`; on delete `CASCADE`
+- Foreign key `requester_id` → `demo_users.id`
+- Foreign key `decision_by` → `demo_users.id`
+- Index `uq_physical_source_access_request_open` on `source_id, requester_id` unique
+
+### `physical_source_access_states`
+
+Revisioned personal opt-outs overriding inherited connected-source access until another Data Owner approves restoration; seeds never reset these states.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `source_id` | `CHAR(32)` | no | PK, FK | — |
+| `user_id` | `VARCHAR(200)` | no | PK, FK | — |
+| `revision` | `INTEGER` | no | — | `1` |
+| `relinquished_at` | `DATETIME` | no | — | — |
+| `restored_at` | `DATETIME` | yes | — | — |
+
+Constraints and indexes:
+
+- Foreign key `source_id` → `physical_sources.id`; on delete `CASCADE`
+- Foreign key `user_id` → `demo_users.id`; on delete `CASCADE`
 
 ### `physical_sources`
 
@@ -3983,6 +4119,7 @@ Owner and approver work items for quality, access governance, SLA review and req
 | `governance_submission_id` | `CHAR(32)` | yes | FK | — |
 | `service_level_revision_id` | `CHAR(32)` | yes | FK | — |
 | `source_access_request_id` | `CHAR(32)` | yes | FK | — |
+| `physical_source_access_request_id` | `CHAR(32)` | yes | FK | — |
 | `domain_change_request_id` | `CHAR(32)` | yes | FK | — |
 | `glossary_term_proposal_id` | `CHAR(32)` | yes | FK | — |
 | `logical_model_review_id` | `CHAR(32)` | yes | FK | — |
@@ -4005,6 +4142,7 @@ Constraints and indexes:
 - Foreign key `governance_submission_id` → `governance_submissions.id`; on delete `CASCADE`
 - Foreign key `service_level_revision_id` → `service_level_revisions.id`; on delete `CASCADE`
 - Foreign key `source_access_request_id` → `source_access_requests.id`; on delete `CASCADE`
+- Foreign key `physical_source_access_request_id` → `physical_source_access_requests.id`; on delete `CASCADE`
 - Foreign key `domain_change_request_id` → `domain_change_requests.id`; on delete `SET NULL`
 - Foreign key `glossary_term_proposal_id` → `glossary_term_proposals.id`; on delete `SET NULL`
 - Foreign key `logical_model_review_id` → `logical_model_reviews.id`; on delete `SET NULL`
@@ -4016,6 +4154,7 @@ Constraints and indexes:
 - Index `ix_workflow_task_logical_review` on `logical_model_review_id`
 - Index `ix_workflow_task_product` on `data_product_id`
 - Index `ix_workflow_task_source_access_request` on `source_access_request_id`
+- Index `ix_workflow_tasks_physical_source_access_request_id` on `physical_source_access_request_id`
 
 <!-- END GENERATED: data-model. -->
 

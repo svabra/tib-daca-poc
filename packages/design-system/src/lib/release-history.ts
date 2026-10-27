@@ -2,7 +2,7 @@ import { DacaFeatureLocale, DacaFeatureScope } from './feature-list';
 import { DACA_VERSION } from './version';
 
 // A version bump must supply new customer-facing notes before the UI can build.
-const CURRENT_RELEASE_VERSION: typeof DACA_VERSION = '0.1.31';
+const CURRENT_RELEASE_VERSION: typeof DACA_VERSION = '0.1.32';
 
 export interface DacaReleaseFeature {
   readonly title: string;
@@ -65,6 +65,29 @@ function localizedFeature(source: HistoricalFeature, locale: DacaFeatureLocale):
 
 export function dacaReleaseHistory(scope: DacaFeatureScope, locale: DacaFeatureLocale): readonly DacaRelease[] {
   const catalogFeatures: readonly DacaReleaseFeature[] = locale === 'de' ? [
+    { title: 'AdA-Import-Journey wiederholen', description: 'Die AdA-Kachel unter Dokumentation führt zu sechs Anleitungsschritten. Drei-Punkte-Menüs auf der Kachel und im Kopf der Anleitung bieten CSV-Download und Reset. Organisationsrechte, Revisionen und Modellverknüpfungen werden geprüft; Audit und andere Quellen bleiben erhalten. Auch per lokalem Reset-Befehl erreichbar.', tags: ['Datenmodelle', 'Import', 'Beispiele'] },
+    { title: 'CSV ablegen und AdA-Modell importieren', description: 'Markierte Drag-and-drop-Fläche zusätzlich zur Dateiauswahl. Ein AdA-Modellvorschlag mit 11 Tabellen und 62 Feldern liefert CSV, PostgreSQL-Schema und fiktive Beispieldaten für die Import-Journey.', tags: ['Datenmodelle', 'Import', 'Beispiele'] },
+    { title: 'Auswahlleiste im Mapping-Arbeitsplatz entfernt', description: 'Der Arbeitsplatz zeigt direkt das gewählte Modell. Die aktive physische Repräsentation wählen Sie weiterhin über ihre Karte.', tags: ['Datenmodelle', 'Mapping', 'Bedienung'] },
+    { title: 'Beziehungen erst mit dem Entwurf speichern', description: 'Linien verschwinden ohne Nachfrage aus dem lokalen Entwurf. Ihre Entfernung wird erst mit Entwurf speichern dauerhaft übernommen; Historie und fehlgeschlagene lokale Entwürfe bleiben erhalten.', tags: ['Datenmodelle', 'Mapping', 'Bedienung'] },
+    { title: 'Feldnamen in Echtzeit übernehmen', description: 'Graph, Tabelle und Zuordnungen zeigen den bearbeiteten Feldnamen sofort als Vorschau. Erst Entwurf speichern übernimmt Feldmerkmale und Zuordnungen gemeinsam; Fehler behalten den lokalen Entwurf.', tags: ['Datenmodelle', 'Mapping', 'Bedienung'] },
+    { title: 'Feld mit bewusster Bestätigung verschieben', description: 'Die Lupe neben Entität sucht ein anderes logisches Modell. Eine deutliche Warnung, Checkbox und erneute Eingabe des Feldnamens sichern das Verschieben ab. Beide Modelle erhalten gemeinsam neue Entwürfe; physische Zuordnungen wandern nicht mit.', tags: ['Datenmodelle', 'Mapping', 'Bedienung'] },
+    { title: 'Felder durch Halten und Ziehen verbinden', description: 'Vom logischen oder physischen Feld eine rote Verbindung zur Gegenseite ziehen. Passende Verbindungen erhalten blaue Endpunkte und bleiben bis zum Speichern Entwürfe; Abbruch und ungültige Ziele verändern nichts.', tags: ['Datenmodelle', 'Mapping', 'Bedienung'] },
+    { title: 'Quellenaktionen im Drei-Punkte-Menü', description: 'Die drei Aktionen der angebundenen Quellen stehen in einem kompakten, per Tastatur bedienbaren Kontextmenü mit einheitlicher Schriftgrösse.', tags: ['Datenquellen', 'Bedienung'] },
+    { title: 'Feldmerkmale und Speichern korrigiert', description: 'Reihenfolge ab 1, Umlaute in technischen Namen und speicherbare Sprachassistenz-Herkunft. Fehlerdetails sind auch im kompakten Mapping-Editor sichtbar.', tags: ['Datenmodelle', 'Mapping', 'Fehlerbehebung'] },
+    { title: 'Quellenberechtigungen zurückgeben', description: 'Persönlichen Zugriff auf angebundene Quellen freiwillig zurückgeben. Die Quelle verschwindet aus der Auswahl und Direktzugriffe sind gesperrt. Erneuter Zugriff braucht einen begründeten Antrag und die Freigabe eines anderen Data Owners unter Meine Aufgaben.', tags: ['Datenquellen', 'Berechtigungen', 'Aufgaben'] },
+  ] : [
+    { title: 'Replay the AdA import journey', description: 'The AdA tile in Documentation opens six instruction steps. Three-dot menus on the tile and detail header offer CSV download and reset. Organization rights, revisions and model references are checked; audit and other sources remain. Also available through a local reset command.', tags: ['Data models', 'Import', 'Examples'] },
+    { title: 'Drop CSV files and import an AdA model', description: 'A labelled drop area complements the file picker. The AdA proposal supplies 11 tables and 62 fields as CSV, PostgreSQL DDL and fictional sample records for the import journey.', tags: ['Data models', 'Import', 'Examples'] },
+    { title: 'Selection bar removed from the mapping workspace', description: 'The workspace directly displays the selected model. Choose the active physical representation through its card.', tags: ['Data models', 'Mapping', 'Usability'] },
+    { title: 'Save relationship removals with the draft', description: 'Lines disappear from the local draft without a prompt. Only Save draft persists their removal; history and failed local drafts are retained.', tags: ['Data models', 'Mapping', 'Usability'] },
+    { title: 'Preview field names in real time', description: 'Graph, table and mappings immediately show the edited field name as a preview. Save draft commits field characteristics and mappings together; failures retain the local draft.', tags: ['Data models', 'Mapping', 'Usability'] },
+    { title: 'Move fields with explicit confirmation', description: 'The magnifying glass beside Entity searches another logical model. A clear warning, acknowledgement and retyping the field name confirm the move. Both models receive new drafts together; physical mappings do not move.', tags: ['Data models', 'Mapping', 'Usability'] },
+    { title: 'Connect fields by holding and dragging', description: 'Drag a red connection from either model type to the other side. Compatible links have blue endpoints and remain drafts until saved. Cancelling or dropping on invalid targets changes nothing.', tags: ['Data models', 'Mapping', 'Usability'] },
+    { title: 'Return source permissions', description: 'Voluntarily return personal access to connected sources, removing them from your selection and blocking direct access. Renewed access requires a reasoned request and approval by another Data Owner in My Tasks.', tags: ['Data sources', 'Permissions', 'Tasks'] },
+    { title: 'Source actions in a three-dot menu', description: 'Connected sources group their three actions in one compact keyboard-accessible menu with consistent typography.', tags: ['Data sources', 'Usability'] },
+    { title: 'Field editing and save fixes', description: 'Order starts at 1, technical names accept Unicode letters, and language assistance provenance saves correctly. Error details also appear in the compact mapping editor.', tags: ['Data models', 'Mapping', 'Fixes'] },
+  ];
+  const catalog31Features: readonly DacaReleaseFeature[] = locale === 'de' ? [
     { title: "Strukturinventare organisationsübergreifend zuordnen", description: "Strukturinventare auch aus anderen Organisationen mit logischen Modellen verbinden, wenn für beide Bereiche eine Berechtigung besteht. Der Dialog verwendet die serverseitige Auswahlentscheidung; Speichern und Inspektion prüfen die Rechte erneut. Angebundene Quellen behalten ihre Organisationsgrenze.", tags: ["Datenmodelle", "Datenquellen", "Berechtigungen"] },
     { title: "Strukturinventare importieren und verwalten", description: "CSV-Strukturinventare ohne technische Anbindung von angebundenen Datenquellen unterscheiden. Physische Modelle mit Vorschau, Suche und Originalangaben inspizieren. Inventare mit Bestätigung archivieren, wiederherstellen oder bei fehlenden Modellverknüpfungen löschen; das Inventarprotokoll hält Person und Zeitpunkt fest und bleibt nach dem Löschen erhalten.", tags: ["Datenmodelle", "Import", "Datenquellen", "Protokoll"] },
   ] : [
@@ -93,7 +116,7 @@ export function dacaReleaseHistory(scope: DacaFeatureScope, locale: DacaFeatureL
   ];
   const latest: DacaRelease = { version: CURRENT_RELEASE_VERSION, features: scope === 'catalog' ? catalogFeatures : controlPlaneFeatures };
   const historical = scope === 'catalog' ? CATALOG_HISTORY : CONTROL_PLANE_HISTORY;
-  return [latest, { version: '0.1.30', features: scope === 'catalog' ? previousCatalogFeatures : controlPlaneFeatures }, ...historical.map((item) => ({ version: item.version, features: [localizedFeature(item, locale)] }))];
+  return [latest, { version: '0.1.31', features: scope === 'catalog' ? catalog31Features : controlPlaneFeatures }, { version: '0.1.30', features: scope === 'catalog' ? previousCatalogFeatures : controlPlaneFeatures }, ...historical.map((item) => ({ version: item.version, features: [localizedFeature(item, locale)] }))];
 }
 
 export function searchDacaReleases(scope: DacaFeatureScope, locale: DacaFeatureLocale, query: string): readonly DacaRelease[] {

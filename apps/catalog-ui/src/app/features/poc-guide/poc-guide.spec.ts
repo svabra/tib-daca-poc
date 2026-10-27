@@ -2,15 +2,24 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { POC_GUIDE_CAPABILITIES, POC_GUIDE_LIMITS, POC_JOURNEYS } from './poc-guide.data';
 import { PocGuideConfigService } from './poc-guide-config.service';
 import { PocGuideDetailComponent } from './poc-guide-detail.component';
 import { PocGuideOverviewComponent } from './poc-guide-overview.component';
+import { DemoIdentityService } from '../../core/demo-identity.service';
+import { CatalogI18nService } from '../../core/catalog-i18n.service';
+import { DataModelsApiService } from '../data-models/data-models-api.service';
+
+const journeyMenuProviders = [
+  {provide: DemoIdentityService, useValue: {userId: signal('christian.man'), canEditModels: signal(true), user: signal({modelingAssignments: [{organizationId: 'vbs-verteidigung', departmentCode: 'VBS', organizationName: 'Verteidigung'}]})}},
+  {provide: CatalogI18nService, useValue: {t: (key: string) => key}},
+  {provide: DataModelsApiService, useValue: {adaImportJourney: () => of(null)}},
+];
 
 describe('PoC guide contract', () => {
-  it('defines thirteen complete, uniquely addressable journeys and twenty-nine screenshot contracts', () => {
+  it('defines fourteen complete, uniquely addressable journeys and twenty-nine screenshot contracts', () => {
     expect(POC_JOURNEYS.map((journey) => journey.id)).toEqual([
       'understand-and-use-product',
       'data-analysts-journey',
@@ -25,10 +34,11 @@ describe('PoC guide contract', () => {
       'derive-logical-model',
       'overview-access-responsibility',
       'resolve-logical-mapping-inconsistency',
+      'import-physical-model-ada',
     ]);
-    expect(POC_JOURNEYS.map((journey) => journey.number)).toEqual(['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13']);
+    expect(POC_JOURNEYS.map((journey) => journey.number)).toEqual(['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14']);
     expect(POC_JOURNEYS[1].verification?.label).toBe('Durchgängig verifiziert');
-    expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(13);
+    expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(14);
     expect(POC_JOURNEYS[9].title).toBe('Logisches Datenmodell erfassen');
     expect(POC_JOURNEYS[9].steps.flatMap((step) => step.actions ?? []).some((action) => action.path?.startsWith('/physical-models'))).toBe(false);
     expect(POC_JOURNEYS[10].steps.flatMap((step) => step.actions ?? []).some((action) => action.path?.includes('adf4a86e-7ab3-5035-b2cc-c8c907e79468'))).toBe(true);
@@ -82,7 +92,7 @@ describe('PoC guide contract', () => {
   it('renders the overview with journey links, boundaries and the simulation compatibility link', async () => {
     await TestBed.configureTestingModule({
       imports: [PocGuideOverviewComponent],
-      providers: [provideRouter([])],
+      providers: [provideRouter([]), ...journeyMenuProviders],
     }).compileComponents();
     const fixture = TestBed.createComponent(PocGuideOverviewComponent);
     fixture.detectChanges();
@@ -90,7 +100,14 @@ describe('PoC guide contract', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('h1')?.textContent).toContain('User Journeys');
     const journeyCards = root.querySelectorAll('[data-poc-guide-journey]');
-    expect(journeyCards.length).toBe(13);
+    expect(journeyCards.length).toBe(14);
+    const adaCard = root.querySelector('#journey-import-physical-model-ada')!;
+    expect(adaCard.querySelector('daca-physical-import-journey')).not.toBeNull();
+    expect(adaCard.querySelector('a daca-physical-import-journey')).toBeNull();
+    expect(root.querySelectorAll('daca-physical-import-journey')).toHaveLength(1);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    fixture.componentInstance.restartAdaImport({organizationId:'vbs-verteidigung'});
+    expect(navigate).toHaveBeenCalledWith(['/physical-models'], {queryParams:{importCsv:'1',organizationId:'vbs-verteidigung'}});
     expect(journeyCards.item(0).getAttribute('data-poc-guide-journey')).toBe('understand-and-use-product');
     expect(journeyCards.item(9).getAttribute('data-poc-guide-journey')).toBe('create-data-model');
     expect(journeyCards.item(10).getAttribute('data-poc-guide-journey')).toBe('derive-logical-model');
@@ -104,12 +121,14 @@ describe('PoC guide contract', () => {
   it('filters DaCa journeys by search terms and tags', async () => {
     await TestBed.configureTestingModule({
       imports: [PocGuideOverviewComponent],
-      providers: [provideRouter([])],
+      providers: [provideRouter([]), ...journeyMenuProviders],
     }).compileComponents();
     const fixture = TestBed.createComponent(PocGuideOverviewComponent);
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
     const search = root.querySelector<HTMLInputElement>('#poc-guide-query')!;
+    search.value = 'AdA CSV';search.dispatchEvent(new Event('input'));fixture.detectChanges();
+    expect([...root.querySelectorAll('[data-poc-guide-journey]')].map(card=>card.getAttribute('data-poc-guide-journey'))).toEqual(['import-physical-model-ada']);
     search.value = 'VIBDBU';
     search.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -179,6 +198,7 @@ describe('PoC guide detail', () => {
         provideRouter([]),
         { provide: ActivatedRoute, useValue: { paramMap: of(paramMap), snapshot: { paramMap } } },
         { provide: PocGuideConfigService, useValue: guideConfig },
+        ...journeyMenuProviders,
       ],
     }).compileComponents();
     const fixture = TestBed.createComponent(PocGuideDetailComponent);
@@ -193,6 +213,20 @@ describe('PoC guide detail', () => {
     expect(manual.querySelectorAll('[data-poc-guide-step]').length).toBe(7);
     expect(manual.querySelector('a[href*="/physical-models"]')).toBeNull();
     expect(manual.textContent).toContain('ohne physische Zuordnung');
+    expect(manual.querySelector('daca-physical-import-journey')).toBeNull();
+  });
+
+  it('offers the shared download and reset menu beside the AdA duration and restarts in the selected scope',async()=>{
+    const {fixture}=await render('import-physical-model-ada');const root=fixture.nativeElement as HTMLElement;
+    const tools=root.querySelector('.poc-guide-heading-tools')!;
+    const actions=tools.querySelector('daca-physical-import-journey')!;
+    expect(actions).not.toBeNull();expect(tools.querySelector('.poc-guide-meta')).not.toBeNull();
+    (actions.querySelector('button') as HTMLButtonElement).click();fixture.detectChanges();
+    expect(actions.querySelector('a[download]')?.getAttribute('href')).toBe('/api/v1/import-journeys/ada/inventory.csv');
+    expect(actions.querySelector('[role=menu] button')?.textContent).toContain('adaJourneyReset');
+    const navigate=vi.spyOn(TestBed.inject(Router),'navigate').mockResolvedValue(true);
+    fixture.componentInstance.restartAdaImport({organizationId:'vbs-verteidigung'});
+    expect(navigate).toHaveBeenCalledWith(['/physical-models'],{queryParams:{importCsv:'1',organizationId:'vbs-verteidigung'}});
   });
 
   it('links VIBDBU derivation with a full-page persona sign-in', async () => {

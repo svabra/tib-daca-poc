@@ -56,6 +56,7 @@ from .models import (
     PhysicalSchemaSnapshot,
     PhysicalSource,
 )
+from .physical_source_access import require_source_access
 from .schemas import ApiModel, reject_unsafe_service_level_text
 
 _CONFIG_REFERENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,254}$")
@@ -126,6 +127,7 @@ def _physical_source_payload(
         "name": source.name,
         "description": source.description,
         "adapterType": source.adapter_type,
+        "canRelinquishAccess": source.adapter_type != "csv" and source.lifecycle == "active",
         "departmentCode": source.department_code,
         "organizationId": source.organization_id,
         "revision": source.revision,
@@ -428,6 +430,7 @@ def create_modeling_lifecycle_router() -> APIRouter:
         )
         if source is None:
             raise HTTPException(404, "Physical source not found")
+        require_source_access(session, actor, source.id)
         _require_scope(
             session,
             actor,
@@ -497,6 +500,7 @@ def create_modeling_lifecycle_router() -> APIRouter:
         )
         if source is None:
             raise HTTPException(404, "Physical source not found")
+        require_source_access(session, actor, source.id)
         _require_scope(
             session,
             actor,
@@ -551,6 +555,7 @@ def create_modeling_lifecycle_router() -> APIRouter:
         if row is None:
             raise HTTPException(404, "Physical drift change not found")
         change, report, source = row
+        require_source_access(session, actor, source.id)
         _require_scope(
             session,
             actor,
@@ -603,6 +608,7 @@ def create_modeling_lifecycle_router() -> APIRouter:
         if row is None:
             raise HTTPException(404, "Physical drift change not found")
         change, _report, source = row
+        require_source_access(session, actor, source.id)
         _require_scope(
             session,
             actor,

@@ -1,8 +1,7 @@
 from contextlib import contextmanager
 
-from daca_catalog import modeling_seed
+from daca_catalog import modeling_seed, site_glossary_seed
 from daca_catalog import seed as seed_module
-from daca_catalog import site_glossary_seed
 
 
 def test_catalog_seed_cli_runs_foundational_and_modeling_seeds(monkeypatch, capsys) -> None:

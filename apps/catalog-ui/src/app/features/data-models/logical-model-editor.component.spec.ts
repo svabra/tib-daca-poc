@@ -50,6 +50,75 @@ describe('LogicalModelEditorComponent contracts',()=>{
   });
   afterEach(()=>{vi.restoreAllMocks();TestBed.resetTestingModule();});
 
+  it('accepts umlauts in technical names while retaining invalid-name and minimum-order checks',()=>{
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);fixture.detectChanges();
+    const field=fixture.componentInstance.fields.at(0);
+    field.patchValue({entityName:'Gebäude',name:'Flächengrösse',order:1});
+    expect(field.controls.entityName.valid).toBe(true);expect(field.controls.name.valid).toBe(true);
+    expect(field.controls.order.valid).toBe(true);
+    field.controls.name.setValue('1 Gebäude');expect(field.controls.name.invalid).toBe(true);
+    field.controls.order.setValue(0);expect(field.controls.order.hasError('min')).toBe(true);
+  });
+
+  it('emits each field-name edit immediately as a local draft without saving or emitting persisted data',()=>{
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent),component=fixture.componentInstance;
+    fixture.componentRef.setInput('fieldPanelOnly',true);
+    component.model.set(FALLBACK_LOGICAL_MODEL);
+    component.modelingScopes.set([{role:'data_steward',organizationId:FALLBACK_LOGICAL_MODEL.office,descendantOrganizationIds:[FALLBACK_LOGICAL_MODEL.office],breadcrumb:[],delegatedOwnerUserId:null}]);
+    const preview=vi.fn(),saved=vi.fn();component.draftChanged.subscribe(preview);component.modelSaved.subscribe(saved);
+    (component as unknown as {patch(value:typeof FALLBACK_LOGICAL_MODEL):void}).patch(FALLBACK_LOGICAL_MODEL);
+    fixture.detectChanges();expect(preview).not.toHaveBeenCalled();
+    const input=(fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('input[formcontrolname=name]')!;
+    for(const name of ['Neu','NeueGrösse']){input.value=name;input.dispatchEvent(new Event('input',{bubbles:true}));expect(preview.mock.lastCall?.[0].value.fields[0].name).toBe(name);}
+    expect(component.model()?.fields[0].name).toBe(FALLBACK_LOGICAL_MODEL.fields[0].name);
+    expect(createLogicalModel).not.toHaveBeenCalled();expect(saved).not.toHaveBeenCalled();
+    fixture.componentRef.setInput('workspaceSaving',true);fixture.detectChanges();expect(input.disabled).toBe(true);
+    fixture.componentRef.setInput('workspaceSaving',false);fixture.detectChanges();expect(input.disabled).toBe(false);
+  });
+
+  it('keeps the field entity read-only and renames all members through the entity-level control',()=>{
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent),component=fixture.componentInstance;
+    component.addField();fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('input[formcontrolname=entityName]')?.readOnly).toBe(true);
+    component.renameEntity(component.fields.at(0),'Gebäude');
+    expect(component.fields.controls.map((field)=>field.controls.entityName.value)).toEqual(['Gebäude','Gebäude']);
+    expect(component.form.dirty).toBe(true);
+  });
+
+  it('shows server issues without a matching input in the field panel and retains unsaved values',async()=>{
+    const failure=new ModelingApiError('unavailable',503,'Die Herkunft des Vorschlags ist nicht speicherbar.',
+      [{location:'body.assistanceProvenance.0.origin',message:'Herkunftsangabe nicht unterstützt.',type:'provenance'}],
+      'DACA-LM-ASSISTANCE-ORIGIN','Nach Aktualisierung erneut versuchen.','origin-request-id');
+    createLogicalModel.mockReturnValue(throwError(()=>failure));
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);const component=fixture.componentInstance;
+    fixture.componentRef.setInput('fieldPanelOnly',true);
+    component.form.controls.dataset.patchValue({titleDe:'Gebäude',descriptionDe:'Gebäudemodell',identifiers:'ORIGIN-TEST'});
+    component.fields.at(0).patchValue({entityName:'Gebäude',name:'Flächengrösse',shortDescription:'Fläche',order:1});
+    fixture.detectChanges();component.form.markAsDirty();component.save(true);fixture.detectChanges();
+    const panel=fixture.nativeElement.querySelector('.save-problem') as HTMLElement;
+    expect(panel.textContent).toContain('Herkunft der Sprachassistenz');
+    expect(panel.textContent).toContain('Herkunftsangabe nicht unterstützt.');
+    expect(panel.textContent).toContain('origin-request-id');
+    expect(component.fields.at(0).controls.name.value).toBe('Flächengrösse');
+    expect(component.form.dirty).toBe(true);
+    const writeText=vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator,'clipboard',{configurable:true,value:{writeText}});
+    await component.copyErrorMessage(failure);
+    expect(writeText.mock.calls[0][0]).toContain('Herkunftsangabe nicht unterstützt.');
+  });
+
+  it('marks the correct field when the server reports an issue in the second entity',()=>{
+    createLogicalModel.mockReturnValue(throwError(()=>new ModelingApiError('validation',422,'Feld ungültig.',
+      [{location:'body.entities.1.fields.0.name',message:'Name prüfen.',type:'validation'}])));
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);const component=fixture.componentInstance;
+    fixture.componentRef.setInput('fieldPanelOnly',true);
+    component.fields.at(0).patchValue({entityName:'Erste',name:'id',shortDescription:'Identifier'});
+    component.addEntity();component.fields.at(1).patchValue({entityName:'Zweite',name:'höhe',shortDescription:'Höhe'});
+    fixture.detectChanges();component.save(true);fixture.detectChanges();
+    expect(component.fields.at(1).controls.name.hasError('server')).toBe(true);
+    expect(component.fields.at(0).controls.name.hasError('server')).toBe(false);
+  });
+
   it('keeps the title above three accessible tabs and preserves unsaved model values',()=>{
     const fixture=TestBed.createComponent(LogicalModelEditorComponent);fixture.detectChanges();
     const root=fixture.nativeElement as HTMLElement;

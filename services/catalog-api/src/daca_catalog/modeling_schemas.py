@@ -15,6 +15,12 @@ LogicalStatus = Literal[
 ]
 MappingType = Literal["Direct", "Renamed", "Derived", "Lookup", "Transformed"]
 MappingStatus = Literal["draft", "review_pending", "validated", "broken", "superseded"]
+LOGICAL_NAME_PATTERN = r"^[\p{L}_][\p{L}\p{M}0-9_.-]*$"
+
+
+def canonical_assistance_origin(value: str) -> str:
+    """Expose historical provenance vocabulary without rewriting immutable evidence."""
+    return {"machine": "machine_translated", "accepted": "accepted_suggestion"}.get(value, value)
 
 
 class ApplicationCreator(ApiModel):
@@ -56,6 +62,11 @@ class LogicalModelAssistanceProvenanceWrite(ApiModel):
     retrieved_at: datetime
     payload_hash: str = Field(min_length=64, max_length=64)
     origin: Literal["machine_translated", "accepted_suggestion", "edited", "source_import"]
+
+    @field_validator("origin", mode="before")
+    @classmethod
+    def normalize_legacy_origin(cls, value: str) -> str:
+        return canonical_assistance_origin(value) if isinstance(value, str) else value
 
 
 class DcatContactPoint(ApiModel):
@@ -107,7 +118,7 @@ class LogicalFieldWrite(ApiModel):
     id: uuid.UUID | None = None
     business_object: str | None = Field(default=None, max_length=255)
     business_object_version_id: uuid.UUID | None = None
-    name: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_.-]{0,254}$")
+    name: str = Field(min_length=1, max_length=255, pattern=LOGICAL_NAME_PATTERN)
     data_type: str = Field(min_length=1, max_length=255)
     length: int | None = Field(default=None, ge=0)
     precision: int | None = Field(default=None, ge=0)
@@ -150,7 +161,7 @@ class LogicalFieldWrite(ApiModel):
 
 class LogicalEntityWrite(ApiModel):
     id: uuid.UUID | None = None
-    name: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_.-]{0,254}$")
+    name: str = Field(min_length=1, max_length=255, pattern=LOGICAL_NAME_PATTERN)
     business_object: str | None = Field(default=None, max_length=255)
     business_object_version_id: uuid.UUID | None = None
     comment: str | None = Field(default=None, max_length=4000)
@@ -333,6 +344,13 @@ class LogicalEntityResponse(ApiModel):
     fields: list[LogicalFieldResponse]
 
 
+class LogicalFieldMoveRequest(ApiModel):
+    source_version_id: uuid.UUID
+    target_model_id: uuid.UUID
+    target_version_id: uuid.UUID
+    target_entity_id: uuid.UUID
+
+
 class LogicalModelSummary(ApiModel):
     id: uuid.UUID
     urn: str
@@ -399,6 +417,7 @@ class LogicalModelVersionCollection(ApiModel):
 
 
 class PhysicalSourceResponse(ApiModel):
+    can_relinquish_access: bool = False
     inventory_manageable: bool = False
     representation_attachable: bool | None = None
     representation_disabled_reason: str | None = None
@@ -579,7 +598,7 @@ class DriftReportResponse(ApiModel):
 
 class DerivationField(ApiModel):
     physical_column_id: uuid.UUID
-    name: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_.-]{0,254}$")
+    name: str = Field(min_length=1, max_length=255, pattern=LOGICAL_NAME_PATTERN)
     data_type: str = Field(min_length=1, max_length=255)
     length: int | None = Field(default=None, ge=0)
     precision: int | None = Field(default=None, ge=0)
@@ -637,8 +656,8 @@ class DeriveLogicalModelRequest(ApiModel):
 
 class DerivedFieldBinding(ApiModel):
     physical_column_id: uuid.UUID
-    entity_name: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_.-]{0,254}$")
-    logical_field_name: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_.-]{0,254}$")
+    entity_name: str = Field(min_length=1, max_length=255, pattern=LOGICAL_NAME_PATTERN)
+    logical_field_name: str = Field(min_length=1, max_length=255, pattern=LOGICAL_NAME_PATTERN)
 
 
 class DerivedLogicalModelRequest(ApiModel):

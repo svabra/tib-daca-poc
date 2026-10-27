@@ -62,6 +62,16 @@ def test_utf8_bom_unknown_type_and_untrusted_text_are_metadata_only():
     assert any("Datentyp fehlt" in warning for warning in parsed.warnings)
 
 
+def test_csv_nullability_declaration_is_preserved_without_claiming_it_is_absent_or_verified():
+    text = "Tabelle;Feldname;Datentyp;Null erlaubt;Primärschlüssel\nangehoeriger;ada_id;uuid;Nein;Ja\n"
+    parsed = parse_inventory(base64.b64encode(text.encode()).decode())
+    column = parsed.tables[0]["columns"][0]
+    assert column["importMetadata"]["records"][0]["Null erlaubt"] == "Nein"
+    assert column["importMetadata"]["nullabilityKnown"] is False
+    assert any("nicht als Datenbankregel übernommen" in warning for warning in parsed.warnings)
+    assert all("nicht angegeben" not in warning for warning in parsed.warnings)
+
+
 @pytest.mark.parametrize("text", [
     "Tabelle,Feldname,Datentyp\nA,B,CHAR", "Tabelle;Feldname;Datentyp;Feldname\nA;B;CHAR;B",
     'Tabelle;Feldname;Datentyp\nA;B;"unterminated', "Tabelle;Feldname;Datentyp\nA;B;CHAR;extra",

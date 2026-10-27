@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy.exc import IntegrityError
-
 from daca_catalog.problems import integrity_problem
+from sqlalchemy.exc import IntegrityError
 
 
 @dataclass
@@ -47,3 +46,14 @@ def test_unknown_integrity_problem_remains_safe_and_supportable() -> None:
     assert "technische Meldung" in problem.suggested_action
     assert problem.technical_details is not None
     assert problem.technical_details["constraint"] == "internal_constraint"
+
+
+def test_assistance_origin_failure_explains_the_cause_without_mislabeling_user_fields() -> None:
+    problem = integrity_problem(_integrity_error("ck_model_assistance_origin", "23514"))
+    assert problem.status == 503
+    assert problem.error_code == "DACA-LM-ASSISTANCE-ORIGIN"
+    assert "TERMDAT" in problem.detail
+    assert "Aktualisierung" in problem.suggested_action
+    assert "markierten" not in problem.suggested_action
+    assert problem.errors[0]["location"] == "body.assistanceProvenance"
+    assert "hidden_values" not in str(problem)

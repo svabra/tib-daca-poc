@@ -12,6 +12,30 @@ describe('DataModelsApiService', () => {
   beforeEach(() => { TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(), { provide: DemoIdentityService, useValue: { userId, user: computed(() => ({ displayName: 'Cinthya Thor', email: 'cinthya.thor@vtg.admin.ch', organization: 'Verteidigung' })), headers: computed(() => new HttpHeaders({ 'X-DaCa-User': userId() })) } }] }); api = TestBed.inject(DataModelsApiService); http = TestBed.inject(HttpTestingController); });
   afterEach(() => { http.verify(); TestBed.resetTestingModule(); });
 
+  it('presents zero-based API positions from one and preserves them on save and reload', () => {
+    const wire={id:'model-order',versionId:'v1',lockVersion:1,revision:1,status:'draft',
+      localizations:[{language:'de',title:'Gebäude',description:'Modell'}],identifiers:['ORDER-TEST'],
+      entities:[{id:'entity',entityVersionId:'ev1',name:'Gebäude',position:0,fields:[
+        {id:'f1',fieldVersionId:'fv1',name:'Grösse',dataType:'string',position:0},
+        {id:'f2',fieldVersionId:'fv2',name:'Höhe',dataType:'string',position:1},
+      ]}]};
+    api.loadLogicalModel('model-order').subscribe(({body:model})=>{
+      expect(model.entities[0].order).toBe(1);
+      expect(model.fields.map(field=>field.order)).toEqual([1,2]);
+      const fields=model.fields.map(field=>({...field,conceptIds:[],primaryConceptId:null,valueListConceptId:null}));
+      const write:LogicalModelWrite={...model,dataDomainId:model.dataDomain.id,dataOwnerId:model.dataOwner.id,
+        deputyDataOwnerId:null,conceptIds:[],fields,entities:model.entities.map(entity=>({...entity,fields}))};
+      api.updateLogicalModel(model.id,model.versionId,write,'"1"').subscribe(({body:reloaded})=>{
+        expect(reloaded.fields.map(field=>field.order)).toEqual([1,2]);
+      });
+    });
+    http.expectOne('/api/v1/logical-models/model-order').flush(wire);
+    const save=http.expectOne('/api/v1/logical-models/model-order/versions/v1');
+    expect(save.request.body.entities[0].position).toBe(0);
+    expect(save.request.body.entities[0].fields.map((field:{position:number})=>field.position)).toEqual([0,1]);
+    save.flush(wire);
+  });
+
   it('requests representation permissions for the selected model and preserves server decisions', () => {
     let sources: readonly import('./data-models.models').PhysicalSource[] = [];
     api.listPhysicalSources(false,'model-id').subscribe(value => sources = value);

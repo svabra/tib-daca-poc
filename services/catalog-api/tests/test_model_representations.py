@@ -4,10 +4,12 @@ import uuid
 
 import pytest
 from daca_catalog.modeling_seed import (
+    PHYSICAL_SOURCE_ID,
     S3_PHYSICAL_SOURCE_ID,
     VEHICLE_MODEL_ID,
     seed_modeling_catalog,
 )
+from daca_catalog.modeling_service import logical_write_from_payload
 from daca_catalog.models import AssetMapping, LogicalModelRepresentation, PhysicalSchemaSnapshot
 from sqlalchemy import func, select
 
@@ -42,6 +44,98 @@ def body_for(model, snapshot, table):
         "representations": [{"physicalSnapshotId": snapshot["id"], "physicalTableId": table["id"]}],
         "mappings": [],
     }
+
+
+def test_workspace_removals_are_versioned_only_on_save_and_reject_stale_or_duplicate_requests(client, session_factory):
+    model, etag, _snapshot, _table = context(client, session_factory)
+    path = f"/api/v1/logical-models/{model['id']}/mapping-drafts"
+    mapping = client.get(f"/api/v1/asset-mappings?logicalModelId={model['id']}",headers=HEADERS).json()["items"][0]
+    removal = {"mappingId":mapping["id"],"versionId":mapping["versionId"],"lockVersion":mapping["lockVersion"]}
+    for removals, status in (([removal,removal],422),([{**removal,"lockVersion":999999}],412)):
+        rejected=client.post(path,headers={**HEADERS,"If-Match":etag},json={"logicalModelVersionId":model["versionId"],"removals":removals})
+        assert rejected.status_code == status, rejected.text
+        assert client.get(f"/api/v1/asset-mappings/{mapping['id']}",headers=HEADERS).json()["versionId"] == mapping["versionId"]
+    response=client.post(path,headers={**HEADERS,"If-Match":etag},json={"logicalModelVersionId":model["versionId"],"removals":[removal]})
+    assert response.status_code == 200, response.text
+    assert response.json()["removedMappingIds"] == [mapping["id"]]
+    saved=client.get(f"/api/v1/asset-mappings/{mapping['id']}",headers=HEADERS).json()
+    assert saved["status"] == "superseded" and saved["versionId"] != mapping["versionId"]
+    assert saved["physicalColumnIds"] == mapping["physicalColumnIds"]
+    assert client.post(path,headers={**HEADERS,"If-Match":etag},json={"logicalModelVersionId":model["versionId"],"removals":[removal]}).status_code == 409
+
+
+def test_removal_rolls_back_when_another_workspace_change_fails(client, session_factory):
+    model, etag, snapshot, table = context(client, session_factory)
+    mapping=client.get(f"/api/v1/asset-mappings?logicalModelId={model['id']}",headers=HEADERS).json()["items"][0]
+    value={key:mapping[key] for key in ("logicalModelVersionId","physicalSnapshotId","mappingType","classification","responsibleUserId","validFrom","logicalFieldVersionIds","physicalColumnIds")}
+    value["physicalColumnIds"]=[str(uuid.uuid4())]
+    payload=body_for(model,snapshot,table)
+    payload["removals"]=[{"mappingId":mapping["id"],"versionId":mapping["versionId"],"lockVersion":mapping["lockVersion"]}]
+    payload["mappings"]=[{"clientId":"bad-after-removal","value":value}]
+    response=client.post(f"/api/v1/logical-models/{model['id']}/mapping-drafts",headers={**HEADERS,"If-Match":etag},json=payload)
+    assert response.status_code == 422, response.text
+    assert client.get(f"/api/v1/asset-mappings/{mapping['id']}",headers=HEADERS).json()["versionId"] == mapping["versionId"]
+
+
+def test_removal_requires_current_physical_source_access(client, session_factory):
+    model, etag, _snapshot, _table = context(client, session_factory)
+    mapping=client.get(f"/api/v1/asset-mappings?logicalModelId={model['id']}",headers=HEADERS).json()["items"][0]
+    with session_factory() as session:
+        source_id=session.get(PhysicalSchemaSnapshot,uuid.UUID(mapping["physicalSnapshotId"])).source_id
+    assert client.post(f"/api/v1/physical-sources/{source_id}/access/relinquish",headers=HEADERS).status_code == 204
+    response=client.post(f"/api/v1/logical-models/{model['id']}/mapping-drafts",headers={**HEADERS,"If-Match":etag},json={"logicalModelVersionId":model["versionId"],"removals":[{"mappingId":mapping["id"],"versionId":mapping["versionId"],"lockVersion":mapping["lockVersion"]}]})
+    assert response.status_code == 403, response.text
+
+
+def test_workspace_saves_live_field_name_and_rebases_existing_and_new_mappings(client, session_factory):
+    model, etag, snapshot, table = context(client, session_factory)
+    write = logical_write_from_payload(model).model_dump(mode="json", by_alias=True)
+    field = write["entities"][0]["fields"][0]
+    field["name"] = "Fahrzeuggrösse"
+    payload = body_for(model, snapshot, table)
+    payload["logicalModel"] = write
+    old = client.get(f"/api/v1/asset-mappings?logicalModelId={model['id']}", headers=HEADERS).json()["items"][0]
+    value = {key:old[key] for key in ("logicalModelVersionId","physicalSnapshotId","mappingType","classification","responsibleUserId","validFrom","logicalFieldVersionIds","physicalColumnIds")}
+    value.update(physicalSnapshotId=snapshot["id"], physicalColumnIds=[table["columns"][0]["id"]])
+    payload["mappings"] = [{"clientId":"rename-and-link", "value":value}]
+    response = client.post(f"/api/v1/logical-models/{model['id']}/mapping-drafts", headers={**HEADERS,"If-Match":etag}, json=payload)
+    assert response.status_code == 200, response.text
+    updated = response.json()["logicalModel"]
+    assert updated["revision"] == model["revision"] + 1
+    assert updated["entities"][0]["fields"][0]["name"] == "Fahrzeuggrösse"
+    assert updated["entities"][0]["fields"][0]["id"] == field["id"]
+    for mapping in response.json()["currentMappings"]:
+        if mapping["status"] != "superseded":
+            assert mapping["logicalModelVersionId"] == updated["versionId"]
+    assert response.json()["mappings"][0]["mapping"]["logicalModelVersionId"] == updated["versionId"]
+    assert client.get(f"/api/v1/logical-models/{model['id']}",headers=HEADERS).json()["entities"][0]["fields"][0]["name"] == "Fahrzeuggrösse"
+    assert client.post(f"/api/v1/logical-models/{model['id']}/mapping-drafts", headers={**HEADERS,"If-Match":etag}, json=payload).status_code == 412
+
+
+def test_invalid_workspace_model_rolls_back_new_mapping_and_membership(client, session_factory):
+    model, etag, snapshot, table = context(client, session_factory)
+    payload = body_for(model, snapshot, table)
+    write = logical_write_from_payload(model).model_dump(mode="json", by_alias=True)
+    write["entities"][0]["fields"][0]["id"] = str(uuid.uuid4())
+    payload["logicalModel"] = write
+    response=client.post(f"/api/v1/logical-models/{model['id']}/mapping-drafts",headers={**HEADERS,"If-Match":etag},json=payload)
+    assert response.status_code == 422, response.text
+    assert client.get(f"/api/v1/logical-models/{model['id']}",headers=HEADERS).json()["versionId"] == model["versionId"]
+    with session_factory() as session:
+        assert session.scalar(select(LogicalModelRepresentation).where(LogicalModelRepresentation.physical_table_id == uuid.UUID(table["id"]))) is None
+
+
+def test_logical_only_workspace_save_does_not_reveal_returned_source_mappings(client, session_factory):
+    model, etag, _snapshot, _table = context(client, session_factory)
+    for source_id in (PHYSICAL_SOURCE_ID, S3_PHYSICAL_SOURCE_ID):
+        assert client.post(f"/api/v1/physical-sources/{source_id}/access/relinquish", headers=HEADERS).status_code == 204
+    write = logical_write_from_payload(model).model_dump(mode="json", by_alias=True)
+    write["entities"][0]["fields"][0]["name"] = "renamed_without_physical_access"
+    response = client.post(f"/api/v1/logical-models/{model['id']}/mapping-drafts", headers={**HEADERS,"If-Match":etag},json={"logicalModelVersionId":model["versionId"],"logicalModel":write})
+    assert response.status_code == 200, response.text
+    assert response.json()["currentMappings"] == []
+    assert response.json()["items"] == []
+    assert response.json()["logicalModel"]["entities"][0]["fields"][0]["name"] == "renamed_without_physical_access"
 
 
 def test_membership_without_links_survives_reload(

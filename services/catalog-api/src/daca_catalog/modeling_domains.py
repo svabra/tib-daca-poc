@@ -17,6 +17,7 @@ from .models import (
     PhysicalSource,
     PhysicalTable,
 )
+from .physical_source_access import require_source_access
 
 
 def domain_reference(session, domain_id):
@@ -67,6 +68,7 @@ def apply_domain_targets(session, actor, domain_id, targets, department_code, or
     validated = []
     for target, (table, snapshot_id, source_id) in rows:
         source = sources[source_id]
+        require_source_access(session, actor, source.id)
         _require_scope(session, actor, source.department_code, source.organization_id,
                        roles={"data_owner", "data_steward"})
         if source.lifecycle != "active" or not _compatible_representation_scope(source, department_code, organization_id):

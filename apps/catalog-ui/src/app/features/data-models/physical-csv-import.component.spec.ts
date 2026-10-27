@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { DemoIdentityService } from '../../core/demo-identity.service';
+import { CatalogI18nService } from '../../core/catalog-i18n.service';
 import { DataModelsApiService } from './data-models-api.service';
 import { CsvInventoryPreview } from './physical-csv.models';
 import { PhysicalCsvImportComponent } from './physical-csv-import.component';
@@ -25,6 +26,7 @@ describe('PhysicalCsvImportComponent', () => {
     ]}) };
     const api = {previewPhysicalCsv: vi.fn(() => of(preview)), importPhysicalCsv: vi.fn(() => of({sourceId: 'source-1', reused: false, snapshot: {id: 'snap-1', tables: [{id: 'table-1'}]}}))};
     TestBed.configureTestingModule({imports: [PhysicalCsvImportComponent], providers: [provideRouter([]),
+      {provide: CatalogI18nService, useValue: {t: (key: string) => key}},
       {provide: DemoIdentityService, useValue: identity}, {provide: DataModelsApiService, useValue: api}]});
     const fixture = TestBed.createComponent(PhysicalCsvImportComponent);
     fixture.detectChanges(); TestBed.tick(); fixture.detectChanges();
@@ -46,6 +48,21 @@ describe('PhysicalCsvImportComponent', () => {
     await context.component.selectFile({target: input} as unknown as Event);
     context.fixture.detectChanges();
   }
+
+  it('previews a dropped CSV without importing and rejects multiple files',async()=>{
+    const context=setup();
+    const file=new File(['Tabelle;Feldname;Datentyp\nADA;ADA_ID;UUID'],'ada.csv',{type:'text/csv'});
+    Object.defineProperty(file,'arrayBuffer',{value:async()=>new TextEncoder().encode('CSV').buffer});
+    const preventDefault=vi.fn();
+    await context.component.dropFile({preventDefault,dataTransfer:{files:[file]}} as unknown as DragEvent);
+    expect(preventDefault).toHaveBeenCalledOnce();expect(context.component.preview()).toEqual(preview);
+    expect(context.component.filename()).toBe('ada.csv');expect(context.api.importPhysicalCsv).not.toHaveBeenCalled();
+    await context.component.dropFile({preventDefault,dataTransfer:{files:[file,file]}} as unknown as DragEvent);
+    expect(context.component.preview()).toBeNull();expect(context.component.error()).toContain('genau eine');
+    context.component.saving.set(true);
+    await context.component.dropFile({preventDefault,dataTransfer:{files:[file]}} as unknown as DragEvent);
+    expect(context.api.previewPhysicalCsv).toHaveBeenCalledTimes(1);
+  });
 
   it('previews the file without saving, preserves original values, searches tables and escapes metadata', async () => {
     const context = setup(); await upload(context);
@@ -69,6 +86,12 @@ describe('PhysicalCsvImportComponent', () => {
       departmentCode: 'VBS', organizationId: 'vbs-armasuisse-immobilien', filename: 'Gebäude.csv', fingerprint: preview.fingerprint,
     }));
     expect(context.navigate).toHaveBeenCalledWith(['/physical-models', 'source-1'], {queryParams: {snapshotId: 'snap-1', tableId: 'table-1', imported: 2, reused: undefined}});
+  });
+
+  it('keeps the import entry free of journey menus',()=>{
+    const c=setup();
+    expect(c.root.querySelector('daca-physical-import-journey')).toBeNull();
+    expect(c.root.querySelector('.journey-menu-trigger')).toBeNull();
   });
 
   it('cancels without mutations and ignores a late preview response', async () => {

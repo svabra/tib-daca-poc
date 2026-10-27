@@ -12,12 +12,21 @@ from sqlalchemy.orm import Session
 
 from .database import get_session
 from .mapping_inconsistencies import _complete_tasks, issue_payload, sync_mapping_inconsistencies
-from .modeling_api import _dataset_version, _require_scope, _require_version_scope, require_modeling_actor
+from .modeling_api import (
+    _dataset_version,
+    _require_scope,
+    _require_version_scope,
+    require_modeling_actor,
+)
 from .modeling_schemas import ApiModel
 from .modeling_service import get_logical_model, get_logical_version, record_audit, utc_now
 from .models import (
-    DataModelRoleAssignment, DemoUser, LogicalFieldVersion, LogicalMappingInconsistency,
-    LogicalModelVersion, WorkflowTask,
+    DataModelRoleAssignment,
+    DemoUser,
+    LogicalFieldVersion,
+    LogicalMappingInconsistency,
+    LogicalModelVersion,
+    WorkflowTask,
 )
 
 SessionDep = Annotated[Session, Depends(get_session)]

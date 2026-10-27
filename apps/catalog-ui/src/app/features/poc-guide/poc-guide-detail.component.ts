@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { PhysicalImportJourneyComponent } from '../data-models/physical-import-journey.component';
 import { POC_GUIDE_STATUS_LABELS, pocJourneyById } from './poc-guide.data';
 import { PocGuideAction, PocGuideScreenshot } from './poc-guide.models';
 import { PocGuideConfigService } from './poc-guide-config.service';
@@ -8,7 +9,7 @@ import { PocGuideConfigService } from './poc-guide-config.service';
 @Component({
   selector: 'daca-poc-guide-detail',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, PhysicalImportJourneyComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (journey(); as current) {
@@ -22,10 +23,15 @@ import { PocGuideConfigService } from './poc-guide-config.service';
           <h1>{{ current.title }}</h1>
           <p>{{ current.summary }}</p>
         </div>
+        <div class="poc-guide-heading-tools">
+        @if(current.id === 'import-physical-model-ada') {
+          <daca-physical-import-journey (reset)="restartAdaImport($event)" />
+        }
         <dl class="poc-guide-meta">
           <div><dt>Dauer</dt><dd>{{ current.duration }}</dd></div>
           <div><dt>Stufe</dt><dd>{{ current.difficulty }}</dd></div>
         </dl>
+        </div>
       </section>
 
       <div class="poc-guide-card-tags poc-guide-detail-tags" aria-label="Tags">@for (tag of current.tags; track tag) { <span>{{ tag }}</span> }</div>
@@ -138,11 +144,19 @@ import { PocGuideConfigService } from './poc-guide-config.service';
       }
     </dialog>
   `,
+  styles: [`
+    .poc-guide-heading-tools{display:flex;align-items:center;gap:.6rem;flex-shrink:0}
+    @media(max-width:700px){.poc-guide-heading-tools{align-self:flex-end}.poc-guide-heading-tools daca-physical-import-journey{order:2}}
+  `],
 })
 export class PocGuideDetailComponent {
   @ViewChild('screenshotDialog') private screenshotDialog?: ElementRef<HTMLDialogElement>;
 
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  restartAdaImport(event: {organizationId: string}): void {
+    void this.router.navigate(['/physical-models'], {queryParams: {importCsv: '1', organizationId: event.organizationId}});
+  }
   private readonly routeParams = toSignal(this.route.paramMap, { initialValue: this.route.snapshot.paramMap });
   private returnFocus: HTMLElement | null = null;
   readonly guideConfig = inject(PocGuideConfigService);

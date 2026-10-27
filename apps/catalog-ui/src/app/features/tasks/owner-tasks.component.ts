@@ -1,3 +1,4 @@
+import { SourceRestorationRequestsComponent } from './source-restoration-requests.component';
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -12,7 +13,7 @@ import { SourceAccessRequestsComponent } from './source-access-requests.componen
 @Component({
   selector: 'daca-owner-tasks',
   standalone: true,
-  imports: [DatePipe, RouterLink, StatusBadgeComponent, DacaGlossaryTermComponent, SourceAccessRequestsComponent],
+  imports: [SourceRestorationRequestsComponent, DatePipe, RouterLink, StatusBadgeComponent, DacaGlossaryTermComponent, SourceAccessRequestsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="daca-page-heading owner-tasks-heading">
@@ -33,6 +34,7 @@ import { SourceAccessRequestsComponent } from './source-access-requests.componen
     </section>
 
     <daca-source-access-requests />
+    @if (sourceRestorationTasks().length) {<daca-source-restoration-requests />}
 
     @if (api.workflowTasksLoading()) {
       <section class="owner-workflow-section" aria-labelledby="workflow-title">
@@ -171,13 +173,14 @@ export class OwnerTasksComponent {
     return this.api.ownerAccessRequests().filter((request) => !productId || request.dataProductId === productId);
   });
   readonly filteredProductTitle = computed(() => this.productTitle(this.filteredProductId() ?? ''));
-  readonly workflowTasks = computed(() => this.api.workflowTasks().filter((task) => task.taskType !== 'access_request_review' && task.taskType !== 'source_access_review'));
+  readonly sourceRestorationTasks = computed(() => this.api.workflowTasks().filter(task => task.taskType === 'physical_source_access_review'));
+  readonly workflowTasks = computed(() => this.api.workflowTasks().filter((task) => task.taskType !== 'access_request_review' && task.taskType !== 'source_access_review' && task.taskType !== 'physical_source_access_review'));
   readonly workflowGroups = computed(() => ([
     { kind: 'action' as const, eyebrow: 'Entscheid nötig', title: 'Fachliche Entscheide', tasks: this.workflowTasks().filter((task) => task.kind !== 'collaboration' && task.kind !== 'information') },
     { kind: 'collaboration' as const, eyebrow: 'Mitarbeit', title: 'Gemeinsame Bearbeitung', tasks: this.workflowTasks().filter((task) => task.kind === 'collaboration') },
     { kind: 'information' as const, eyebrow: 'Zur Kenntnis', title: 'Entscheidungsinformationen', tasks: this.workflowTasks().filter((task) => task.kind === 'information') },
   ]));
-  readonly openTaskCount = computed(() => this.requests().length + this.api.sourceAccessRequests().length + this.workflowTasks().length);
+  readonly openTaskCount = computed(() => this.requests().length + this.api.sourceAccessRequests().length + this.workflowTasks().length + this.sourceRestorationTasks().length);
   readonly taskStatusUnknown = computed(() => Boolean(this.api.ownerAccessRequestError() || this.api.workflowTasksError() || this.api.sourceAccessRequestsError()));
   readonly taskStatusLoading = computed(() => this.api.ownerAccessRequestLoading() || this.api.workflowTasksLoading() || this.api.sourceAccessRequestsLoading());
   readonly decisionError = signal<string | null>(null);
