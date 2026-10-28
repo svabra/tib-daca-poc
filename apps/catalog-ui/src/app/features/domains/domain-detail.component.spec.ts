@@ -1,3 +1,4 @@
+import { UserPreferencesService } from '../../core/user-preferences.service';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
@@ -65,7 +66,7 @@ describe('DomainDetailComponent', () => {
 
   it('loads products through the domain endpoint and renders them in the accessible graph alternative', async () => {
     const api = {
-      loadGlossaryTermProposals:()=>of([]),loadDomainModels: vi.fn(() => of({logicalModels:[],physicalModels:[]})),
+      loadSemanticGraph:()=>of({revision:0,positions:{},relations:[],canEditLayout:true,canEditRelations:false}),loadGlossaryTermProposals:()=>of([]),loadDomainModels: vi.fn(() => of({logicalModels:[],physicalModels:[]})),
       loadDomain: vi.fn(() => of(DOMAIN)),
       loadDataProductsForDomain: vi.fn(() => of([PRODUCT])),
       loadGlossaryTerms: vi.fn(() => of([])),
@@ -73,11 +74,11 @@ describe('DomainDetailComponent', () => {
     };
     await TestBed.configureTestingModule({
       imports: [DomainDetailComponent],
-      providers: [
+      providers: [{provide:UserPreferencesService,useValue:{language:signal('de')}},
         provideRouter([]),
         {provide:DemoIdentityService,useValue:{userId:signal('christian.man')}},
         { provide: CatalogApiService, useValue: api },
-        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: DOMAIN_ID }) } } },
+        { provide: ActivatedRoute, useValue: { paramMap:of(convertToParamMap({id:DOMAIN_ID})), snapshot: { paramMap: convertToParamMap({ id: DOMAIN_ID }) } } },
       ],
     }).compileComponents();
     const fixture = TestBed.createComponent(DomainDetailComponent);
@@ -99,7 +100,7 @@ describe('DomainDetailComponent', () => {
 
   it('offers a domain-prefilled term proposal and exposes abbreviations in the term presentation', async () => {
     const api = {
-      loadGlossaryTermProposals:()=>of([]),loadDomainModels: vi.fn(() => of({logicalModels:[],physicalModels:[]})),
+      loadSemanticGraph:()=>of({revision:0,positions:{},relations:[],canEditLayout:true,canEditRelations:false}),loadGlossaryTermProposals:()=>of([]),loadDomainModels: vi.fn(() => of({logicalModels:[],physicalModels:[]})),
       loadDomain: vi.fn(() => of(DOMAIN)),
       loadDataProductsForDomain: vi.fn(() => of([])),
       loadGlossaryTerms: vi.fn(() => of([TERM])),
@@ -107,11 +108,11 @@ describe('DomainDetailComponent', () => {
     };
     await TestBed.configureTestingModule({
       imports: [DomainDetailComponent],
-      providers: [
+      providers: [{provide:UserPreferencesService,useValue:{language:signal('de')}},
         provideRouter([]),
         {provide:DemoIdentityService,useValue:{userId:signal('christian.man')}},
         { provide: CatalogApiService, useValue: api },
-        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: DOMAIN_ID }) } } },
+        { provide: ActivatedRoute, useValue: { paramMap:of(convertToParamMap({id:DOMAIN_ID})), snapshot: { paramMap: convertToParamMap({ id: DOMAIN_ID }) } } },
       ],
     }).compileComponents();
     const fixture = TestBed.createComponent(DomainDetailComponent);
@@ -132,10 +133,10 @@ describe('DomainDetailComponent', () => {
     const linked = {...TERM,relations:[{id:'relation',relationType:'broader' as const,targetTermId:'other',targetUri:'',targetLabel:'Person'}]};
     const api = {
       loadDomain:()=>of(DOMAIN),loadDataProductsForDomain:()=>of([]),loadGlossaryTerms:()=>of([linked,other]),loadDomainAuditEvents:()=>of([]),
-      loadGlossaryTermProposals:()=>of([]),loadDomainModels:()=>of({logicalModels:[{id:'logical',title:'Personalbestand',description:'Mitarbeitende',status:'draft',revision:2,organizationId:'BIT',fieldCount:5}],
+      loadSemanticGraph:()=>of({revision:0,positions:{},relations:[],canEditLayout:true,canEditRelations:false}),loadGlossaryTermProposals:()=>of([]),loadDomainModels:()=>of({logicalModels:[{id:'logical',title:'Personalbestand',description:'Mitarbeitende',status:'draft',revision:2,organizationId:'BIT',fieldCount:5}],
         physicalModels:[{id:'table',title:'s3://demo/personal.parquet',sourceId:'s3',sourceName:'Personaldaten',sourceType:'s3',modelType:'parquet',snapshotId:'snapshot',snapshotRevision:4}]}),
     };
-    await TestBed.configureTestingModule({imports:[DomainDetailComponent],providers:[provideRouter([]),{provide:DemoIdentityService,useValue:{userId:signal('christian.man')}},{provide:CatalogApiService,useValue:api},{provide:ActivatedRoute,useValue:{snapshot:{paramMap:convertToParamMap({id:DOMAIN_ID})}}}]}).compileComponents();
+    await TestBed.configureTestingModule({imports:[DomainDetailComponent],providers: [{provide:UserPreferencesService,useValue:{language:signal('de')}},provideRouter([]),{provide:DemoIdentityService,useValue:{userId:signal('christian.man')}},{provide:CatalogApiService,useValue:api},{provide:ActivatedRoute,useValue:{paramMap:of(convertToParamMap({id:DOMAIN_ID})),snapshot:{paramMap:convertToParamMap({id:DOMAIN_ID})}}}]}).compileComponents();
     const fixture=TestBed.createComponent(DomainDetailComponent);fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();
     const root=fixture.nativeElement as HTMLElement;
     expect(root.querySelectorAll('.graph-node.is-term')).toHaveLength(2);
@@ -156,8 +157,8 @@ describe('DomainDetailComponent', () => {
   });
 
   it('keeps terms available when model loading fails and offers a retry', async () => {
-    const api={loadDomain:()=>of(DOMAIN),loadDataProductsForDomain:()=>of([]),loadGlossaryTerms:()=>of([TERM]),loadDomainAuditEvents:()=>of([]),loadGlossaryTermProposals:()=>of([]),loadDomainModels:vi.fn(()=>throwError(()=>new Error('unavailable')))};
-    await TestBed.configureTestingModule({imports:[DomainDetailComponent],providers:[provideRouter([]),{provide:DemoIdentityService,useValue:{userId:signal('christian.man')}},{provide:CatalogApiService,useValue:api},{provide:ActivatedRoute,useValue:{snapshot:{paramMap:convertToParamMap({id:DOMAIN_ID})}}}]}).compileComponents();
+    const api={loadDomain:()=>of(DOMAIN),loadDataProductsForDomain:()=>of([]),loadGlossaryTerms:()=>of([TERM]),loadDomainAuditEvents:()=>of([]),loadSemanticGraph:()=>of({revision:0,positions:{},relations:[],canEditLayout:true,canEditRelations:false}),loadGlossaryTermProposals:()=>of([]),loadDomainModels:vi.fn(()=>throwError(()=>new Error('unavailable')))};
+    await TestBed.configureTestingModule({imports:[DomainDetailComponent],providers: [{provide:UserPreferencesService,useValue:{language:signal('de')}},provideRouter([]),{provide:DemoIdentityService,useValue:{userId:signal('christian.man')}},{provide:CatalogApiService,useValue:api},{provide:ActivatedRoute,useValue:{paramMap:of(convertToParamMap({id:DOMAIN_ID})),snapshot:{paramMap:convertToParamMap({id:DOMAIN_ID})}}}]}).compileComponents();
     const fixture=TestBed.createComponent(DomainDetailComponent);fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();
     const root=fixture.nativeElement as HTMLElement;
     expect(root.querySelector('.domain-term-list')?.textContent).toContain(TERM.preferredLabel);
@@ -168,8 +169,8 @@ describe('DomainDetailComponent', () => {
   it('cancels stale scoped model requests when the identity changes', async () => {
     const first=new Subject<DomainModelMemberships>(),second=new Subject<DomainModelMemberships>();
     const userId=signal('christian.man');
-    const api={loadDomain:()=>of(DOMAIN),loadDataProductsForDomain:()=>of([]),loadGlossaryTerms:()=>of([]),loadDomainAuditEvents:()=>of([]),loadGlossaryTermProposals:()=>of([]),loadDomainModels:vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)};
-    await TestBed.configureTestingModule({imports:[DomainDetailComponent],providers:[provideRouter([]),{provide:DemoIdentityService,useValue:{userId}},{provide:CatalogApiService,useValue:api},{provide:ActivatedRoute,useValue:{snapshot:{paramMap:convertToParamMap({id:DOMAIN_ID})}}}]}).compileComponents();
+    const api={loadDomain:()=>of(DOMAIN),loadDataProductsForDomain:()=>of([]),loadGlossaryTerms:()=>of([]),loadDomainAuditEvents:()=>of([]),loadSemanticGraph:()=>of({revision:0,positions:{},relations:[],canEditLayout:true,canEditRelations:false}),loadGlossaryTermProposals:()=>of([]),loadDomainModels:vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)};
+    await TestBed.configureTestingModule({imports:[DomainDetailComponent],providers: [{provide:UserPreferencesService,useValue:{language:signal('de')}},provideRouter([]),{provide:DemoIdentityService,useValue:{userId}},{provide:CatalogApiService,useValue:api},{provide:ActivatedRoute,useValue:{paramMap:of(convertToParamMap({id:DOMAIN_ID})),snapshot:{paramMap:convertToParamMap({id:DOMAIN_ID})}}}]}).compileComponents();
     const fixture=TestBed.createComponent(DomainDetailComponent);fixture.detectChanges();
     userId.set('daca-test-editor');fixture.detectChanges();
     expect(api.loadDomainModels).toHaveBeenCalledTimes(2);

@@ -18,7 +18,8 @@ from .modeling_service import (
     logical_write_from_payload,
     utc_now,
 )
-from .models import LogicalModelReview, LogicalModelVersion, WorkflowTask
+from .models import Domain, LogicalModelReview, LogicalModelVersion, WorkflowTask
+from .object_governance import governs_domain
 from .schemas import ApiModel, reject_unsafe_service_level_text
 
 
@@ -35,12 +36,18 @@ class LogicalModelDecision(ApiModel):
         return self
 
 
-def _payload(review: LogicalModelReview) -> dict[str, Any]:
+def _can_decide(session, actor, review):
+    domain = session.get(Domain, review.domain_id)
+    return bool(review.status == "pending" and actor != review.submitter_user_id and domain
+                and domain.lifecycle == "active" and governs_domain(session, actor, domain))
+
+
+def _payload(review: LogicalModelReview, session, actor) -> dict[str, Any]:
     return {
         "id": review.id, "logicalModelId": review.logical_model_id,
         "submittedVersionId": review.submitted_version_id, "domainId": review.domain_id,
         "submitterUserId": review.submitter_user_id, "reviewerUserId": review.reviewer_user_id,
-        "status": review.status, "reviewSnapshot": review.review_snapshot,
+        "status": review.status, "canDecide": _can_decide(session, actor, review), "reviewSnapshot": review.review_snapshot,
         "decisionComment": review.decision_comment, "decidedAt": review.decided_at,
         "resultVersionId": review.result_version_id, "createdAt": review.created_at,
     }
@@ -54,11 +61,11 @@ def create_logical_model_review_router() -> APIRouter:
         review = session.get(LogicalModelReview, review_id)
         if review is None:
             raise HTTPException(404, "Logical model review not found")
-        if actor not in {review.reviewer_user_id, review.submitter_user_id}:
+        if actor != review.submitter_user_id and not governs_domain(session, actor, session.get(Domain, review.domain_id)):
             raise HTTPException(403, "This review is not assigned to the current identity")
         version = session.get(LogicalModelVersion, review.submitted_version_id)
         response.headers["ETag"] = f'"{version.lock_version}"'
-        return _payload(review)
+        return _payload(review, session, actor)
 
     @router.post("/logical-model-reviews/{review_id}/decision", response_model=LogicalModelResponse)
     def decide_review(
@@ -71,8 +78,9 @@ def create_logical_model_review_router() -> APIRouter:
             raise HTTPException(404, "Logical model review not found")
         if review.status != "pending":
             raise HTTPException(409, "This review already has a decision")
-        if actor != review.reviewer_user_id:
-            raise HTTPException(403, "Only the primary owner of the selected domain may decide")
+        session.scalar(select(Domain).where(Domain.id == review.domain_id).with_for_update().execution_options(populate_existing=True))
+        if not _can_decide(session, actor, review):
+            raise HTTPException(403, "Only a current owner or deputy of this domain, other than the submitter, may decide")
         model = get_logical_model(session, review.logical_model_id, lock=True)
         source = get_logical_version(session, model.id, review.submitted_version_id, lock=True)
         _require_etag(if_match, source.lock_version)

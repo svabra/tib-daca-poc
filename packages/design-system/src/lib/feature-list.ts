@@ -41,6 +41,46 @@ export const DACA_FEATURE_RELEASE = {
         introduction: 'DaCa ist der zentrale Datenkatalog der Data Platform BIT und bringt Metadaten, Freigaben und Aufgaben an einem Ort zusammen.',
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
+          { title: 'Domänenverantwortung übertragen', description: 'Domänen an neue Owner und Stellvertretungen abtreten – als zuständiger Owner, ALDS oder LDSD. Personensuche, Begründung und Bestätigung; Versionsschutz und Audit. Amtsbereich und eigenständige Objektverantwortlichkeiten bleiben erhalten.' },
+          { title: 'Domänen direkt bearbeiten und Amtsmandate unterscheiden', description: 'Owner, Stellvertretung sowie zuständige ALDS und deren Stellvertretungen bearbeiten Domänennamen und Beschreibungen. Gesonderte LDSD-/ALDS-Zuordnungen, Versionsschutz und Audit; die statische Information erklärt Rollen und bestätigte Zuständigkeiten.' },
+          { title: 'Domänen und Terme nach Owner suchen', description: 'Die Kachelsuche findet Data Owner und Stellvertretungen über Name oder User-ID, unabhängig von Grossschreibung und Akzenten. Terme verwenden ihre eigenen Verantwortlichkeiten.' },
+          { title: 'Domänen als Kacheln oder Netz anzeigen', description: 'Unter Domänen zwischen Kacheln und Domänennetz wechseln, wie bei der Terminologie. Bestehende Netzlinks bleiben erreichbar; ungespeicherte Änderungen werden beim Ansichtswechsel geprüft.' },
+          {
+            title: 'Objektrechte und aktuelle Prüfer konsistenter prüfen',
+            description: 'Produktpflege verlangt eine konkrete Zuordnung. Stellvertretungen werden bei Produktaktionen berücksichtigt; Freigaben prüfen aktuelle Rollen und verhindern Selbstfreigaben. Der Prüfbericht dokumentiert verbleibende Modell-/Quellenrechte und die Grenzen der umgesetzten Mandatsaktionen.',
+          },
+          {
+            title: 'Fachliche Schnittstellen und Überschneidungen verbinden',
+            description: 'Domänenbeziehungen können «hat eine fachliche Schnittstelle zu» oder «hat Überschneidungen mit» ausdrücken. Über das Linien-Kontextmenü auswählen und mit Netz speichern übernehmen; beide Typen werden in allen Netzen korrekt angezeigt.',
+          },
+          {
+            title: 'Termnetz je Organisation erkunden',
+            description: 'Terminologie bietet Kacheln und ein Termnetz mit den Domänen und Termen der gewählten Organisation. Die Startansicht folgt nachgeladenen Organisationsdaten und wiederholt kurzzeitig fehlgeschlagene Lesezugriffe. Layouts gemeinsam speichern; fachliche Änderungen weiterhin zur Freigabe einreichen. Ein Drei-Punkte-Menü bündelt die Aktionen auf Termkacheln.',
+          },
+          {
+            title: 'Domänennetze schneller bedienen',
+            description: 'Domänen nach kurzem Halten auch bei kleinen Mausbewegungen direkt verbinden. Blaue Punkte nur an verbundenen Kartenseiten. Einheitliche kompakte Kontextmenüs und Tooltips; direkt verbundene Domänen im Begriffsnetz bei Bedarf einblenden. TERMDAT-Aufnahme ist als deaktivierte Aktion sichtbar.',
+          },
+          {
+            title: 'Objektverantwortung und Rollen nachschlagen',
+            description: 'Data Owner und Stellvertretung entscheiden über ihre Domänen und Terme. Information enthält die Rollen, LDSD-/ALDS-Mandate und die vollständige Aufgabenmatrix; eine Textsuche erschliesst die statische Dokumentation.',
+          },
+          {
+            title: 'Domänenkacheln übersichtlich bedienen',
+            description: 'Die ganze Kopfzeile öffnet die Domäne. Ein Drei-Punkte-Menü bündelt Öffnen, Änderungs- und Stilllegungsaktionen mit den bestehenden Berechtigungen und Tastaturbedienung.',
+          },
+          {
+            title: 'Vom Canvas aus erstellen und suchen',
+            description: 'Eine Karte gedrückt halten und den roten Punkt auf die freie Fläche ziehen: Begriffe oder Domänen im Modal erstellen oder suchen. Karten nur ausblenden oder mit Berechtigung und Bestätigung im Katalog stilllegen. Verbindungstypen und Linien im lokalen Entwurf ändern.',
+          },
+          {
+            title: 'Begriffs- und Domänennetze gemeinsam nutzen',
+            description: 'Begriffslayouts separat für alle speichern. Das neue Domänennetz zeigt verwandte Domänen und Unterdomänen mit verschiebbaren Karten und lokalen Beziehungsentwürfen. Kontextmenüs öffnen eine gemeinsame Suche nach Termen, Domänen sowie logischen und physischen Modellen.',
+          },
+          {
+            title: 'Kartenpositionen gemeinsam speichern',
+            description: 'Data Owner und Data Stewards ordnen Modellkarten an und übernehmen die Positionen mit Entwurf speichern für alle. Ungespeicherte Bewegungen bleiben lokal; konkurrierende Änderungen werden erkannt. Modellinhalte und Zuordnungen bleiben bei reinen Layoutänderungen unverändert.',
+          },
           {
             title: 'AdA-Import herunterladen und zurücksetzen',
             description: 'Die AdA-Journey unter Dokumentation erklärt den Import in sechs Schritten. Das Drei-Punkte-Menü auf ihrer Kachel und im Kopf der Anleitung lädt die CSV herunter und setzt den Beispielimport nach Bestätigung zurück. Modellverknüpfungen sperren den Reset; Audit und andere Quellen bleiben erhalten. Auch per lokalem Reset-Befehl erreichbar.',
@@ -212,6 +252,38 @@ export const DACA_FEATURE_RELEASE = {
         introduction: 'DaCa is the central data catalog of the BIT data platform and brings metadata, approvals and tasks together in one place.',
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
+          { title: 'Transfer domain responsibility', description: 'Assign a new Owner and deputy as the current Owner, scoped ALDS or department LDSD. Person search, reason and confirmation, with revisions and audit. Office scope and independent object responsibilities are preserved.' },
+          { title: 'Edit domain metadata with explicit office mandates', description: 'Owners, deputies and appointed office ALDS/deputies edit domain names and descriptions. Separate LDSD/ALDS assignments, revision checks and audit evidence; static Information explains confirmed responsibilities.' },
+          { title: 'Search domains and terms by owner', description: 'Card search matches Data Owner and deputy names or user IDs without case or accent differences. Terms use their own assigned responsibilities.' },
+          { title: 'View domains as cards or a network', description: 'Switch between Cards and Domain network within Domains, matching Terminology. Existing network links still work and view changes check for unsaved edits.' },
+          {
+            title: 'Check object rights and current reviewers consistently',
+            description: 'Product edits require a concrete assignment. Deputy rights and current approval roles are checked, including self-approval. The audit records remaining model/source rights and the limits of implemented mandate actions.',
+          },
+          {
+            title: 'Navigate domain networks faster',
+            description: 'Connect domains after a short hold. Consistent compact context menus and tooltips; optionally display directly connected domains in a term graph. TERMDAT intake is shown as a disabled action.',
+          },
+          {
+            title: 'Find object responsibilities and roles',
+            description: 'Assigned owners and deputies govern their domains and terms. Information documents object roles, LDSD/ALDS mandates and the full activity matrix; text search covers static documentation.',
+          },
+          {
+            title: 'Use clearer domain cards',
+            description: 'Open a domain through its full heading. A three-dot menu groups open, change and retirement actions with existing permissions and keyboard controls.',
+          },
+          {
+            title: 'Create and search from the canvas',
+            description: 'Hold a card and drag its red point onto empty canvas to create or search terms or domains in a modal. Hide cards separately from confirmed, authorized catalog retirement. Change relationship types and remove lines in the local draft.',
+          },
+          {
+            title: 'Share term and domain networks',
+            description: 'Save shared term layouts separately from glossary approval. The new domain network shows related domains and subdomains with movable cards and local relationship drafts. Context menus open one search for terms, domains, logical models and physical models.',
+          },
+          {
+            title: 'Save shared card positions',
+            description: 'Data Owners and Data Stewards arrange model cards and use Save draft to share positions with everyone. Unsaved moves remain local and concurrent changes are detected. Layout-only saves leave model content and mapping versions unchanged.',
+          },
           {
             title: 'Download and reset the AdA import',
             description: 'The AdA journey in Documentation explains the import in six steps. The three-dot menu on its tile and detail header downloads the CSV and resets its scoped import after confirmation. Model references block reset; audit and other sources remain. A local command uses the same workflow.',

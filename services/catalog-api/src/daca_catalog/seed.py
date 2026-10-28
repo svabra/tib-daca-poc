@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, date, datetime
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .database import default_session_factory
@@ -199,6 +200,7 @@ def seed_catalog(session: Session) -> bool:
         workflow_added = seed_workflow_reference_data(session)
         domain_glossary_added = seed_domain_glossary_reference_data(session)
         glossary_reference_added = seed_glossary_reference_terms(session)
+        _seed_term_object_ownership(session)
         return (
             owner_profiles_added
             or relationships_added
@@ -629,6 +631,7 @@ def seed_catalog(session: Session) -> bool:
     seed_workflow_reference_data(session)
     seed_domain_glossary_reference_data(session)
     seed_glossary_reference_terms(session)
+    _seed_term_object_ownership(session)
     return True
 
 
@@ -844,9 +847,23 @@ def main() -> None:
     with session_factory() as session:
         created = seed_catalog(session)
         seed_modeling_catalog(session)
+        from .office_governance import (
+            seed_rapid_prototyping_domain,
+            seed_requested_steward_mandates,
+        )
+        seed_requested_steward_mandates(session)
+        seed_rapid_prototyping_domain(session)
         seed_site_glossary_terms(session)
         session.commit()
     print("catalog seed applied" if created else "catalog seed already present")
+
+
+def _seed_term_object_ownership(session: Session) -> None:
+    from .models import GlossaryTerm
+    from .object_governance import ensure_term_owners
+    for identity in session.scalars(select(GlossaryTerm.id)):
+        ensure_term_owners(session, identity)
+    session.commit()
 
 
 if __name__ == "__main__":

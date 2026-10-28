@@ -20,6 +20,7 @@ from .models import (
     WorkflowTask,
     utc_now,
 )
+from .object_governance import product_owners
 from .schemas import (
     FIXED_BEST_EFFORT_LIMITATION,
     ServiceLevelBaselineResponse,
@@ -206,21 +207,21 @@ def published_revisions(
 
 
 def actor_is_revision_privileged(
-    product: DataProduct, row: ServiceLevelRevision, actor: str | None
+    session: Session, product: DataProduct, row: ServiceLevelRevision, actor: str | None
 ) -> bool:
     return bool(
         actor is not None
         and (
-            actor == product.owner_user_id
+            actor in product_owners(session, product)
             or actor == row.control_person_user_id
         )
     )
 
 
 def actor_can_view_revision(
-    product: DataProduct, row: ServiceLevelRevision, actor: str | None
+    session: Session, product: DataProduct, row: ServiceLevelRevision, actor: str | None
 ) -> bool:
-    return row.status == "published" or actor_is_revision_privileged(product, row, actor)
+    return row.status == "published" or actor_is_revision_privileged(session, product, row, actor)
 
 
 def visible_revisions(
@@ -236,7 +237,7 @@ def visible_revisions(
             )
         )
     )
-    return [row for row in rows if actor_can_view_revision(product, row, actor)]
+    return [row for row in rows if actor_can_view_revision(session, product, row, actor)]
 
 
 def effective_valid_until(row: ServiceLevelRevision) -> date | None:
@@ -517,7 +518,7 @@ def summary_response(
             if next_row is not None
             else None
         ),
-        can_edit=actor is not None and actor == product.owner_user_id,
+        can_edit=actor in product_owners(session, product),
         can_review=actor is not None and pending_review is not None,
         owner=product_owner_person(session, product),
         control_person=product_control_person(session, product),
@@ -561,8 +562,8 @@ def _audit(
     )
 
 
-def _require_owner(product: DataProduct, actor: str) -> None:
-    if product.owner_user_id != actor:
+def _require_owner(session: Session, product: DataProduct, actor: str) -> None:
+    if actor not in product_owners(session, product):
         raise HTTPException(403, "Only the responsible data owner may edit this SLA")
 
 
@@ -578,7 +579,7 @@ def create_revision(
     actor: str,
     if_match: str | None,
 ) -> ServiceLevelRevision:
-    _require_owner(product, actor)
+    _require_owner(session, product, actor)
     _require_editable_product(product)
     latest = latest_revision_number(session, product.id)
     require_etag(if_match, latest)
@@ -621,7 +622,7 @@ def update_revision(
     actor: str,
     if_match: str | None,
 ) -> ServiceLevelRevision:
-    _require_owner(product, actor)
+    _require_owner(session, product, actor)
     _require_editable_product(product)
     require_etag(if_match, row.lock_version)
     if row.status != "draft":
@@ -656,7 +657,7 @@ def submit_revision(
     actor: str,
     if_match: str | None,
 ) -> ServiceLevelRevision:
-    _require_owner(product, actor)
+    _require_owner(session, product, actor)
     _require_editable_product(product)
     require_etag(if_match, row.lock_version)
     if row.status != "draft":
@@ -734,7 +735,7 @@ def withdraw_revision(
     actor: str,
     if_match: str | None,
 ) -> ServiceLevelRevision:
-    _require_owner(product, actor)
+    _require_owner(session, product, actor)
     require_etag(if_match, row.lock_version)
     if row.status != "pending_approval":
         raise HTTPException(409, "Only a pending SLA revision can be withdrawn")
@@ -758,7 +759,7 @@ def decide_revision(
     require_etag(if_match, row.lock_version)
     if row.status != "pending_approval":
         raise HTTPException(409, "Only a pending SLA revision can be decided")
-    if actor != row.control_person_user_id or actor == product.owner_user_id:
+    if actor != row.control_person_user_id or actor in product_owners(session, product):
         raise HTTPException(403, "Only the assigned SLA control person may decide")
     controller = session.get(DemoUser, actor)
     if not is_active_publication_approver(controller):

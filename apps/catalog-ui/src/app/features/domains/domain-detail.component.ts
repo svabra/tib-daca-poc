@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal, ViewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal, untracked, ViewChild } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StatusBadgeComponent } from '@bit-daca/design-system';
 import { finalize, forkJoin, Subscription } from 'rxjs';
@@ -7,13 +8,19 @@ import { CatalogApiService } from '../../core/catalog-api.service';
 import { DataProduct, DomainAuditEvent, DomainSummary, DomainModelMemberships, GlossaryTermSummary } from '../../core/catalog.models';
 import { DatePipe } from '@angular/common';
 import { ConceptNetworkEditorComponent } from './concept-network-editor.component';
+import { DomainMetadataDialogComponent } from './domain-metadata-dialog.component';
+import { DomainTransferDialogComponent } from './domain-transfer-dialog.component';
+import { CatalogI18nService } from '../../core/catalog-i18n.service';
 
-@Component({selector:'daca-domain-detail',standalone:true,imports:[DatePipe,RouterLink,StatusBadgeComponent,ConceptNetworkEditorComponent],changeDetection:ChangeDetectionStrategy.OnPush,template:`
+@Component({selector:'daca-domain-detail',standalone:true,imports:[DatePipe,RouterLink,StatusBadgeComponent,ConceptNetworkEditorComponent,DomainMetadataDialogComponent,DomainTransferDialogComponent],changeDetection:ChangeDetectionStrategy.OnPush,template:`
   <a routerLink="/domains">← Domänen &amp; Konzepte</a>
   @if (loading()) { <div class="daca-card detail-state">Domain wird geladen …</div> }
   @else if (error()) { <p class="daca-alert is-error" role="alert">{{ error() }}</p> }
   @else if (domain(); as item) {
-    <section class="daca-page-heading"><div><p class="daca-eyebrow">Fachdomain · keine Organisation</p><h1>{{ item.preferredLabel }}</h1><p>{{ item.definition }}</p></div><div class="domain-heading-actions"><daca-status-badge [tone]="item.status === 'active' ? 'green' : 'neutral'">{{ item.status === 'active' ? 'Aktiv' : 'Stillgelegt' }}</daca-status-badge>@if(item.status === 'active'){<a class="daca-button is-secondary" routerLink="/glossary/proposals/new" [queryParams]="{domainId:item.id}">Term für diese Domain vorschlagen</a>}</div></section>
+    <section class="daca-page-heading"><div><p class="daca-eyebrow">Fachdomain · keine Organisation</p><h1>{{ item.preferredLabel }}</h1><p>{{ item.definition }}</p></div><div class="domain-heading-actions"><daca-status-badge [tone]="item.status === 'active' ? 'green' : 'neutral'">{{ item.status === 'active' ? 'Aktiv' : 'Stillgelegt' }}</daca-status-badge>@if(item.canEditMetadata){<button class="daca-button is-secondary domain-edit-trigger" type="button" (click)="editOpen.set(true)">{{i18n.t('editDomainMetadata')}}</button>}@if(item.canTransferOwnership){<button class="daca-button is-secondary domain-transfer-trigger" type="button" (click)="transferOpen.set(true)">{{i18n.t('transferDomain')}}</button>}@if(item.status === 'active'){<a class="daca-button is-secondary" routerLink="/glossary/proposals/new" [queryParams]="{domainId:item.id}">Term für diese Domain vorschlagen</a>}</div></section>
+    @if(transferOpen()){<daca-domain-transfer-dialog [domain]="item" (closed)="transferOpen.set(false)" (saved)="ownershipTransferred($event)"/>}
+    @if(editOpen()){<daca-domain-metadata-dialog [domain]="item" (closed)="editOpen.set(false)" (saved)="metadataSaved($event)"/>}
+    @if(editNotice()){<p class="daca-alert is-success" role="status">{{editNotice()}}</p>}
     <div class="detail-grid"><section class="daca-card"><div class="daca-card-header"><h2>Governance</h2><span>Revision {{ item.revision }}</span></div><div class="daca-card-body"><dl><div><dt>Data Owner</dt><dd><strong>{{ item.ownerName }}</strong><br>{{ item.ownerOrganization }}</dd></div><div><dt>Stellvertretung</dt><dd><strong>{{ item.deputyOwnerName }}</strong><br>{{ item.deputyOwnerOrganization }}</dd></div><div><dt>Stabile URI</dt><dd><code>{{ item.urn }}</code></dd></div></dl></div></section>
     <section class="daca-card"><div class="daca-card-header"><h2>Sprachlabels</h2></div><div class="daca-card-body">@for(label of item.labels;track label.language){<article><strong>{{ label.language.toUpperCase() }} · {{ label.preferredLabel }}</strong><p>{{ label.definition }}</p></article>}@empty{<p>Keine Sprachlabels erfasst.</p>}</div></section></div>
     <section class="daca-card domain-models"><div class="daca-card-header"><div><p class="daca-eyebrow">Zugeordnete Datenmodelle</p><h2>Logische und physische Modelle</h2></div></div><div class="daca-card-body">
@@ -28,6 +35,7 @@ import { ConceptNetworkEditorComponent } from './concept-network-editor.componen
     <section class="daca-card relationship-card"><div class="daca-card-header"><div><p class="daca-eyebrow">Wissensgraph</p><h2>Beziehungen</h2></div><span>Domäne, Produkte und Begriffsbeziehungen</span></div><div class="daca-card-body">
 
       <daca-concept-network-editor [domain]="item" [terms]="terms()" [products]="products()" />
+      <a class="daca-button is-secondary" routerLink="/domains" [queryParams]="{view:'network'}">Domänennetz öffnen</a>
       <details><summary>JSON-LD-Endpunkt</summary><code>/api/v1/knowledge-graph?domainId={{ item.id }}</code></details>
     </div></section>
     <section class="daca-card audit-card"><div class="daca-card-header"><div><p class="daca-eyebrow">Append-only</p><h2>Änderungsverlauf</h2></div><span>{{auditEvents().length}}</span></div><div class="daca-card-body">@if(auditEvents().length){<ol class="audit-list">@for(event of auditEvents();track event.id){<li><div><strong>{{auditAction(event.action)}}</strong><span>{{event.actor}} · @if(event.revision){Revision {{event.revision}} · }<time [attr.datetime]="event.occurredAt">{{event.occurredAt|date:'dd.MM.yyyy, HH:mm'}}</time></span></div></li>}</ol>}@else{<p>Noch keine protokollierten Domain-Änderungen.</p>}</div></section>
@@ -38,12 +46,19 @@ export class DomainDetailComponent {
   private readonly api=inject(CatalogApiService); private readonly route=inject(ActivatedRoute); readonly domain=signal<DomainSummary|null>(null); readonly products=signal<readonly DataProduct[]>([]); readonly terms=signal<readonly GlossaryTermSummary[]>([]);readonly auditEvents=signal<readonly DomainAuditEvent[]>([]); readonly models=signal<DomainModelMemberships>({logicalModels:[],physicalModels:[]}); readonly modelQuery=signal(''); readonly modelsError=signal(''); readonly modelsLoading=signal(true);
   readonly filteredLogicalModels=computed(()=>this.models().logicalModels.filter(model=>this.matchesModel([model.title,model.description,model.organizationId,this.modelStatus(model.status)])));
   readonly filteredPhysicalModels=computed(()=>this.models().physicalModels.filter(model=>this.matchesModel([model.title,model.sourceName,model.sourceType,model.modelType,this.physicalType(model.modelType)])));
+  readonly i18n=inject(CatalogI18nService);readonly editOpen=signal(false);readonly transferOpen=signal(false);readonly editNotice=signal('');
   readonly loading=signal(true); readonly error=signal('');
+  @ViewChild(DomainTransferDialogComponent) transferDialog?:DomainTransferDialogComponent;
+  @ViewChild(DomainMetadataDialogComponent) metadataDialog?:DomainMetadataDialogComponent;
   @ViewChild(ConceptNetworkEditorComponent) networkEditor?:ConceptNetworkEditorComponent;
-  canDeactivate():boolean{return this.networkEditor?.canDeactivate()??true;}
-  constructor(){effect(()=>{this.identity.userId();this.loadModels();});this.destroyRef.onDestroy(()=>this.modelRequest?.unsubscribe());const id=this.route.snapshot.paramMap.get('id')??'';forkJoin({domain:this.api.loadDomain(id),products:this.api.loadDataProductsForDomain(id),terms:this.api.loadGlossaryTerms([id]),auditEvents:this.api.loadDomainAuditEvents(id)}).pipe(finalize(()=>this.loading.set(false))).subscribe({next:({domain,products,terms,auditEvents})=>{this.domain.set(domain);this.products.set(products);this.terms.set(terms);this.auditEvents.set(auditEvents);},error:()=>this.error.set('Die Domain konnte nicht vollständig geladen werden.')});}
-  auditAction(value:string):string{return({'created':'Domain erstellt','updated':'Domain geändert','retired':'Domain stillgelegt','approved':'Antrag genehmigt'} as Record<string,string>)[value]??value;}
-  loadModels():void{this.modelRequest?.unsubscribe();this.models.set({logicalModels:[],physicalModels:[]});this.modelsError.set('');this.modelsLoading.set(true);this.modelRequest=this.api.loadDomainModels(this.route.snapshot.paramMap.get('id')??'').pipe(finalize(()=>this.modelsLoading.set(false))).subscribe({next:models=>this.models.set(models),error:()=>this.modelsError.set('Die Modellzuordnungen konnten nicht geladen werden.')});}
+  canDeactivate():boolean{if(this.metadataDialog?.busy()||this.transferDialog?.busy())return false;if(this.transferDialog?.hasChanges()&&!window.confirm(this.i18n.t('discardDomainEdit')))return false;if(this.metadataDialog?.hasChanges()&&!window.confirm(this.i18n.t('discardDomainEdit')))return false;return this.networkEditor?.canDeactivate()??true;}
+  private readonly currentDomainId=signal('');private detailRequest?:Subscription;
+  constructor(){effect(()=>{this.identity.userId();const id=this.currentDomainId();if(id)untracked(()=>{this.loadModels();this.loadDetails(id);});});this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params=>this.currentDomainId.set(params.get('id')??''));this.destroyRef.onDestroy(()=>{this.modelRequest?.unsubscribe();this.detailRequest?.unsubscribe();});}
+  private loadDetails(id:string):void{this.detailRequest?.unsubscribe();this.editOpen.set(false);this.transferOpen.set(false);this.editNotice.set('');this.loading.set(true);this.error.set('');this.domain.set(null);this.detailRequest=forkJoin({domain:this.api.loadDomain(id),products:this.api.loadDataProductsForDomain(id),terms:this.api.loadGlossaryTerms([id]),auditEvents:this.api.loadDomainAuditEvents(id)}).pipe(finalize(()=>this.loading.set(false))).subscribe({next:({domain,products,terms,auditEvents})=>{this.domain.set(domain);this.products.set(products);this.terms.set(terms);this.auditEvents.set(auditEvents);},error:()=>this.error.set('Die Domain konnte nicht vollständig geladen werden.')});}
+  metadataSaved(domain:DomainSummary):void{this.domain.set(domain);this.editOpen.set(false);this.editNotice.set(this.i18n.t('domainEditSaved'));this.api.loadDomainAuditEvents(domain.id).subscribe(events=>this.auditEvents.set(events));}
+  ownershipTransferred(domain:DomainSummary):void{this.transferOpen.set(false);this.metadataSaved(domain);this.editNotice.set(this.i18n.t('domainTransferSaved'));this.api.refreshWorkflowTasks();}
+  auditAction(value:string):string{if(value==='ownership-transferred')return this.i18n.t('domainOwnershipTransferred');return({'created':'Domain erstellt','updated':'Domain geändert','retired':'Domain stillgelegt','approved':'Antrag genehmigt'} as Record<string,string>)[value]??value;}
+  loadModels():void{this.modelRequest?.unsubscribe();this.models.set({logicalModels:[],physicalModels:[]});this.modelsError.set('');this.modelsLoading.set(true);this.modelRequest=this.api.loadDomainModels(this.currentDomainId()).pipe(finalize(()=>this.modelsLoading.set(false))).subscribe({next:models=>this.models.set(models),error:()=>this.modelsError.set('Die Modellzuordnungen konnten nicht geladen werden.')});}
   inputValue(event:Event):string{return (event.target as HTMLInputElement).value;}
   private matchesModel(values:string[]):boolean{return values.join(' ').toLocaleLowerCase().includes(this.modelQuery().trim().toLocaleLowerCase());}
   physicalType(value:string):string{return ({table:'Tabelle',view:'View',materialized_view:'Materialized View',parquet:'Parquet-Objekt'} as Record<string,string>)[value]??value;}

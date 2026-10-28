@@ -1,15 +1,24 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { DestroyRef, effect, untracked, afterNextRender, ChangeDetectionStrategy, Component, computed, ElementRef, inject, Injector, signal, viewChild } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { StatusBadgeComponent } from '@bit-daca/design-system';
-import { finalize, forkJoin, Observable } from 'rxjs';
+import { finalize, forkJoin, Observable, Subscription } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { CatalogI18nService } from '../../core/catalog-i18n.service';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 import { DomainChangeRequest, DomainSummary, GlossaryTermProposal, GlossaryTermSummary } from '../../core/catalog.models';
+import { TermCardActionsComponent } from './term-card-actions.component';
+import { OrganizationTermNetworkComponent } from './organization-term-network.component';
+import { DomainNetworkComponent } from './domain-network.component';
+import { DomainTransferDialogComponent } from './domain-transfer-dialog.component';
+import { DomainCardAction, DomainCardActionsComponent } from './domain-card-actions.component';
 
 export type SemanticTab = 'domains' | 'terms' | 'governance';
+
+function searchableText(value: string): string {
+  return value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('de-CH');
+}
 
 export function resolveSemanticTab(routeTab: unknown, legacyTab: string | null): SemanticTab {
   if (routeTab === 'terms' || routeTab === 'governance') return routeTab;
@@ -19,7 +28,7 @@ export function resolveSemanticTab(routeTab: unknown, legacyTab: string | null):
 @Component({
   selector: 'daca-domains-glossary',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, StatusBadgeComponent],
+  imports: [ReactiveFormsModule, RouterLink, StatusBadgeComponent, DomainCardActionsComponent, TermCardActionsComponent, OrganizationTermNetworkComponent, DomainNetworkComponent, DomainTransferDialogComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="daca-page-heading">
@@ -49,33 +58,40 @@ export function resolveSemanticTab(routeTab: unknown, legacyTab: string | null):
     @if (loading()) {
       <div class="daca-card semantic-state" aria-live="polite">{{ i18n.t('loadingSemantics') }}</div>
     } @else if (!error() && tab() === 'domains') {
-      <label class="semantic-search">{{ i18n.t('searchDomains') }} <input type="search" [value]="query()" (input)="query.set(searchValue($event))" placeholder="Name, Definition oder Owner"></label>
+      <div class="term-view-switch domain-view-switch" role="group" [attr.aria-label]="i18n.t('domainView')"><button class="daca-button is-secondary" type="button" [attr.aria-pressed]="domainView()==='cards'" (click)="setDomainView('cards')">{{i18n.t('semanticCards')}}</button><button class="daca-button is-secondary" type="button" [attr.aria-pressed]="domainView()==='network'" (click)="setDomainView('network')">{{i18n.t('domainNetwork')}}</button></div>
+      @if(domainView()==='network'){<daca-domain-network [embedded]="true"/>}@else{
+      <label class="semantic-search">{{ i18n.t('searchDomains') }} <input type="search" [value]="query()" (input)="query.set(searchValue($event))" [placeholder]="i18n.t('domainSearchPlaceholder')"></label>
       @if (filteredDomains().length) {
         <div class="semantic-grid">
           @for (domain of filteredDomains(); track domain.id) {
-            <article class="daca-card semantic-card">
-              <div class="daca-card-header"><div><p class="daca-eyebrow">Fachdomain</p><h2>{{ domain.preferredLabel }}</h2></div><daca-status-badge [tone]="domain.status === 'active' ? 'green' : 'neutral'">{{ domain.status === 'active' ? 'Aktiv' : 'Stillgelegt' }}</daca-status-badge></div>
-              <div class="daca-card-body"><p>{{ domain.definition || i18n.t('noDefinition') }}</p><dl><div><dt>Data Owner</dt><dd>{{ domain.ownerName }} · {{ domain.ownerOrganization }}</dd></div><div><dt>Stellvertretung</dt><dd>{{ domain.deputyOwnerName }} · {{ domain.deputyOwnerOrganization }}</dd></div><div><dt>Inhalt</dt><dd>{{ domain.productCount }} Produkte · {{ domain.termCount }} Terme</dd></div><div><dt>Revision</dt><dd>{{ domain.revision }}</dd></div></dl><div class="domain-actions"><a class="daca-button is-secondary" [routerLink]="['/domains', domain.id]">{{ i18n.t('openDomain') }}</a>@if(domain.status==='active'&&canRequestDomain()){<button class="daca-button is-secondary" type="button" (click)="openDomainEdit(domain,false)">Änderung beantragen</button><button type="button" (click)="requestRetirement(domain)">Stilllegung beantragen</button>}@if(domain.status==='active'&&isRegisterOwner()){<button type="button" (click)="openDomainEdit(domain,true)">Direkt bearbeiten</button><button type="button" (click)="retireDirect(domain)">Direkt stilllegen</button>}</div></div>
+            <article class="daca-card semantic-card domain-card" [attr.data-domain-id]="domain.id">
+              <a class="daca-card-header domain-card-heading" [routerLink]="['/domains',domain.id]" [attr.aria-label]="i18n.t('openNamedDomain',{name:domain.preferredLabel})"><div><p class="daca-eyebrow">Fachdomain</p><h2>{{ domain.preferredLabel }}</h2></div><daca-status-badge [tone]="domain.status === 'active' ? 'green' : 'neutral'">{{ domain.status === 'active' ? 'Aktiv' : 'Stillgelegt' }}</daca-status-badge></a>
+              <div class="daca-card-body"><p>{{ domain.definition || i18n.t('noDefinition') }}</p><dl><div><dt>Data Owner</dt><dd>{{ domain.ownerName }} · {{ domain.ownerOrganization }}</dd></div><div><dt>Stellvertretung</dt><dd>{{ domain.deputyOwnerName }} · {{ domain.deputyOwnerOrganization }}</dd></div><div><dt>Inhalt</dt><dd>{{ domain.productCount }} Produkte · {{ domain.termCount }} Terme</dd></div><div><dt>Revision</dt><dd>{{ domain.revision }}</dd></div></dl><div class="domain-actions"><daca-domain-card-actions [domain]="domain" [canRequest]="canRequestDomain()" [canGovern]="canGovernDomain(domain)" [busy]="saving()" (action)="domainCardAction(domain,$event)" /></div></div>
             </article>
           }
         </div>
       } @else { <div class="daca-card semantic-state">{{ i18n.t('noMatchingDomain') }}</div> }
+      }
     } @else if (!error() && tab() === 'terms') {
-      <label class="semantic-search">{{ i18n.t('searchTerminology') }} <input type="search" [value]="termQuery()" (input)="termQuery.set(searchValue($event))" placeholder="Begriff, Abkürzung oder Definition"></label>
+      <div class="term-view-switch" role="group" [attr.aria-label]="i18n.t('semanticView')"><button class="daca-button is-secondary" type="button" [attr.aria-pressed]="termView()==='cards'" (click)="setTermView('cards')">{{i18n.t('semanticCards')}}</button><button class="daca-button is-secondary" type="button" [attr.aria-pressed]="termView()==='network'" (click)="setTermView('network')">{{i18n.t('termNetwork')}}</button></div>
+      @if(termView()==='network'){<daca-organization-term-network [domains]="domains()" [terms]="terms()"/>}@else{
+      <label class="semantic-search">{{ i18n.t('searchTerminology') }} <input type="search" [value]="termQuery()" (input)="termQuery.set(searchValue($event))" [placeholder]="i18n.t('termSearchPlaceholder')"></label>
       @if (filteredTerms().length) {
         <div class="semantic-grid">
           @for (term of filteredTerms(); track term.id) {
-            <article class="daca-card semantic-card"><div class="daca-card-header"><div><p class="daca-eyebrow">SKOS Concept</p><h2>{{ term.preferredLabel }}</h2></div><daca-status-badge [tone]="term.status === 'active' ? 'green' : 'neutral'">{{ term.status }}</daca-status-badge></div><div class="daca-card-body"><p>{{ term.definition || 'Noch keine Definition hinterlegt.' }}</p><div class="semantic-chips">@for (domain of term.domains; track domain.id) { <a [routerLink]="['/domains', domain.id]">{{ domain.preferredLabel }}</a> }</div><dl><div><dt>Sprachen</dt><dd>{{ languages(term) }}</dd></div><div><dt>Abkürzungen</dt><dd>{{ alternativeLabels(term) || '–' }}</dd></div><div><dt>Relationen</dt><dd>{{ term.relations.length }}</dd></div></dl>@if(term.status==='active'){<div class="domain-actions term-actions"><a class="daca-button is-secondary" routerLink="/glossary/proposals/new" [queryParams]="{ termId: term.id }">Änderung vorschlagen</a><button type="button" (click)="requestTermRetirement(term)">Stilllegung beantragen</button></div>}</div></article>
+            <article class="daca-card semantic-card term-card" [attr.data-term-id]="term.id"><div class="daca-card-header"><div><p class="daca-eyebrow">SKOS Concept</p><h2>{{ term.preferredLabel }}</h2></div><daca-status-badge [tone]="term.status === 'active' ? 'green' : 'neutral'">{{ term.status }}</daca-status-badge></div><div class="daca-card-body"><p>{{ term.definition || 'Noch keine Definition hinterlegt.' }}</p><div class="semantic-chips">@for (domain of term.domains; track domain.id) { <a [routerLink]="['/domains', domain.id]">{{ domain.preferredLabel }}</a> }</div><dl>@if(term.ownerUserId){<div><dt>Data Owner</dt><dd>{{personName(term.ownerUserId)}}</dd></div>}@if(term.deputyOwnerUserId){<div><dt>Stellvertretung</dt><dd>{{personName(term.deputyOwnerUserId)}}</dd></div>}<div><dt>Sprachen</dt><dd>{{ languages(term) }}</dd></div><div><dt>Abkürzungen</dt><dd>{{ alternativeLabels(term) || '–' }}</dd></div><div><dt>Relationen</dt><dd>{{ term.relations.length }}</dd></div></dl>@if(term.status==='active'){<div class="domain-actions term-actions"><daca-term-card-actions [term]="term" [busy]="saving()" (action)="requestTermRetirement(term)"/></div>}</div></article>
           }
         </div>
       } @else { <div class="daca-card semantic-state">{{ termQuery().trim() ? 'Keine passenden Terminology-Terme gefunden.' : 'Noch keine akzeptierten Terminology-Terme.' }}</div> }
+      }
     } @else if (!error()) {
       <div class="semantic-governance">
-        <section><h2>Domain-Anträge</h2>@if (domainRequests().length) { @for (request of domainRequests(); track request.id) { <article class="daca-card governance-row"><div><strong>{{ requestTitle(request) }}</strong><p>{{ request.requesterName }} · Revision {{ request.revision }} · {{ request.status }}</p></div>@if (isRegisterOwner() && request.status === 'submitted') { <div><button class="daca-button is-secondary" type="button" (click)="openDomainRequestReview(request)">Antrag bearbeiten</button><button class="daca-button" type="button" (click)="decideDomain(request, 'approve')">Genehmigen</button><button class="daca-button is-secondary" type="button" (click)="decideDomain(request, 'reject')">Ablehnen</button></div> }</article> } } @else { <div class="daca-card semantic-state">Keine Domain-Anträge.</div> }</section>
+        <section><h2>Domain-Anträge</h2>@if (domainRequests().length) { @for (request of domainRequests(); track request.id) { <article class="daca-card governance-row"><div><strong>{{ requestTitle(request) }}</strong><p>{{ request.requesterName }} · Revision {{ request.revision }} · {{ request.status }}</p></div>@if (request.canReview && request.status === 'submitted') { <div><button class="daca-button is-secondary" type="button" (click)="openDomainRequestReview(request)">Antrag bearbeiten</button><button class="daca-button" type="button" (click)="decideDomain(request, 'approve')">Genehmigen</button><button class="daca-button is-secondary" type="button" (click)="decideDomain(request, 'reject')">Ablehnen</button></div> }</article> } } @else { <div class="daca-card semantic-state">Keine Domain-Anträge.</div> }</section>
         <section><h2>Termvorschläge</h2>@if (proposals().length) { @for (proposal of proposals(); track proposal.id) { <article class="daca-card governance-row"><div><strong>{{ proposalTitle(proposal) }}</strong><p>{{ proposal.requesterName }} · {{ proposal.reviews.length }} Domain-Reviews · {{ proposal.status }}</p></div><a class="daca-button is-secondary" [routerLink]="['/glossary/proposals', proposal.id, 'review']">Review öffnen</a></article> } } @else { <div class="daca-card semantic-state">Keine sichtbaren Termvorschläge.</div> }</section>
       </div>
     }
 
+    @if(transferTarget();as target){<daca-domain-transfer-dialog [domain]="target" (closed)="transferTarget.set(null)" (saved)="transferSaved($event)"/>}
     @if (requestOpen()) {
       <div class="dialog-backdrop" (click)="requestOpen.set(false)"></div>
       <section class="daca-card semantic-dialog" role="dialog" aria-modal="true" aria-labelledby="domain-request-title">
@@ -93,11 +109,15 @@ export function resolveSemanticTab(routeTab: unknown, legacyTab: string | null):
 
   `,
   styles: [`
-    .semantic-tabs{display:flex;gap:.5rem;margin:0 0 1.5rem;border-bottom:1px solid var(--daca-color-border,#d5d8dc)}.semantic-tabs>a{padding:.9rem 1rem;color:inherit;font-weight:700;text-decoration:none;border-bottom:3px solid transparent}.semantic-tabs>a.is-active{border-color:#e1001a}.semantic-tabs span{margin-left:.4rem;color:#646b72}.semantic-search{display:grid;gap:.35rem;max-width:38rem;margin-bottom:1.25rem;font-weight:700}.semantic-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(19rem,1fr));gap:1rem}.semantic-card h2{margin:0}.semantic-card dl{display:grid;gap:.65rem}.semantic-card dl div{display:grid;grid-template-columns:7rem 1fr;gap:.75rem}.semantic-card dt{font-weight:700}.semantic-card dd{margin:0}.domain-actions{display:flex;flex-wrap:wrap;gap:.5rem}.term-actions{margin-top:1rem}.semantic-chips{display:flex;flex-wrap:wrap;gap:.4rem;margin:1rem 0}.semantic-chips a{padding:.25rem .55rem;background:#eef3f7;border-radius:1rem}.semantic-state{padding:2rem;text-align:center}.semantic-governance{display:grid;gap:2rem}.governance-row{padding:1rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;margin:.75rem 0}.governance-row p{margin:.25rem 0 0}.governance-row>div:last-child{display:flex;gap:.5rem}.dialog-backdrop{position:fixed;inset:0;background:#0008;z-index:20}.semantic-dialog{position:fixed;z-index:21;inset:50% auto auto 50%;transform:translate(-50%,-50%);width:min(36rem,calc(100vw - 2rem));max-height:90vh;overflow:auto}.term-dialog{width:min(58rem,calc(100vw - 2rem))}.semantic-dialog .daca-card-header button{font-size:1.75rem;border:0;background:none}.dialog-form{display:grid;gap:1rem}.dialog-form label{display:grid;gap:.35rem;font-weight:700}.dialog-form>div{display:flex;justify-content:flex-end;gap:.5rem}.term-language-grid{display:grid!important;grid-template-columns:1fr 1fr;gap:1rem;justify-content:stretch!important}.term-language-grid fieldset,.term-domain-selection{display:grid;gap:.75rem;margin:0;padding:1rem;border:1px solid var(--daca-color-border,#d5d8dc)}.term-language-grid legend,.term-domain-selection legend{font-weight:700}.term-domain-selection{grid-template-columns:repeat(auto-fit,minmax(13rem,1fr))}.term-domain-selection legend{grid-column:1/-1}.term-domain-selection label{display:flex;align-items:center;gap:.5rem}.form-hint{margin:0;color:#a3291b}@media(max-width:700px){.governance-row{align-items:flex-start;flex-direction:column}.semantic-card dl div,.term-language-grid{grid-template-columns:1fr}}
+    .domain-card-heading{color:inherit;text-decoration:none;cursor:pointer}.domain-card-heading>div{min-width:0}.domain-card-heading h2{overflow-wrap:anywhere}.domain-card-heading:hover{background:var(--daca-blue-soft)}.domain-card-heading:focus-visible{outline:2px solid var(--daca-blue);outline-offset:-3px}.domain-card .domain-actions{justify-content:flex-end}
+    .semantic-tabs{display:flex;gap:.5rem;margin:0 0 1.5rem;border-bottom:1px solid var(--daca-color-border,#d5d8dc)}.semantic-tabs>a{padding:.9rem 1rem;color:inherit;font-weight:700;text-decoration:none;border-bottom:3px solid transparent}.semantic-tabs>a.is-active{border-color:#e1001a}.semantic-tabs span{margin-left:.4rem;color:#646b72}.semantic-search{display:grid;gap:.35rem;max-width:38rem;margin-bottom:1.25rem;font-weight:700}.semantic-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(19rem,1fr));gap:1rem}.semantic-card h2{margin:0}.semantic-card dl{display:grid;gap:.65rem}.semantic-card dl div{display:grid;grid-template-columns:7rem 1fr;gap:.75rem}.semantic-card dt{font-weight:700}.semantic-card dd{margin:0}.domain-actions{display:flex;flex-wrap:wrap;gap:.5rem}.term-actions{margin-top:1rem;justify-content:flex-end}.term-view-switch{display:flex;gap:.5rem;margin-bottom:1rem}.term-view-switch [aria-pressed=true]{background:var(--daca-blue-soft);border-color:var(--daca-blue)}.term-actions .daca-button{font-size:.875rem;min-height:40px}.semantic-chips{display:flex;flex-wrap:wrap;gap:.4rem;margin:1rem 0}.semantic-chips a{padding:.25rem .55rem;background:#eef3f7;border-radius:1rem}.semantic-state{padding:2rem;text-align:center}.semantic-governance{display:grid;gap:2rem}.governance-row{padding:1rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;margin:.75rem 0}.governance-row p{margin:.25rem 0 0}.governance-row>div:last-child{display:flex;gap:.5rem}.dialog-backdrop{position:fixed;inset:0;background:#0008;z-index:20}.semantic-dialog{position:fixed;z-index:21;inset:50% auto auto 50%;transform:translate(-50%,-50%);width:min(36rem,calc(100vw - 2rem));max-height:90vh;overflow:auto}.term-dialog{width:min(58rem,calc(100vw - 2rem))}.semantic-dialog .daca-card-header button{font-size:1.75rem;border:0;background:none}.dialog-form{display:grid;gap:1rem}.dialog-form label{display:grid;gap:.35rem;font-weight:700}.dialog-form>div{display:flex;justify-content:flex-end;gap:.5rem}.term-language-grid{display:grid!important;grid-template-columns:1fr 1fr;gap:1rem;justify-content:stretch!important}.term-language-grid fieldset,.term-domain-selection{display:grid;gap:.75rem;margin:0;padding:1rem;border:1px solid var(--daca-color-border,#d5d8dc)}.term-language-grid legend,.term-domain-selection legend{font-weight:700}.term-domain-selection{grid-template-columns:repeat(auto-fit,minmax(13rem,1fr))}.term-domain-selection legend{grid-column:1/-1}.term-domain-selection label{display:flex;align-items:center;gap:.5rem}.form-hint{margin:0;color:#a3291b}@media(max-width:700px){.governance-row{align-items:flex-start;flex-direction:column}.semantic-card dl div,.term-language-grid{grid-template-columns:1fr}}
   `],
 })
 export class DomainsGlossaryComponent {
+  private loadRequest?:Subscription;
   readonly api = inject(CatalogApiService);
+  private readonly host=inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector=inject(Injector);
   readonly i18n = inject(CatalogI18nService);
   readonly identity = inject(DemoIdentityService);
   private readonly fb = inject(FormBuilder);
@@ -114,23 +134,33 @@ export class DomainsGlossaryComponent {
   readonly notice = signal('');
   readonly query = signal('');
   readonly termQuery = signal('');
+  readonly termView=signal<'cards'|'network'>('cards');
+  readonly domainView=signal<'cards'|'network'>('cards');
+  readonly domainNetwork=viewChild(DomainNetworkComponent);
+  readonly organizationNetwork=viewChild(OrganizationTermNetworkComponent);
+  setDomainView(view:'cards'|'network'):void{if(view===this.domainView())return;void this.router.navigate([],{relativeTo:this.route,queryParams:{view:view==='network'?'network':null},queryParamsHandling:'merge',replaceUrl:true});}
+  setTermView(view:'cards'|'network'):void{if(view===this.termView()||!this.canDeactivate())return;this.termView.set(view);void this.router.navigate([],{relativeTo:this.route,queryParams:{view:view==='network'?'network':null},queryParamsHandling:'merge',replaceUrl:true});}
+  readonly transferTarget=signal<DomainSummary|null>(null);
+  readonly transferDialog=viewChild(DomainTransferDialogComponent);
+  canDeactivate():boolean{if(this.transferDialog()?.busy())return false;if(this.transferDialog()?.hasChanges()&&!window.confirm(this.i18n.t('discardDomainEdit')))return false;return (this.domainNetwork()?.canDeactivate()??true)&&(this.organizationNetwork()?.canDeactivate()??true);}
   readonly requestOpen = signal(false);
   readonly requestMode = signal<'create' | 'update'>('create');
   readonly requestTarget = signal<DomainSummary | null>(null);
   readonly directAction = signal(false);
   readonly reviewingRequest = signal<DomainChangeRequest | null>(null);
-  readonly canRequestDomain = computed(() => this.identity.user().roles.includes('data_owner'));
-  readonly isRegisterOwner = computed(() => this.identity.user().roles.includes('domain_register_owner'));
+  readonly canRequestDomain = computed(() => this.identity.user().roles.includes('data_owner')||(this.identity.canEditModels?.()??false)||this.domains().some(domain=>this.canGovernDomain(domain)));
+  personName(id:string):string{return this.identity.users().find(user=>user.id===id)?.displayName??id;}
+  canGovernDomain(domain:DomainSummary):boolean{return [domain.ownerUserId,domain.deputyOwnerUserId].includes(this.identity.userId());}
   readonly openGovernanceCount = computed(() => this.domainRequests().filter((item) => item.status === 'submitted').length + this.proposals().filter((item) => item.status === 'submitted' || item.status === 'in_review').length);
-  readonly filteredDomains = computed(() => { const query = this.query().trim().toLocaleLowerCase('de-CH'); return query ? this.domains().filter((item) => [item.preferredLabel,item.definition,item.ownerName,item.ownerOrganization].some((value) => value.toLocaleLowerCase('de-CH').includes(query))) : this.domains(); });
+  readonly filteredDomains = computed(() => { const query = searchableText(this.query().trim()); return query ? this.domains().filter((item) => [item.preferredLabel,item.definition,item.ownerName,item.ownerOrganization,item.deputyOwnerName,item.deputyOwnerOrganization,item.ownerUserId,item.deputyOwnerUserId].some((value) => searchableText(value??'').includes(query))) : this.domains(); });
   readonly filteredTerms = computed(() => {
-    const query = this.termQuery().trim().toLocaleLowerCase('de-CH');
+    const query = searchableText(this.termQuery().trim());
     if (!query) return this.terms();
-    return this.terms().filter((term) => term.labels.some((label) => [
-      label.preferredLabel,
-      label.definition,
-      ...label.alternativeLabels,
-    ].some((value) => value.toLocaleLowerCase('de-CH').includes(query))));
+    return this.terms().filter((term) => [
+      term.preferredLabel, term.definition,
+      ...term.labels.flatMap(label => [label.preferredLabel, label.definition, ...label.alternativeLabels]),
+      ...[term.ownerUserId, term.deputyOwnerUserId].flatMap(id => id ? [id, this.personName(id)] : []),
+    ].some(value => searchableText(value??'').includes(query)));
   });
   readonly requestForm = this.fb.nonNullable.group({ label: ['', [Validators.required, Validators.maxLength(160)]], definition: ['', [Validators.required, Validators.maxLength(2000)]], ownerUserId: ['', Validators.required], deputyOwnerUserId: ['', Validators.required] });
 
@@ -138,13 +168,17 @@ export class DomainsGlossaryComponent {
     const routeTab = this.route.snapshot.data['semanticTab'];
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       this.tab.set(resolveSemanticTab(routeTab, params.get('tab')));
+      this.termView.set(params.get('view')==='network'?'network':'cards');
+      this.domainView.set(params.get('view')==='network'?'network':'cards');
+      if(params.has('q')){this.termQuery.set(params.get('q')??'');this.query.set(params.get('q')??'');}
     });
-    this.load();
+    effect(()=>{this.identity.userId();untracked(()=>{this.transferTarget.set(null);this.load();});});
+    inject(DestroyRef).onDestroy(()=>this.loadRequest?.unsubscribe());
   }
 
   load(): void {
-    this.loading.set(true); this.error.set('');
-    forkJoin({ domains: this.api.loadDomains(true), terms: this.api.loadGlossaryTerms(), requests: this.api.loadDomainChangeRequests(), proposals: this.api.loadGlossaryTermProposals() }).pipe(finalize(() => this.loading.set(false))).subscribe({ next: (data) => { this.domains.set(data.domains); this.terms.set(data.terms); this.domainRequests.set(data.requests); this.proposals.set(data.proposals); }, error: () => this.error.set('Die fachlichen Metadaten konnten nicht geladen werden.') });
+    this.loadRequest?.unsubscribe();const actor=this.identity.userId();this.domains.set([]);this.terms.set([]);this.loading.set(true); this.error.set('');
+    this.loadRequest=forkJoin({ domains: this.api.loadDomains(true), terms: this.api.loadGlossaryTerms(), requests: this.api.loadDomainChangeRequests(), proposals: this.api.loadGlossaryTermProposals() }).pipe(finalize(() => this.loading.set(false))).subscribe({ next: (data) => { if(actor!==this.identity.userId())return;this.domains.set(data.domains); this.terms.set(data.terms); this.domainRequests.set(data.requests); this.proposals.set(data.proposals); }, error: () => this.error.set('Die fachlichen Metadaten konnten nicht geladen werden.') });
   }
 
   searchValue(event: Event): string { return (event.target as HTMLInputElement).value; }
@@ -156,6 +190,17 @@ export class DomainsGlossaryComponent {
   alternativeLabels(term: GlossaryTermSummary): string { return term.labels.flatMap((label) => label.alternativeLabels).join(', '); }
   requestTitle(request: DomainChangeRequest): string { const localizations = request.reviewPayload['localizations'] ?? request.requestedPayload['localizations']; return Array.isArray(localizations) ? String((localizations[0] as Record<string, unknown>)?.['preferredLabel'] ?? request.operation) : request.operation; }
   proposalTitle(proposal: GlossaryTermProposal): string { const labels = proposal.reviewPayload['localizations'] ?? proposal.requestedPayload['localizations']; return Array.isArray(labels) ? String((labels[0] as Record<string, unknown>)?.['preferredLabel'] ?? 'Termvorschlag') : 'Termvorschlag'; }
+
+  domainCardAction(domain:DomainSummary,action:DomainCardAction):void{
+    if(action==='transfer'){this.transferTarget.set(domain);}
+    else if(action==='request-change'||action==='edit'){
+      this.openDomainEdit(domain,action==='edit');
+      afterNextRender(()=>this.host.nativeElement.querySelector<HTMLInputElement>('.semantic-dialog input')?.focus(),{injector:this.injector});
+    }else if(action==='request-retirement')this.requestRetirement(domain);
+    else this.retireDirect(domain);
+  }
+
+  transferSaved(domain:DomainSummary):void{this.transferTarget.set(null);this.notice.set(this.i18n.t('domainTransferSaved'));this.domains.update(items=>items.map(item=>item.id===domain.id?domain:item));this.api.refreshWorkflowTasks();this.load();}
 
   openDomainEdit(domain: DomainSummary, direct: boolean): void { this.reviewingRequest.set(null);this.requestMode.set('update'); this.requestTarget.set(domain); this.directAction.set(direct); this.requestForm.reset({ label: domain.preferredLabel, definition: domain.definition, ownerUserId: domain.ownerUserId, deputyOwnerUserId: domain.deputyOwnerUserId }); this.requestOpen.set(true); }
   openCreate(): void { this.reviewingRequest.set(null);this.requestMode.set('create'); this.requestTarget.set(null); this.directAction.set(false); this.requestForm.reset(); this.requestOpen.set(true); }

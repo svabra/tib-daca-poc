@@ -141,7 +141,7 @@ def test_opa_bundle_revision_changes_with_trusted_pip_attributes(client):
     before = client.get("/api/v1/opa/bundles/catalog.tar.gz")
     edited = client.patch(
         product_url(),
-        headers={"If-Match": '"1"'},
+        headers={"If-Match": '"1"', "X-DaCa-User": "kassandra.valdata"},
         json={"classification": "internal"},
     )
     assert edited.status_code == 200

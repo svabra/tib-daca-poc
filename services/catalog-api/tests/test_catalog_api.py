@@ -108,14 +108,14 @@ def test_seeded_estv_portfolio_covers_user_machine_and_owner_relationships(clien
 
 
 def test_metadata_updates_are_optimistic_and_audited(client):
-    missing = client.patch(product_url(), json={"description": "Changed"})
+    missing = client.patch(product_url(), headers={"X-DaCa-User": "kassandra.valdata"}, json={"description": "Changed"})
     assert missing.status_code == 428
     assert missing.headers["content-type"].startswith("application/problem+json")
     assert missing.json()["requestId"]
 
     updated = client.patch(
         product_url(),
-        headers={"If-Match": '"1"', "X-DaCa-User": "estv-editor"},
+        headers={"If-Match": '"1"', "X-DaCa-User": "kassandra.valdata"},
         json={"description": "Updated aggregate description", "updateFrequency": "quarterly"},
     )
     assert updated.status_code == 200
@@ -123,7 +123,7 @@ def test_metadata_updates_are_optimistic_and_audited(client):
     assert updated.json()["revision"] == 2
     assert updated.json()["updateFrequency"] == "quarterly"
 
-    stale = client.patch(product_url(), headers={"If-Match": '"1"'}, json={"title": "Stale"})
+    stale = client.patch(product_url(), headers={"If-Match": '"1"', "X-DaCa-User": "kassandra.valdata"}, json={"title": "Stale"})
     assert stale.status_code == 412
 
     audit = client.get(
@@ -132,7 +132,7 @@ def test_metadata_updates_are_optimistic_and_audited(client):
     )
     events = audit.json()
     assert events[0]["action"] == "metadata-updated"
-    assert events[0]["actor"] == "estv-editor"
+    assert events[0]["actor"] == "kassandra.valdata"
     assert events[0]["details"]["changedFields"] == ["description", "updateFrequency"]
 
 

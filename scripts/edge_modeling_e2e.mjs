@@ -31,6 +31,8 @@ class CdpClient {
     this.sequence = 0;
     this.pending = new Map();
     this.httpFailures = [];
+    this.loadedLoaders = new Set();
+    this.dialogs = new Map();
     this.socket = new WebSocket(webSocketUrl);
     this.ready = new Promise((resolve, reject) => {
       this.socket.addEventListener('open', resolve, { once: true });
@@ -39,6 +41,19 @@ class CdpClient {
     this.socket.addEventListener('close', () => {for(const pending of this.pending.values())pending.reject(new Error('Browser connection closed'));this.pending.clear();});
     this.socket.addEventListener('message', (event) => {
       const message = JSON.parse(String(event.data));
+      if(args.get('--trace') && message.method==='Runtime.exceptionThrown')console.log('Browser exception:',JSON.stringify(message.params.exceptionDetails));
+      if(message.method==='Fetch.requestPaused'){
+        const mock=this.mockTransferResponse;
+        this.interceptedTransfers??=[];this.interceptedTransfers.push(message.params.request);
+        const command=mock?this.call('Fetch.fulfillRequest',{requestId:message.params.requestId,responseCode:mock.status,responseHeaders:[{name:'Content-Type',value:'application/problem+json'}],body:Buffer.from(JSON.stringify(mock.body)).toString('base64')},message.sessionId):this.call('Fetch.failRequest',{requestId:message.params.requestId,errorReason:'Aborted'},message.sessionId);
+        void command.catch(async error=>{this.interceptionError=error.message;try{await this.call('Fetch.failRequest',{requestId:message.params.requestId,errorReason:'Aborted'},message.sessionId);}catch{/* Closing the isolated browser cancels any remaining paused request. */}});
+      }
+      if(message.method==='Page.javascriptDialogOpening'){
+        this.dialogs.set(message.sessionId,message.params.type);
+        if(args.get('--trace'))console.log('Native browser dialog:',message.params.type);
+      }
+      if(message.method==='Page.javascriptDialogClosed')this.dialogs.delete(message.sessionId);
+      if(message.method==='Page.lifecycleEvent'&&message.params.name==='load')this.loadedLoaders.add(message.params.loaderId);
       if(message.method==='Network.responseReceived'&&message.params.response.status>=400){
         const response=message.params.response,path=new URL(response.url).pathname;
         if(path.startsWith('/api/'))this.httpFailures.push({path,status:response.status});
@@ -59,7 +74,8 @@ class CdpClient {
     const message = { id, method, params };
     if (sessionId) message.sessionId = sessionId;
     return new Promise((resolve, reject) => {
-      const timer=setTimeout(()=>{this.pending.delete(id);reject(new Error(`${method}: browser command timed out`));},30_000);
+      const timeoutError=new Error(`${method}: browser command timed out`);
+      const timer=setTimeout(()=>{this.pending.delete(id);timeoutError.message+=this.dialogs.has(sessionId)?` (${this.dialogs.get(sessionId)} dialog open)`:'';reject(timeoutError);},30_000);
       this.pending.set(id, { method, resolve:(value)=>{clearTimeout(timer);resolve(value);}, reject:(error)=>{clearTimeout(timer);reject(error);} });
       this.socket.send(JSON.stringify(message));
     });
@@ -85,6 +101,9 @@ const edge = spawn(edgePath, [
   '--headless=new',
   '--disable-gpu',
   '--disable-default-apps',
+  '--disable-background-timer-throttling',
+  '--disable-renderer-backgrounding',
+  '--disable-backgrounding-occluded-windows',
   '--no-first-run',
   `--remote-debugging-port=${remotePort}`,
   '--remote-allow-origins=*',
@@ -110,6 +129,12 @@ async function evaluate(expression) {
   return response.result?.value;
 }
 
+async function settleFrames() {
+  // Headless Edge can suspend frame callbacks after leaving fullscreen. DOM readiness
+  // is checked separately; settling the paint must not hang the browser command.
+  await evaluate('new Promise(resolve=>{const fallback=setTimeout(resolve,200);requestAnimationFrame(()=>requestAnimationFrame(()=>{clearTimeout(fallback);resolve();}));})');
+}
+
 async function waitFor(expression, message, timeout = 12_000) {
   const deadline = Date.now() + timeout;
   let lastError;
@@ -122,7 +147,7 @@ async function waitFor(expression, message, timeout = 12_000) {
     await sleep(120);
   }
   const state = await evaluate(`(() => ({url:location.pathname,profile:document.querySelector('a[href="/profile"]')?.textContent,
-    pageText:document.body.innerText.slice(0,1000),alerts:[...document.querySelectorAll('[role="alert"]')].map(item=>item.textContent.slice(0,500)),
+    pageText:document.body.innerText.slice(0,4000),alerts:[...document.querySelectorAll('[role="alert"]')].map(item=>item.textContent.slice(0,500)),
     dialogs:[...document.querySelectorAll('dialog[open]')].map(item=>item.innerText.slice(0,800))}))()`);
   throw new Error(`${message}${lastError ? ` (${lastError.message})` : ''}: ${JSON.stringify({...state,httpFailures:cdp.httpFailures})}`);
 }
@@ -210,6 +235,7 @@ async function captureWorkspaceScreenshot(filename) {
 
 async function navigate(route, actor, width = 1440, height = 900) {
   const url = new URL(route, `${baseUrl}/`);
+  const expectedPath = url.pathname === '/domains/network' ? '/domains' : url.pathname;
   if (actor) url.searchParams.set('demoUser', actor);
   // Establish the test identity before bootstrapping the next page. The
   // demoUser query is a UI shortcut and may be cleaned up during startup.
@@ -221,17 +247,23 @@ async function navigate(route, actor, width = 1440, height = 900) {
   }
   await setViewport(width, height);
   await cdp.call('Page.bringToFront', {}, sessionId);
-  await cdp.call('Page.navigate', { url: url.href }, sessionId);
+  const navigation=await cdp.call('Page.navigate', { url: url.href }, sessionId);
+  if(navigation.loaderId){
+    const deadline=Date.now()+15_000;
+    while(!cdp.loadedLoaders.has(navigation.loaderId)&&Date.now()<deadline)await sleep(80);
+    invariant(cdp.loadedLoaders.has(navigation.loaderId),`Page did not finish loading: ${url.pathname}`);
+  }
   await waitFor(
-    "document.readyState === 'complete' && document.querySelector('daca-root') !== null",
+    `location.pathname===${JSON.stringify(expectedPath)}&&document.readyState === 'complete' && !!document.querySelector('daca-root router-outlet')?.nextElementSibling`,
     `Angular page did not load: ${url.href}`,
   );
   await waitFor(
     "!document.body.innerText.includes('werden geladen') && !document.body.innerText.includes('wird geladen')",
     `Angular page remained in a loading state: ${url.href}`,
   );
-  if (actor) await waitFor(`(async () => {const response=await fetch('/api/v1/session');return response.ok&&(await response.json()).userId===${JSON.stringify(actor)};})()`, 'local preview sign-in did not finish for the requested actor');
+  if (actor) await waitFor(`(async () => {const response=await fetch('/api/v1/session');return response.ok&&(await response.json()).userId===${JSON.stringify(actor)}&&localStorage.getItem('daca-demo-user')===${JSON.stringify(actor)};})()`, 'local preview sign-in did not finish for the requested actor');
   await evaluate("document.fonts?.ready ?? Promise.resolve()");
+  await settleFrames();
 }
 
 async function api(actor, route, { method = 'GET', etag = null, body = undefined } = {}) {
@@ -266,6 +298,8 @@ function expectStatus(response, expected, step) {
 }
 
 async function setControls(values) {
+  await waitFor(`${JSON.stringify(Object.keys(values))}.every(selector=>document.querySelector(selector)!==null)`,'Form controls did not become ready');
+  await waitFor(`Object.entries(${JSON.stringify(values)}).every(([selector,value])=>{const element=document.querySelector(selector);return element?.tagName!=='SELECT'||[...element.options].some(option=>option.value===String(value));})`,'Select options did not finish loading');
   const missing = await evaluate(`(() => {
     const values = ${JSON.stringify(values)};
     const missing = [];
@@ -282,6 +316,7 @@ async function setControls(values) {
 }
 
 async function clickText(selector, text) {
+  await waitFor(`(() => {const target=[...document.querySelectorAll(${JSON.stringify(selector)})].find(element=>element.textContent.trim().includes(${JSON.stringify(text)}));return target&&!target.disabled;})()`, `Action did not become available: ${selector} containing ${text}`);
   const clicked = await evaluate(`(() => {
     const target = [...document.querySelectorAll(${JSON.stringify(selector)})]
       .find((element) => element.textContent.trim().includes(${JSON.stringify(text)}));
@@ -1246,6 +1281,12 @@ async function physicalFirstFlow() {
   await evaluate(`(() => {const frame=document.querySelector('.mapping-print-frame');frame.style.cssText='position:fixed;left:0;top:0;width:1123px;height:794px;border:0;z-index:2000;background:white';})()`);
   await captureScreenshot('mapping-canvas-print-1440x900.png');
   await evaluate("document.querySelector('.mapping-print-frame').contentWindow.dispatchEvent(new Event('afterprint'))");
+  invariant(Object.keys(expectStatus(await api('christian.man',`/api/v1/logical-models/${modelId}/canvas-layout`),200,'read unsaved canvas').body.positions).length===0,'dragging a card persisted its position before Save draft');
+  const sharedPositions=await evaluate(`(() => Object.fromEntries([document.querySelector('.logical-node'),...document.querySelectorAll('.physical-representation')].map(card=>[card.classList.contains('logical-node')?'logical':'physical:'+card.dataset.representationTableId,{x:card.offsetLeft,y:card.offsetTop}])))()`);
+  await clickText('.toolbar-actions button','Entwurf speichern');
+  await waitForWorkspaceSave('shared canvas positions did not save');
+  const savedLayout=expectStatus(await api('christian.man',`/api/v1/logical-models/${modelId}/canvas-layout`),200,'read shared canvas').body;
+  invariant(savedLayout.revision===1&&Object.entries(savedLayout.positions).every(([key,point])=>point.x===sharedPositions[key].x&&point.y===sharedPositions[key].y),'saved canvas positions differ from the draft');
   await evaluate(`document.querySelector('[data-representation-table-id="${beforeDrag.id}"] .physical-table-title').click()`);
   await clickText('.representation-context-menu button','Darstellung der physischen Repräsentation entfernen');
   await waitFor(`document.querySelector('[data-representation-table-id="${beforeDrag.id}"]')===null`,'remove drawing did not hide its card');
@@ -1254,6 +1295,9 @@ async function physicalFirstFlow() {
   await waitFor(`document.querySelector('[data-representation-table-id="${beforeDrag.id}"]')?.offsetLeft===${beforeDrag.left+300}`,'restoring a drawing lost its position');
   const afterDrawingActions=expectStatus(await api('christian.man',`/api/v1/asset-mappings?logicalModelId=${modelId}`),200,'read mappings after canvas actions').body.items;
   invariant(JSON.stringify(afterDrawingActions.map((item)=>item.versionId).sort())===JSON.stringify(mappings.map((item)=>item.versionId).sort()),'canvas actions modified mapping versions');
+  await navigate(mappingPath,'christian.man');
+  await waitFor(`document.querySelector('[data-representation-table-id="${beforeDrag.id}"]')?.offsetLeft===${beforeDrag.left+300}`,'shared canvas position did not survive reload');
+  console.log('PASS shared canvas: local drag, explicit save, unchanged mapping versions, drawing visibility and position after reload');
 
   return { sourceId: createdSource.id, sourceName, snapshotId, modelId };
 }
@@ -1275,11 +1319,16 @@ async function holdConnectionFlow(physical) {
   async function drag(pair,reverse=false,screenshot=false) {
     const from=reverse?`[data-physical-column-id="${pair.column}"]`:`[data-logical-field-id="${pair.field}"]`;
     const to=reverse?`[data-logical-field-id="${pair.field}"]`:`[data-physical-column-id="${pair.column}"]`;
-    await evaluate(`document.querySelector(${JSON.stringify(to)}).scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'})`);
+    // Shared positions may put the endpoints farther apart than one viewport.
+    // Start on the visible source, then scroll to the target with the pointer held.
+    await evaluate(`document.querySelector(${JSON.stringify(from)}).scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'})`);
+    await settleFrames();
     const points=await evaluate(`(() => {const a=document.querySelector(${JSON.stringify(from)}).getBoundingClientRect(),b=document.querySelector(${JSON.stringify(to)}).getBoundingClientRect();return {a:{x:a.left+a.width/2,y:a.top+a.height/2},b:{x:b.left+b.width/2,y:b.top+b.height/2}};})()`);
     await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...points.a},sessionId);
     await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...points.a,button:'left',buttons:1,clickCount:1},sessionId);
     await waitFor("document.querySelectorAll('.connection-preview circle').length===2",'holding the field did not expose red drag points');
+    await evaluate(`document.querySelector(${JSON.stringify(to)}).scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'})`);
+    points.b=await evaluate(`(() => {const rect=document.querySelector(${JSON.stringify(to)}).getBoundingClientRect();return {x:rect.left+rect.width/2,y:rect.top+rect.height/2};})()`);
     await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:(points.a.x+points.b.x)/2,y:(points.a.y+points.b.y)/2,buttons:1},sessionId);
     if(!await evaluate("document.querySelector('.connection-preview path')!==null")){
       await captureScreenshot('mapping-hold-preview-failure.png');
@@ -1361,7 +1410,7 @@ async function edgeEditingFlow(physical) {
   // Exercise the viewport-filling fallback here; native Escape always exits browser fullscreen.
   await evaluate("document.querySelector('.mapping-shell').requestFullscreen=undefined;document.querySelector('.fullscreen-toggle').click()");
   await waitFor("document.querySelector('.mapping-shell.is-fullscreen')?.getBoundingClientRect().height>=innerHeight-1",'line editor viewport did not open');
-  await evaluate('new Promise((resolve)=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  await settleFrames();
   const edgePoint=()=>evaluate(`(() => {const path=document.querySelector('[data-edge-mapping-id="${mappingId}"] .edge-hit');for(const fraction of [.5,.35,.65,.2,.8]){const point=path.getPointAtLength(path.getTotalLength()*fraction),screen=new DOMPoint(point.x,point.y).matrixTransform(path.getScreenCTM());if(document.elementFromPoint(screen.x,screen.y)?.closest('.mapping-edge'))return {x:screen.x,y:screen.y};}throw new Error('No unobstructed hit point on the selected line');})()`);
   const point=await edgePoint();
   await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...point},sessionId);
@@ -1374,7 +1423,7 @@ async function edgeEditingFlow(physical) {
   await waitFor(`parseFloat(getComputedStyle(document.querySelector('[data-edge-mapping-id="${mappingId}"] .edge-line')).strokeWidth)<=1.5`,'line remained thick after pointer departure');
   async function dragEnd(side,targetSelector) {
     await evaluate(`(() => {document.querySelector('[data-edge-handle="${side}"]').scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});document.querySelector(${JSON.stringify(targetSelector)}).scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});})()`);
-    await evaluate('new Promise((resolve)=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    await settleFrames();
     const positions=await evaluate(`(() => {const handle=document.querySelector('[data-edge-handle="${side}"]'),target=document.querySelector(${JSON.stringify(targetSelector)}),a=handle.getBoundingClientRect(),b=target.getBoundingClientRect();return {from:{x:a.left+a.width/2,y:a.top+a.height/2},to:{x:b.left+b.width/2,y:b.top+b.height/2}};})()`);
     await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...positions.from},sessionId);
     await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...positions.from,button:'left',buttons:1,clickCount:1},sessionId);
@@ -1388,7 +1437,7 @@ async function edgeEditingFlow(physical) {
   await waitFor(`document.querySelector('[data-edge-mapping-id="${mappingId}"] .edge-line')?.dataset.edgeLogicalFieldId==='${nextField}'`,'logical endpoint was not rewired within its model');
   async function openLineMenu() {
     await evaluate(`document.querySelector('[data-edge-mapping-id="${mappingId}"] .edge-hit').scrollIntoView({block:'center',inline:'nearest',behavior:'instant'})`);
-    await evaluate('new Promise((resolve)=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    await settleFrames();
     let p;
     try{p=await edgePoint();}catch(error){await captureScreenshot('mapping-line-hit-failure.png');throw error;}
 
@@ -1414,7 +1463,10 @@ async function edgeEditingFlow(physical) {
   await evaluate(`document.querySelector('[data-edge-mapping-id="${mappingId}"] .edge-hit').dispatchEvent(new MouseEvent('click',{bubbles:true}))`);
   await waitFor("document.querySelector('.mapping-detail h2 .daca-glossary-trigger')?.textContent==='Derived'",'assigned inspector type did not render');
   async function hoverAssignedType(selector) {
-    const point=await evaluate(`(() => {const trigger=[...document.querySelectorAll(${JSON.stringify(selector)})].find((item)=>item.textContent==='Derived');trigger.scrollIntoView({block:'center',behavior:'instant'});const r=trigger.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
+    await evaluate(`[...document.querySelectorAll(${JSON.stringify(selector)})].find(item=>item.textContent==='Derived').scrollIntoView({block:'center',behavior:'instant'})`);
+    await settleFrames();
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:5,y:5},sessionId);
+    const point=await evaluate(`(() => {const trigger=[...document.querySelectorAll(${JSON.stringify(selector)})].find((item)=>item.textContent==='Derived');const r=trigger.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
     await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...point},sessionId);
   }
   await hoverAssignedType('.mapping-detail h2 .daca-glossary-trigger');
@@ -1490,7 +1542,7 @@ async function domainAssignmentFlow(physical) {
   await openLogical();
   const hover=await evaluate("(() => {const row=[...document.querySelectorAll('.canvas-context-menu button')].find((button)=>button.textContent==='Domäne zuordnen'),r=row.getBoundingClientRect();return{x:r.left+15,y:r.top+r.height/2,background:getComputedStyle(row).backgroundColor};})()");
   await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:hover.x,y:hover.y},sessionId);
-  await waitFor(`(() => {const row=[...document.querySelectorAll('.canvas-context-menu button')].find((button)=>button.textContent==='Domäne zuordnen'),style=getComputedStyle(row);return style.backgroundColor!==${JSON.stringify(hover.background)}&&style.boxShadow.includes('inset');})()`,'menu hover does not highlight the entire row');
+  await waitFor(`(() => {const row=[...document.querySelectorAll('.canvas-context-menu button')].find((button)=>button.textContent==='Domäne zuordnen'),style=getComputedStyle(row);return row.matches(':hover')&&style.backgroundColor!=='rgba(0, 0, 0, 0)'&&style.fontSize==='14px'&&parseFloat(style.paddingTop)===7&&style.boxShadow==='none';})()`,'menu hover does not highlight the entire row');
   await captureScreenshot('model-domain-menu-hover-1440x900.png');
   await openLogical();
   await clickText('.canvas-context-menu button','Domäne zuordnen');
@@ -1553,16 +1605,494 @@ async function personnelOntologyFlow() {
   console.log('PASS personnel ontology and searchable domain models');
 }
 
+async function semanticGestureFlow() {
+  await navigate('/domains','christian.man');
+  const suffix=Date.now(),domains=[],globalPath='/api/v1/semantic-graphs/domains';
+  const baseline=expectStatus(await api('sibilla.micheli',globalPath),200,'read gesture graph baseline').body;let lastWritten=null;
+  const approve=async proposal=>{let result=proposal;for(const review of proposal.reviews)result=expectStatus(await api(review.ownerUserId,`/api/v1/glossary/term-proposals/${proposal.id}/reviews/${review.domainId}/decision`,{method:'POST',etag:`"${proposal.revision}"`,body:{decision:'approve',comment:'Synthetische Gestenprüfung.'}}),200,'approve only synthetic gesture term').body;return result;};
+  const createTerm=async(domainId,label)=>{const proposal=expectStatus(await api('christian.man','/api/v1/glossary/term-proposals',{method:'POST',body:{operation:'create',payload:{domainIds:[domainId],localizations:[{language:'de',preferredLabel:label,definition:'Synthetic gesture term.'}],relations:[]}}}),201,'create only synthetic gesture term').body;return(await approve(proposal)).targetTermId;};
+  async function holdToBlank(selector,root='.network-editor') {
+    await evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center',inline:'nearest',behavior:'instant'})`);
+    await settleFrames();
+    const points=await evaluate(`(() => {const box=document.querySelector(${JSON.stringify(selector)}),card=box.closest('.graph-node'),r=box.getBoundingClientRect(),view=document.querySelector(${JSON.stringify(root+' .semantic-graph')}).getBoundingClientRect();const candidates=[];for(const x of [.7,.85,.5])for(const y of [.6,.8,.4]){const point={x:view.left+view.width*x,y:view.top+Math.min(view.height,innerHeight-view.top-20)*y};const hit=document.elementFromPoint(point.x,point.y);if(hit?.closest('.graph-canvas')&&!hit.closest('.graph-node,.graph-relationship'))candidates.push(point);}if(!candidates.length)throw new Error('No visible blank canvas point');return{from:{x:r.left+r.width/2,y:r.top+r.height/2},to:candidates[0],style:card.style.cssText};})()`);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...points.from,button:'left',buttons:1,clickCount:1},sessionId);
+    await waitFor(`document.querySelectorAll(${JSON.stringify(root+' .hold-dot')}).length===2`,'holding the card did not expose the red point');
+    for(let step=1;step<=4;step++)await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:points.from.x+(points.to.x-points.from.x)*step/4,y:points.from.y+(points.to.y-points.from.y)*step/4,buttons:1},sessionId);
+    invariant(await evaluate(`document.querySelector(${JSON.stringify(selector)}).closest('.graph-node').style.cssText===${JSON.stringify(points.style)}`),'holding a card moved it instead of starting a connection');
+    invariant(await evaluate(`(() => {const line=document.querySelector(${JSON.stringify(root+' .hold-line')}),dot=document.querySelector(${JSON.stringify(root+' .hold-dot')});return line&&dot&&getComputedStyle(line).stroke===getComputedStyle(dot).fill&&getComputedStyle(line).strokeDasharray==='none';})()`),'held connection must show a solid red line matching the red point');
+    await captureScreenshot(root.includes('domain-network')?'domain-hold-red-preview.png':'term-hold-red-preview.png');
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...points.to,button:'left',buttons:0,clickCount:1},sessionId);
+    await waitFor(`document.querySelector(${JSON.stringify(root+' .canvas-drop-menu')})!==null`,'blank drop did not open create/search actions');
+  }
+  try {
+    for(const label of ['A','B'])domains.push(expectStatus(await api('sibilla.micheli','/api/v1/domains',{method:'POST',body:{ownerUserId:'sibilla.micheli',deputyOwnerUserId:'sandro.wenger',localizations:[{language:'de',preferredLabel:`Gesture ${label} ${suffix}`,definition:'Synthetic gesture domain.'}]}}),201,'create isolated gesture domain').body);
+    const [domainA,domainB]=domains,a=await createTerm(domainA.id,`Ausgang ${suffix}`),b=await createTerm(domainB.id,`Referenz ${suffix}`),route=`/domains/${domainA.id}`;
+    await navigate(route,'christian.man');await waitFor("document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'",'gesture term graph did not load');
+    await evaluate("document.querySelector('.network-editor').requestFullscreen=undefined;document.querySelector('.network-editor .fullscreen-toggle').click()");
+    await holdToBlank(`[data-term-id="${a}"] p`);
+    await clickText('.canvas-drop-menu button','Begriff suchen');await waitFor("document.querySelector('.object-browser-backdrop input')!==null",'term selection modal missing');
+    await setControls({'.object-browser-backdrop input':`Referenz ${suffix}`});await waitFor(`[...document.querySelectorAll('.object-browser-backdrop li button')].some(button=>button.textContent.includes('Referenz ${suffix}'))`,'reference search result missing');await clickText('.object-browser-backdrop li button',`Referenz ${suffix}`);
+    await waitFor(`document.querySelector('.relation-dialog')?.getAttribute('data-target-id')==='${b}'`,'term search did not select a connection target');
+    await clickText('.relation-dialog button','Entwurf übernehmen');
+    await clickText('.layout-actions button','Layout speichern');await waitFor("document.querySelector('.layout-actions button')?.disabled&&document.querySelector('.layout-actions button')?.textContent.trim()==='Layout speichern'&&document.querySelector('.network-editor [role=status]')?.textContent.includes('Layout für alle gespeichert')",'reference layout did not save');
+    const termGraphPath=`/api/v1/semantic-graphs/concepts/${domainA.id}`,layout=expectStatus(await api('christian.man',termGraphPath),200,'read reference membership').body;
+    invariant(layout.additionalNodeIds.includes(`term:${b}`),'selected reference did not persist');
+    invariant(!expectStatus(await api('christian.man',`/api/v1/glossary/terms/${b}`),200,'read selected term domains').body.domainIds.includes(domainA.id),'canvas selection reassigned the term to another domain');
+    await clickText('.draft-actions button','Änderungen einreichen');await waitFor("document.querySelector('.pending-proposals a')!==null",'reference relation was not submitted');
+    let proposals=expectStatus(await api('christian.man','/api/v1/glossary/term-proposals'),200,'read gesture proposals').body;await approve(proposals.find(proposal=>proposal.targetTermId===a&&proposal.status==='in_review'));
+    await navigate(route,'christian.man');await waitFor("document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'",'shared reference graph reload missing');
+    await evaluate("window.__gestureConfirms=0;window.confirm=()=>{window.__gestureConfirms++;return true;}");
+    await evaluate(`document.querySelector('[data-source-id="term:${a}"][data-target-id="term:${b}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);
+    await clickText('.edge-actions-menu button','Verbindungstyp ändern');await waitFor("document.querySelector('.relation-dialog')!==null",'edge type dialog missing');
+    await evaluate("(() => {const type=document.querySelectorAll('.relation-dialog select')[1];type.value='broader';type.dispatchEvent(new Event('change',{bubbles:true}));})()");await clickText('.relation-dialog button','Entwurf übernehmen');
+    await evaluate(`document.querySelector('[data-source-id="term:${a}"][data-target-id="term:${b}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);
+    await clickText('.edge-actions-menu button','Verbindung löschen');invariant(await evaluate('window.__gestureConfirms===0'),'line deletion prompted for confirmation');
+    invariant(expectStatus(await api('christian.man',`/api/v1/glossary/terms/${a}`),200,'read unsubmitted line deletion').body.relations.length===1,'line deletion persisted immediately');
+    await clickText('.draft-actions button','Entwurf verwerfen');
+    await evaluate(`document.querySelector('[data-term-id="${b}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);await clickText('.concept-context-menu button','Vom Canvas entfernen');
+    await clickText('.layout-actions button','Layout speichern');await waitFor(`!document.querySelector('[data-term-id="${b}"]')&&document.querySelector('.layout-actions button')?.disabled&&document.querySelector('.layout-actions button')?.textContent.trim()==='Layout speichern'`,'hidden term layout did not save');
+    invariant(expectStatus(await api('christian.man',`/api/v1/glossary/terms/${b}`),200,'read hidden term').body.lifecycle==='active','canvas removal retired the term');
+    await clickText('.hidden-nodes button',`Referenz ${suffix}`);await clickText('.layout-actions button','Layout speichern');await waitFor("document.querySelector('.layout-actions button')?.disabled&&document.querySelector('.layout-actions button')?.textContent.trim()==='Layout speichern'",'restored term did not save');
+    await evaluate("document.querySelector('.network-editor').requestFullscreen=undefined;document.querySelector('.network-editor .fullscreen-toggle').click()");
+    await holdToBlank(`[data-term-id="${a}"] p`);await clickText('.canvas-drop-menu button','Neuen Begriff erstellen');
+    await waitFor("document.querySelector('.create-backdrop input[formcontrolname=labelDe]')!==null",'term creation modal missing');
+    await setControls({'.create-backdrop input[formcontrolname=labelDe]':`Neu ${suffix}`,'.create-backdrop textarea[formcontrolname=definitionDe]':'Synthetic created term.'});await clickText('.create-backdrop button','Term vorschlagen');
+    await waitFor("document.querySelector('.graph-node.is-pending')!==null",'new term did not show a pending proposal card');await captureScreenshot('term-create-pending-card.png');
+    proposals=expectStatus(await api('christian.man','/api/v1/glossary/term-proposals'),200,'read newly created term request').body;const newProposal=proposals.find(proposal=>proposal.operation==='create'&&proposal.status==='in_review'&&proposal.reviewPayload.localizations.some(label=>label.preferredLabel===`Neu ${suffix}`));invariant(newProposal,'term creation bypassed the proposal workflow');const newTerm=(await approve(newProposal)).targetTermId;
+    await navigate(route,'sibilla.micheli');await waitFor(`document.querySelector('[data-term-id="${newTerm}"]')!==null&&document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'`,'approved term missing');
+    await evaluate('window.confirm=()=>false');await evaluate(`document.querySelector('[data-term-id="${newTerm}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);await clickText('.concept-context-menu button','Im Katalog löschen');invariant(expectStatus(await api('sibilla.micheli',`/api/v1/glossary/terms/${newTerm}`),200,'read canceled term deletion').body.lifecycle==='active','canceled deletion changed the term');
+    await evaluate('window.confirm=()=>true');await evaluate(`document.querySelector('[data-term-id="${newTerm}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);await clickText('.concept-context-menu button','Im Katalog löschen');await waitFor(`!document.querySelector('[data-term-id="${newTerm}"]')`,'confirmed term deletion left an active card');
+    invariant(expectStatus(await api('sibilla.micheli',`/api/v1/glossary/terms/${newTerm}`),200,'read retired term history').body.lifecycle==='retired','term deletion did not preserve retirement history');
+    await navigate('/domains/network','sibilla.micheli');await waitFor(`document.querySelector('[data-domain-id="${domainA.id}"]')!==null`,'domain gesture canvas missing');await evaluate("document.querySelector('.domain-network .canvas-tools button:last-child').click()");
+    // A held drop onto a domain draws the default relation immediately, without persisting it.
+    await evaluate(`document.querySelector('[data-domain-id="${domainA.id}"] p').scrollIntoView({block:'center',inline:'nearest',behavior:'instant'})`);
+    await settleFrames();
+    const heldPoints=await evaluate(`(() => {const source=document.querySelector('[data-domain-id="${domainA.id}"] p'),target=document.querySelector('[data-domain-id="${domainB.id}"] p');const a=source.getBoundingClientRect(),b=target.getBoundingClientRect();return{from:{x:a.left+a.width/2,y:a.top+4},to:{x:b.left+b.width/2,y:b.top+4}};})()`);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:10,y:10},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...heldPoints.from},sessionId);
+    await waitFor("document.querySelector('.daca-glossary-tooltip[role=tooltip]')!==null",'domain description did not use the catalog tooltip');
+    invariant(await evaluate(`(() => {const text=document.querySelector('[data-domain-id="${domainA.id}"] p');return !text.hasAttribute('title')&&getComputedStyle(text).cursor==='grab'&&getComputedStyle(document.querySelector('[role=tooltip]')).zIndex==='2400';})()`),'description cursor or rich tooltip layering is incorrect');
+    await captureScreenshot('domain-description-tooltip.png');
+    await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...heldPoints.from,button:'left',buttons:1,clickCount:1},sessionId);
+    await waitFor("document.querySelector('.domain-network .hold-line')!==null",'domain hold did not activate');
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...heldPoints.to,buttons:1},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...heldPoints.to,button:'left',buttons:0,clickCount:1},sessionId);
+    await waitFor("document.querySelector('[data-domain-link]')!==null&&!document.querySelector('.domain-network .relation-dialog')",'domain drop did not draw an immediate draft link');
+    invariant(expectStatus(await api('sibilla.micheli',globalPath),200,'read unsaved held domain connection').body.relations.every(link=>link.sourceId!==domainA.id),'held connection saved automatically');
+    await evaluate("document.querySelector('[data-domain-link]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))");
+    invariant(await evaluate("getComputedStyle(document.querySelector('.concept-context-menu [role=menuitem]')).fontSize==='14px'"),'domain context menu is not using the shared compact font');
+    await clickText('.concept-context-menu button','Verbindung l\u00f6schen');
+    await holdToBlank(`[data-domain-id="${domainA.id}"] p`,'.domain-network');await clickText('.canvas-drop-menu button','Domäne suchen');await waitFor("document.querySelector('.object-browser-backdrop input')!==null",'domain selection modal missing');
+    await setControls({'.object-browser-backdrop input':domainB.preferredLabel});await waitFor(`[...document.querySelectorAll('.object-browser-backdrop li button')].some(button=>button.textContent.includes(${JSON.stringify(domainB.preferredLabel)}))`,'domain target search result missing');await clickText('.object-browser-backdrop li button',domainB.preferredLabel);await waitFor("document.querySelector('.relation-dialog')!==null",'domain search did not prepare a relation');await clickText('.relation-dialog button','Entwurf übernehmen');await clickText('.draft-actions button','Netz speichern');await waitFor("document.querySelector('.domain-network .draft-actions button')?.disabled&&document.querySelector('.domain-network .draft-actions button')?.textContent.trim()==='Netz speichern'",'domain selection relation did not save');lastWritten=expectStatus(await api('sibilla.micheli',globalPath),200,'read selected domain relation').body;
+    await holdToBlank(`[data-domain-id="${domainA.id}"] p`,'.domain-network');await clickText('.canvas-drop-menu button','Neue Domäne erstellen');await waitFor("document.querySelector('.create-backdrop input[name=label]')!==null",'domain creation modal missing');
+    await setControls({'.create-backdrop input[name=label]':`Erstellt ${suffix}`,'.create-backdrop textarea[name=definition]':'Synthetic created domain.','.create-backdrop select[name=owner]':'sibilla.micheli','.create-backdrop select[name=deputy]':'sandro.wenger'});await clickText('.create-backdrop button','Domäne erstellen');
+    await waitFor("document.querySelector('.domain-network .relation-dialog')!==null",'new domain did not prepare its relation');const createdDomain=expectStatus(await api('sibilla.micheli',`/api/v1/domains?q=${encodeURIComponent(`Erstellt ${suffix}`)}`),200,'find only created domain fixture').body.find(domain=>domain.preferredLabel===`Erstellt ${suffix}`);invariant(createdDomain,'domain modal did not create a catalog domain');domains.push(createdDomain);await clickText('.relation-dialog button','Entwurf übernehmen');await clickText('.draft-actions button','Netz speichern');await waitFor("document.querySelector('.domain-network .draft-actions button')?.disabled&&document.querySelector('.domain-network .draft-actions button')?.textContent.trim()==='Netz speichern'",'created domain layout did not save');lastWritten=expectStatus(await api('sibilla.micheli',globalPath),200,'read created domain graph').body;await captureScreenshot('domain-created-from-canvas.png');
+    await evaluate(`document.querySelector('[data-domain-id="${domainB.id}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);await clickText('.concept-context-menu button','Vom Canvas entfernen');await clickText('.draft-actions button','Netz speichern');await waitFor("document.querySelector('.domain-network .draft-actions button')?.disabled&&document.querySelector('.domain-network .draft-actions button')?.textContent.trim()==='Netz speichern'",'domain hide did not save');
+    invariant(expectStatus(await api('sibilla.micheli',`/api/v1/domains/${domainB.id}`),200,'read hidden domain').body.lifecycle==='active','hiding a domain retired it');
+    await clickText('.hidden-nodes button',domainB.preferredLabel);await clickText('.draft-actions button','Netz speichern');await waitFor("document.querySelector('.domain-network .draft-actions button')?.disabled&&document.querySelector('.domain-network .draft-actions button')?.textContent.trim()==='Netz speichern'",'restored domain did not save');lastWritten=expectStatus(await api('sibilla.micheli',globalPath),200,'read restored domain layout').body;
+    await navigate(route,'sibilla.micheli');await waitFor("document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'",'neighbor canvas did not load');
+    invariant(await evaluate("document.querySelectorAll('.graph-node.is-domain').length===1"),'neighbor domains were enabled by default');
+    await clickText('.canvas-options-toggle','\u22ef');await waitFor("document.querySelector('.canvas-options [role=menuitemcheckbox]')!==null",'canvas display menu missing');
+    await clickText('.canvas-options button','Direkt verbundene');
+    await waitFor(`document.querySelector('[data-node-id="domain:${domainB.id}"]')!==null&&document.querySelector('[data-node-id="domain:${createdDomain.id}"]')!==null`,'direct domain neighbors did not appear');
+    invariant(await evaluate(`(() => {const neighbors=[...document.querySelectorAll('.graph-node.is-domain')].filter(node=>node.dataset.nodeId!=='domain:${domainA.id}'),cards=[...document.querySelectorAll('.graph-node')];return neighbors.every(node=>cards.every(other=>{if(node===other)return true;const a=node.getBoundingClientRect(),b=other.getBoundingClientRect();return a.right<=b.left||b.right<=a.left||a.bottom<=b.top||b.bottom<=a.top;}));})()`),'new neighboring domain cards overlap existing cards');
+    await capturePageSegmentScreenshot('.network-editor','concept-linked-domains.png');
+    await clickText('.canvas-options button','Direkt verbundene');await waitFor("document.querySelectorAll('.graph-node.is-domain').length===1",'neighbor domains did not hide');
+    await navigate('/domains/network','sibilla.micheli');await waitFor(`document.querySelector('[data-domain-id="${createdDomain.id}"]')!==null`,'domain canvas did not reload');
+    await evaluate('window.confirm=()=>false');await evaluate(`document.querySelector('[data-domain-id="${createdDomain.id}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);await clickText('.concept-context-menu button','Im Katalog löschen');invariant(expectStatus(await api('sibilla.micheli',`/api/v1/domains/${createdDomain.id}`),200,'read canceled domain deletion').body.lifecycle==='active','canceled domain deletion changed the catalog');
+    await evaluate('window.confirm=()=>true');await evaluate(`document.querySelector('[data-domain-id="${createdDomain.id}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);await clickText('.concept-context-menu button','Im Katalog löschen');await waitFor(`!document.querySelector('[data-domain-id="${createdDomain.id}"]')`,'confirmed domain deletion left an active card');
+    console.log('PASS canvas gestures: held red point, create/search modals, reference membership, hide/restore, line actions and confirmed catalog deletion');
+  } finally {
+    if(lastWritten){const current=expectStatus(await api('sibilla.micheli',globalPath),200,'read gesture graph cleanup').body,positions={...current.positions},owned=new Set(domains.map(domain=>domain.id));for(const [key,value]of Object.entries(lastWritten.positions))if(JSON.stringify(current.positions[key])===JSON.stringify(value)){if(key in baseline.positions)positions[key]=baseline.positions[key];else delete positions[key];}for(const id of owned)delete positions[`domain:${id}`];expectStatus(await api('sibilla.micheli',globalPath,{method:'PUT',body:{revision:current.revision,positions,hiddenNodeIds:(current.hiddenNodeIds??[]).filter(key=>!owned.has(key.slice(7))),relations:current.relations.filter(link=>!owned.has(link.sourceId)&&!owned.has(link.targetId))}}),200,'remove only gesture graph fixtures');}
+    for(const domain of domains){const current=expectStatus(await api('sibilla.micheli',`/api/v1/domains/${domain.id}`),200,'read gesture domain for cleanup').body;if(current.lifecycle==='active')expectStatus(await api('sibilla.micheli',`/api/v1/domains/${domain.id}/retire`,{method:'POST',etag:`"${current.revision}"`,body:{}}),200,'retire only gesture domain fixtures');}
+  }
+}
+
+// Uses only local drafts: safe against an existing preview, with no graph writes.
+// Read-only against the live preview: opens menus and stages/discards layout only.
+// Existing relationships are changed only in a local draft, then discarded.
+async function domainRelationTypesFlow(){
+  const actor='sibilla.micheli';await navigate('/domains/network',actor,1440,1000);
+  await waitFor("location.pathname==='/domains'&&new URLSearchParams(location.search).get('view')==='network'&&document.querySelector('.domain-network .graph-canvas')",'legacy network link did not open the embedded domain view');
+  invariant(await evaluate("document.querySelectorAll('h1').length===1&&!document.querySelector('.semantic-tabs a[href=\"/domains/network\"]')&&document.querySelector('.semantic-tabs [aria-current=page]')?.getAttribute('href')==='/domains'"),'domain network still has a separate tab or duplicate page heading');
+  await clickText('.domain-view-switch button','Kacheln');
+  await waitFor("!document.querySelector('daca-domain-network')&&document.querySelector('.domain-card')&&!new URLSearchParams(location.search).has('view')",'domain cards view did not open');
+  await clickText('.domain-view-switch button','Dom\u00e4nennetz');
+  await waitFor("document.querySelector('.domain-network .graph-canvas')&&new URLSearchParams(location.search).get('view')==='network'",'domain network button did not open the embedded graph');
+  await captureScreenshot('domain-network-submenu.png');
+  const baseline=expectStatus(await api(actor,'/api/v1/semantic-graphs/domains'),200,'read domain relation baseline').body;
+  let index=baseline.relations.findIndex(link=>baseline.relationSourceNodeIds.includes('domain:'+link.sourceId));
+  try{
+    if(index<0){
+      const source=await evaluate(`(()=>{const ids=${JSON.stringify(baseline.relationSourceNodeIds)};return [...document.querySelectorAll('[data-domain-id]')].find(node=>ids.includes('domain:'+node.dataset.domainId))?.dataset.domainId;})()`);
+      invariant(source,'relation type preview requires an owned active domain');
+      await evaluate(`document.querySelector('[data-domain-id="${source}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);
+      await clickText('.concept-context-menu button','Neue Dom\u00e4nenbeziehung');
+      const target=await evaluate(`(()=>{const node=[...document.querySelectorAll('.graph-node[data-domain-id]')].find(node=>node.dataset.domainId!==${JSON.stringify(source)});node.click();return node.dataset.domainId;})()`);
+      await waitFor("document.querySelector('.relation-dialog')!==null",'new draft relationship editor missing');
+      await clickText('.relation-dialog button','Entwurf \u00fcbernehmen');index=0;
+    }
+    for(const [type,label] of [['interfacesWith','hat eine fachliche Schnittstelle zu'],['overlapsWith','hat \u00dcberschneidungen mit']]){
+      await evaluate(`document.querySelector('[data-domain-link="${index}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);
+      await clickText('.concept-context-menu button','Verbindungstyp \u00e4ndern');
+      await waitFor("document.querySelector('.relation-dialog')!==null",'relationship type editor missing');
+      const options=await evaluate("[...document.querySelectorAll('.relation-dialog select')[1].options].map(option=>option.value)");
+      invariant(JSON.stringify(options)===JSON.stringify(['related','partOf','interfacesWith','overlapsWith']),'domain relationship dropdown is incomplete');
+      await evaluate(`(()=>{const select=document.querySelectorAll('.relation-dialog select')[1];select.value=${JSON.stringify(type)};select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+      await captureScreenshot(`domain-relation-${type}-dialog.png`);
+      await clickText('.relation-dialog button','Entwurf \u00fcbernehmen');
+      await waitFor(`[...document.querySelectorAll('.graph-relationship text')].some(text=>text.textContent===${JSON.stringify(label)})&&!document.querySelector('.relation-dialog')`,'selected relationship label did not appear in the graph');
+      index=await evaluate("document.querySelectorAll('[data-domain-link]').length-1");
+    }
+    await evaluate("window.__domainViewConfirm=window.confirm;window.confirm=()=>false");
+    try { await clickText('.domain-view-switch button','Kacheln'); await settleFrames(); } finally { await evaluate("window.confirm=window.__domainViewConfirm;delete window.__domainViewConfirm"); }
+    invariant(await evaluate("!!document.querySelector('daca-domain-network')&&document.querySelectorAll('.domain-view-switch button')[1].getAttribute('aria-pressed')==='true'"),'cancelled view switch discarded a dirty domain graph');
+  }finally{
+    await evaluate("(()=>{const discard=[...document.querySelectorAll('.domain-network .draft-actions button')].find(button=>button.textContent.includes('Entwurf verwerfen'));if(discard&&!discard.disabled)discard.click();})()");
+  }
+  invariant(JSON.stringify(expectStatus(await api(actor,'/api/v1/semantic-graphs/domains'),200,'verify graph baseline').body)===JSON.stringify(baseline),'relationship type preview saved a live graph change');
+  console.log('PASS domain submenu and relationship types: legacy redirect, cards/network switch, single heading/current tab, dirty-view cancellation, dropdown options and local apply/discard; no graph writes');
+}
+
+async function domainTransferFlow(){
+  await navigate('/domains','sibilla.micheli');
+  const domains=expectStatus(await api('sibilla.micheli','/api/v1/domains'),200,'read transfer domains').body;
+  const defence=domains.find(item=>item.preferredLabel==='Verteidigung'),estate=domains.find(item=>item.preferredLabel==='Immobilienmanagement VBS');
+  invariant(defence&&estate,'domain handover preview requires the existing domains');
+  let mocked=false;
+  for(const [actor,domain,allowed,width] of [['sibilla.micheli',estate,true,1440],['christian.spider',estate,true,1440],['christian.man',defence,true,390],['sandro.wenger',defence,true,1440],['thomas.kriegli',defence,false,1440],['christian.spider',defence,false,1440]]){
+    await navigate('/domains',actor,width,900);
+    const baseline=expectStatus(await api(actor,'/api/v1/domains/'+domain.id),200,'read handover baseline').body;
+    invariant(baseline.canTransferOwnership===allowed,'server handover rights are incorrect');
+    const card=`.domain-card[data-domain-id="${domain.id}"]`;
+    await evaluate(`document.querySelector('${card} .domain-actions-trigger').scrollIntoView({block:'center',behavior:'instant'})`);
+    await clickText(card+' .domain-actions-trigger','');
+    invariant(await evaluate(`!!document.querySelector('${card} [data-domain-action=transfer]')===${allowed}`),'card handover menu ignores its actor capability');
+    if(!allowed){await pressKey('Escape','Escape',27);continue;}
+    await clickText(card+' [data-domain-action=transfer]','Dom\u00e4ne abtreten');
+    await waitFor("!!document.querySelector('daca-domain-transfer-dialog dialog[open]')",'handover dialog did not open');
+    await setControls({'daca-domain-transfer-dialog input[name=query]':'cinthya'});
+    await setControls({'daca-domain-transfer-dialog select[name=owner]':'cinthya.thor'});
+    await setControls({'daca-domain-transfer-dialog input[name=query]':'hong'});
+    await setControls({'daca-domain-transfer-dialog select[name=deputy]':'hong.an.captain','daca-domain-transfer-dialog textarea':'Lokale Vorschau einer bewussten Übergabe'});
+    invariant(await evaluate("document.querySelector('daca-domain-transfer-dialog button[type=submit]').disabled"),'handover did not require confirmation');
+    await evaluate("document.querySelector('daca-domain-transfer-dialog input[type=checkbox]').click()");
+    await waitFor("!document.querySelector('daca-domain-transfer-dialog button[type=submit]').disabled",'confirmed handover form is invalid');
+    invariant(await evaluate("(()=>{const rect=document.querySelector('daca-domain-transfer-dialog dialog').getBoundingClientRect();return rect.left>=0&&rect.right<=innerWidth+1;})()"),'handover dialog overflows its viewport');
+    await captureScreenshot(`domain-handover-${actor}-${width}.png`);
+    if(!mocked){
+      cdp.mockTransferResponse={status:409,body:{status:409,detail:'Testkonflikt: Die Domäne wurde parallel geändert.'}};
+      await cdp.call('Fetch.enable',{patterns:[{urlPattern:`${baseUrl}/api/v1/domains/${domain.id}/transfer`,requestStage:'Request'}]},sessionId);
+      try{
+        await clickText('daca-domain-transfer-dialog button[type=submit]','Verantwortung \u00fcbertragen');
+        await waitFor("document.querySelector('daca-domain-transfer-dialog [role=alert]')?.textContent.includes('Testkonflikt')",'handover error did not retain its dialog');
+        const request=cdp.interceptedTransfers.at(-1),payload=JSON.parse(request.postData);
+        invariant(payload.ownerUserId==='cinthya.thor'&&payload.deputyOwnerUserId==='hong.an.captain','handover payload lost the selected people');
+        invariant(Object.entries(request.headers).find(([name])=>name.toLowerCase()==='if-match')?.[1]===`"${baseline.revision}"`,'handover omitted its revision');
+        invariant(await evaluate("document.querySelector('daca-domain-transfer-dialog select[name=owner]').value==='cinthya.thor'&&document.querySelector('daca-domain-transfer-dialog textarea').value.includes('bewussten')"),'handover error discarded entries');
+        mocked=true;
+      }finally{if(mocked)await cdp.call('Fetch.disable',{},sessionId);cdp.mockTransferResponse=null;}
+    }
+    await clickText('daca-domain-transfer-dialog footer button','Abbrechen');
+    await waitFor("!document.querySelector('daca-domain-transfer-dialog')",'cancel did not close handover dialog');
+    const after=expectStatus(await api(actor,'/api/v1/domains/'+domain.id),200,'verify cancelled handover').body;
+    invariant(after.revision===baseline.revision&&after.ownerUserId===baseline.ownerUserId&&after.deputyOwnerUserId===baseline.deputyOwnerUserId,'handover preview changed live responsibilities');
+    await navigate('/domains/'+domain.id,actor,width,900);
+    invariant(await evaluate("!!document.querySelector('.domain-transfer-trigger')"),'detail handover action missing');
+  }
+  console.log('PASS domain handover: scoped owner/deputy/ALDS/LDSD menus, person search, confirmation, mobile, mocked conflict retention, revision header and cancellation; no catalog writes');
+}
+
+async function domainMetadataFlow(){
+  await navigate('/domains','sibilla.micheli');
+  const domains=expectStatus(await api('sibilla.micheli','/api/v1/domains'),200,'read domains for metadata preview').body;
+  const defence=domains.find(domain=>domain.preferredLabel==='Verteidigung'),vat=domains.find(domain=>domain.preferredLabel==='Mehrwertsteuer'),estate=domains.find(domain=>domain.preferredLabel==='Immobilienmanagement VBS'),rapid=domains.find(domain=>domain.preferredLabel==='Data Analytics Rapid Prototyping');
+  invariant(defence&&vat&&estate&&rapid,'confirmed domain metadata fixtures are missing');
+  for(const [actor,domain,allowed] of [['sibilla.micheli',defence,true],['sandro.wenger',defence,true],['christian.man',defence,true],['christian.spider',defence,false],['thomas.kriegli',vat,true],['joel.ruod',vat,true],['christian.man',vat,false],['christian.spider',estate,true],['joel.ruod',rapid,true],['thomas.kriegli',rapid,true]]){
+    const width=actor==='thomas.kriegli'&&domain.id===rapid.id?390:1440;
+    await navigate('/domains/'+domain.id,actor,width,900);
+    const current=expectStatus(await api(actor,'/api/v1/domains/'+domain.id),200,'read actor domain metadata').body;
+    invariant(current.canEditMetadata===allowed,'unexpected server metadata capability for '+actor+' / '+domain.preferredLabel);
+    invariant(await evaluate(`!!document.querySelector('.domain-edit-trigger')===${allowed}`),'domain edit action does not match server rights');
+    if(!allowed)continue;
+    await clickText('.domain-edit-trigger','Dom\u00e4ne bearbeiten');
+    await waitFor("document.querySelector('daca-domain-metadata-dialog dialog[open] input')!==null",'domain metadata dialog did not open');
+    invariant(await evaluate("(()=>{const rect=document.querySelector('daca-domain-metadata-dialog dialog').getBoundingClientRect();return rect.left>=0&&rect.right<=innerWidth+1;})()"),'domain editor overflows the viewport');
+    invariant(await evaluate(`document.querySelectorAll('daca-domain-metadata-dialog fieldset').length===${current.localizations.length}`),'domain editor lost an existing language');
+    await setControls({'daca-domain-metadata-dialog textarea':'Nur lokaler Testentwurf'});
+    await captureScreenshot(`domain-edit-${actor}-${domain.id}.png`);
+    await clickText('daca-domain-metadata-dialog footer button','Abbrechen');
+    await waitFor("!document.querySelector('daca-domain-metadata-dialog')",'domain edit cancel did not close');
+    invariant(expectStatus(await api(actor,'/api/v1/domains/'+domain.id),200,'read cancelled domain').body.revision===current.revision,'cancelling wrote domain metadata');
+  }
+  await governanceInformationFlow();
+  invariant(await evaluate("document.querySelector('#rollen-zustaendigkeiten').textContent.includes('LDSD')&&document.querySelector('#rollen-zustaendigkeiten').textContent.includes('Thomas Kriegli')"),'updated mandate documentation is missing');
+  console.log('PASS domain metadata: owner/deputy, ALDS/deputy, foreign-office denial, subordinate office, confirmed new domain, languages, cancellation and static LDSD reference; no catalog writes');
+}
+
+async function semanticOwnerSearchFlow(){
+  const normalize=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('de-CH');
+  for(const route of ['/domains','/domains/terminology']){
+    await navigate(route,'sibilla.micheli');
+    const baseline=await evaluate("[...document.querySelectorAll('.semantic-grid>article')].map(card=>({id:card.dataset.domainId??card.dataset.termId,owners:[...card.querySelectorAll('dl>div')].filter(row=>['Data Owner','Stellvertretung'].includes(row.querySelector('dt')?.textContent)).map(row=>row.querySelector('dd').textContent.split(' · ')[0].trim())}))");
+    invariant(baseline.length&&baseline[0].owners.length===2,'owner search requires visible owner and deputy fixtures');
+    for(const person of baseline[0].owners){
+      const query=normalize(person).toUpperCase(),expected=baseline.filter(card=>card.owners.some(owner=>normalize(owner).includes(normalize(query)))).map(card=>card.id).sort();
+      await setControls({'.semantic-search input':query});
+      await waitFor(`[...document.querySelectorAll('.semantic-grid>article')].map(card=>card.dataset.domainId??card.dataset.termId).sort().join(',')===${JSON.stringify(expected.join(','))}`,'owner/deputy search did not match the visible object responsibilities');
+    }
+    await captureScreenshot(route==='/domains'?'domain-owner-search.png':'term-owner-search.png');
+    await setControls({'.semantic-search input':''});
+    invariant(await evaluate(`document.querySelectorAll('.semantic-grid>article').length===${baseline.length}`),'clearing owner search did not restore the cards');
+  }
+  console.log('PASS semantic owner search: domain and term owners/deputies, case/accent normalization, clearing; no catalog writes');
+}
+
+async function organizationTermNetworkFlow(){
+  for(const [actor,organizationId] of [['christian.spider','vbs-armasuisse-immobilien'],['sibilla.micheli','vbs-verteidigung']]){
+    await navigate('/domains/terminology?view=network',actor,1440,1000);
+    await waitFor("document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'",'organization term network did not load');
+    invariant(await evaluate(`document.querySelector('.organization-choice select')?.value===${JSON.stringify(organizationId)}`),'term network default did not follow the current modeling organization: '+JSON.stringify(await evaluate("({selected:document.querySelector('.organization-choice select')?.value,scope:document.querySelector('.scope-description')?.textContent,body:document.body.innerText.slice(0,600)})")));
+    // Reload the existing cookie/local identity without the demoUser bootstrap shortcut.
+    await navigate('/domains/terminology?view=network',null,1440,1000);
+    await waitFor(`document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'&&document.querySelector('.organization-choice select')?.value===${JSON.stringify(organizationId)}`,'existing session did not reload its organization network');
+    invariant(expectStatus(await api(actor,'/api/v1/session'),200,'read restored session').body.userId===actor,'reload changed the active person');
+    const graph=expectStatus(await api(actor,'/api/v1/semantic-graphs/organizations/'+organizationId),200,'read expected organization graph').body;
+    const actual=await evaluate("[...document.querySelectorAll('.network-editor [data-node-id]')].map(node=>node.dataset.nodeId).sort()");
+    const expected=[...graph.scopeDomainIds.map(id=>'domain:'+id),...graph.scopeTermIds.map(id=>'term:'+id)].filter(id=>!graph.hiddenNodeIds.includes(id));
+    for(const id of expected)invariant(actual.includes(id),'organization object is missing from the term graph: '+id);
+    invariant(actual.every(id=>expected.includes(id)||graph.additionalNodeIds.includes(id)),'an unrelated organization object leaked into the term graph');
+    await evaluate('window.scrollTo(0,0)');await captureScreenshot(`term-network-session-${actor}.png`);
+    await capturePageSegmentScreenshot('daca-organization-term-network',`term-network-${actor}.png`,1440,1000);
+    if(actor==='sibilla.micheli'){
+      const term=await evaluate("document.querySelector('.network-editor [data-term-id]')?.dataset.termId");invariant(term,'defense term network should contain existing terms');
+      await evaluate(`document.querySelector('[data-term-id="${term}"] header').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}))`);
+      await waitFor("!document.querySelector('.layout-actions button').disabled",'term network move did not stage layout');
+      await clickText('.layout-actions button','Layout verwerfen');
+      invariant(JSON.stringify(expectStatus(await api(actor,'/api/v1/semantic-graphs/organizations/'+organizationId),200,'verify unsaved organization layout').body)===JSON.stringify(graph),'local layout movement persisted automatically');
+      const selected=await evaluate("(()=>{const select=document.querySelector('.organization-choice select');select.value='vbs-armasuisse-immobilien';select.dispatchEvent(new Event('change',{bubbles:true}));return select.value;})()");
+      invariant(selected==='vbs-armasuisse-immobilien','organization selector did not switch');
+      await waitFor("document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'&&document.querySelector('.scope-description')?.textContent.includes('armasuisse')",'organization switch retained stale cards');
+    }
+  }
+  await navigate('/domains/terminology','sibilla.micheli');
+  await waitFor("document.querySelector('.term-card .term-actions-trigger')!==null",'term card overflow trigger missing');
+  invariant(await evaluate("[...document.querySelectorAll('.term-card')].every(card=>card.querySelectorAll('button').length===1)"),'term cards still expose separate action buttons');
+  const card=await evaluate("document.querySelector('.term-card').dataset.termId"),selector=`.term-card[data-term-id="${card}"]`;
+  await clickText(selector+' .term-actions-trigger','');
+  await waitFor(`document.querySelectorAll('${selector} [role=menuitem]').length===3`,'term actions were lost from the compact menu');
+  invariant(await evaluate(`document.querySelector('${selector} [data-term-action=termdat]').disabled&&getComputedStyle(document.querySelector('${selector} [role=menuitem]')).fontSize==='14px'`),'TERMDAT state or compact menu font is incorrect');
+  await capturePageSegmentScreenshot(selector,'term-actions-desktop.png',1440,1000);
+  await pressKey('Escape','Escape',27);
+  await waitFor(`document.activeElement===document.querySelector('${selector} .term-actions-trigger')`,'term action menu did not restore focus');
+  await setViewport(390,844);await evaluate(`document.querySelector('${selector} .term-actions-trigger').scrollIntoView({block:'center',behavior:'instant'})`);await settleFrames();
+  await clickText(selector+' .term-actions-trigger','');
+  invariant(await evaluate(`(()=>{const rect=document.querySelector('${selector} [role=menu]').getBoundingClientRect();return rect.left>=0&&rect.right<=innerWidth+1;})()`),'term action menu overflows mobile viewport');
+  await captureScreenshot('term-actions-mobile.png');
+  await pressKey('Escape','Escape',27);
+  console.log('PASS organization term network: persona defaults, exact object scope, organization switch, discardable layout, compact term menus and disabled TERMDAT, desktop/mobile; no catalog writes');
+}
+
+async function domainConnectionGestureFlow() {
+  const actor='sibilla.micheli',graphPath='/api/v1/semantic-graphs/domains';
+  await navigate('/domains/network',actor);
+  const baseline=expectStatus(await api(actor,graphPath),200,'read gesture baseline').body;
+  const sources=baseline.relationSourceNodeIds??[];
+  const domains=expectStatus(await api(actor,'/api/v1/domains'),200,'read gesture domains').body;
+  const source=domains.find(domain=>domain.lifecycle==='active'&&sources.includes('domain:'+domain.id));
+  invariant(source,'gesture preview needs an existing owned domain');
+  const target=domains.find(domain=>domain.lifecycle==='active'&&domain.id!==source.id&&!baseline.relations.some(link=>[link.sourceId,link.targetId].includes(source.id)&&[link.sourceId,link.targetId].includes(domain.id)));
+  invariant(target,'gesture preview needs an unconnected active target');
+  const sourceCard=`[data-domain-id="${source.id}"]`,targetCard=`[data-domain-id="${target.id}"]`;
+  const baselinePorts=await evaluate("document.querySelectorAll('.domain-network .ontology-port').length");
+  try {
+    for(const [width,height,startPart,endPart] of [[1440,1000,'p','header'],[390,844,'header','p']]){
+      await setViewport(width,height);
+      await evaluate("document.querySelector('.domain-network .canvas-tools button:last-child').click()");
+      // The overview's local automatic arrangement is discardable like every card move.
+      await clickText('.domain-network .graph-controls button','Automatisch anordnen');
+      if(width<500)for(let i=0;i<2;i++)await clickText('.domain-network .graph-controls button','\u2212');
+      await settleFrames();
+      const points=await evaluate(`(()=>{const a=document.querySelector('${sourceCard} ${startPart}').getBoundingClientRect(),b=document.querySelector('${targetCard} ${endPart}').getBoundingClientRect();return{from:{x:a.left+a.width/2,y:a.top+4},to:{x:b.left+b.width/2,y:b.top+4},style:document.querySelector('${sourceCard}').style.cssText,ports:document.querySelectorAll('.domain-network .ontology-port').length};})()`);
+      invariant(points.to.x>0&&points.to.x<width&&points.to.y>0&&points.to.y<height,'target must be visible for a real mouse drop');
+      await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...points.from},sessionId);
+      await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...points.from,button:'left',buttons:1,clickCount:1},sessionId);
+      await sleep(70);
+      await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:points.from.x+5,y:points.from.y+3,buttons:1},sessionId);
+      await waitFor("document.querySelector('.domain-network .hold-line')!==null",'small mouse jitter cancelled the held connection');
+      invariant(await evaluate(`document.querySelector('${sourceCard}').style.cssText===${JSON.stringify(points.style)}`),'pending hold moved the source card');
+      await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...points.to,buttons:1},sessionId);
+      await captureScreenshot(`domain-connection-red-${width}.png`);
+      await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...points.to,button:'left',buttons:0,clickCount:1},sessionId);
+      await waitFor(`document.querySelectorAll('[data-domain-link]').length===${baseline.relations.length+1}&&!document.querySelector('.domain-network .relation-dialog')`,'held drop did not draw a local connection');
+      invariant(await evaluate(`document.querySelector('${sourceCard}').style.cssText===${JSON.stringify(points.style)}&&document.querySelector('${sourceCard} .ontology-port')!==null&&document.querySelector('${targetCard} .ontology-port')!==null`),'connected endpoints missing or source moved');
+      invariant(await evaluate("[...document.querySelectorAll('.domain-network .graph-node')].every(node=>node.querySelectorAll('.ontology-port').length<=2)"),'unexpected extra connection points');
+      await captureScreenshot(`domain-connection-blue-${width}.png`);
+      await clickText('.domain-network .draft-actions button','Entwurf verwerfen');
+      await waitFor(`document.querySelectorAll('[data-domain-link]').length===${baseline.relations.length}`,'discard did not restore connection visibility');
+      invariant(await evaluate(`document.querySelectorAll('.domain-network .ontology-port').length===${baselinePorts}`),'unconnected ports remained after discard');
+      await evaluate("document.querySelector('.domain-network .canvas-tools button:last-child').click()");
+    }
+  } finally {
+    await evaluate("(()=>{const discard=[...document.querySelectorAll('.domain-network .draft-actions button')].find(button=>button.textContent.includes('Entwurf verwerfen'));if(discard&&!discard.disabled)discard.click();})()");
+  }
+  const after=expectStatus(await api(actor,graphPath),200,'verify graph was not saved').body;
+  invariant(JSON.stringify(after)===JSON.stringify(baseline),'local gesture check changed persisted graph state');
+  // The same hold helper and conditional ports also serve a domain's term network.
+  await navigate('/domains/'+source.id,actor,1440,1000);
+  await waitFor("document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'",'term graph did not load');
+  const termBefore=expectStatus(await api(actor,`/api/v1/semantic-graphs/concepts/${source.id}`),200,'read term layout baseline').body;
+  await evaluate("document.querySelector('.network-editor').requestFullscreen=undefined;document.querySelector('.network-editor .fullscreen-toggle').click()");
+  for(let i=0;i<2;i++)await clickText('.network-editor .graph-controls button','\u2212');
+  await settleFrames();
+  const terms=await evaluate(`(()=>{const viewport=document.querySelector('.network-editor .semantic-graph').getBoundingClientRect();return [...document.querySelectorAll('[data-term-id]')].map(card=>{const r=card.querySelector('p').getBoundingClientRect();return{id:card.dataset.termId,x:r.left+r.width/2,y:r.top+4};}).filter(point=>point.x>viewport.left+8&&point.x<Math.min(viewport.right,innerWidth)-8&&point.y>viewport.top+8&&point.y<Math.min(viewport.bottom,innerHeight)-8).slice(0,2);})()`);
+  invariant(terms.length===2,'term gesture check requires two visible cards');
+  await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:terms[0].x,y:terms[0].y},sessionId);
+  await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',x:terms[0].x,y:terms[0].y,button:'left',buttons:1,clickCount:1},sessionId);
+  await sleep(70);await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:terms[0].x+5,y:terms[0].y+3,buttons:1},sessionId);
+  await waitFor("document.querySelector('.network-editor .hold-line')!==null",'term hold did not tolerate mouse jitter');
+  await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:terms[1].x,y:terms[1].y,buttons:1},sessionId);
+  await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',x:terms[1].x,y:terms[1].y,button:'left',buttons:0,clickCount:1},sessionId);
+  await waitFor(`document.querySelector('.relation-dialog')?.getAttribute('data-target-id')==='${terms[1].id}'`,'held term drop did not select the actual target');
+  await clickText('.relation-dialog button','Abbrechen');
+  invariant(JSON.stringify(expectStatus(await api(actor,`/api/v1/semantic-graphs/concepts/${source.id}`),200,'verify unchanged term layout').body)===JSON.stringify(termBefore),'term gesture changed the shared layout');
+  console.log('PASS held domain connections: hand jitter, description/header targets, desktop/mobile, red preview, connected blue endpoints, discard; no graph writes');
+}
+
+async function domainCardActionsFlow() {
+  // This flow reads existing catalog metadata and opens/cancels dialogs only.
+  const actor='sibilla.micheli';await navigate('/domains',actor);
+  const domains=expectStatus(await api(actor,'/api/v1/domains'),200,'read domains for card checks').body;
+  const owned=domains.filter(domain=>domain.ownerUserId===actor||domain.deputyOwnerUserId===actor);
+  const domain=owned.find(domain=>domain.preferredLabel==='Verteidigung')??owned[0];invariant(domain,'card preview needs an existing owned domain');
+  const card=`.domain-card[data-domain-id="${domain.id}"]`;
+  await waitFor(`document.querySelector('${card} .domain-actions-trigger')!==null`,'domain card action trigger missing');
+  invariant(await evaluate(`document.querySelector('${card}').querySelectorAll('button').length===1&&document.querySelector('${card} .domain-card-heading').contains(document.querySelector('${card} daca-status-badge'))`),'domain card still has separate action buttons or a partial heading link');
+  await clickText(card+' .domain-actions-trigger','');
+  await waitFor(`document.querySelectorAll('${card} [role=menuitem]').length===${domain.canTransferOwnership?6:5}`,'owned domain menu is missing existing actions or authorized handover');
+  await capturePageSegmentScreenshot('.semantic-grid','domain-cards-menu-desktop.png',1440,900);
+  await pressKey('Escape','Escape',27);
+  await waitFor(`!document.querySelector('${card} [role=menu]')&&document.activeElement===document.querySelector('${card} .domain-actions-trigger')`,'Escape did not close the domain menu and restore focus');
+  await clickText(card+' .domain-actions-trigger','');await clickText(card+' [data-domain-action=edit]','');
+  await waitFor("document.querySelector('.semantic-dialog input')===document.activeElement",'domain edit dialog did not receive keyboard focus');
+  invariant(await evaluate("document.querySelector('#domain-request-title').textContent.includes('direkt')"),'menu did not open the existing direct edit dialog');
+  await clickText('.semantic-dialog button','Abbrechen');
+  await setViewport(390,844);
+  await evaluate(`document.querySelector('${card}').scrollIntoView({block:'center',behavior:'instant'})`);await settleFrames();
+  await clickText(card+' .domain-actions-trigger','');
+  invariant(await evaluate(`(()=>{const r=document.querySelector('${card} [role=menu]').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1;})()`),'domain card menu overflows the narrow viewport');
+  await captureScreenshot('domain-card-menu-mobile.png');
+  await pressKey('Escape','Escape',27);await setViewport(1440,900);
+  const point=await evaluate(`(()=>{const header=document.querySelector('${card} .domain-card-heading');header.scrollIntoView({block:'center',behavior:'instant'});const r=header.getBoundingClientRect();return{x:r.left+8,y:r.top+8};})()`);
+  await settleFrames();await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',buttons:1,clickCount:1},sessionId);await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',buttons:0,clickCount:1},sessionId);
+  await waitFor(`location.pathname==='/domains/${domain.id}'&&document.querySelector('daca-domain-detail h1')!==null`,'clicking the heading padding did not open the domain');
+  await navigate('/domains',actor);await waitFor(`document.querySelector('${card} .domain-card-heading')!==null`,'heading link did not reload');
+  await evaluate(`document.querySelector('${card} .domain-card-heading').focus()`);await pressKey('Enter','Enter',13);
+  await waitFor(`location.pathname==='/domains/${domain.id}'`,'domain heading cannot be opened with Enter');
+  const otherActor=['kassandra.valdata','noemie.rochat','christian.man'].find(id=>![domain.ownerUserId,domain.deputyOwnerUserId].includes(id));
+  await navigate('/domains',otherActor);await waitFor(`document.querySelector('${card} .domain-actions-trigger')!==null`,'other-owner card did not load');
+  await clickText(card+' .domain-actions-trigger','');
+  invariant(await evaluate(`!document.querySelector('${card} [data-domain-action=edit]')&&!document.querySelector('${card} [data-domain-action=retire]')&&document.querySelector('${card} [role=menuitem][href]')!==null`),'domain menu changed object permission visibility');
+  console.log('PASS domain cards: one action trigger, existing menu actions, edit dialog, Escape focus, mobile fit, padded header click, Enter and object permissions; no object writes');
+}
+
+async function governanceInformationFlow() {
+  await navigate('/documentation','christian.man');
+  invariant(await evaluate("document.querySelector('a[href=\"/documentation/static#rollen-zustaendigkeiten\"]')!==null"),'Information role reference is missing');
+  await navigate('/documentation/static','christian.man');
+  await waitFor("document.querySelectorAll('daca-governance-information tbody tr').length===19",'RACI reference is incomplete');
+  invariant(await evaluate("!document.querySelector('#rollen-zustaendigkeiten').textContent.match(/\\b(?:VBS|SLDS)\\b/)"),'source reference includes an unwanted department abbreviation or nonexistent role');
+  await setControls({'#documentation-text-search':'datendomanen'});
+  await waitFor("document.querySelectorAll('.documentation-articles>article:not([hidden])').length===1&&!document.querySelector('#rollen-zustaendigkeiten').hidden",'documentation content search did not find normalized matrix text');
+  await capturePageSegmentScreenshot('#rollen-zustaendigkeiten','information-roles.png',1440,1000);
+  await capturePageSegmentScreenshot('.raci-scroll','information-raci.png',1440,1150);
+  await setControls({'#documentation-text-search':'Unauffindbarer Suchtext'});
+  await waitFor("document.querySelectorAll('.documentation-articles>article:not([hidden])').length===0&&document.querySelector('.documentation-search').textContent.includes('0')",'documentation search has no empty-result state');
+  await evaluate("document.querySelector('.documentation-search button').click()");
+  await waitFor("document.querySelectorAll('.documentation-articles>article:not([hidden])').length===5",'documentation search reset did not restore articles');
+  console.log('PASS Information: object roles, LDS/ALDS reference, complete 19-row RACI, normalized text search, empty results and reset');
+}
+
+async function domainNetworkFlow() {
+  await navigate('/domains','sibilla.micheli');
+  const path='/api/v1/semantic-graphs/domains',baseline=expectStatus(await api('sibilla.micheli',path),200,'read domain graph baseline').body;
+  const domains=[],suffix=Date.now();let lastWritten=null;
+  try {
+    for(const label of ['Teilbereich','Gesamtbereich'])domains.push(expectStatus(await api('sibilla.micheli','/api/v1/domains',{method:'POST',body:{ownerUserId:'sibilla.micheli',deputyOwnerUserId:'sandro.wenger',localizations:[{language:'de',preferredLabel:`Netz QA ${label} ${suffix}`,definition:'Synthetische UI-Testdomäne.'}]}}),201,'create only synthetic network domain').body);
+    const [source,target]=domains;
+    await navigate('/domains/network','sibilla.micheli');
+    await waitFor(`document.querySelector('[data-domain-id="${source.id}"]')!==null`,'domain network cards missing');
+    const before=await evaluate(`(() => {const card=document.querySelector('[data-domain-id="${source.id}"]');return{x:parseFloat(card.style.left),y:parseFloat(card.style.top)};})()`);
+    await evaluate(`document.querySelector('[data-domain-id="${source.id}"] header').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}))`);
+    invariant(expectStatus(await api('sibilla.micheli',path),200,'read locally moved domain graph').body.revision===baseline.revision,'domain move saved automatically');
+    await clickText('.domain-network .draft-actions button','Entwurf verwerfen');
+    await waitFor(`parseFloat(document.querySelector('[data-domain-id="${source.id}"]').style.left)===${before.x}`,'discard did not restore the shared layout');
+    await evaluate(`document.querySelector('[data-domain-id="${source.id}"] header').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}))`);
+    await clickText('.domain-network .draft-actions button','Netz speichern');
+    await waitFor("document.querySelector('.domain-network [role=status]')?.textContent.includes('für alle gespeichert')",'domain layout did not save');
+    lastWritten=expectStatus(await api('sibilla.micheli',path),200,'read saved domain positions').body;
+    invariant(lastWritten.positions[`domain:${source.id}`].y===before.y+10,'domain position differs from saved draft');
+    const other=expectStatus(await api('christian.man',path),200,'read domain graph as another person').body;
+    invariant(JSON.stringify(other.positions)===JSON.stringify(lastWritten.positions),'domain layout is personal instead of shared');
+    invariant(await evaluate(`!document.querySelector('[data-domain-id="${source.id}"] .ontology-port')`),'unconnected domain retained a connection port');
+    await evaluate(`document.querySelector('[data-domain-id="${source.id}"] header').dispatchEvent(new KeyboardEvent('keydown',{key:'F10',shiftKey:true,bubbles:true,cancelable:true}))`);
+    await clickText('.domain-network .concept-context-menu button','Neue Domänenbeziehung');
+    await evaluate(`document.querySelector('[data-domain-id="${target.id}"]').click()`);
+    await waitFor("document.querySelector('.domain-network .relation-dialog')!==null",'domain ports did not offer a relationship');
+    await evaluate("(() => {const type=document.querySelectorAll('.domain-network .relation-dialog select')[1];type.value='partOf';type.dispatchEvent(new Event('change',{bubbles:true}));})()");
+    await clickText('.domain-network .relation-dialog button','Entwurf übernehmen');
+    invariant(!expectStatus(await api('sibilla.micheli',path),200,'check unsaved domain link').body.relations.some(link=>link.sourceId===source.id),'domain link saved before Netz speichern');
+    await clickText('.domain-network .draft-actions button','Netz speichern');
+    await waitFor("document.querySelector('.domain-network .draft-actions button')?.disabled&&document.querySelector('.domain-network .draft-actions button')?.textContent.trim()==='Netz speichern'",'domain link did not finish saving');
+    lastWritten=expectStatus(await api('sibilla.micheli',path),200,'read saved domain relation').body;
+    invariant(lastWritten.relations.some(link=>link.sourceId===source.id&&link.targetId===target.id&&link.relationType==='partOf'),'domain relation is not persisted');
+    await evaluate(`document.querySelector('[data-domain-id="${source.id}"]').scrollIntoView({block:'center',inline:'nearest',behavior:'instant'})`);
+    await captureScreenshot('shared-domain-network.png');
+    await navigate('/domains/network','christian.man');await waitFor(`document.querySelector('[data-domain-id="${source.id}"]')!==null`,'shared graph did not reload');
+    await evaluate(`document.querySelector('[data-domain-id="${source.id}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:300}))`);
+    await waitFor("document.querySelector('.domain-network .concept-context-menu')!==null",'domain context menu missing');
+    invariant(await evaluate("[...document.querySelectorAll('.domain-network .concept-context-menu button')].filter(button=>button.textContent.includes('suchen und öffnen')).length===4"),'domain context lacks one of the four object searches');
+    await clickText('.domain-network .concept-context-menu button','Domäne suchen und öffnen');
+    await waitFor("document.querySelector('.object-browser-backdrop input')!==null",'catalog search modal missing');
+    for(const label of ['Terme','Logische Modelle','Physische Modelle']){
+      await clickText('.object-browser-backdrop nav button',label);
+      await waitFor("document.querySelectorAll('.object-browser-backdrop li button').length>0&&!document.querySelector('.object-browser-backdrop [role=alert]')",`${label} are not accessible through the common search`);
+    }
+    await captureScreenshot('catalog-object-search.png');
+    await clickText('.object-browser-backdrop nav button','Domänen');
+    await waitFor("document.querySelectorAll('.object-browser-backdrop li button').length>0",'domain search results missing');
+    await evaluate(`(() => {const input=document.querySelector('.object-browser-backdrop input');input.value=${JSON.stringify(target.preferredLabel)};input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+    await clickText('.object-browser-backdrop li button',target.preferredLabel);
+    await waitFor(`document.querySelector('h1')?.textContent===${JSON.stringify(target.preferredLabel)}`,'search did not open the selected domain');
+    await evaluate("document.querySelector('.network-editor .semantic-graph').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:300}))");
+    await clickText('.concept-context-menu button','Domäne suchen und öffnen');
+    await waitFor("document.querySelectorAll('.object-browser-backdrop li button').length>0",'domain-to-domain navigation search missing');
+    await evaluate(`(() => {const input=document.querySelector('.object-browser-backdrop input');input.value=${JSON.stringify(source.preferredLabel)};input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+    await clickText('.object-browser-backdrop li button',source.preferredLabel);
+    await waitFor(`document.querySelector('h1')?.textContent===${JSON.stringify(source.preferredLabel)}`,'same-route domain navigation retained the previous domain');
+    console.log('PASS semantic networks: shared layouts, local drafts, discard, hierarchy, four object searches and domain-to-domain navigation');
+  } finally {
+    if(lastWritten){
+      const current=expectStatus(await api('sibilla.micheli',path),200,'read graph for isolated fixture cleanup').body,positions={...current.positions},owned=new Set(domains.map(domain=>domain.id));
+      for(const [key,value] of Object.entries(lastWritten.positions))if(JSON.stringify(current.positions[key])===JSON.stringify(value)){if(key in baseline.positions)positions[key]=baseline.positions[key];else delete positions[key];}
+      for(const id of owned)delete positions[`domain:${id}`];
+      const relations=current.relations.filter(link=>!owned.has(link.sourceId)&&!owned.has(link.targetId));
+      expectStatus(await api('sibilla.micheli',path,{method:'PUT',body:{revision:current.revision,positions,relations}}),200,'remove only this run domain graph fixtures');
+    }
+    for(const domain of domains)expectStatus(await api('sibilla.micheli',`/api/v1/domains/${domain.id}/retire`,{method:'POST',etag:`"${domain.revision}"`,body:{}}),200,'retire only synthetic network domain');
+  }
+}
+
 async function conceptNetworkEditingFlow() {
   await navigate('/domains','christian.man');
   const suffix=Date.now();
-  const domain=expectStatus(await api('sibilla.micheli','/api/v1/domains',{method:'POST',body:{ownerUserId:'kassandra.valdata',deputyOwnerUserId:'ariane.keller',localizations:[{language:'de',preferredLabel:`Begriffsnetz QA ${suffix}`,definition:'Isolierte synthetische Testdomäne für den Begriffsnetz-Editor.'}]}}),201,'create isolated concept network domain');
+  const domain=expectStatus(await api('sibilla.micheli','/api/v1/domains',{method:'POST',body:{ownerUserId:'sibilla.micheli',deputyOwnerUserId:'sandro.wenger',localizations:[{language:'de',preferredLabel:`Begriffsnetz QA ${suffix}`,definition:'Isolierte synthetische Testdomäne für den Begriffsnetz-Editor.'}]}}),201,'create isolated concept network domain');
   const approve=async(proposal)=>{let result=proposal;for(const review of proposal.reviews)result=expectStatus(await api(review.ownerUserId,`/api/v1/glossary/term-proposals/${proposal.id}/reviews/${review.domainId}/decision`,{method:'POST',etag:`"${proposal.revision}"`,body:{decision:'approve',comment:'Synthetische Editorprüfung.'}}),200,'approve synthetic concept change').body;return result;};
   const create=async(label,relations=[])=>{const proposal=expectStatus(await api('christian.man','/api/v1/glossary/term-proposals',{method:'POST',body:{operation:'create',payload:{domainIds:[domain.body.id],localizations:[{language:'de',preferredLabel:label,definition:`Synthetischer Begriff ${label}.`}],relations}}}),201,'create synthetic concept proposal').body;return(await approve(proposal)).targetTermId;};
   try {
     const b=await create('Person'),a=await create('Mitarbeitende',[{relation:'broader',targetTermId:b}]),c=await create('Anstellung');
     const route=`/domains/${domain.body.id}`;
-    await navigate(route,'christian.man');await waitFor("document.querySelectorAll('.network-editor .is-term').length===3",'editable concept cards missing');
+    await navigate(route,'christian.man');await waitFor("document.querySelectorAll('.network-editor .is-term').length===3&&document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'",'editable concept cards missing');
     await evaluate("document.querySelector('.network-editor').requestFullscreen=undefined;document.querySelector('.network-editor .fullscreen-toggle').click()");
     await waitFor("document.querySelector('.network-editor.is-fullscreen')!==null",'concept editor fullscreen missing');
     const bounds=async(selector)=>evaluate(`(() => {const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+15,left:r.left,top:r.top};})()`);
@@ -1571,10 +2101,17 @@ async function conceptNetworkEditingFlow() {
     await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',x:before.x,y:before.y,button:'left',buttons:1,clickCount:1},sessionId);
     for(let step=1;step<=4;step++)await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:before.x+step*35,y:before.y+step*50,buttons:1},sessionId);
     await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',x:before.x+140,y:before.y+200,button:'left',buttons:0,clickCount:1},sessionId);
+    await settleFrames();
     const moved=await bounds(aHeader);invariant(moved.left>before.left+100&&moved.top>before.top+40,'concept card did not move freely');
     await evaluate(`document.querySelector(${JSON.stringify(aHeader)}).dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}))`);
-    await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    await settleFrames();
     const aPosition=await evaluate(`document.querySelector('[data-term-id="${a}"]').style.cssText`);
+    const conceptGraphPath=`/api/v1/semantic-graphs/concepts/${domain.body.id}`;
+    invariant(expectStatus(await api('christian.man',conceptGraphPath),200,'read unsaved term layout').body.revision===0,'term drag saved without Layout speichern');
+    await clickText('.network-editor .layout-actions button','Layout speichern');
+    await waitFor("document.querySelector('.network-editor .layout-actions button')?.disabled&&document.querySelector('.network-editor [role=status]')?.textContent.includes('Layout für alle gespeichert')",'term layout did not save');
+    const sharedConcept=expectStatus(await api('sibilla.micheli',conceptGraphPath),200,'read shared term layout as another person').body;
+    invariant(sharedConcept.revision===1&&sharedConcept.positions[`term:${a}`],'saved term layout is not shared across identities');
     const relation=()=>evaluate("[...document.querySelectorAll('.graph-relationship')].find(edge=>edge.dataset.edgeId.startsWith('relation:')).dataset.edgeId");
     let edgeId=await relation();
     const edgePoint=async()=>evaluate(`(() => {const p=document.querySelector('[data-edge-id="${edgeId}"] .edge-hit');for(const f of [.5,.3,.7]){const v=p.getPointAtLength(p.getTotalLength()*f),s=new DOMPoint(v.x,v.y).matrixTransform(p.getScreenCTM());if(document.elementFromPoint(s.x,s.y)?.closest('.graph-relationship'))return{x:s.x,y:s.y};}throw new Error('No reachable concept relationship point');})()`);
@@ -1582,29 +2119,34 @@ async function conceptNetworkEditingFlow() {
     let point=await edgePoint();await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...point},sessionId);
     await waitFor(`parseFloat(getComputedStyle(document.querySelector('[data-edge-id="${edgeId}"] .graph-edge')).strokeWidth)>2`,'concept edge hover missing');
     await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'right',buttons:2,clickCount:1},sessionId);await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'right',buttons:0,clickCount:1},sessionId);
-    await waitFor("document.querySelector('.relation-dialog')!==null",'relationship context menu missing');
+    await waitFor("document.querySelector('.edge-actions-menu')!==null",'relationship context menu missing');
+    await clickText('.edge-actions-menu button','Verbindungstyp ändern');
+    await waitFor("document.querySelector('.relation-dialog')!==null",'relationship type editor missing');
     await evaluate("(() => {const select=document.querySelectorAll('.relation-dialog select')[1];select.value='related';select.dispatchEvent(new Event('change',{bubbles:true}));})()");
     await captureScreenshot('concept-relationship-context-1440x900.png');await clickText('.relation-dialog button','Entwurf übernehmen');
     await waitFor("document.querySelector('.relation-dialog')===null&&document.querySelectorAll('.edge-handles circle').length===2",'relationship edit did not expose draggable ends');
-    await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    await settleFrames();
     const positions=await evaluate(`(() => {const from=document.querySelector('[data-edge-handle="target"]').getBoundingClientRect(),to=document.querySelector('[data-term-id="${c}"]').getBoundingClientRect();return{from:{x:from.left+from.width/2,y:from.top+from.height/2},to:{x:to.left+to.width/2,y:to.top+to.height/2}};})()`);
     await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...positions.from,button:'left',buttons:1,clickCount:1},sessionId);
     for(let step=1;step<=4;step++)await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:positions.from.x+(positions.to.x-positions.from.x)*step/4,y:positions.from.y+(positions.to.y-positions.from.y)*step/4,buttons:1},sessionId);
     await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...positions.to,button:'left',buttons:0,clickCount:1},sessionId);
     try{await waitFor(`document.querySelector('[data-edge-id="${edgeId}"]')?.getAttribute('data-target-id')==='term:${c}'`,'rewired edge did not render its new target');}catch(error){await captureScreenshot('concept-drop-failure.png');throw new Error(error.message+' '+JSON.stringify(await evaluate(`({notice:document.querySelector('.network-editor [role=status]')?.textContent,alerts:[...document.querySelectorAll('[role=alert]')].map(item=>item.textContent),edges:[...document.querySelectorAll('.graph-relationship')].map(item=>({id:item.dataset.edgeId,target:item.dataset.targetId}))})`)));}
     await evaluate(`document.querySelector('[data-edge-id="${edgeId}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}))`);
+    await clickText('.edge-actions-menu button','Verbindungstyp ändern');
     try{await waitFor(`document.querySelectorAll('.relation-dialog select')[2]?.value==='${c}'`,'dragging the concept endpoint did not rewire its target');}catch(error){await captureScreenshot('concept-rewire-failure.png');throw new Error(error.message+' '+JSON.stringify(await evaluate(`({from:${JSON.stringify(positions.from)},to:${JSON.stringify(positions.to)},notice:document.querySelector('.network-editor [role=status]')?.textContent,expected:${JSON.stringify({a,b,c})},selects:[...document.querySelectorAll('.relation-dialog select')].map(item=>item.value),alerts:[...document.querySelectorAll('[role=alert]')].map(item=>item.textContent),target:document.elementsFromPoint(${positions.to.x},${positions.to.y}).map(item=>item.tagName+'.'+item.classList).slice(0,8)})`)));}
     await clickText('.relation-dialog button','Beziehung löschen');await waitFor("[...document.querySelectorAll('.graph-relationship')].every(edge=>!edge.dataset.edgeId.startsWith('relation:'))",'concept relationship deletion did not create a local draft');
     await evaluate("document.querySelector('.network-editor .fullscreen-toggle').click()");
     const reload=cdp.call('Page.reload',{ignoreCache:true},sessionId);await sleep(250);try{await cdp.call('Page.handleJavaScriptDialog',{accept:true},sessionId);}catch{}await reload;
-    await waitFor("document.querySelector('.network-editor')?.innerText.includes('Lokaler Entwurf wiederhergestellt')",'concept draft did not survive reload');
+    await waitFor("document.querySelector('.network-editor')?.innerText.includes('Lokaler Entwurf wiederhergestellt')&&document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'",'concept draft did not survive reload');
     invariant(await evaluate(`document.querySelector('[data-term-id="${a}"]').style.cssText===${JSON.stringify(aPosition)}`),'concept arrangement did not survive reload');
     await evaluate(`document.querySelector('[data-term-id="${a}"] header').dispatchEvent(new KeyboardEvent('keydown',{key:'F10',shiftKey:true,bubbles:true,cancelable:true}))`);
     await waitFor("document.querySelector('.concept-context-menu')!==null",'concept keyboard context menu missing');await clickText('.concept-context-menu button','Neue Beziehung');
     await evaluate(`document.querySelector('[data-term-id="${c}"]').click()`);await waitFor("document.querySelector('.relation-dialog')!==null",'keyboard connection did not start a new relation');await clickText('.relation-dialog button','Abbrechen');
-    await evaluate("document.querySelector('.network-editor').requestFullscreen=undefined;document.querySelector('.network-editor .fullscreen-toggle').click()");await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
-    const portDrag=await evaluate(`(() => {const from=document.querySelector('[data-term-id="${a}"] .ontology-port.is-right').getBoundingClientRect(),to=document.querySelector('[data-term-id="${c}"]').getBoundingClientRect();return{from:{x:from.left+from.width/2,y:from.top+from.height/2},to:{x:to.left+to.width/2,y:to.top+to.height/2}};})()`);
+    await evaluate("document.querySelector('.network-editor').requestFullscreen=undefined;document.querySelector('.network-editor .fullscreen-toggle').click()");await settleFrames();
+    invariant(await evaluate(`!document.querySelector('[data-term-id="${a}"] .ontology-port.is-right')`),'unconnected concept side retained a connection port');
+    const portDrag=await evaluate(`(() => {const from=document.querySelector('[data-term-id="${a}"] p').getBoundingClientRect(),to=document.querySelector('[data-term-id="${c}"]').getBoundingClientRect();return{from:{x:from.left+from.width/2,y:from.top+from.height/2},to:{x:to.left+to.width/2,y:to.top+to.height/2}};})()`);
     await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...portDrag.from,button:'left',buttons:1,clickCount:1},sessionId);
+    await waitFor("document.querySelector('.network-editor .hold-line')!==null",'holding an unconnected concept did not expose the connection preview');
     for(let step=1;step<=4;step++)await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:portDrag.from.x+(portDrag.to.x-portDrag.from.x)*step/4,y:portDrag.from.y+(portDrag.to.y-portDrag.from.y)*step/4,buttons:1},sessionId);
     await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...portDrag.to,button:'left',buttons:0,clickCount:1},sessionId);
     await waitFor(`document.querySelector('.relation-dialog')?.getAttribute('data-target-id')==='${c}'`,'dragging a connection port did not select the target');await clickText('.relation-dialog button','Entwurf übernehmen');await captureScreenshot('concept-network-editable-1440x900.png');
@@ -1958,6 +2500,7 @@ try {
   const attached = await cdp.call('Target.attachToTarget', { targetId: target.targetId, flatten: true });
   sessionId = attached.sessionId;
   await cdp.call('Page.enable', {}, sessionId);
+  await cdp.call('Page.setLifecycleEventsEnabled', {enabled:true}, sessionId);
   await cdp.call('Page.addScriptToEvaluateOnNewDocument', {
     source: `try {
       const user = new URL(location.href).searchParams.get('demoUser');
@@ -1969,7 +2512,7 @@ try {
   await cdp.call('Network.setCacheDisabled', { cacheDisabled: true }, sessionId);
   await cdp.call('Network.setBypassServiceWorker', { bypass: true }, sessionId);
 
-  if(args.get('--flow')==='field-move'){await fieldMoveFlow();} else if(args.get('--flow')==='hold-connections'){await holdConnectionFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});} else if(args.get('--flow')==='source-access-return'){await sourceAccessReturnFlow();} else if(args.get('--flow')==='csv-import'){await csvPhysicalModelsFlow();} else if(args.get('--flow')==='inventory-representation'){await inventoryRepresentationFlow();} else if(args.get('--flow')==='concept-network'){await conceptNetworkEditingFlow();} else if(args.get('--flow')==='line-editing'){
+  if(args.get('--flow')==='domain-transfer'){await domainTransferFlow();} else if(args.get('--flow')==='domain-metadata'){await domainMetadataFlow();} else if(args.get('--flow')==='semantic-owner-search'){await semanticOwnerSearchFlow();} else if(args.get('--flow')==='domain-relation-types'){await domainRelationTypesFlow();} else if(args.get('--flow')==='organization-term-network'){await organizationTermNetworkFlow();} else if(args.get('--flow')==='domain-connection-gesture'){await domainConnectionGestureFlow();} else if(args.get('--flow')==='domain-card-actions'){await domainCardActionsFlow();} else if(args.get('--flow')==='governance-information'){await governanceInformationFlow();} else if(args.get('--flow')==='semantic-gestures'){await semanticGestureFlow();} else if(args.get('--flow')==='domain-network'){await domainNetworkFlow();} else if(args.get('--flow')==='field-move'){await fieldMoveFlow();} else if(args.get('--flow')==='hold-connections'){await holdConnectionFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});} else if(args.get('--flow')==='source-access-return'){await sourceAccessReturnFlow();} else if(args.get('--flow')==='csv-import'){await csvPhysicalModelsFlow();} else if(args.get('--flow')==='inventory-representation'){await inventoryRepresentationFlow();} else if(args.get('--flow')==='concept-network'){await conceptNetworkEditingFlow();} else if(args.get('--flow')==='line-editing'){
     invariant(args.get('--model-id')&&args.get('--snapshot-id'),'line-editing flow requires model-id and snapshot-id');
     await edgeEditingFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});
   } else {
@@ -1986,6 +2529,8 @@ try {
   console.log(`PASS domain-assignment: ${domainAssignment.modelId}`);
   await personnelOntologyFlow();
   await conceptNetworkEditingFlow();
+  await domainNetworkFlow();await semanticOwnerSearchFlow();await domainMetadataFlow();await domainTransferFlow();await governanceInformationFlow();await domainCardActionsFlow();
+  await semanticGestureFlow();
   const existing = await existingToExistingFlow(physical);
   console.log(`PASS existing-to-existing: ${existing.mappingId} @ ${existing.currentSnapshotId}`);
   console.log(`PASS mobile: ${JSON.stringify(existing.mobile)}`);

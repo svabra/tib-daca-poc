@@ -2,7 +2,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { catchError, forkJoin, of } from 'rxjs';
 
-export type ModelingRole = 'data_owner' | 'deputy_data_owner' | 'data_steward';
+export type ModelingRole = 'data_owner' | 'deputy_data_owner' | 'data_steward' | 'deputy_data_steward';
 
 export interface ModelingPersona {
   id: string;
@@ -63,7 +63,7 @@ const POC_USERS: readonly DemoUser[] = [
   { id: 'sandro.wenger', displayName: 'Sandro Wenger', organization: 'BAZG', email: 'sandro.wenger@bazg.admin.ch', phone: '+41 58 000 00 91', avatarUrl: '/assets/data-owners/sandro-wenger.webp', roles: ['data_owner', 'data_consumer'] },
   { id: 'sarah.brunner', displayName: 'Sarah Brunner', organization: 'Kanton St. Gallen', email: 'sarah.brunner@sg.ch', phone: '+41 58 000 00 72', avatarUrl: '/assets/data-owners/sarah-brunner.webp', roles: ['data_owner', 'data_consumer'] },
   { id: 'christian.spider', displayName: 'Christian Spider', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'christian.spider@vtg.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'data_owner' },
-  { id: 'sibilla.micheli', displayName: 'Sibilla Micheli', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'sibilla.micheli@vbs.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'domain_register_owner', 'data_consumer'], primaryModelingRole: 'deputy_data_owner' },
+  { id: 'sibilla.micheli', displayName: 'Sibilla Micheli', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'sibilla.micheli@vbs.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'deputy_data_owner' },
   { id: 'cinthya.thor', displayName: 'Cinthya Thor', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'cinthya.thor@vtg.admin.ch', phone: null, avatarUrl: null, roles: ['data_consumer'], primaryModelingRole: 'data_steward' },
   { id: 'lawrence.hill', displayName: 'Lawrence Hill', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'lawrence.hill@vtg.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'data_owner' },
   { id: 'hong.an.captain', displayName: 'Hong An Captain', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'hong-an.captain@vtg.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'deputy_data_owner' },
@@ -130,7 +130,7 @@ export class DemoIdentityService {
       return assignments.some((assignment) => assignment.departmentCode === model.department
         && assignment.organizationId === model.office
         && ((assignment.role === 'data_owner' && user.id === model.dataOwner.id)
-          || (assignment.role === 'deputy_data_owner' && assignment.delegatedOwnerUserId === model.dataOwner.id)));
+          || (assignment.role === 'deputy_data_owner' && user.id === model.deputyDataOwner?.id && assignment.delegatedOwnerUserId === model.dataOwner.id)));
     }
     const inScope = user.department === model.department && user.office === model.office;
     const roles = this.modelingRoles(user);

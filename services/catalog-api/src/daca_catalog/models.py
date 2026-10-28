@@ -993,6 +993,27 @@ class SourceAccessGrant(Base):
     )
 
 
+class OrganizationStewardMandate(Base):
+    """Explicit LDSD/ALDS appointment; separate from object/profile roles."""
+
+    __tablename__ = "organization_steward_mandates"
+    __table_args__ = (
+        CheckConstraint("revision >= 1", name="ck_steward_mandate_revision"),
+        CheckConstraint("mandate_type IN ('ldsd','alds')", name="ck_steward_mandate_type"),
+        CheckConstraint("deputy_user_id IS NULL OR deputy_user_id <> user_id", name="ck_steward_mandate_deputy"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("administrative_organizations.id", ondelete="RESTRICT"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id", ondelete="RESTRICT"), nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    mandate_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    deputy_user_id: Mapped[str | None] = mapped_column(ForeignKey("demo_users.id", ondelete="RESTRICT"))
+    appointed_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    decision_reference: Mapped[str] = mapped_column(String(1000), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
 class Domain(Base):
     __tablename__ = "domains"
     __table_args__ = (
@@ -1621,7 +1642,7 @@ class DataModelRoleAssignment(Base):
     __tablename__ = "data_model_role_assignments"
     __table_args__ = (
         CheckConstraint(
-            "role IN ('data_owner', 'deputy_data_owner', 'data_steward')",
+            "role IN ('data_owner', 'deputy_data_owner', 'data_steward', 'deputy_data_steward')",
             name="ck_data_model_role",
         ),
         CheckConstraint(
@@ -1655,16 +1676,17 @@ class DataModelRoleAssignment(Base):
 
 
 class CatalogObjectResponsibility(Base):
-    """Additional object-scoped responsibility; it does not grant authorization."""
+    """Explicit object-scoped responsibility, including governed term ownership."""
 
     __tablename__ = "catalog_object_responsibilities"
     __table_args__ = (
         CheckConstraint(
-            "role IN ('data_owner', 'deputy_data_owner', 'data_steward')",
+            "role IN ('data_owner', 'deputy_data_owner', 'data_steward', 'deputy_data_steward')",
             name="ck_catalog_object_responsibility_role",
         ),
         CheckConstraint(
             "(CASE WHEN domain_id IS NULL THEN 0 ELSE 1 END + "
+            "CASE WHEN glossary_term_id IS NULL THEN 0 ELSE 1 END + "
             "CASE WHEN logical_model_id IS NULL THEN 0 ELSE 1 END + "
             "CASE WHEN physical_source_id IS NULL THEN 0 ELSE 1 END + "
             "CASE WHEN data_product_id IS NULL THEN 0 ELSE 1 END) = 1",
@@ -1676,6 +1698,7 @@ class CatalogObjectResponsibility(Base):
         ),
         Index("ix_catalog_object_responsibility_user", "user_id", "active"),
         Index("ix_catalog_object_responsibility_domain", "domain_id"),
+        Index("ix_catalog_object_responsibility_term", "glossary_term_id"),
         Index("ix_catalog_object_responsibility_model", "logical_model_id"),
         Index("ix_catalog_object_responsibility_source", "physical_source_id"),
         Index("ix_catalog_object_responsibility_product", "data_product_id"),
@@ -1688,6 +1711,7 @@ class CatalogObjectResponsibility(Base):
         ForeignKey("administrative_organizations.id", ondelete="RESTRICT")
     )
     domain_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("domains.id", ondelete="CASCADE"))
+    glossary_term_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("glossary_terms.id", ondelete="CASCADE"))
     logical_model_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("logical_models.id", ondelete="CASCADE")
     )
@@ -2725,6 +2749,35 @@ class LogicalModelRepresentation(Base):
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     created_by_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class SemanticGraphState(Base):
+    """Shared term/domain canvas presentation and explicitly managed domain links."""
+
+    __tablename__ = "semantic_graph_states"
+    __table_args__ = (CheckConstraint("revision >= 1", name="ck_semantic_graph_revision"),)
+    graph_key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    domain_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("domains.id", ondelete="RESTRICT"))
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    positions: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    relations: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    hidden_node_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    additional_node_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    updated_by_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class MappingCanvasLayout(Base):
+    """Shared presentation state, separate from logical and physical model content."""
+
+    __tablename__ = "mapping_canvas_layouts"
+    __table_args__ = (CheckConstraint("revision >= 1", name="ck_mapping_canvas_revision"),)
+
+    logical_model_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("logical_models.id", ondelete="RESTRICT"), primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    positions: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    updated_by_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
 class AssetMapping(Base):

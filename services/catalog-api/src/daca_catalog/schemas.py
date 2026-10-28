@@ -1313,6 +1313,8 @@ class DomainDraft(ApiModel):
 
 
 class DomainResponse(ApiModel):
+    can_transfer_ownership: bool = False
+    can_edit_metadata: bool = False
     id: uuid.UUID
     urn: str
     origin_catalog_id: str
@@ -1328,6 +1330,21 @@ class DomainResponse(ApiModel):
     created_at: datetime
     updated_at: datetime
     retired_at: datetime | None
+
+
+class DomainOwnershipTransfer(ApiModel):
+    owner_user_id: str = Field(min_length=1, max_length=200)
+    deputy_owner_user_id: str = Field(min_length=1, max_length=200)
+    reason: str = Field(min_length=3, max_length=2000)
+
+    @model_validator(mode="after")
+    def valid_transfer(self):
+        if self.owner_user_id == self.deputy_owner_user_id:
+            raise ValueError("Owner and deputy must be different people")
+        self.reason = reject_unsafe_service_level_text(self.reason)
+        if len(self.reason) < 3:
+            raise ValueError("Provide a reason for the handover")
+        return self
 
 
 class DomainDirectCreate(DomainDraft):
@@ -1378,6 +1395,7 @@ class GovernanceDecision(ApiModel):
 
 
 class DomainChangeRequestResponse(ApiModel):
+    can_review: bool = False
     id: uuid.UUID
     request_number: str
     operation: Literal["create", "update", "retire"]
@@ -1404,6 +1422,8 @@ class GlossaryTermRelationResponse(ApiModel):
 
 
 class GlossaryTermResponse(ApiModel):
+    owner_user_id: str | None = None
+    deputy_owner_user_id: str | None = None
     id: uuid.UUID
     urn: str
     origin_catalog_id: str
@@ -1458,6 +1478,7 @@ class GlossaryTermProposalUpdate(ApiModel):
 
 
 class GlossaryTermProposalReviewResponse(ApiModel):
+    can_decide: bool = False
     domain_id: uuid.UUID
     proposal_revision: int
     owner_user_id: str
@@ -1468,6 +1489,7 @@ class GlossaryTermProposalReviewResponse(ApiModel):
 
 
 class GlossaryTermProposalResponse(ApiModel):
+    can_edit: bool = False
     id: uuid.UUID
     request_number: str
     operation: Literal["create", "update", "retire"]

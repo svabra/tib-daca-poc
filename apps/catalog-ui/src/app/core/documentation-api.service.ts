@@ -4,8 +4,8 @@ import { Observable, shareReplay } from 'rxjs';
 import { DemoIdentityService } from './demo-identity.service';
 import { CatalogLanguage } from './user-preferences.service';
 
-export type ResponsibilityRole = 'data_owner' | 'deputy_data_owner' | 'data_steward';
-export type ResponsibilityCategory = 'domain' | 'logical_model' | 'physical_representation' | 'data_product';
+export type ResponsibilityRole = 'data_owner' | 'deputy_data_owner' | 'data_steward' | 'deputy_data_steward';
+export type ResponsibilityCategory = 'domain' | 'glossary_term' | 'logical_model' | 'physical_representation' | 'data_product';
 
 export interface CatalogResponsibility {
   userId: string;

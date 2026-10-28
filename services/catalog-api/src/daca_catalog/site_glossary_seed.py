@@ -10,6 +10,13 @@ from .models import SiteGlossaryLocalization, SiteGlossaryTerm, utc_now
 
 _TERMS = (
     (
+        "deputy-data-steward", None,
+        {"de": ("Stv. Data Steward", "Stellvertretung für die operative Pflege zugewiesener Datenobjekte.", "Übernimmt Metadatenpflege, Dokumentation und Qualitätsprüfungen im ausdrücklich zugewiesenen Objektbereich. Fachliche Owner-Entscheidungen bleiben bei Data Owner und dessen Stellvertretung."),
+         "fr": ("Data Steward suppléant", "Suppléance pour la gestion opérationnelle des objets attribués.", "Assure la maintenance des métadonnées, la documentation et les contrôles de qualité dans le périmètre attribué. Les décisions du Data Owner restent du ressort du titulaire et de son suppléant."),
+         "it": ("Sostituto Data Steward", "Sostituzione nella gestione operativa degli oggetti assegnati.", "Cura metadati, documentazione e controlli di qualità nell'ambito assegnato. Le decisioni del Data Owner competono al titolare e al suo sostituto."),
+         "en": ("Deputy Data Steward", "Deputy for operational maintenance of assigned data objects.", "Maintains metadata, documentation and quality checks within the assigned object scope. Owner decisions remain with the Data Owner and deputy owner.")},
+    ),
+    (
         "data-owner", None,
         {
             "de": ("Data Owner", "Fachlich verantwortliche Person für eine zugewiesene Domäne, ein Modell oder Datenprodukt.", "Aufgaben: Der Data Owner bestimmt fachliche Bedeutung, Qualität und Nutzung der ihm zugewiesenen Datenobjekte und prüft eingereichte logische Modelle. Kompetenzen: Er kann Objekte in seinem Geltungsbereich bearbeiten; der primäre Domain Owner entscheidet über die Freigabe eines logischen Modells. Bei Datenprodukten gelten die gesonderten Eigentümer- und Vier-Augen-Prozesse. Verantwortung: Er trägt die fachliche Rechenschaft für seinen zugewiesenen Bereich, die Nachvollziehbarkeit der Entscheidungen und angemessene Zugriffsvorgaben. Die Rolle verleiht keinen pauschalen Zugriff auf Datenzeilen."),

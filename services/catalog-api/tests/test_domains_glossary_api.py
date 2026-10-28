@@ -130,12 +130,12 @@ def test_unanimous_glossary_review_auto_attaches_and_notifies(client):
         },
     ).json()
 
-    deputy_attempt = client.post(
+    unrelated_attempt = client.post(
         f"/api/v1/glossary/term-proposals/{proposal['id']}/reviews/{defence['id']}/decision",
-        headers={**SANDRO, "If-Match": '"1"'},
+        headers={"X-DaCa-User": "noemie.rochat", "If-Match": '"1"'},
         json={"decision": "approve", "comment": "Als Stellvertretung."},
     )
-    assert deputy_attempt.status_code == 403
+    assert unrelated_attempt.status_code == 403
 
     first = client.post(
         f"/api/v1/glossary/term-proposals/{proposal['id']}/reviews/{defence['id']}/decision",
@@ -470,7 +470,7 @@ def test_final_approval_marks_proposal_stale_when_review_domain_was_retired(
 
     retired = client.post(
         f"/api/v1/domains/{logistics['id']}/retire",
-        headers={**SIBILLA, "If-Match": f'"{logistics["revision"]}"'},
+        headers={**KASSANDRA, "If-Match": f'"{logistics["revision"]}"'},
     )
     assert retired.status_code == 200
 
@@ -525,7 +525,7 @@ def test_final_approval_marks_proposal_stale_when_review_domain_was_retired(
         }
 
 
-def test_domain_register_role_if_match_and_retirement_rules(client):
+def test_domain_object_owner_if_match_and_retirement_rules(client):
     draft = {
         "ownerUserId": "kassandra.valdata",
         "deputyOwnerUserId": "ariane.keller",
@@ -537,25 +537,25 @@ def test_domain_register_role_if_match_and_retirement_rules(client):
             }
         ],
     }
-    forbidden = client.post("/api/v1/domains", headers=KASSANDRA, json=draft)
+    forbidden = client.post("/api/v1/domains", headers=SIBILLA, json=draft)
     assert forbidden.status_code == 403
     invalid = client.post(
         "/api/v1/domains",
-        headers=SIBILLA,
+        headers=KASSANDRA,
         json={**draft, "deputyOwnerUserId": "kassandra.valdata"},
     )
     assert invalid.status_code == 422
-    created = client.post("/api/v1/domains", headers=SIBILLA, json=draft)
+    created = client.post("/api/v1/domains", headers=KASSANDRA, json=draft)
     assert created.status_code == 201
     no_precondition = client.patch(
         f"/api/v1/domains/{created.json()['id']}",
-        headers=SIBILLA,
+        headers=KASSANDRA,
         json={"localizations": draft["localizations"]},
     )
     assert no_precondition.status_code == 428
     retired = client.post(
         f"/api/v1/domains/{created.json()['id']}/retire",
-        headers={**SIBILLA, "If-Match": '"1"'},
+        headers={**KASSANDRA, "If-Match": '"1"'},
     )
     assert retired.status_code == 200
     assert retired.json()["lifecycle"] == "retired"
@@ -630,7 +630,7 @@ def test_active_term_is_not_selectable_when_all_owning_domains_are_retired(clien
         domain = _domain_by_label(client, label)
         response = client.post(
             f"/api/v1/domains/{domain['id']}/retire",
-            headers={**SIBILLA, "If-Match": f'"{domain["revision"]}"'},
+            headers={"X-DaCa-User": domain["ownerUserId"], "If-Match": f'"{domain["revision"]}"'},
         )
         assert response.status_code == 200
     assert term_id not in {item["id"] for item in client.get("/api/v1/glossary/terms").json()}

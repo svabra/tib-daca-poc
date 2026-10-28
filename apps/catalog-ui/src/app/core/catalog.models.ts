@@ -147,6 +147,8 @@ export interface LocalizedConceptLabel {
 }
 
 export interface DomainSummary {
+  canTransferOwnership?: boolean;
+  canEditMetadata?: boolean;
   id: string;
   urn: string;
   originCatalogId: string;
@@ -166,6 +168,24 @@ export interface DomainSummary {
   updatedAt: string;
 }
 
+export interface SemanticGraphState {
+  organizationName?:string|null;
+  scopeDomainIds?:string[];
+  scopeTermIds?:string[];
+  relationSourceNodeIds?: readonly string[];
+  revision:number;
+  positions:Record<string,{x:number;y:number}>;
+  relations:DomainNetworkLink[];
+  canEditLayout:boolean;
+  canEditRelations:boolean;
+  hiddenNodeIds?:string[];
+  additionalNodeIds?:string[];
+  deletableNodeIds?:string[];
+  retiredNodeIds?:string[];
+  canCreateDomains?:boolean;
+}
+export type DomainRelationType='related'|'partOf'|'interfacesWith'|'overlapsWith';
+export interface DomainNetworkLink {sourceId:string;targetId:string;relationType:DomainRelationType;}
 export type SkosRelationType = 'exactMatch' | 'closeMatch' | 'broader' | 'narrower' | 'related';
 
 export interface GlossaryTermRelation {
@@ -177,6 +197,8 @@ export interface GlossaryTermRelation {
 }
 
 export interface GlossaryTermSummary {
+  ownerUserId?: string | null;
+  deputyOwnerUserId?: string | null;
   id: string;
   urn: string;
   originCatalogId: string;
@@ -191,6 +213,7 @@ export interface GlossaryTermSummary {
 }
 
 export interface DomainChangeRequest {
+  canReview?: boolean;
   id: string;
   operation: 'create' | 'update' | 'retire';
   targetDomainId: string | null;
@@ -217,6 +240,7 @@ export interface DomainAuditEvent {
 }
 
 export interface GlossaryTermProposalReview {
+  canDecide?: boolean;
   id: string;
   domainId: string;
   domainLabel: string;
@@ -228,6 +252,7 @@ export interface GlossaryTermProposalReview {
 }
 
 export interface GlossaryTermProposal {
+  canEdit?: boolean;
   id: string;
   operation: 'create' | 'update' | 'retire';
   targetTermId: string | null;

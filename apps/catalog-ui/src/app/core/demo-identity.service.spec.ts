@@ -158,7 +158,7 @@ describe('DemoIdentityService', () => {
     expect(users.filter((user) => !modelingIds.includes(user.id)).every((user) => Boolean(user.avatarUrl))).toBe(true);
     expect(users.filter((user) => modelingIds.includes(user.id))).toHaveLength(11);
     expect(users.filter((user) => modelingIds.includes(user.id)).every((user) => user.department === 'VBS')).toBe(true);
-    expect(users.find((user) => user.id === 'sibilla.micheli')).toEqual(expect.objectContaining({ organization: 'Verteidigung', avatarUrl: null, roles: expect.arrayContaining(['domain_register_owner']), modelingRoles: ['deputy_data_owner'] }));
+    expect(users.find((user) => user.id === 'sibilla.micheli')).toEqual(expect.objectContaining({ organization: 'Verteidigung', avatarUrl: null, roles: expect.arrayContaining(['data_owner']), modelingRoles: ['deputy_data_owner'] }));
     expect(users.find((user) => user.id === 'giuseppe.starwars')).toEqual(expect.objectContaining({ organization: 'armasuisse', office: 'vbs-armasuisse', modelingRoles: ['data_owner'] }));
     expect(users.find((user) => user.id === 'thomas.wikinger')).toEqual(expect.objectContaining({ organization: 'armasuisse', office: 'vbs-armasuisse', modelingRoles: ['data_steward'] }));
     expect(users.map((user) => user.id)).toEqual(expect.arrayContaining([
@@ -174,7 +174,7 @@ describe('DemoIdentityService', () => {
     window.history.replaceState({}, '', '/models?demoUser=sibilla.micheli');
     const service = TestBed.inject(DemoIdentityService);
     const http = TestBed.inject(HttpTestingController);
-    const sibilla: DemoUser = { id:'sibilla.micheli',displayName:'Sibilla Micheli',organization:'Verteidigung',email:'sibilla.micheli@vbs.admin.ch',phone:null,avatarUrl:null,roles:['data_owner','domain_register_owner','data_consumer'] };
+    const sibilla: DemoUser = { id:'sibilla.micheli',displayName:'Sibilla Micheli',organization:'Verteidigung',email:'sibilla.micheli@vbs.admin.ch',phone:null,avatarUrl:null,roles:['data_owner','data_consumer'] };
     http.expectOne('/api/v1/demo-users').flush([sibilla]);
     flushPersonas(http,[{id:'assignment-1',userId:'sibilla.micheli',displayName:'Sibilla Micheli',departmentCode:'VBS',organizationId:'vbs-verteidigung',organizationName:'Verteidigung',role:'deputy_data_owner',delegatedOwnerUserId:'christian.spider'}]);
     expect(service.user().roles).toEqual(sibilla.roles);
@@ -205,6 +205,16 @@ describe('DemoIdentityService', () => {
 
     service.select(sibilla.id);
     expect(service.canPublishModel(christianModel)).toBe(true);
+    expect(service.canPublishModel({...christianModel,deputyDataOwner:{id:'another.deputy'}})).toBe(false);
+    expect(service.canPublishModel({...christianModel,deputyDataOwner:null})).toBe(false);
     expect(service.canPublishModel(lawrenceModel)).toBe(false);
+  });
+
+  it('recognizes deputy stewards as operational modelers without publication authority',()=>{
+    const service=TestBed.inject(DemoIdentityService),http=TestBed.inject(HttpTestingController);
+    const user:DemoUser={id:'audit.deputy',displayName:'Deputy',organization:'Demo',email:'deputy@example.test',phone:null,avatarUrl:null,roles:['data_consumer']};
+    http.expectOne('/api/v1/demo-users').flush([user]);
+    flushPersonas(http,[{id:'deputy-role',userId:user.id,displayName:user.displayName,departmentCode:'VBS',organizationId:'vbs-verteidigung',organizationName:'Verteidigung',role:'deputy_data_steward',delegatedOwnerUserId:null}]);
+    service.select(user.id);expect(service.canEditModels()).toBe(true);expect(service.canPublishModels()).toBe(false);
   });
 });

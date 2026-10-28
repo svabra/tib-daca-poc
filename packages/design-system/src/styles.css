@@ -650,3 +650,52 @@ a { color: var(--daca-blue); }
 @media print {
   .daca-version-overlay, .daca-feature-dialog, .daca-update-confirmation, .daca-app-update-screen { display: none; }
 }
+/* One compact context-menu treatment across catalog and control-plane surfaces.
+   Important metrics intentionally override legacy component button shorthands. */
+html body [role="menu"] {
+  box-sizing: border-box;
+  padding: 4px !important;
+  border: 1px solid var(--daca-border, #d1d9df) !important;
+  border-radius: 8px !important;
+  background: var(--daca-surface, #fff) !important;
+  color: var(--daca-ink, #14202b) !important;
+  box-shadow: 0 6px 24px #14202b24 !important;
+  font-size: .875rem !important;
+  line-height: 1.35 !important;
+}
+html body [role="menu"] :is([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]) {
+  box-sizing: border-box;
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 34px !important;
+  margin: 0 !important;
+  padding: 7px 10px !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  color: var(--daca-ink, #14202b) !important;
+  font-family: inherit !important;
+  font-size: .875rem !important;
+  font-weight: 500 !important;
+  line-height: 1.35 !important;
+  text-align: left !important;
+  text-decoration: none !important;
+  white-space: normal;
+  cursor: pointer;
+  box-shadow: none !important;
+}
+html body [role="menu"] :is([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]):not(:disabled):is(:hover, :focus-visible) {
+  background: var(--daca-blue-soft, #edf4f8) !important;
+  color: var(--daca-blue, #145586) !important;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+}
+html body [role="menu"] :is([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]):disabled {
+  opacity: .48;
+  cursor: default;
+}
+html body [role="menu"] [role="separator"] { margin: 4px 6px; border: 0; border-top: 1px solid var(--daca-border, #d1d9df); }
+@media (pointer: coarse) { html body [role="menu"] :is([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]) { min-height: 44px !important; } }

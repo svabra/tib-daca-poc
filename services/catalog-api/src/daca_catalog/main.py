@@ -51,6 +51,7 @@ from .domain_glossary_seed import (
     MOBILITY_DOMAIN_ID,
     VEHICLE_PRODUCT_ID,
 )
+from .domain_ownership import domain_organization_ids, replace_domain_owners, reroute_domain_work
 from .glossary_reference_seed import GLOSSARY_REFERENCE_SEED_NAME
 from .governance import (
     bind_access_request_fulfillments,
@@ -118,6 +119,23 @@ from .models import (
     WorkflowTask,
     utc_now,
 )
+from .object_governance import (
+    domain_owners,
+    ensure_term_owners,
+    governs_domain,
+    governs_term,
+    may_create_domain,
+    product_assignment_filter,
+    product_editors,
+    product_owners,
+    term_owner_pair,
+)
+from .office_governance import (
+    can_edit_domain_metadata,
+    can_transfer_domain,
+    seed_rapid_prototyping_domain,
+    seed_requested_steward_mandates,
+)
 from .physical_csv_api import create_physical_csv_router
 from .physical_source_access_api import create_physical_source_access_router
 from .policy import (
@@ -157,6 +175,7 @@ from .schemas import (
     DomainChangeRequestUpdate,
     DomainDirectCreate,
     DomainDirectUpdate,
+    DomainOwnershipTransfer,
     DomainResponse,
     EndpointCreate,
     EndpointReadResponse,
@@ -220,6 +239,7 @@ from .schemas import (
     to_camel,
 )
 from .seed import seed_catalog
+from .semantic_graph_api import create_semantic_graph_router
 from .semantic_suggestions import RapidFuzzSuggestionProvider, SuggestionCandidate
 from .service_levels import (
     actor_can_view_revision as can_view_service_level_revision,
@@ -930,8 +950,8 @@ QUALITY_LABELS = {
 }
 
 
-def require_product_owner(product: DataProduct, actor: str) -> None:
-    if product.owner_user_id != actor:
+def require_product_owner(session: Session, product: DataProduct, actor: str) -> None:
+    if actor not in product_owners(session, product):
         raise HTTPException(403, "Only the responsible data owner may perform this action")
 
 
@@ -1239,9 +1259,34 @@ def _require_role(session: Session, actor: str, role: str, detail: str) -> DemoU
 
 def _require_active_data_owner(session: Session, user_id: str) -> DemoUser:
     user = session.get(DemoUser, user_id)
-    if user is None or not user.active or not _has_role(user, "data_owner"):
+    if user is None or not may_create_domain(session, user_id):
         raise HTTPException(422, f"{user_id} is not an active data owner")
     return user
+
+
+def _domain_request_reviewers(session: Session, change: DomainChangeRequest) -> set[str]:
+    target = session.get(Domain, change.target_domain_id) if change.target_domain_id else None
+    if target:
+        owners = domain_owners(session, target)
+    else:
+        owners = {change.review_payload.get("ownerUserId"), change.review_payload.get("deputyOwnerUserId")}
+        owners = {identity for identity in owners if identity and (session.get(DemoUser, identity) and session.get(DemoUser, identity).active)}
+    return owners - {change.requester_user_id}
+
+
+def _require_domain_request_reviewer(session: Session, actor: str, change: DomainChangeRequest) -> None:
+    if actor not in _domain_request_reviewers(session, change):
+        raise HTTPException(403, "Only a currently assigned object owner or deputy other than the requester may review")
+
+
+def _proposal_for_actor(session: Session, proposal: GlossaryTermProposal, actor: str) -> GlossaryTermProposal:
+    can_edit = False
+    for review in proposal.reviews:
+        authorized = governs_domain(session, actor, session.get(Domain, review.domain_id)) if proposal.operation == "create" else governs_term(session, actor, proposal.target_term_id)
+        review.can_decide = authorized and review.status == "pending" and proposal.status in {"submitted", "in_review"}
+        can_edit = can_edit or authorized
+    proposal.can_edit = can_edit and proposal.status in {"submitted", "in_review"}
+    return proposal
 
 
 def _preferred_localization(localizations: list[Any], language: str = "de") -> Any | None:
@@ -1251,7 +1296,7 @@ def _preferred_localization(localizations: list[Any], language: str = "de") -> A
     )
 
 
-def _domain_response(session: Session, domain: Domain) -> DomainResponse:
+def _domain_response(session: Session, domain: Domain, actor: str | None = None) -> DomainResponse:
     localizations = list(
         session.scalars(
             select(DomainLocalization)
@@ -1263,6 +1308,8 @@ def _domain_response(session: Session, domain: Domain) -> DomainResponse:
     return DomainResponse.model_validate(
         {
             **{column.name: getattr(domain, column.name) for column in Domain.__table__.columns},
+            "canEditMetadata": can_edit_domain_metadata(session, actor, domain),
+            "canTransferOwnership": can_transfer_domain(session, actor, domain),
             "preferredLabel": preferred.preferred_label if preferred else domain.urn,
             "localizations": localizations,
             "productCount": session.scalar(
@@ -1282,6 +1329,7 @@ def _domain_response(session: Session, domain: Domain) -> DomainResponse:
 
 
 def _term_response(session: Session, term: GlossaryTerm) -> GlossaryTermResponse:
+    owner_id, deputy_id = term_owner_pair(session, term.id)
     localizations = list(
         session.scalars(
             select(GlossaryTermLocalization)
@@ -1336,6 +1384,8 @@ def _term_response(session: Session, term: GlossaryTerm) -> GlossaryTermResponse
                 if column.name not in {"abbreviation", "is_termdat"}
             },
             "preferredLabel": preferred.preferred_label if preferred else term.urn,
+            "ownerUserId": owner_id,
+            "deputyOwnerUserId": deputy_id,
             "localizations": localizations,
             "domainIds": domain_ids,
             "relations": relation_responses,
@@ -1403,7 +1453,7 @@ def data_product_response(
         else []
     )
     pending: list[uuid.UUID] = []
-    if actor and actor in {product.owner_user_id, product.deputy_owner_user_id}:
+    if actor and actor in product_owners(session, product):
         pending = list(
             session.scalars(
                 select(GlossaryTermProposal.id).where(
@@ -1471,7 +1521,7 @@ def complete_tasks(session: Session, product_id: uuid.UUID, task_type: str) -> N
 def reconcile_group_membership_tasks(session: Session, actor: str) -> None:
     """Surface group-directory drift without silently widening an active grant."""
     owned_products = list(
-        session.scalars(select(DataProduct).where(DataProduct.owner_user_id == actor))
+        session.scalars(select(DataProduct).where(product_assignment_filter(actor, owners_only=True)))
     )
     active_warning_ids: set[uuid.UUID] = set()
     for product in owned_products:
@@ -1679,12 +1729,18 @@ def _update_domain(
     *,
     retire: bool = False,
     change_actor: str | None = None,
+    active_recipients: bool = False,
 ) -> Domain:
     if domain.lifecycle == "retired":
         raise HTTPException(409, "A retired domain cannot be changed")
     owner_id = payload.get("ownerUserId", domain.owner_user_id)
     deputy_id = payload.get("deputyOwnerUserId", domain.deputy_owner_user_id)
-    _validate_domain_stewards(session, owner_id, deputy_id)
+    if active_recipients:
+        if owner_id == deputy_id or not all((person := session.get(DemoUser, identity)) and person.active and person.selectable for identity in (owner_id, deputy_id)):
+            raise HTTPException(422, "Owner and deputy must be different active people")
+    elif (owner_id, deputy_id) != (domain.owner_user_id, domain.deputy_owner_user_id):
+        _validate_domain_stewards(session, owner_id, deputy_id)
+    source_organizations = domain_organization_ids(session, domain)
     previous_owner_id = domain.owner_user_id
     previous_deputy_id = domain.deputy_owner_user_id
     domain.owner_user_id = owner_id
@@ -1716,69 +1772,9 @@ def _update_domain(
     domain.revision += 1
     domain.updated_at = utc_now()
     domain.content_hash = _canonical_hash(_domain_hash_payload(domain, localizations))
-    if previous_owner_id != owner_id:
-        open_reviews = list(
-            session.scalars(
-                select(GlossaryTermProposalReview)
-                .join(
-                    GlossaryTermProposal,
-                    GlossaryTermProposal.id == GlossaryTermProposalReview.proposal_id,
-                )
-                .where(
-                    GlossaryTermProposalReview.domain_id == domain.id,
-                    GlossaryTermProposalReview.status == "pending",
-                    GlossaryTermProposal.status.in_(("submitted", "in_review")),
-                )
-            )
-        )
-        for review in open_reviews:
-            review.owner_user_id = owner_id
-            review.updated_at = utc_now()
-            for task in session.scalars(
-                select(WorkflowTask).where(
-                    WorkflowTask.glossary_term_proposal_id == review.proposal_id,
-                    WorkflowTask.task_type == "glossary_term_review",
-                    WorkflowTask.status != "completed",
-                    WorkflowTask.assignee_user_id == previous_owner_id,
-                )
-            ):
-                task.assignee_user_id = owner_id
-                task.updated_at = utc_now()
-            audit(
-                session,
-                "glossary-term-proposal",
-                str(review.proposal_id),
-                "review-owner-reassigned",
-                change_actor or "system",
-                review.proposal_revision,
-                {"domainId": str(domain.id), "ownerUserId": owner_id},
-            )
-    if previous_deputy_id != deputy_id:
-        open_proposal_ids = list(
-            session.scalars(
-                select(GlossaryTermProposalReview.proposal_id)
-                .join(
-                    GlossaryTermProposal,
-                    GlossaryTermProposal.id == GlossaryTermProposalReview.proposal_id,
-                )
-                .where(
-                    GlossaryTermProposalReview.domain_id == domain.id,
-                    GlossaryTermProposalReview.status == "pending",
-                    GlossaryTermProposal.status.in_(("submitted", "in_review")),
-                )
-            )
-        )
-        if open_proposal_ids:
-            for task in session.scalars(
-                select(WorkflowTask).where(
-                    WorkflowTask.glossary_term_proposal_id.in_(open_proposal_ids),
-                    WorkflowTask.task_type == "glossary_term_collaboration",
-                    WorkflowTask.status != "completed",
-                    WorkflowTask.assignee_user_id == previous_deputy_id,
-                )
-            ):
-                task.assignee_user_id = deputy_id
-                task.updated_at = utc_now()
+    if (previous_owner_id, previous_deputy_id) != (owner_id, deputy_id):
+        replace_domain_owners(session, domain, source_organizations)
+        reroute_domain_work(session, domain, change_actor)
     session.flush()
     return domain
 
@@ -1916,6 +1912,8 @@ def _accept_term_proposal(
         {"urn": term.urn, "lifecycle": term.lifecycle, "payload": payload}
     )
     session.flush()
+    if proposal.operation == "create":
+        ensure_term_owners(session, term.id, uuid.UUID(str(payload["domainIds"][0])))
     proposal.target_term_id = term.id
     proposal.status = "accepted"
     proposal.decided_at = utc_now()
@@ -2430,6 +2428,7 @@ def create_router() -> APIRouter:
     @router.get("/domains", response_model=list[DomainResponse], tags=["domains & glossary"])
     def list_domains(
         session: SessionDep,
+        actor: OptionalActorDep,
         q: str | None = None,
         include_retired: Annotated[bool, Query(alias="includeRetired")] = False,
     ) -> list[DomainResponse]:
@@ -2437,7 +2436,7 @@ def create_router() -> APIRouter:
         if not include_retired:
             statement = statement.where(Domain.lifecycle == "active")
         domains = list(session.scalars(statement.order_by(Domain.created_at)))
-        responses = [_domain_response(session, item) for item in domains]
+        responses = [_domain_response(session, item, actor) for item in domains]
         if q and q.strip():
             needle = _normalized_label(q)
             responses = [
@@ -2452,12 +2451,12 @@ def create_router() -> APIRouter:
         return responses
 
     @router.get("/domains/{domain_id}", response_model=DomainResponse, tags=["domains & glossary"])
-    def get_domain(domain_id: uuid.UUID, response: Response, session: SessionDep) -> DomainResponse:
+    def get_domain(domain_id: uuid.UUID, response: Response, session: SessionDep, actor: OptionalActorDep) -> DomainResponse:
         domain = session.get(Domain, domain_id)
         if domain is None:
             raise HTTPException(404, "Domain not found")
         response.headers["ETag"] = etag_for_revision(domain.revision)
-        return _domain_response(session, domain)
+        return _domain_response(session, domain, actor)
 
     @router.get(
         "/domains/{domain_id}/audit-events",
@@ -2494,12 +2493,9 @@ def create_router() -> APIRouter:
     def create_domain_direct(
         body: DomainDirectCreate, session: SessionDep, actor: ActorDep
     ) -> DomainResponse:
-        _require_role(
-            session,
-            actor,
-            "domain_register_owner",
-            "Only the domain register owner may change the register directly",
-        )
+        _require_active_data_owner(session, actor)
+        if body.owner_user_id != actor:
+            raise HTTPException(403, "Create a domain under your own ownership, or submit a request to the proposed owner")
         domain = _create_domain(session, _domain_draft_payload(body))
         audit(
             session,
@@ -2511,7 +2507,7 @@ def create_router() -> APIRouter:
             {"status": domain.lifecycle},
         )
         session.commit()
-        return _domain_response(session, domain)
+        return _domain_response(session, domain, actor)
 
     @router.patch(
         "/domains/{domain_id}", response_model=DomainResponse, tags=["domains & glossary"]
@@ -2524,15 +2520,13 @@ def create_router() -> APIRouter:
         actor: ActorDep,
         if_match: Annotated[str | None, Header(alias="If-Match")] = None,
     ) -> DomainResponse:
-        _require_role(
-            session,
-            actor,
-            "domain_register_owner",
-            "Only the domain register owner may change the register directly",
-        )
         domain = session.scalar(select(Domain).where(Domain.id == domain_id).with_for_update())
         if domain is None:
             raise HTTPException(404, "Domain not found")
+        if not can_edit_domain_metadata(session, actor, domain):
+            raise HTTPException(403, "Only the assigned owner/deputy or the office ALDS may edit domain metadata")
+        if not governs_domain(session, actor, domain) and body.model_fields_set - {"localizations"}:
+            raise HTTPException(403, "Changing domain ownership requires the assigned object owner or deputy")
         require_revision(if_match, domain.revision)
         domain = _update_domain(session, domain, _domain_draft_payload(body), change_actor=actor)
         audit(
@@ -2546,7 +2540,40 @@ def create_router() -> APIRouter:
         )
         session.commit()
         response.headers["ETag"] = etag_for_revision(domain.revision)
-        return _domain_response(session, domain)
+        return _domain_response(session, domain, actor)
+
+    @router.post("/domains/{domain_id}/transfer", response_model=DomainResponse, tags=["domains & glossary"])
+    def transfer_domain_ownership(
+        domain_id: uuid.UUID, body: DomainOwnershipTransfer, response: Response,
+        session: SessionDep, actor: ActorDep,
+        if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    ) -> DomainResponse:
+        domain = session.scalar(select(Domain).where(Domain.id == domain_id).with_for_update().execution_options(populate_existing=True))
+        if domain is None:
+            raise HTTPException(404, "Domain not found")
+        if not can_transfer_domain(session, actor, domain, lock=True):
+            raise HTTPException(403, "Only the domain owner/deputy or its scoped ALDS/LDSD may transfer ownership")
+        require_revision(if_match, domain.revision)
+        if body.owner_user_id == domain.owner_user_id:
+            raise HTTPException(409, "Select a different person as the new Data Owner")
+        previous = {"previousOwnerUserId": domain.owner_user_id, "previousDeputyOwnerUserId": domain.deputy_owner_user_id}
+        organizations = sorted(domain_organization_ids(session, domain))
+        domain = _update_domain(session, domain, {"ownerUserId": body.owner_user_id,
+            "deputyOwnerUserId": body.deputy_owner_user_id}, change_actor=actor, active_recipients=True)
+        for change in session.scalars(select(DomainChangeRequest).where(
+            DomainChangeRequest.target_domain_id == domain.id, DomainChangeRequest.status == "submitted",
+        )):
+            change.status, change.updated_at = "stale", utc_now()
+            change.revision += 1
+            _complete_linked_tasks(session, domain_request_id=change.id)
+            audit(session, "domain-change-request", str(change.id), "marked-stale", actor, change.revision,
+                {"reason": "domain-ownership-transferred", "domainId": str(domain.id)})
+        audit(session, "domain", str(domain.id), "ownership-transferred", actor, domain.revision,
+            {**previous, "ownerUserId": domain.owner_user_id, "deputyOwnerUserId": domain.deputy_owner_user_id,
+             "organizationIds": organizations, "reason": body.reason})
+        session.commit()
+        response.headers["ETag"] = etag_for_revision(domain.revision)
+        return _domain_response(session, domain, actor)
 
     @router.post(
         "/domains/{domain_id}/retire", response_model=DomainResponse, tags=["domains & glossary"]
@@ -2558,15 +2585,11 @@ def create_router() -> APIRouter:
         actor: ActorDep,
         if_match: Annotated[str | None, Header(alias="If-Match")] = None,
     ) -> DomainResponse:
-        _require_role(
-            session,
-            actor,
-            "domain_register_owner",
-            "Only the domain register owner may retire a domain",
-        )
         domain = session.scalar(select(Domain).where(Domain.id == domain_id).with_for_update())
         if domain is None:
             raise HTTPException(404, "Domain not found")
+        if not governs_domain(session, actor, domain):
+            raise HTTPException(403, "Only the assigned object owner or deputy may govern this domain")
         require_revision(if_match, domain.revision)
         domain = _update_domain(session, domain, {}, retire=True, change_actor=actor)
         audit(
@@ -2580,7 +2603,7 @@ def create_router() -> APIRouter:
         )
         session.commit()
         response.headers["ETag"] = etag_for_revision(domain.revision)
-        return _domain_response(session, domain)
+        return _domain_response(session, domain, actor)
 
     @router.post(
         "/domain-change-requests",
@@ -2591,7 +2614,6 @@ def create_router() -> APIRouter:
     def create_domain_change_request(
         body: DomainChangeRequestCreate, session: SessionDep, actor: ActorDep
     ) -> DomainChangeRequest:
-        _require_role(session, actor, "data_owner", "Only a data owner may request a domain change")
         if body.target_domain_id:
             target = session.get(Domain, body.target_domain_id)
             if target is None:
@@ -2619,19 +2641,15 @@ def create_router() -> APIRouter:
             revision=1,
         )
         session.add(change)
-        register_owners = [
-            user
-            for user in session.scalars(select(DemoUser).where(DemoUser.active.is_(True)))
-            if _has_role(user, "domain_register_owner")
-        ]
-        if not register_owners:
-            raise HTTPException(409, "No active domain register owner is configured")
-        for owner in register_owners:
+        reviewers = _domain_request_reviewers(session, change)
+        if not reviewers:
+            raise HTTPException(409, "No other active object owner or deputy is available for review")
+        for owner_id in sorted(reviewers):
             _create_workflow_task(
                 session,
                 task_type="domain_change_review",
                 task_kind="action",
-                assignee=owner.id,
+                assignee=owner_id,
                 title=f"Review domain request {change.request_number}",
                 detail=f"A data owner requested a domain {body.operation} operation.",
                 domain_request_id=change.id,
@@ -2656,11 +2674,13 @@ def create_router() -> APIRouter:
     def list_domain_change_requests(
         session: SessionDep, actor: ActorDep
     ) -> list[DomainChangeRequest]:
-        profile = actor_profile(session, actor)
-        statement = select(DomainChangeRequest)
-        if not _has_role(profile, "domain_register_owner"):
-            statement = statement.where(DomainChangeRequest.requester_user_id == actor)
-        return list(session.scalars(statement.order_by(DomainChangeRequest.created_at.desc())))
+        changes = list(session.scalars(select(DomainChangeRequest).order_by(DomainChangeRequest.created_at.desc())))
+        visible = []
+        for change in changes:
+            change.can_review = actor in _domain_request_reviewers(session, change)
+            if change.requester_user_id == actor or change.can_review:
+                visible.append(change)
+        return visible
 
     @router.patch(
         "/domain-change-requests/{request_id}",
@@ -2675,12 +2695,6 @@ def create_router() -> APIRouter:
         actor: ActorDep,
         if_match: Annotated[str | None, Header(alias="If-Match")] = None,
     ) -> DomainChangeRequest:
-        _require_role(
-            session,
-            actor,
-            "domain_register_owner",
-            "Only the domain register owner may edit a review draft",
-        )
         change = session.scalar(
             select(DomainChangeRequest)
             .where(DomainChangeRequest.id == request_id)
@@ -2688,6 +2702,7 @@ def create_router() -> APIRouter:
         )
         if change is None:
             raise HTTPException(404, "Domain change request not found")
+        _require_domain_request_reviewer(session, actor, change)
         if change.status != "submitted":
             raise HTTPException(409, "Only a submitted request may be edited")
         require_revision(if_match, change.revision)
@@ -2721,12 +2736,6 @@ def create_router() -> APIRouter:
         actor: ActorDep,
         if_match: Annotated[str | None, Header(alias="If-Match")] = None,
     ) -> DomainChangeRequest:
-        _require_role(
-            session,
-            actor,
-            "domain_register_owner",
-            "Only the domain register owner may decide a request",
-        )
         change = session.scalar(
             select(DomainChangeRequest)
             .where(DomainChangeRequest.id == request_id)
@@ -2734,6 +2743,7 @@ def create_router() -> APIRouter:
         )
         if change is None:
             raise HTTPException(404, "Domain change request not found")
+        _require_domain_request_reviewer(session, actor, change)
         if change.status != "submitted":
             raise HTTPException(409, "The request already has a final decision")
         require_revision(if_match, change.revision)
@@ -2923,6 +2933,40 @@ def create_router() -> APIRouter:
             ]
         return responses
 
+    @router.post("/glossary/terms/{term_id}/retire-direct", response_model=GlossaryTermResponse, tags=["domains & glossary"])
+    def retire_term_direct(
+        term_id: uuid.UUID, response: Response, session: SessionDep, actor: ActorDep,
+        if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    ):
+        term = session.scalar(select(GlossaryTerm).where(GlossaryTerm.id == term_id).with_for_update())
+        if term is None:
+            raise HTTPException(404, "Glossary term not found")
+        if not governs_term(session, actor, term_id):
+            raise HTTPException(403, "Only the assigned term owner or deputy may retire this term")
+        require_revision(if_match, term.revision)
+        if term.lifecycle == "retired":
+            raise HTTPException(409, "Der Begriff ist bereits stillgelegt.")
+        if session.scalar(select(GlossaryTermProposal.id).where(GlossaryTermProposal.target_term_id == term_id, GlossaryTermProposal.status.in_(["submitted", "in_review"]))):
+            raise HTTPException(409, "Für diesen Begriff bestehen offene Anträge. Schliessen Sie diese vor dem Löschen ab.")
+        current = _term_response(session, term)
+        payload = {
+            "domainIds": [str(identity) for identity in current.domain_ids],
+            "localizations": [{"language": item.language, "preferredLabel": item.preferred_label,
+                               "alternativeLabels": item.alternative_labels, "definition": item.definition} for item in current.localizations],
+            "relations": [{"relation": item.relation, "targetTermId": str(item.target_term_id) if item.target_term_id else None,
+                           "targetUri": item.target_uri} for item in current.relations],
+        }
+        term.lifecycle = "retired"
+        term.revision += 1
+        term.updated_at = term.retired_at = utc_now()
+        term.content_hash = _canonical_hash({"urn": term.urn, "lifecycle": term.lifecycle, "payload": payload})
+        audit(session, "glossary-term", str(term.id), "retired-direct", actor, term.revision, {"status": term.lifecycle})
+        session.flush()
+        result = _term_response(session, term)
+        session.commit()
+        response.headers["ETag"] = etag_for_revision(term.revision)
+        return result
+
     @router.get(
         "/glossary/terms/{term_id}",
         response_model=GlossaryTermResponse,
@@ -3012,7 +3056,7 @@ def create_router() -> APIRouter:
                     proposal_id=proposal.id,
                     domain_id=domain.id,
                     proposal_revision=proposal.revision,
-                    owner_user_id=domain.owner_user_id,
+                    owner_user_id=(term_owner_pair(session, proposal.target_term_id)[0] or domain.owner_user_id) if proposal.operation != "create" else domain.owner_user_id,
                     status="pending",
                 )
             )
@@ -3020,7 +3064,7 @@ def create_router() -> APIRouter:
                 session,
                 task_type="glossary_term_review",
                 task_kind="action",
-                assignee=domain.owner_user_id,
+                assignee=(term_owner_pair(session, proposal.target_term_id)[0] or domain.owner_user_id) if proposal.operation != "create" else domain.owner_user_id,
                 title=f"Review glossary proposal {proposal.request_number}",
                 detail="Your domain must decide this exact proposal revision.",
                 term_proposal_id=proposal.id,
@@ -3030,9 +3074,9 @@ def create_router() -> APIRouter:
                 session,
                 task_type="glossary_term_collaboration",
                 task_kind="action",
-                assignee=domain.deputy_owner_user_id,
+                assignee=(term_owner_pair(session, proposal.target_term_id)[1] or domain.deputy_owner_user_id) if proposal.operation != "create" else domain.deputy_owner_user_id,
                 title=f"Collaborate on glossary proposal {proposal.request_number}",
-                detail="You may edit the review draft, but only the primary owner may decide.",
+                detail="The assigned owner and deputy may edit and decide this revision.",
                 term_proposal_id=proposal.id,
                 product_id=proposal.source_product_id,
             )
@@ -3047,7 +3091,7 @@ def create_router() -> APIRouter:
         )
         session.commit()
         session.refresh(proposal)
-        return proposal
+        return _proposal_for_actor(session, proposal, actor)
 
     @router.get(
         "/glossary/term-proposals",
@@ -3055,27 +3099,8 @@ def create_router() -> APIRouter:
         tags=["domains & glossary"],
     )
     def list_term_proposals(session: SessionDep, actor: ActorDep) -> list[GlossaryTermProposal]:
-        governed_domains = list(
-            session.scalars(
-                select(Domain.id).where(
-                    or_(Domain.owner_user_id == actor, Domain.deputy_owner_user_id == actor)
-                )
-            )
-        )
-        visible_review = exists(
-            select(GlossaryTermProposalReview.proposal_id).where(
-                GlossaryTermProposalReview.proposal_id == GlossaryTermProposal.id,
-                GlossaryTermProposalReview.domain_id.in_(governed_domains),
-            )
-        )
-        return list(
-            session.scalars(
-                select(GlossaryTermProposal)
-                .where(or_(GlossaryTermProposal.requester_user_id == actor, visible_review))
-                .options(selectinload(GlossaryTermProposal.reviews))
-                .order_by(GlossaryTermProposal.created_at.desc())
-            )
-        )
+        proposals = session.scalars(select(GlossaryTermProposal).options(selectinload(GlossaryTermProposal.reviews)).order_by(GlossaryTermProposal.created_at.desc()))
+        return [_proposal_for_actor(session, proposal, actor) for proposal in proposals if proposal.requester_user_id == actor or (proposal.operation != "create" and governs_term(session, actor, proposal.target_term_id)) or (proposal.operation == "create" and any(governs_domain(session, actor, session.get(Domain, review.domain_id)) for review in proposal.reviews))]
 
     @router.get(
         "/glossary/term-proposals/{proposal_id}",
@@ -3094,12 +3119,11 @@ def create_router() -> APIRouter:
             raise HTTPException(404, "Glossary term proposal not found")
         domain_ids = [review.domain_id for review in proposal.reviews]
         domains = list(session.scalars(select(Domain).where(Domain.id.in_(domain_ids))))
-        if proposal.requester_user_id != actor and not any(
-            actor in {domain.owner_user_id, domain.deputy_owner_user_id} for domain in domains
-        ):
+        authorized = any(governs_domain(session, actor, domain) for domain in domains) if proposal.operation == "create" else governs_term(session, actor, proposal.target_term_id)
+        if proposal.requester_user_id != actor and not authorized:
             raise HTTPException(404, "Glossary term proposal not found")
         response.headers["ETag"] = etag_for_revision(proposal.revision)
-        return proposal
+        return _proposal_for_actor(session, proposal, actor)
 
     @router.patch(
         "/glossary/term-proposals/{proposal_id}",
@@ -3132,11 +3156,9 @@ def create_router() -> APIRouter:
                 )
             )
         )
-        if not any(
-            actor in {domain.owner_user_id, domain.deputy_owner_user_id}
-            for domain in current_domains
-        ):
-            raise HTTPException(403, "Only a responsible domain owner or deputy may edit")
+        authorized = any(governs_domain(session, actor, domain) for domain in current_domains) if proposal.operation == "create" else governs_term(session, actor, proposal.target_term_id)
+        if not authorized:
+            raise HTTPException(403, "Only the currently assigned object owner or deputy may edit")
         new_domain_ids = body.review_payload.domain_ids
         _active_domains(session, new_domain_ids)
         existing_domain_ids = (
@@ -3175,7 +3197,7 @@ def create_router() -> APIRouter:
                     proposal_id=proposal.id,
                     domain_id=domain.id,
                     proposal_revision=proposal.revision,
-                    owner_user_id=domain.owner_user_id,
+                    owner_user_id=(term_owner_pair(session, proposal.target_term_id)[0] or domain.owner_user_id) if proposal.operation != "create" else domain.owner_user_id,
                     status="pending",
                 )
             )
@@ -3183,7 +3205,7 @@ def create_router() -> APIRouter:
                 session,
                 task_type="glossary_term_review",
                 task_kind="action",
-                assignee=domain.owner_user_id,
+                assignee=(term_owner_pair(session, proposal.target_term_id)[0] or domain.owner_user_id) if proposal.operation != "create" else domain.owner_user_id,
                 title=f"Review glossary proposal {proposal.request_number}",
                 detail=f"The review draft changed to revision {proposal.revision}.",
                 term_proposal_id=proposal.id,
@@ -3193,7 +3215,7 @@ def create_router() -> APIRouter:
                 session,
                 task_type="glossary_term_collaboration",
                 task_kind="action",
-                assignee=domain.deputy_owner_user_id,
+                assignee=(term_owner_pair(session, proposal.target_term_id)[1] or domain.deputy_owner_user_id) if proposal.operation != "create" else domain.deputy_owner_user_id,
                 title=f"Collaborate on glossary proposal {proposal.request_number}",
                 detail=f"The review draft changed to revision {proposal.revision}.",
                 term_proposal_id=proposal.id,
@@ -3211,7 +3233,7 @@ def create_router() -> APIRouter:
         session.commit()
         session.refresh(proposal)
         response.headers["ETag"] = etag_for_revision(proposal.revision)
-        return proposal
+        return _proposal_for_actor(session, proposal, actor)
 
     @router.post(
         "/glossary/term-proposals/{proposal_id}/reviews/{domain_id}/decision",
@@ -3240,8 +3262,9 @@ def create_router() -> APIRouter:
         review = next((item for item in proposal.reviews if item.domain_id == domain_id), None)
         if review is None:
             raise HTTPException(404, "Domain review not found")
-        if review.owner_user_id != actor:
-            raise HTTPException(403, "Only the primary domain owner may decide this review")
+        authorized = governs_domain(session, actor, session.get(Domain, domain_id)) if proposal.operation == "create" else governs_term(session, actor, proposal.target_term_id)
+        if not authorized:
+            raise HTTPException(403, "Only the currently assigned object owner or deputy may decide this review")
         if review.proposal_revision != proposal.revision:
             raise HTTPException(409, "This review belongs to a stale proposal revision")
         if review.status != "pending":
@@ -3301,7 +3324,7 @@ def create_router() -> APIRouter:
         )
         session.commit()
         session.refresh(proposal)
-        return proposal
+        return _proposal_for_actor(session, proposal, actor)
 
     @router.get(
         "/data-products/{product_id}/semantic-suggestions",
@@ -3849,7 +3872,7 @@ def create_router() -> APIRouter:
         actor: ActorDep,
     ) -> PocAccessRenewalFixtureResponse:
         product = find_product(session, ACCESS_RENEWAL_PRODUCT_ID)
-        require_product_owner(product, actor)
+        require_product_owner(session, product, actor)
         return access_renewal_fixture_response(session)
 
     @router.post(
@@ -3863,7 +3886,7 @@ def create_router() -> APIRouter:
         actor: ActorDep,
     ) -> PocAccessRenewalFixtureResponse:
         product = find_product(session, ACCESS_RENEWAL_PRODUCT_ID)
-        require_product_owner(product, actor)
+        require_product_owner(session, product, actor)
         prepare_access_renewal_fixture(
             session,
             product,
@@ -3885,7 +3908,7 @@ def create_router() -> APIRouter:
         actor: ActorDep,
     ) -> PocAccessRenewalFixtureResponse:
         product = find_product(session, ACCESS_RENEWAL_PRODUCT_ID)
-        require_product_owner(product, actor)
+        require_product_owner(session, product, actor)
         if body.confirmation_name != product.title:
             raise HTTPException(
                 422, "confirmationName must exactly match the fixture product title"
@@ -4426,7 +4449,7 @@ def create_router() -> APIRouter:
         actor: ActorDep,
     ) -> PocSimulationTriggerResponse:
         product = find_product(session, product_id)
-        require_product_owner(product, actor)
+        require_product_owner(session, product, actor)
         fixture = fixture_for_product(session, product)
         active = active_simulation_events(session, product_id=product_id)
         if active:
@@ -4537,7 +4560,7 @@ def create_router() -> APIRouter:
         ):
             raise HTTPException(404, "Active simulation event not found")
         product = find_product(session, trigger.product_id)
-        require_product_owner(product, actor)
+        require_product_owner(session, product, actor)
         already_reset = session.scalar(
             select(PocSimulationEvent).where(PocSimulationEvent.trigger_event_id == trigger.id)
         )
@@ -4610,7 +4633,7 @@ def create_router() -> APIRouter:
         actor: ActorDep,
     ) -> PocSimulationResetResponse:
         product = find_product(session, product_id)
-        require_product_owner(product, actor)
+        require_product_owner(session, product, actor)
         user = actor_profile(session, actor)
         if body.confirmation_name != user.display_name:
             raise HTTPException(422, "confirmationName must exactly match the active demo identity")
@@ -4749,7 +4772,7 @@ def create_router() -> APIRouter:
         )
         visibility = (
             or_(
-                DataProduct.owner_user_id == actor,
+                product_assignment_filter(actor),
                 DataProduct.discoverable.is_(True),
                 approver_visibility,
             )
@@ -4803,18 +4826,13 @@ def create_router() -> APIRouter:
         if_match: Annotated[str | None, Header(alias="If-Match")] = None,
     ) -> DataProductResponse:
         current = find_product(session, product_id)
-        if patch.model_fields_set.intersection(
-            {"domain_ids", "glossary_term_ids"}
-        ) and actor not in {
-            current.owner_user_id,
-            current.deputy_owner_user_id,
-        }:
-            raise HTTPException(
-                403,
-                "Only the product owner or deputy may change domains or glossary terms",
-            )
+        operational_fields = {"title", "description", "keywords", "contact", "update_frequency"}
+        if actor not in product_owners(session, current) and (
+            actor not in product_editors(session, current) or patch.model_fields_set - operational_fields
+        ):
+            raise HTTPException(403, "Only an assigned object editor may maintain metadata; sensitive changes require its owner")
         if requires_four_eyes(session, current):
-            require_product_owner(current, actor)
+            require_product_owner(session, current, actor)
         require_revision(if_match, current.revision)
         changes = patch.model_dump(exclude_unset=True, by_alias=False)
         requested_domain_ids = changes.pop("domain_ids", None)
@@ -5106,7 +5124,7 @@ def create_router() -> APIRouter:
         actor: ActorDep,
     ) -> ProductQualityResponse:
         product = find_product(session, product_id)
-        require_product_owner(product, actor)
+        require_product_owner(session, product, actor)
         fields = {
             field.id: field
             for field in session.scalars(
@@ -5297,7 +5315,7 @@ def create_router() -> APIRouter:
         actor: ActorDep,
     ) -> list[SemanticMappingResponse]:
         product = find_product(session, product_id)
-        require_product_owner(product, actor)
+        require_product_owner(session, product, actor)
         version = session.scalar(
             select(CanonicalOntologyVersion)
             .where(CanonicalOntologyVersion.active.is_(True))
@@ -5418,7 +5436,7 @@ def create_router() -> APIRouter:
         actor: ActorDep,
     ) -> PolicyRevisionResponse:
         product = find_product(session, product_id)
-        require_product_owner(product, actor)
+        require_product_owner(session, product, actor)
         reject_legacy_governance_path(session, product)
         product.discoverable = body.discoverable
         assessment = session.get(ProductQualityAssessment, product_id) or ProductQualityAssessment(
@@ -5543,7 +5561,9 @@ def create_router() -> APIRouter:
         submission = session.get(GovernanceSubmission, submission_id)
         if submission is None:
             raise HTTPException(404, "Governance submission not found")
-        if actor not in {submission.owner_user_id, submission.approver_user_id}:
+        if actor not in {submission.owner_user_id, submission.approver_user_id} and actor not in product_owners(
+            session, session.get(DataProduct, submission.data_product_id)
+        ):
             raise HTTPException(
                 403, "Only the owner and assigned approver may view this submission"
             )
@@ -5641,7 +5661,7 @@ def create_router() -> APIRouter:
         )
         result: list[AccessRequestResponse] = []
         for access_request in open_requests:
-            if access_request.data_product.owner_user_id == actor:
+            if actor in product_owners(session, access_request.data_product):
                 result.append(access_request_response(session, access_request))
                 continue
             usage = access_request.data_product.extra_metadata.get("catalogUsage", {})
@@ -5812,7 +5832,7 @@ def create_router() -> APIRouter:
         if access_request is None:
             raise HTTPException(404, "Access request not found")
         product = find_product(session, access_request.data_product_id)
-        require_product_owner(product, actor)
+        require_product_owner(session, product, actor)
         if access_request.status not in {
             "submitted",
             "identity_review",
@@ -6023,7 +6043,7 @@ def create_router() -> APIRouter:
     ) -> Any:
         product = find_product(session, product_id)
         if requires_four_eyes(session, product):
-            require_product_owner(product, actor)
+            require_product_owner(session, product, actor)
         require_revision(if_match, product.revision)
         next_revision = product.revision + 1
         result = session.execute(
@@ -6134,7 +6154,7 @@ def create_router() -> APIRouter:
         privileged = bool(
             actor is not None
             and (
-                actor == product.owner_user_id
+                actor in product_owners(session, product)
                 or any(row.control_person_user_id == actor for row in rows)
             )
         )
@@ -6147,7 +6167,7 @@ def create_router() -> APIRouter:
                     session,
                     product,
                     row,
-                    privileged=is_service_level_revision_privileged(product, row, actor),
+                    privileged=is_service_level_revision_privileged(session, product, row, actor),
                     rows_by_id=rows_by_id,
                 )
                 for row in rows
@@ -6176,7 +6196,7 @@ def create_router() -> APIRouter:
                 ServiceLevelRevision.data_product_id == product_id,
             )
         )
-        if row is None or not can_view_service_level_revision(product, row, actor):
+        if row is None or not can_view_service_level_revision(session, product, row, actor):
             raise HTTPException(404, "SLA revision not found")
         require_product_view(session, product, actor)
         response.headers["ETag"] = service_level_etag(row.lock_version)
@@ -6184,7 +6204,7 @@ def create_router() -> APIRouter:
             session,
             product,
             row,
-            privileged=is_service_level_revision_privileged(product, row, actor),
+            privileged=is_service_level_revision_privileged(session, product, row, actor),
         )
 
     @router.post(
@@ -6313,7 +6333,7 @@ def create_router() -> APIRouter:
         if_match: Annotated[str | None, Header(alias="If-Match")] = None,
     ) -> ControlPersonUpdateResponse:
         product = lock_service_level_product(session, product_id)
-        require_product_owner(product, actor)
+        require_product_owner(session, product, actor)
         require_revision(if_match, product.revision)
         candidate = session.get(DemoUser, body.control_person_user_id)
         if not is_active_publication_approver(candidate):
@@ -6401,7 +6421,7 @@ def create_router() -> APIRouter:
         product_id: uuid.UUID, session: SessionDep, actor: ActorDep
     ) -> list[MetadataDeliveryOutbox]:
         product = find_product(session, product_id)
-        require_product_owner(product, actor)
+        require_product_owner(session, product, actor)
         return list(
             session.scalars(
                 select(MetadataDeliveryOutbox)
@@ -6481,7 +6501,7 @@ def create_router() -> APIRouter:
         if_match: Annotated[str | None, Header(alias="If-Match")] = None,
     ) -> PolicyRevisionResponse:
         product = find_product(session, product_id)
-        require_product_owner(product, actor)
+        require_product_owner(session, product, actor)
         reject_legacy_governance_path(session, product)
         current = latest_policy(session, product_id)
         current_revision = current.revision if current else 0
@@ -6554,7 +6574,7 @@ def create_router() -> APIRouter:
     ) -> PolicyRevisionResponse:
         """Create one draft grant while preserving the currently active grants."""
         product = find_product(session, product_id)
-        require_product_owner(product, actor)
+        require_product_owner(session, product, actor)
         reject_legacy_governance_path(session, product)
         current = latest_policy(session, product_id)
         current_revision = current.revision if current else 0
@@ -6644,7 +6664,7 @@ def create_router() -> APIRouter:
         if_match: Annotated[str | None, Header(alias="If-Match")] = None,
     ) -> PolicyRevisionResponse:
         product = find_product(session, product_id)
-        require_product_owner(product, actor)
+        require_product_owner(session, product, actor)
         reject_legacy_governance_path(session, product)
         source = session.get(PolicyRevision, policy_id)
         current = latest_policy(session, product_id)
@@ -6749,7 +6769,7 @@ def create_router() -> APIRouter:
         if_match: Annotated[str | None, Header(alias="If-Match")] = None,
     ) -> PolicyRevisionResponse:
         product = find_product(session, product_id)
-        require_product_owner(product, actor)
+        require_product_owner(session, product, actor)
         reject_legacy_governance_path(session, product)
         target = session.get(PolicyRevision, policy_id)
         current = latest_policy(session, product_id)
@@ -6873,6 +6893,8 @@ def create_app(
             with resolved_session_factory() as session:
                 seed_catalog(session)
                 seed_modeling_catalog(session)
+                seed_requested_steward_mandates(session)
+                seed_rapid_prototyping_domain(session)
                 seed_site_glossary_terms(session)
                 session.commit()
         try:
@@ -6915,6 +6937,7 @@ def create_app(
     app.include_router(create_router())
     app.include_router(create_modeling_router())
     app.include_router(create_representation_router())
+    app.include_router(create_semantic_graph_router())
     app.include_router(create_physical_csv_router())
     app.include_router(create_import_journey_router())
     app.include_router(create_structure_inventory_router())

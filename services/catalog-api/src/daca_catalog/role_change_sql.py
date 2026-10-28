@@ -71,10 +71,11 @@ BEGIN
                 'delegatedOwnerUserId', after_row->>'delegated_owner_user_id') END;
         ELSE
             target_type := CASE WHEN row_data->>'domain_id' IS NOT NULL THEN 'domain'
+                WHEN row_data->>'glossary_term_id' IS NOT NULL THEN 'glossary_term'
                 WHEN row_data->>'logical_model_id' IS NOT NULL THEN 'logical_model'
                 WHEN row_data->>'physical_source_id' IS NOT NULL THEN 'physical_representation'
                 ELSE 'data_product' END;
-            target_id := COALESCE(row_data->>'domain_id', row_data->>'logical_model_id',
+            target_id := COALESCE(row_data->>'domain_id', row_data->>'glossary_term_id', row_data->>'logical_model_id',
                                   row_data->>'physical_source_id', row_data->>'data_product_id');
             before_state := CASE WHEN before_row IS NULL THEN NULL ELSE jsonb_build_object(
                 'userId', before_row->>'user_id', 'role', before_row->>'role',

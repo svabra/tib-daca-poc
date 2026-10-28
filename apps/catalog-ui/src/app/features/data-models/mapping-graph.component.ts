@@ -1,6 +1,7 @@
 import { afterNextRender, Injector, ChangeDetectionStrategy, Component, computed, effect, ElementRef, HostListener, inject, input, output, signal } from '@angular/core';
 import { MappingDraftFacade, CanvasNodePosition } from './mapping-draft.facade';
 import { printMappingCanvas } from './mapping-canvas-print';
+import { CatalogObjectBrowserComponent, CatalogObjectKind } from '../domains/catalog-object-browser.component';
 import { AssetMapping, LogicalField, MappingStatus, MappingType, MAPPING_STATUS_LABELS } from './data-models.models';
 
 import { MAPPING_TYPE_OPTIONS, mappingTypeDescription } from './mapping-types';
@@ -13,11 +14,12 @@ interface FieldLink { mapping: AssetMapping; columnId: string; label: string; }
 interface ConnectionHold { side: 'logical'|'physical'; id: string; pointerId: number; clientX: number; clientY: number; handle: HTMLElement; }
 
 @Component({
-  selector: 'daca-mapping-graph', standalone: true, changeDetection: ChangeDetectionStrategy.OnPush,
+  selector: 'daca-mapping-graph', standalone: true, imports:[CatalogObjectBrowserComponent],changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="mapping-graph" [class.is-fullscreen]="fullscreen()" aria-labelledby="mapping-graph-title" (keydown.escape)="graphEscape($event)">
       <header><div><p class="daca-eyebrow">Grafischer Modus</p><h2 id="mapping-graph-title">{{ canvasTitle() }}</h2></div><div class="graph-legend" aria-label="Legende"><span><i class="is-valid"></i> Gültig</span><span><i class="is-review"></i> Prüfen</span><span><i class="is-broken"></i> Gebrochen</span></div></header>
       <p class="graph-instruction">Ein logisches oder physisches Feld kurz gedrückt halten, dann den roten Punkt mit Linie auf ein Feld der Gegenseite ziehen. Blaue Endpunkte zeigen die Verbindung. Alternativ Felder per Klick verbinden. Karten am Kopf ziehen oder mit Pfeiltasten verschieben. Linienenden lassen sich auf andere Felder desselben Modells ziehen. Rechtsklick oder Umschalt+F10 öffnet Aktionen für Karten und Linien. <strong>1:1 · wird repräsentiert durch</strong> (Gegenrichtung: „abgeleitet aus“).</p>
+      <p class="graph-instruction canvas-save-hint">Kartenpositionen gelten für alle. Data Owner und Data Stewards übernehmen eine neue Anordnung mit «Entwurf speichern».</p>
       <div class="canvas-viewport">
       <div class="canvas-tools" role="group" aria-label="Canvas-Ansicht">
         <button class="canvas-print" type="button" aria-label="Canvas drucken" title="Canvas mit Titel drucken" [disabled]="printing()" (click)="printCanvas()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V3h10v5M7 17H4V9h16v8h-3M7 14h10v7H7zM16 11h1" /></svg></button>
@@ -55,8 +57,10 @@ interface ConnectionHold { side: 'logical'|'physical'; id: string; pointerId: nu
         <label>Physisches Linienende<select aria-label="Physisches Linienende" [disabled]="!canManage()" [value]="opened.columnId" (change)="rewireFromMenu('physical',$any($event.target).value,$any($event.target))">@for(column of edgeMenuColumns();track column.id){<option [value]="column.id" [selected]="column.id===opened.columnId">{{ column.name }}</option>}</select></label>
         <button type="button" class="is-danger" [disabled]="!canManage()" (click)="deleteEdge()">Beziehung löschen</button>
         <span class="menu-hint">Änderungen an Typ, Regel und Linienenden mit „Entwurf speichern“ sichern. Sie werden nicht automatisch validiert.</span>
+        @for(type of objectKinds;track type.id){<button type="button" (click)="openObjectBrowser(type.id)">{{type.label}}</button>}
       </div>}}
       @if(canvasMenu();as position){<div class="field-context-menu canvas-context-menu" role="menu" aria-label="Canvas-Aktionen" [style.left.px]="position.x" [style.top.px]="position.y">
+        @for(type of objectKinds;track type.id){<button type="button" role="menuitem" (click)="openObjectBrowser(type.id)">{{type.label}}</button>}
         @if(canManage()){<button type="button" role="menuitem" (click)="requestRepresentation()">Neue physische Repräsentation</button>}
         @if(position.logical){
           @if(facade.model()?.dataDomain?.id){<a role="menuitem" [href]="'/domains/'+facade.model()!.dataDomain.id" target="_blank" rel="noopener" (click)="closeMenu()">Zugehörige Domäne anzeigen</a>}
@@ -64,6 +68,7 @@ interface ConnectionHold { side: 'logical'|'physical'; id: string; pointerId: nu
         }
       </div>}
       @if(representationMenu();as position){<div class="field-context-menu representation-context-menu" role="menu" aria-label="Darstellungsaktionen der physischen Repräsentation" [style.left.px]="position.x" [style.top.px]="position.y">
+        @for(type of objectKinds;track type.id){<button type="button" role="menuitem" (click)="openObjectBrowser(type.id)">{{type.label}}</button>}
         @for(domain of physicalDomains(position.tableId);track domain.id){<a role="menuitem" [href]="'/domains/'+domain.id" target="_blank" rel="noopener" (click)="closeMenu()">Zugehörige Domäne anzeigen@if(physicalDomains(position.tableId).length>1){: {{ domain.displayName }}}</a>}
         @if(!physicalDomains(position.tableId).length&&canManage()&&physicalDomainAssignable(position.tableId)){<button type="button" role="menuitem" (click)="requestDomain(position.tableId)">Domäne zuordnen</button>}
         <button type="button" role="menuitem" class="is-danger" (click)="hideRepresentation(position.tableId)">Darstellung der physischen Repräsentation entfernen</button><span class="menu-hint">Bindungen und Mappings bleiben erhalten.</span>
@@ -71,11 +76,13 @@ interface ConnectionHold { side: 'logical'|'physical'; id: string; pointerId: nu
       @if(menu();as opened){<div class="field-context-menu" role="menu" [style.left.px]="opened.x" [style.top.px]="opened.y" [attr.aria-label]="'Aktionen für '+(menuField()?.name || 'logisches Feld')">
         <strong>{{ menuField()?.name }}</strong>
         <button type="button" role="menuitem" (click)="editField(opened.fieldId)">Feldmerkmale bearbeiten</button>
-        <button type="button" role="menuitem" (click)="addConnection(opened.fieldId)">Verbindung hinzufügen</button>
-        @for(link of menuLinks();track link.mapping.id+link.columnId){@if(link.mapping.logicalFieldVersionIds.length===1){<button type="button" role="menuitem" (click)="disconnect.emit({mappingId:link.mapping.id,columnId:link.columnId});closeMenu()">Verbindung zu {{ link.label }} entfernen</button>}@else{<button type="button" role="menuitem" (click)="facade.openEdit(link.mapping.id);closeMenu()">Gemeinsame Zuordnung bearbeiten</button>}}
+        <button type="button" role="menuitem" [disabled]="!canManage()" (click)="addConnection(opened.fieldId)">Verbindung hinzufügen</button>
+        @for(link of menuLinks();track link.mapping.id+link.columnId){@if(link.mapping.logicalFieldVersionIds.length===1){<button type="button" role="menuitem" [disabled]="!canManage()" (click)="disconnect.emit({mappingId:link.mapping.id,columnId:link.columnId});closeMenu()">Verbindung zu {{ link.label }} entfernen</button>}@else{<button type="button" role="menuitem" [disabled]="!canManage()" (click)="facade.openEdit(link.mapping.id);closeMenu()">Gemeinsame Zuordnung bearbeiten</button>}}
         @if(menuLinks().length===0){<span class="menu-hint">Keine Verbindung vorhanden</span>}
-        <button type="button" role="menuitem" class="is-danger" [disabled]="facade.logicalFields().length<=1" (click)="deleteField.emit(opened.fieldId);closeMenu()">Logisches Feld entfernen</button>
+        <button type="button" role="menuitem" class="is-danger" [disabled]="!canManage()||facade.logicalFields().length<=1" (click)="deleteField.emit(opened.fieldId);closeMenu()">Logisches Feld entfernen</button>
+        @for(type of objectKinds;track type.id){<button type="button" role="menuitem" (click)="openObjectBrowser(type.id)">{{type.label}}</button>}
       </div>}
+      @if(objectBrowser();as kind){<daca-catalog-object-browser [initialKind]="kind" (closed)="closeObjectBrowser()"/>}
     </section>
   `,
   styles: [`
@@ -92,6 +99,10 @@ interface ConnectionHold { side: 'logical'|'physical'; id: string; pointerId: nu
   `],
 })
 export class MappingGraphComponent {
+  readonly objectBrowser=signal<CatalogObjectKind|null>(null);
+  readonly objectKinds:readonly {id:CatalogObjectKind;label:string}[]=[{id:'term',label:'Term suchen und öffnen'},{id:'domain',label:'Domäne suchen und öffnen'},{id:'logical',label:'Logisches Modell suchen und öffnen'},{id:'physical',label:'Physisches Modell suchen und öffnen'}];
+  openObjectBrowser(kind:CatalogObjectKind):void{this.closeMenu();this.objectBrowser.set(kind);}
+  closeObjectBrowser():void{this.objectBrowser.set(null);queueMicrotask(()=>this.host.nativeElement.querySelector<HTMLElement>('.graph-scroll')?.focus());}
   readonly facade=inject(MappingDraftFacade);
   readonly canManage=input(false);
   readonly responsibleUserId=input('');
@@ -245,7 +256,7 @@ export class MappingGraphComponent {
   readonly draggingNode=signal<string|null>(null);
   readonly representationMenu=signal<{tableId:string;x:number;y:number}|null>(null);
   private readonly nodeHeights=signal<ReadonlyMap<string,number>>(new Map());
-  private drag:{key:string;pointerId:number;startX:number;startY:number;position:CanvasNodePosition;scrollX:number;scrollY:number;handle:HTMLElement;moved:boolean}|null=null;
+  private drag:{key:string;pointerId:number;startX:number;startY:number;position:CanvasNodePosition;positions:ReadonlyMap<string,CanvasNodePosition>;scrollX:number;scrollY:number;handle:HTMLElement;moved:boolean}|null=null;
   private suppressedClickNode:string|null=null;
   readonly visibleColumnIds=computed(()=>new Set(this.facade.visibleRepresentations().flatMap((item)=>item.table.columns.map((column)=>column.id))));
   nodePosition(key:string):CanvasNodePosition{
@@ -265,10 +276,10 @@ export class MappingGraphComponent {
     return{width,height};
   });
   startNodeDrag(key:string,event:PointerEvent):void{
-    if(event.button!==0)return;
+    if(event.button!==0||!this.canManage()||this.facade.representations().some((item)=>key==='physical:'+item.table.id&&item.preview))return;
     const handle=event.currentTarget as HTMLElement,scroll=this.host.nativeElement.querySelector('.graph-scroll')!;
     this.closeMenu();this.facade.cancelConnection();this.suppressedClickNode=null;handle.focus({preventScroll:true});event.preventDefault();event.stopPropagation();
-    this.drag={key,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,position:this.nodePosition(key),scrollX:scroll.scrollLeft,scrollY:scroll.scrollTop,handle,moved:false};
+    this.drag={key,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,position:this.nodePosition(key),positions:this.facade.canvasNodePositions(),scrollX:scroll.scrollLeft,scrollY:scroll.scrollTop,handle,moved:false};
     try{handle.setPointerCapture?.(event.pointerId);}catch{/* Synthetic events have no active pointer. */}
   }
   @HostListener('document:pointermove',['$event']) dragNode(event:PointerEvent):void{
@@ -285,14 +296,15 @@ export class MappingGraphComponent {
     this.scheduleEndpointRefresh();
   }
   @HostListener('document:pointerup',['$event']) finishNodeDrag(event:PointerEvent):void{if(this.finishConnection(event))return;if(this.endpointDrag()){this.finishEndpointDrag(event);return;}if(!this.drag||event.pointerId!==this.drag.pointerId)return;const drag=this.drag;this.drag=null;this.draggingNode.set(null);if(drag.moved)this.suppressedClickNode=drag.key;try{if(drag.handle.hasPointerCapture?.(event.pointerId))drag.handle.releasePointerCapture(event.pointerId);}catch{}this.scheduleEndpointRefresh();}
-  @HostListener('document:pointercancel',['$event']) cancelNodeDrag(event:PointerEvent):void{if(this.connectionHold?.pointerId===event.pointerId){this.cancelConnectionDrag();return;}if(this.endpointDrag()){this.endpointPointerCancel(event);return;}if(this.drag?.pointerId===event.pointerId){this.facade.moveCanvasNode(this.drag.key,this.drag.position);this.drag=null;this.draggingNode.set(null);this.scheduleEndpointRefresh();}}
+  @HostListener('document:pointercancel',['$event']) cancelNodeDrag(event:PointerEvent):void{if(this.connectionHold?.pointerId===event.pointerId){this.cancelConnectionDrag();return;}if(this.endpointDrag()){this.endpointPointerCancel(event);return;}if(this.drag?.pointerId===event.pointerId){this.facade.canvasNodePositions.set(this.drag.positions);this.drag=null;this.draggingNode.set(null);this.scheduleEndpointRefresh();}}
   moveNodeByKeyboard(key:string,event:KeyboardEvent):void{
+    if(!this.canManage()||this.facade.representations().some((item)=>key==='physical:'+item.table.id&&item.preview))return;
     const direction:Record<string,[number,number]>={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
     const delta=direction[event.key];if(!delta)return;event.preventDefault();event.stopPropagation();const position=this.nodePosition(key),step=event.shiftKey?40:10;
     this.facade.moveCanvasNode(key,{x:position.x+delta[0]*step,y:position.y+delta[1]*step});this.scheduleEndpointRefresh();
   }
   representationClicked(tableId:string,event:MouseEvent):void{if((event.target as HTMLElement).closest('.column-endpoint'))return;if(this.suppressedClickNode==='physical:'+tableId){this.suppressedClickNode=null;return;}this.openRepresentationMenu(tableId,event);}
-  openRepresentationMenu(tableId:string,event:MouseEvent):void{event.preventDefault();event.stopPropagation();this.closeMenu();const rect=(event.currentTarget as HTMLElement).getBoundingClientRect();this.menuTrigger=event.currentTarget as HTMLElement;this.representationMenu.set({tableId,x:Math.max(8,Math.min(event.clientX||rect.left,window.innerWidth-298)),y:Math.max(8,Math.min(event.clientY||rect.top+30,window.innerHeight-130))});queueMicrotask(()=>this.host.nativeElement.querySelector<HTMLButtonElement>('.representation-context-menu [role="menuitem"]')?.focus());}
+  openRepresentationMenu(tableId:string,event:MouseEvent):void{event.preventDefault();event.stopPropagation();this.closeMenu();const rect=(event.currentTarget as HTMLElement).getBoundingClientRect();this.menuTrigger=event.currentTarget as HTMLElement;this.representationMenu.set({tableId,x:Math.max(8,Math.min(event.clientX||rect.left,window.innerWidth-298)),y:Math.max(8,Math.min(event.clientY||rect.top+30,window.innerHeight-420))});queueMicrotask(()=>this.host.nativeElement.querySelector<HTMLButtonElement>('.representation-context-menu [role="menuitem"]')?.focus());}
   representationKeydown(tableId:string,event:KeyboardEvent):void{if((event.target as HTMLElement).closest('.column-endpoint'))return;if((event.key==='F10'&&event.shiftKey)||event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();const rect=(event.currentTarget as HTMLElement).getBoundingClientRect();this.openRepresentationMenu(tableId,{preventDefault:()=>{},stopPropagation:()=>{},clientX:rect.left,clientY:rect.top+30,currentTarget:event.currentTarget} as MouseEvent);}}
   hideRepresentation(tableId:string):void{this.facade.hideRepresentation(tableId);this.closeMenu();this.host.nativeElement.querySelector<HTMLElement>('.graph-scroll')?.focus({preventScroll:true});}
   private scheduleEndpointRefresh():void{queueMicrotask(()=>this.refreshEndpointPositions());}
@@ -313,16 +325,16 @@ export class MappingGraphComponent {
   openCanvasMenu(event:MouseEvent):void{
     const target=event.target as HTMLElement,logical=Boolean(target.closest('.logical-node>header'));
     if(target.closest('.mapping-edge,.edge-handles'))return;
-    if((!this.canManage()&&!logical)||(!logical&&target.closest('.logical-node,.physical-nodes'))||target.closest('.field-endpoint,.column-endpoint'))return;
+    if((!logical&&target.closest('.logical-node,.physical-nodes'))||target.closest('.field-endpoint,.column-endpoint'))return;
     event.preventDefault();event.stopPropagation();this.closeMenu();this.menuTrigger=target.closest<HTMLElement>('[tabindex]');
-    this.canvasMenu.set({logical,x:Math.max(8,Math.min(event.clientX,window.innerWidth-298)),y:Math.max(8,Math.min(event.clientY,window.innerHeight-160))});queueMicrotask(()=>this.host.nativeElement.querySelector<HTMLElement>('.canvas-context-menu [role="menuitem"]')?.focus());
+    this.canvasMenu.set({logical,x:Math.max(8,Math.min(event.clientX,window.innerWidth-298)),y:Math.max(8,Math.min(event.clientY,window.innerHeight-420))});queueMicrotask(()=>this.host.nativeElement.querySelector<HTMLElement>('.canvas-context-menu [role="menuitem"]')?.focus());
   }
   canvasKeydown(event:KeyboardEvent):void{
     if(event.key!=='F10'||!event.shiftKey)return;
     const target=event.target as HTMLElement;if(target.closest('.field-endpoint,.column-endpoint,.mapping-edge,.edge-handles'))return;
-    const logical=Boolean(target.closest('.logical-node>header'));if(!this.canManage()&&!logical)return;
+    const logical=Boolean(target.closest('.logical-node>header'));
     event.preventDefault();this.closeMenu();const rect=target.getBoundingClientRect();this.menuTrigger=target;
-    this.canvasMenu.set({logical,x:Math.max(8,Math.min(rect.left,window.innerWidth-298)),y:Math.max(8,Math.min(rect.bottom,window.innerHeight-160))});queueMicrotask(()=>this.host.nativeElement.querySelector<HTMLElement>('.canvas-context-menu [role="menuitem"]')?.focus());
+    this.canvasMenu.set({logical,x:Math.max(8,Math.min(rect.left,window.innerWidth-298)),y:Math.max(8,Math.min(rect.bottom,window.innerHeight-420))});queueMicrotask(()=>this.host.nativeElement.querySelector<HTMLElement>('.canvas-context-menu [role="menuitem"]')?.focus());
   }
   requestRepresentation():void{const trigger=this.menuTrigger;this.closeMenu();this.addRepresentation.emit(trigger);}
 
@@ -347,9 +359,9 @@ export class MappingGraphComponent {
   fieldAriaLabel(field:LogicalField):string{return `Logisches Feld ${field.name}, ${field.dataType}, Status ${this.fieldStatusLabel(field.id)}. ${this.canManage()?'Aktivieren, dann physische Spalte wählen. Umschalt+F10 öffnet Aktionen.':'Aktivieren, um Feldmerkmale anzuzeigen.'}`;}
   fieldPointerDown(fieldId:string,event:PointerEvent):void{this.startConnectionHold('logical',fieldId,event);}
   fieldClicked(fieldId:string,target:EventTarget|null):void{if(this.suppressConnectionClick)return;if(this.canManage())this.facade.beginConnection(fieldId,target);else this.facade.selectField(fieldId);this.fieldActivated.emit(fieldId);}
-  fieldKeydown(fieldId:string,event:KeyboardEvent):void{if(!this.canManage()||!(event.key==='F10'&&event.shiftKey))return;event.preventDefault();const rect=(event.currentTarget as HTMLElement).getBoundingClientRect();this.showMenu(fieldId,rect.left,rect.bottom);}
-  openFieldMenu(fieldId:string,event:MouseEvent):void{this.cancelConnectionDrag();if(!this.canManage())return;event.preventDefault();event.stopPropagation();this.facade.cancelConnection();this.facade.selectField(fieldId);this.showMenu(fieldId,event.clientX,event.clientY);}
-  private showMenu(fieldId:string,x:number,y:number):void{this.closeMenu();this.menu.set({fieldId,x:Math.max(8,Math.min(x,window.innerWidth-298)),y:Math.max(8,Math.min(y,window.innerHeight-260))});}
+  fieldKeydown(fieldId:string,event:KeyboardEvent):void{if(!(event.key==='F10'&&event.shiftKey))return;event.preventDefault();const rect=(event.currentTarget as HTMLElement).getBoundingClientRect();this.showMenu(fieldId,rect.left,rect.bottom);}
+  openFieldMenu(fieldId:string,event:MouseEvent):void{this.cancelConnectionDrag();event.preventDefault();event.stopPropagation();this.facade.cancelConnection();this.facade.selectField(fieldId);this.showMenu(fieldId,event.clientX,event.clientY);}
+  private showMenu(fieldId:string,x:number,y:number):void{this.closeMenu();this.menu.set({fieldId,x:Math.max(8,Math.min(x,window.innerWidth-298)),y:Math.max(8,Math.min(y,window.innerHeight-420))});}
   editField(fieldId:string):void{this.facade.selectField(fieldId);this.closeMenu();this.fieldActivated.emit(fieldId);}
   addConnection(fieldId:string):void{this.facade.beginConnection(fieldId);this.closeMenu();}
   typeConflict(columnId:string):boolean{return this.facade.activeMappings().some((mapping)=>mapping.physicalColumnIds.includes(columnId)&&mapping.validationResult?.issues.some((issue)=>issue.code==='type_mismatch'&&(!issue.physicalColumnId||issue.physicalColumnId===columnId)));}

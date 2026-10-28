@@ -829,7 +829,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
     duration: '8–12 Minuten',
     difficulty: 'Einfach',
     systems: ['DaCa', 'Catalog API', 'PostgreSQL', 'JSON-LD'],
-    roles: [{ name: 'Sandro Wenger', responsibility: 'Data Owner · beantragt die Domain und ordnet das Produkt ein' }, { name: 'Sibilla Micheli', responsibility: 'Domain Register Owner · prüft und genehmigt den Antrag' }],
+    roles: [{ name: 'Sandro Wenger', responsibility: 'Data Owner · beantragt die Domain und ordnet das Produkt ein' }, { name: 'Sibilla Micheli', responsibility: 'Zugewiesener Data Owner · prüft und genehmigt den Antrag' }],
     prerequisites: ['Die Demo-Identitäten Sandro und Sibilla sind verfügbar.', 'Das synthetische Fahrzeugprodukt wurde vorbereitet.'],
     outcome: 'Die aktive Domain «Verteidigung» ist versioniert und das Produkt ist mehreren Fachdomains zugeordnet; Organisation und Keywords bleiben unverändert.',
     repeatability: 'Die PoC-Fixture kann serverseitig idempotent vorbereitet und auf ihre synthetischen Artefakte zurückgesetzt werden.',

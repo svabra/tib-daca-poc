@@ -13,6 +13,10 @@ describe('DaCa release history', () => {
     expect(fixture.nativeElement.textContent).toContain('V0.1.28');
     expect(fixture.nativeElement.textContent).toContain('Strukturinventare importieren und verwalten');
     expect(fixture.nativeElement.textContent).toContain('V0.1.29');
+    const releases = dacaReleaseHistory('catalog', 'de');
+    expect(releases[0]?.version).toBe(DACA_VERSION);
+    expect(releases.find(release => release.version === '0.1.32')?.features.some(feature => feature.title === 'AdA-Import-Journey wiederholen')).toBe(true);
+    expect(releases[0]?.features.some(feature => feature.title === 'AdA-Import-Journey wiederholen')).toBe(false);
     const previous = dacaReleaseHistory('catalog', 'de').find(release => release.version === '0.1.30');
     expect(previous?.features).toHaveLength(6);
     expect(previous?.features[0].title).toBe('Physische Modelle aus CSV laden');

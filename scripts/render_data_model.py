@@ -36,12 +36,13 @@ class ContextSpec:
 
 
 CATALOG_TABLES = {
+    "organization_steward_mandates": "Explicit LDSD department and ALDS office mandates, with optional named deputy, active state, revision and appointment decision reference; operator provisioning appends audit evidence and seeds preserve changes/revocations.",
     "asset_mapping_logical_fields": "Ordered many-to-many references from one immutable mapping version to logical field versions.",
     "asset_mapping_physical_columns": "Ordered many-to-many references from one immutable mapping version to physical snapshot columns.",
     "asset_mapping_versions": "Immutable revisions of DaCa logical-to-physical mappings, including classification, validation and drift evidence.",
     "asset_mappings": "Versioned aggregate roots for mappings between a logical model and a physical source.",
-    "data_model_role_assignments": "Organization-scoped Data Owner, delegated deputy and Data Steward assignments used only by the modeling module.",
-    "catalog_object_responsibilities": "Additional explicit person-to-domain, model, physical source/table or product responsibility links; descriptive, never an authorization grant.",
+    "data_model_role_assignments": "Organization-scoped Data Owner, delegated deputy Data Owner, Data Steward and deputy Data Steward assignments used by legacy modeling guards; these are not LDSD/ALDS mandates or universal object ownership.",
+    "catalog_object_responsibilities": "Explicit person-to-object roles, including deputy stewardship and independent term ownership. Domain handover revokes old Owner rows and pins the office (or explicit lack of office) with domain-handover provenance. Model, source/table and product modules retain their established checks.",
     "physical_domain_assignments": "Explicit current domain memberships keyed by physical source and stable table/object key, independent of imported snapshots and field mappings; audited editor assignments append memberships and preserve existing domains.",
     "role_change_events": "Append-only, sequential audit of organization roles, direct object responsibilities and domain/model/product owner changes; includes a migration baseline.",
     "dcat_catalog_versions": "Immutable multilingual DCAT catalog metadata revisions.",
@@ -66,6 +67,8 @@ CATALOG_TABLES = {
     "logical_model_assistance_provenance": "Immutable version-bound DeepL and TERMDAT provenance with provider/hash checks; canonical machine_translated, accepted_suggestion, edited and source_import origins coexist with historical machine/accepted aliases, which normalize only at the API boundary.",
     "logical_model_identifier_reservations": "Case-folded catalog-wide logical-model identifier reservations, atomically owned by one logical-model root.",
     "logical_model_representations": "Immutable, content-hashed membership binding a logical model root to an exact physical snapshot and object, independent of field mappings.",
+    "mapping_canvas_layouts": "One shared presentation per logical-model root with independent optimistic revision, JSON node positions, updating actor/time and append-only layout-saved audit evidence; positions never change model content or source access.",
+    "semantic_graph_states": "Shared revision-checked term/domain and organization-scoped concept layouts (organizations:<registry ID>, with null domain_id) with validated positions, hidden-node and additional-reference JSON plus domain related/partOf/interfacesWith/overlapsWith links; organization layout rows never store governed relationship edits; presentation does not change governed assignments. Updating person/time and atomic append-only graph-saved audit preserve traceability; glossary approval and access rights remain separate.",
     "logical_model_reviews": "Immutable domain-owner review snapshots, decisions and successor-version references for submitted logical models.",
     "logical_mapping_inconsistencies": "Current owner decisions for logical fields without physical counterparts after a model has been physically linked; accepted findings remain quality errors until resolved.",
     "physical_columns": "Snapshot-bound PostgreSQL, Parquet or CSV inventory fields with normalized types, stable source-relative keys and DaCa URNs; import_metadata preserves original CSV records and unknown nullability.",

@@ -138,7 +138,11 @@ ActorDep = Annotated[str, Depends(require_modeling_actor)]
 def _assignments(session: Session, actor: str) -> list[DataModelRoleAssignment]:
     return list(
         session.scalars(
-            select(DataModelRoleAssignment).where(
+            select(DataModelRoleAssignment).join(DemoUser, DemoUser.id == DataModelRoleAssignment.user_id)
+            .join(AdministrativeOrganization, AdministrativeOrganization.id == DataModelRoleAssignment.organization_id).where(
+                DemoUser.active.is_(True),
+                AdministrativeOrganization.active.is_(True),
+                AdministrativeOrganization.department_code == DataModelRoleAssignment.department_code,
                 DataModelRoleAssignment.user_id == actor,
                 DataModelRoleAssignment.active.is_(True),
             )
@@ -191,6 +195,16 @@ def _require_scope(
     *,
     roles: set[str] | None = None,
 ) -> DataModelRoleAssignment:
+    # Deputy stewards share operational scope capabilities. Owner deputies must
+    # be checked against the concrete object by its decision guard, not promoted
+    # to every owner action throughout an organization.
+    if roles is not None:
+        roles = set(roles)
+        if "data_steward" in roles:
+            roles.add("deputy_data_steward")
+    organization = session.get(AdministrativeOrganization, organization_id)
+    if organization is None or not organization.active or organization.department_code != department_code:
+        raise HTTPException(403, "The organization scope is inactive or inconsistent")
     row = next(
         (
             assignment
@@ -255,6 +269,7 @@ def _require_publish_right(session: Session, actor: str, version: LogicalModelVe
             (item.role == "data_owner" and actor == dataset.data_owner_user_id)
             or (
                 item.role == "deputy_data_owner"
+                and actor == dataset.deputy_owner_user_id
                 and item.delegated_owner_user_id == dataset.data_owner_user_id
             )
         )

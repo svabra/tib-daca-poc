@@ -96,7 +96,7 @@ class DataModelRoleResponse(ApiModel):
     department_code: str
     organization_id: str
     organization_name: str
-    role: Literal["data_owner", "deputy_data_owner", "data_steward"]
+    role: Literal["data_owner", "deputy_data_owner", "data_steward", "deputy_data_steward"]
     delegated_owner_user_id: str | None = None
     primary_organization_id: str | None = None
     sort_rank: int = 2

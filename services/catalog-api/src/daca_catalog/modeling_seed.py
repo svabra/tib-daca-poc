@@ -29,6 +29,7 @@ from .models import (
     Domain,
     DomainLocalization,
     FederalPersonMembership,
+    GlossaryTerm,
     I14yCodeListEntry,
     I14yConcept,
     LogicalEntityVersion,
@@ -772,6 +773,9 @@ def seed_modeling_catalog(session: Session) -> None:
     # scenario seed self-healing so downgrade/re-upgrade/seed remains idempotent.
     _seed_scenarios(session)
     _seed_responsibility_examples(session)
+    from .object_governance import ensure_term_owners
+    for term_id in session.scalars(select(GlossaryTerm.id)):
+        ensure_term_owners(session, term_id)
     _retire_duplicate_source_instances(session)
     if session.get(SeedMarker, MODELING_SEED_NAME) is None:
         session.add(SeedMarker(name=MODELING_SEED_NAME, applied_at=_NOW))

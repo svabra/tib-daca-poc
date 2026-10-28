@@ -24,6 +24,7 @@ from .models import (
     WorkflowTask,
     utc_now,
 )
+from .object_governance import product_editors, product_owners
 from .policy import ProjectionResult, project_to_postgresql
 from .schemas import (
     AccessRequestFulfillment,
@@ -214,7 +215,7 @@ def can_view_private_product(session: Session, product: DataProduct, actor: str 
         return True
     if actor is None:
         return False
-    if product.owner_user_id == actor:
+    if actor in product_editors(session, product):
         return True
     return (
         session.scalar(
@@ -290,7 +291,7 @@ def create_renewal_submission(
     actor: str,
 ) -> GovernanceSubmission:
     """Create four-eyes evidence while leaving the active product and policy untouched."""
-    if product.owner_user_id != actor:
+    if actor not in product_owners(session, product):
         raise HTTPException(403, "Only the responsible data owner may submit governance")
     if access_request.request_kind != "renewal" or access_request.renewal_context is None:
         raise HTTPException(409, "Only a linked renewal can use renewal governance")
@@ -446,7 +447,7 @@ def create_submission(
     actor: str,
     resolved_grants: list[dict[str, Any]],
 ) -> GovernanceSubmission:
-    if product.owner_user_id != actor:
+    if actor not in product_owners(session, product):
         raise HTTPException(403, "Only the responsible data owner may submit governance")
     quality_task_open = session.scalar(
         select(WorkflowTask.id).where(
@@ -657,6 +658,14 @@ def decide_submission(
         raise HTTPException(403, "Only the assigned publication approver may decide")
     if actor == submission.owner_user_id:
         raise HTTPException(403, "The data owner cannot approve their own publication")
+    controller = session.get(DemoUser, actor)
+    product = session.get(DataProduct, submission.data_product_id)
+    if not is_active_publication_approver(controller):
+        raise HTTPException(403, "The assigned publication approver is no longer eligible")
+    if product is None:
+        raise HTTPException(404, "Data product not found")
+    if product.control_person_user_id != actor or actor in product_owners(session, product):
+        raise HTTPException(403, "The current independent control person must decide")
     policy = session.get(PolicyRevision, submission.policy_revision_id)
     current = latest_policy(session, submission.data_product_id)
     if policy is None or current is None or current.id != policy.id:

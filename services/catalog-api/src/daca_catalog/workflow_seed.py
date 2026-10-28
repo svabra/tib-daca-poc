@@ -228,7 +228,7 @@ DEMO_USERS = (
         "email": "sibilla.micheli@vbs.admin.ch",
         "phone": "+41 58 000 00 61",
         "avatar_url": None,
-        "roles": ["data_owner", "domain_register_owner", "data_consumer"],
+        "roles": ["data_owner", "data_consumer"],
         "selectable": True,
     },
     {

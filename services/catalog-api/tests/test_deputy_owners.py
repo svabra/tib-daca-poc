@@ -95,10 +95,15 @@ def test_seed_preserves_valid_noncanonical_deputy_on_imported_product(client, se
         assert product.deputy_owner_user_id == "ariane.keller"
 
 
-def test_deputy_field_does_not_grant_product_owner_permissions(client):
+def test_named_deputy_has_object_permissions_but_unrelated_owner_does_not(client):
     response = client.get(
         "/api/v1/data-products/11111111-1111-4111-8111-111111111111/metadata-deliveries",
         headers={"X-DaCa-User": "joel.ruod"},
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 200, response.text
+    unrelated = client.get(
+        "/api/v1/data-products/11111111-1111-4111-8111-111111111111/metadata-deliveries",
+        headers={"X-DaCa-User": "noemie.rochat"},
+    )
+    assert unrelated.status_code == 403

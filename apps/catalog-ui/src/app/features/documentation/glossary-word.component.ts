@@ -102,12 +102,13 @@ export class GlossaryWordComponent implements OnDestroy {
 export class RoleTermComponent {
   private readonly preferences = inject(UserPreferencesService);
   readonly role = input.required<ResponsibilityRole>();
-  readonly lookup = computed(() => ({ data_owner: 'Data Owner', deputy_data_owner: 'Stv. Data Owner', data_steward: 'Data Steward' })[this.role()]);
+  readonly lookup = computed(() => ({ data_owner: 'Data Owner', deputy_data_owner: 'Stv. Data Owner', data_steward: 'Data Steward', deputy_data_steward:'Stv. Data Steward' })[this.role()]);
   readonly label = computed(() => {
     const labels = {
       data_owner: ['Data Owner', 'Data Owner', 'Data Owner', 'Data Owner'],
       deputy_data_owner: ['Stv. Data Owner', 'Data Owner suppléant', 'Sostituto Data Owner', 'Deputy Data Owner'],
       data_steward: ['Data Steward', 'Data Steward', 'Data Steward', 'Data Steward'],
+      deputy_data_steward: ['Stv. Data Steward', 'Data Steward suppléant', 'Sostituto Data Steward', 'Deputy Data Steward'],
     } as const;
     return labels[this.role()][({ de: 0, fr: 1, it: 2, en: 3 })[this.preferences.language()]];
   });

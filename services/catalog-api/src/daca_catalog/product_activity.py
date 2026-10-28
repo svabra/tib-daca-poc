@@ -16,6 +16,7 @@ from .models import (
     PolicyRevision,
     ServiceLevelRevision,
 )
+from .object_governance import product_owners
 from .schemas import (
     ProductActivityActor,
     ProductActivityFact,
@@ -60,7 +61,7 @@ def is_privileged_product_auditor(
 ) -> bool:
     if actor is None:
         return False
-    if product.owner_user_id == actor:
+    if actor in product_owners(session, product):
         return True
     return bool(
         session.scalar(
@@ -78,6 +79,7 @@ def is_privileged_product_auditor(
 def _can_view_service_level_event(
     event: AuditEvent,
     *,
+    session: Session,
     product: DataProduct,
     actor: str | None,
     revision_by_number: dict[int, ServiceLevelRevision],
@@ -92,7 +94,7 @@ def _can_view_service_level_event(
         return True
     if actor is None:
         return False
-    if actor == product.owner_user_id:
+    if actor in product_owners(session, product):
         return True
     row = revision_by_number.get(event.revision or -1)
     return row is not None and row.control_person_user_id == actor
@@ -179,6 +181,7 @@ def product_activity(
         for event in events
         if _can_view_service_level_event(
             event,
+            session=session,
             product=product,
             actor=actor,
             revision_by_number=service_level_by_revision,
@@ -252,7 +255,7 @@ def product_activity(
             event_privileged = bool(
                 actor is not None
                 and (
-                    actor == product.owner_user_id
+                    actor in product_owners(session, product)
                     or (row is not None and actor == row.control_person_user_id)
                 )
             )

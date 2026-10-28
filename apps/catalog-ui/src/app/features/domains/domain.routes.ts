@@ -1,8 +1,10 @@
-import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router, Routes } from '@angular/router';
 
 export const DOMAIN_ROUTES: Routes = [
-  { path: 'domains', pathMatch: 'full', loadComponent: () => import('./domains-glossary.component').then((m) => m.DomainsGlossaryComponent), data: { preload: true, semanticTab: 'domains' }, title: 'Domänen | DaCa' },
-  { path: 'domains/terminology', pathMatch: 'full', loadComponent: () => import('./domains-glossary.component').then((m) => m.DomainsGlossaryComponent), data: { semanticTab: 'terms' }, title: 'Terminology | DaCa' },
+  { path:'domains/network', pathMatch:'full', redirectTo:({queryParams})=>inject(Router).createUrlTree(['/domains'],{queryParams:{...queryParams,view:'network'}}) },
+  { path: 'domains', pathMatch: 'full', runGuardsAndResolvers:(from,to)=>from.queryParamMap.get('view')!==to.queryParamMap.get('view'), canDeactivate:[(component:{canDeactivate:()=>boolean})=>component.canDeactivate()], loadComponent: () => import('./domains-glossary.component').then((m) => m.DomainsGlossaryComponent), data: { preload: true, semanticTab: 'domains' }, title: 'Domänen | DaCa' },
+  { path: 'domains/terminology', pathMatch: 'full', canDeactivate:[(component:{canDeactivate:()=>boolean})=>component.canDeactivate()], loadComponent: () => import('./domains-glossary.component').then((m) => m.DomainsGlossaryComponent), data: { semanticTab: 'terms' }, title: 'Terminology | DaCa' },
   { path: 'domains/glossary', pathMatch: 'full', redirectTo: 'domains/terminology' },
   { path: 'domains/concepts', pathMatch: 'full', loadComponent: () => import('./i14y-concepts.component').then((m) => m.I14yConceptsComponent), title: 'I14Y-Konzepte | DaCa' },
   { path: 'domains/themes', pathMatch: 'full', loadComponent: () => import('./i14y-themes.component').then((m) => m.I14yThemesComponent), title: 'I14Y-Themen | DaCa' },

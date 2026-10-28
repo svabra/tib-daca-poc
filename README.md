@@ -1,5 +1,108 @@
 # BIT DaCa
 
+Domains can be handed over through **Domäne abtreten** on their detail page or card menu.
+Current object owners/deputies, office ALDS/deputies and the department LDSD/deputy can assign
+new active people with a reason and explicit confirmation. The handover preserves office
+scope, replaces former owner assignments, reroutes domain-governed reviews and appends audit
+evidence. Terms, models and products retain their independent responsibilities.
+
+Domain detail pages offer **Domäne bearbeiten** for their Data Owner/deputy and the explicitly
+appointed office ALDS/deputy. Names/descriptions are edited in the existing languages; Save
+checks the revision and appends audit evidence. ALDS metadata PATCH cannot change ownership or retire a domain; the separate, audited
+handover action permits scoped ALDS/LDSD ownership transfer. Migration `0044_office_alds_mandates` stores distinct LDSD/ALDS mandates and named
+deputies. [Governance information](docs/object-governance-and-raci.md) records the confirmed
+people/scopes. No general Steward profile implies an ALDS mandate.
+
+Domain and term card searches include Data Owner and deputy names/IDs. Matching ignores case
+and accents; term ownership is searched independently of the owners of its assigned domains.
+
+**Domänen** now groups **Kacheln / Domänennetz** below its section tab, matching
+Terminologie's **Kacheln / Termnetz** switch. The network is directly addressable at
+`/domains?view=network`; existing `/domains/network` links redirect there. Unsaved graph
+changes are checked before switching views or leaving the section.
+
+The [authorization consistency audit](docs/authorization-consistency-audit.md) records the
+28 October 2026 review against the four object roles. Product edits now require an active
+object assignment, deputies share the owner's product decisions, and publication/model reviews
+recheck current responsibilities. Migration `0043_deputy_steward_role` completes the modeling
+role vocabulary without assigning new people. **Open:** legacy model/source actions still use
+organization-wide rights in places; LDSD/ALDS appointments are now persisted for domain metadata
+but appointment UI and general office configuration remain future work. The audit does not certify full compliance with the new ownership model.
+
+Domain links now support **hat eine fachliche Schnittstelle zu** (`interfacesWith`) and
+**hat Überschneidungen mit** (`overlapsWith`), alongside related/subdomain relationships.
+Right-click a line, select **Verbindungstyp ändern**, apply the draft and **Netz speichern**.
+Both new types are symmetric and retain the existing source-owner checks. Domain, neighboring
+domain and organization term graphs use the same localized relationship labels.
+
+**Terminologie → Termnetz** (`/domains/terminology?view=network`) shows the selected
+organization's active terms and domains. The initial organization follows the current modeling
+area; it can be changed explicitly. Object scopes or the responsible owner's current primary
+membership determine inclusion, independently of term classification. Organization layouts are
+shared with an explicit save; semantic edits retain the existing proposal/approval workflow.
+Term cards now group change, retirement and disabled TERMDAT actions in one **…** menu.
+The initial network follows organization details that arrive after identity startup, while an
+explicit organization choice stays selected. Brief network/gateway failures retry twice;
+authorization failures retain their normal denied result.
+
+Semantic graph connection points appear only on card sides used by visible relationships.
+Holding tolerates small hand movements without shifting the source card; releasing over a
+target's heading or description resolves the target independently of pointer capture. Domain
+ownership failures appear directly in the canvas. Connections remain local until explicitly saved.
+
+Domain cards open through their complete heading, including its padding and status area.
+The existing open/request/edit/retire actions are grouped in a single **…** menu using the
+shared compact context-menu style and the same object permissions. Keyboard navigation,
+Escape, outside-click dismissal and focus restoration follow the source-card menu pattern.
+
+**Information → [Rollen und Zuständigkeiten](docs/object-governance-and-raci.md)** is available at
+`/documentation/static#rollen-zustaendigkeiten`, with a searchable static documentation page and
+the 19 activities of the supplied RACI matrix. Department-specific abbreviations are omitted;
+LDS and ALDS mandates are documented separately from the four object roles.
+
+Migration `0042_object_governance` removes the legacy register role. Domain Data Owners and
+deputies govern their own objects; changes to domain links check the source object's owner and
+preserve unrelated links. Term ownership is stored explicitly, remains independent of later
+domain membership/owner changes, and appears in the responsibility views. Requests route to
+the actual object owners; decisions recheck current assignments. Other metadata modules retain
+their existing scope checks. Organizational LDS/ALDS appointments are described here; this
+change does not introduce an appointment UI.
+
+In term and domain networks, hold a card for 180 ms, then drag the red point onto free canvas
+space to **create** or **search** in a modal. Quick drags still reposition cards. The gesture's
+search inserts a reference/visible card and prepares a local relationship; general context search
+continues to open objects. **Vom Canvas entfernen** only changes the shared layout after Save.
+Assigned object owners/deputies can confirm **Im Katalog löschen**, which immediately retires the object while
+retaining its history/references. Right-click a connection to change its type or remove it locally.
+Apply migration `0041_semantic_graph_visibility`. New term proposals retain domain-owner approval.
+
+Dropping a held domain onto another active domain immediately draws a local **verwandt mit**
+connection; **Netz speichern** publishes it under the existing role checks. Context menus share
+compact 14 px typography and 34 px minimum rows (44 px for touch), and graph descriptions use the
+catalog's rich tooltips with a drag cursor. **Domänennetz** is the second terminology tab. Term
+actions share the same button style; **«TERMDAT»-Aufnahme beantragen** is a disabled placeholder.
+In a domain's term graph, **… → Direkt verbundene Domänen anzeigen** shows active one-hop
+neighbors and their real relationships. They are hidden by default; their positions can be saved.
+
+The term network now shares its layout through **Layout speichern**, separately from glossary
+approval. **Domänen und Terminologie → Domänennetz** opens the new domain graph, with related
+domains and subdomain relationships. Graph context menus open one searchable browser for terms,
+domains, logical models and accessible physical models. See [semantic design](docs/domains-and-glossary.md).
+Apply migration `0040_semantic_graph_states` as well as preceding migrations.
+
+Mapping canvas card positions can be shared per logical model. Data Owners and Data Stewards
+move the logical/physical cards, then use **Entwurf speichern** to publish the arrangement for
+all authorized readers. Moves remain local until that save; conflicting saves preserve the local
+draft and require a reload. Apply migration `0039_mapping_canvas_layouts` before starting the API.
+
+Release **0.2.0** adds shared model/term layouts, editable domain networks and organization-scoped
+term networks, compact context actions, owner search and searchable governance documentation.
+Current object assignments and explicit LDSD/ALDS mandates govern domain editing and ownership
+handover with revision checks and append-only audit. Apply all migrations through
+`0044_office_alds_mandates` before starting the API. Existing access returns and layout data
+remain intact. The authorization audit records remaining model/source scope limitations;
+see [the audit](docs/authorization-consistency-audit.md).
+
 Release **0.1.32** adds personal source-access return and owner-reviewed restoration, draft-only
 mapping edits, improved field editing and the repeatable AdA CSV-import journey. Release 0.1.31
 notes remain in the version history. For a separate local UI-regression stack, set
@@ -806,10 +909,10 @@ emphasis, context-menu SKOS type/target/source editing and deletion. Both endpoi
 rewired onto other terms in the same domain. Term names and definitions are editable while
 preserving other language labels and domain memberships. The canvas provides sticky fullscreen
 plus/print controls, zoom, automatic layout, keyboard menus and a text alternative.
-Layout is browser-local per identity/domain; unfinished semantic drafts survive a reload in the
-same tab and are protected on navigation. `Änderungen einreichen` submits existing glossary
+Layout is shared per domain after explicit Layout speichern; unsaved layout changes stay local.
+Unfinished semantic drafts survive a reload in the same tab and are protected on navigation. `Änderungen einreichen` submits existing glossary
 update proposals with an expected term revision. It never directly publishes terminology;
 the existing responsible domain owners still approve the proposals. Open proposals by the
 current author reload as an explicitly pending preview with review links. If one of several
 term submissions fails, already submitted proposals are retained and only remaining drafts
-are retried. No new terminology store or SQL schema is introduced.
+are retried. No new terminology store is introduced; shared presentation uses the separate semantic_graph_states table.

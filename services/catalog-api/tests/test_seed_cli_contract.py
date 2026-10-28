@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 
-from daca_catalog import modeling_seed, site_glossary_seed
+from daca_catalog import modeling_seed, office_governance, site_glossary_seed
 from daca_catalog import seed as seed_module
 
 
@@ -34,11 +34,16 @@ def test_catalog_seed_cli_runs_foundational_and_modeling_seeds(monkeypatch, caps
         lambda actual_session: calls.append(("glossary", actual_session)),
     )
 
+    monkeypatch.setattr(office_governance, "seed_requested_steward_mandates", lambda actual_session: calls.append(("mandates", actual_session)))
+    monkeypatch.setattr(office_governance, "seed_rapid_prototyping_domain", lambda actual_session: calls.append(("rapid-domain", actual_session)))
+
     seed_module.main()
 
     assert calls == [
         ("catalog", session),
         ("modeling", session),
+        ("mandates", session),
+        ("rapid-domain", session),
         ("glossary", session),
         ("commit", session),
     ]

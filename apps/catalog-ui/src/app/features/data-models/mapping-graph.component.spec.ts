@@ -6,6 +6,18 @@ import { FALLBACK_LOGICAL_MODEL, FALLBACK_MAPPINGS, FALLBACK_PHYSICAL_SNAPSHOT }
 describe('MappingGraphComponent field context menu', () => {
   afterEach(() => TestBed.resetTestingModule());
 
+  it('shows shared positions but prevents a reader from moving cards',()=>{
+    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade]});
+    const facade=TestBed.inject(MappingDraftFacade);
+    facade.initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,FALLBACK_MAPPINGS,null,undefined,{revision:2,positions:{logical:{x:150,y:90}}});
+    const fixture=TestBed.createComponent(MappingGraphComponent);fixture.detectChanges();
+    const header=fixture.nativeElement.querySelector('.logical-node>header') as HTMLElement;
+    header.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.logical-node').style.left).toBe('150px');
+    expect(facade.canvasDirty()).toBe(false);
+  });
+
   it('offers scoped field actions by right click and removes only the selected link', () => {
     TestBed.configureTestingModule({ imports: [MappingGraphComponent], providers: [MappingDraftFacade] });
     const facade = TestBed.inject(MappingDraftFacade);
@@ -23,7 +35,7 @@ describe('MappingGraphComponent field context menu', () => {
     field.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 80 }));
     fixture.detectChanges();
     expect(root.querySelector('[role="menu"]')).not.toBeNull();
-    expect(root.querySelectorAll('[role="menuitem"]')).toHaveLength(5);
+    expect(root.querySelectorAll('[role="menuitem"]')).toHaveLength(9);
     const link = [...root.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
       .find((item) => item.textContent?.includes('org_unit_id'));
     expect(link).toBeDefined();
@@ -104,7 +116,9 @@ describe('MappingGraphComponent field context menu', () => {
     const field = root.querySelector<HTMLButtonElement>('[data-logical-field-id="field-org-id"]')!;
     field.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     fixture.detectChanges();
-    expect(root.querySelector('[role="menu"]')).toBeNull();
+    expect(root.querySelector('[role="menu"]')).not.toBeNull();
+    expect([...root.querySelectorAll('button[role="menuitem"]')].filter(button=>button.textContent?.includes('suchen und öffnen'))).toHaveLength(4);
+    expect(root.querySelector<HTMLButtonElement>('.is-danger')?.disabled).toBe(true);
     field.click();
     expect(TestBed.inject(MappingDraftFacade).pendingLogicalFieldId()).toBeNull();
   });
@@ -120,7 +134,7 @@ describe('MappingGraphComponent field context menu', () => {
     expect(root.textContent).toContain('S3 demo');
     const add=vi.fn();fixture.componentInstance.addRepresentation.subscribe(add);
     root.querySelector('.graph-canvas')!.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}));fixture.detectChanges();
-    root.querySelector<HTMLButtonElement>('.canvas-context-menu button')!.click();
+    [...root.querySelectorAll<HTMLButtonElement>('.canvas-context-menu button')].find(button=>button.textContent?.includes('Neue physische Repräsentation'))!.click();
     expect(add).toHaveBeenCalledOnce();
     root.querySelector('.logical-node>header')!.dispatchEvent(new KeyboardEvent('keydown',{key:'F10',shiftKey:true,bubbles:true,cancelable:true}));fixture.detectChanges();
     expect(root.querySelector('.canvas-context-menu')).not.toBeNull();
@@ -132,7 +146,7 @@ describe('MappingGraphComponent field context menu', () => {
     TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade]});
     const facade=TestBed.inject(MappingDraftFacade);
     facade.initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,FALLBACK_MAPPINGS,null);
-    const fixture=TestBed.createComponent(MappingGraphComponent);fixture.detectChanges();
+    const fixture=TestBed.createComponent(MappingGraphComponent);fixture.componentRef.setInput('canManage',true);fixture.detectChanges();
     const root=fixture.nativeElement as HTMLElement;
     expect(root.querySelector('.add-representation')).toBeNull();
     const card=root.querySelector<HTMLElement>('.physical-representation')!,id=card.dataset['representationTableId']!;
@@ -156,7 +170,7 @@ describe('MappingGraphComponent field context menu', () => {
     facade.showRepresentation(id);fixture.detectChanges();
     expect(root.querySelector<HTMLElement>(`[data-representation-table-id="${id}"]`)!.style.left).toBe('495px');
     fixture.destroy();
-    const reopened=TestBed.createComponent(MappingGraphComponent);reopened.detectChanges();
+    const reopened=TestBed.createComponent(MappingGraphComponent);reopened.componentRef.setInput('canManage',true);reopened.detectChanges();
     expect(reopened.nativeElement.querySelector(`[data-representation-table-id="${id}"]`).style.left).toBe('495px');
   });
 
@@ -171,7 +185,8 @@ describe('MappingGraphComponent field context menu', () => {
     const down=new MouseEvent('pointerdown',{bubbles:true,cancelable:true,clientX:350,clientY:30});Object.defineProperty(down,'pointerId',{value:2});header.dispatchEvent(down);
     const move=new MouseEvent('pointermove',{bubbles:true,clientX:550,clientY:100});Object.defineProperty(move,'pointerId',{value:2});document.dispatchEvent(move);
     const cancel=new Event('pointercancel',{bubbles:true});Object.defineProperty(cancel,'pointerId',{value:2});document.dispatchEvent(cancel);fixture.detectChanges();
-    expect(facade.canvasNodePositions().get('physical:'+id)).toEqual({x:335,y:15});
+    expect(facade.canvasNodePositions().has('physical:'+id)).toBe(false);
+    expect(facade.canvasDirty()).toBe(false);
   });
 
   it('uses facing ports for simultaneous left and right representations and switches back after movement',()=>{

@@ -197,7 +197,7 @@ export class LogicalModelEditorComponent {
   readonly structureView = signal<'table' | 'relation'>('table');
   readonly fieldMoveOpen=signal(false);
   private fieldMoveTrigger:HTMLElement|null=null;
-  readonly moveOrganizations=computed(()=>[...new Set(this.modelingScopes().filter((scope)=>scope.role==='data_owner'||scope.role==='data_steward').flatMap((scope)=>scope.descendantOrganizationIds??[]))]);
+  readonly moveOrganizations=computed(()=>[...new Set(this.modelingScopes().filter((scope)=>(scope.role === 'data_owner' || scope.role === 'deputy_data_owner')||(scope.role === 'data_steward' || scope.role === 'deputy_data_steward')).flatMap((scope)=>scope.descendantOrganizationIds??[]))]);
   openFieldMove(trigger:EventTarget|null):void{
     if(!this.model()||!this.canRemoveFields()||this.saving())return;
     if(this.form.dirty||this.mappingDraftsPending()){this.error.set('Speichern oder verwerfen Sie zuerst alle offenen Feld- und Zuordnungsänderungen.');return;}
@@ -215,7 +215,7 @@ export class LogicalModelEditorComponent {
     return this.identity.canEditModels() && this.modelingScopes().some((scope) => scope.descendantOrganizationIds?.includes(current.office));
   });
   readonly canRemoveFields = computed(() => this.canEditCurrentModel()
-    && this.identity.modelingRoles(this.identity.user()).some((role) => role === 'data_owner' || role === 'data_steward'));
+    && this.identity.modelingRoles(this.identity.user()).some((role) => (role === 'data_owner' || role === 'deputy_data_owner') || (role === 'data_steward' || role === 'deputy_data_steward')));
   readonly codeLists = computed(() => this.concepts().filter((item) => item.conceptType === 'CodeList'));
   readonly modelingUsers = computed(() => this.identity.users().filter((user) => this.identity.modelingRoles(user).includes('data_owner')));
   readonly deputyUsers = computed(() => this.identity.users().filter((user) => this.identity.modelingRoles(user).includes('deputy_data_owner')));
@@ -243,7 +243,7 @@ export class LogicalModelEditorComponent {
   });
   readonly organizationStewards = computed(() => this.identity.users()
     .filter((user) => user.office === this.selectedOrganizationId()
-      && this.identity.modelingRoles(user).includes('data_steward'))
+      && this.identity.modelingRoles(user).some(role=>role==='data_steward'||role==='deputy_data_steward'))
     .map((user) => user.displayName).join(', '));
   get fields(): FormArray<ReturnType<LogicalModelEditorComponent['createField']>> { return this.form.controls.fields; }
 
@@ -330,7 +330,7 @@ export class LogicalModelEditorComponent {
       next: (scopes) => {
         this.modelingScopes.set(scopes);
         if (this.id() || this.physicalTableId()) return;
-        const scope = scopes.find((item) => item.role === 'data_steward') ?? scopes[0];
+        const scope = scopes.find((item) => (item.role === 'data_steward' || item.role === 'deputy_data_steward')) ?? scopes[0];
         if (!scope) { this.scopeChanged(); return; }
         const path = scope.breadcrumb.map((item) => item.id);
         this.form.controls.dataset.patchValue({
@@ -740,8 +740,8 @@ export class LogicalModelEditorComponent {
       error: (error: Error) => this.handleSaveError(error),
     });
   }
-  canSubmitForReview(): boolean { const current=this.model();return Boolean(current?.status==='draft'&&!this.form.dirty&&!this.form.invalid&&!this.saving()&&this.selectedDomain()&&this.identity.modelingRoles(this.identity.user()).includes('data_steward')); }
-  submitBlockedReason(): string | null { const current=this.model();if(!current)return'Zuerst den Entwurf speichern.';if(current.status!=='draft')return'Nur ein Entwurf kann eingereicht werden.';if(this.form.dirty)return'Zuerst die Änderungen als Entwurf speichern.';if(this.form.invalid)return'Zuerst die ungültigen Felder korrigieren und speichern.';if(!this.identity.modelingRoles(this.identity.user()).includes('data_steward'))return'Nur ein Data Steward kann das Modell einreichen.';return null; }
+  canSubmitForReview(): boolean { const current=this.model();return Boolean(current?.status==='draft'&&!this.form.dirty&&!this.form.invalid&&!this.saving()&&this.selectedDomain()&&this.identity.modelingRoles(this.identity.user()).some(role=>role==='data_steward'||role==='deputy_data_steward')); }
+  submitBlockedReason(): string | null { const current=this.model();if(!current)return'Zuerst den Entwurf speichern.';if(current.status!=='draft')return'Nur ein Entwurf kann eingereicht werden.';if(this.form.dirty)return'Zuerst die Änderungen als Entwurf speichern.';if(this.form.invalid)return'Zuerst die ungültigen Felder korrigieren und speichern.';if(!this.identity.modelingRoles(this.identity.user()).some(role=>role==='data_steward'||role==='deputy_data_steward'))return'Nur ein Data Steward kann das Modell einreichen.';return null; }
   submitForReview(): void { const current = this.model(); if (!current || !this.canSubmitForReview()) return; this.saving.set(true);this.error.set(null);this.saveError.set(null); this.api.submitLogicalModel(current.id, current.versionId, this.etag()).pipe(finalize(() => this.saving.set(false))).subscribe({ next: ({ body, etag }) => { this.model.set(body); this.etag.set(etag);this.patch(body);this.form.markAsPristine();this.catalogApi.refreshWorkflowTasks(); this.notice.set(`Der Prüfauftrag wurde an ${this.selectedDomain()?.ownerName ?? 'den primären Domain Owner'} übermittelt.`); }, error: (error: Error) => this.error.set(error.message) }); }
   retire(): void { const current = this.model(); if (!current || current.status !== 'published' || !this.canPublishCurrentModel() || !window.confirm(`«${current.title.de || current.identifiers[0]}» stilllegen? Die Versionshistorie bleibt erhalten.`)) return; this.saving.set(true); this.error.set(null); this.api.retireLogicalModel(current.id, current.versionId, this.etag()).pipe(finalize(() => this.saving.set(false))).subscribe({ next: ({ body, etag }) => { this.model.set(body); this.etag.set(etag); this.notice.set('Das Modell wurde stillgelegt; die Versionshistorie bleibt erhalten.'); }, error: (error: Error) => this.error.set(error.message) }); }
   private patch(model: LogicalModel): void {

@@ -159,6 +159,7 @@ export class GlossaryProposalFormComponent implements OnChanges {
   @Input() product: DataProduct | null = null;
   @Input() initialDomainIds: readonly string[] = [];
   @Input() initialLabel = '';
+  @Input() initialRelationTargetTermId = '';
   @Input() canAttachProduct = false;
   @Input() submitting = false;
   @Output() readonly proposalSubmit = new EventEmitter<GlossaryProposalFormValue>();
@@ -180,7 +181,7 @@ export class GlossaryProposalFormComponent implements OnChanges {
   });
 
   ngOnChanges(changes: SimpleChanges): void {
-    const proposalContextChanged = Boolean(changes['target'] || changes['initialDomainIds'] || changes['initialLabel'] || changes['product']);
+    const proposalContextChanged = Boolean(changes['target'] || changes['initialDomainIds'] || changes['initialLabel'] || changes['product'] || changes['initialRelationTargetTermId']);
     if (proposalContextChanged) {
       this.resetFromInputs();
     } else if (changes['domains']) {
@@ -217,7 +218,7 @@ export class GlossaryProposalFormComponent implements OnChanges {
       definitionEn: en?.definition ?? '',
       autoAttach: Boolean(this.product && this.canAttachProduct && this.sharesProductDomain()),
       relationType: 'related',
-      relationTargetTermId: '',
+      relationTargetTermId: this.initialRelationTargetTermId,
     });
     this.labelVersion.update((value) => value + 1);
   }

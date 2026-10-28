@@ -1,4 +1,6 @@
 import { CsvImportMetadata } from './physical-csv.models';
+export interface CanvasNodePosition { x: number; y: number; }
+export interface MappingCanvasLayout { revision: number; positions: Record<string, CanvasNodePosition>; }
 export interface MultiLanguageText {
   de: string;
   fr: string;
@@ -120,6 +122,7 @@ export interface LogicalModel extends LogicalModelSummary {
 }
 
 export interface LogicalModelReview {
+  canDecide?: boolean;
   id: string;
   logicalModelId: string;
   submittedVersionId: string;

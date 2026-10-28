@@ -1,5 +1,24 @@
 # Catalog documentation and responsibilities
 
+The [authorization audit](authorization-consistency-audit.md) distinguishes implemented object
+checks from remaining legacy scope authorization. Product metadata edits require an active
+concrete assignment. Owner/deputy decisions, private product visibility, lists, SLA and audit
+use common ownership checks. Assigned stewards/deputy stewards can maintain operational text
+metadata, not classifications or governance settings; four-eyes product workflows remain.
+Publication decisions recheck current approver role, control-person assignment and independence
+from all object owners. LDSD/ALDS mandates are now separately persisted for office domain-metadata editing, including
+named deputies and confirmed people/scopes. Appointment UI and general office configuration
+remain future work; see the updated governance information.
+
+The static Information section now includes the supplied 19-activity RACI matrix and the
+object-role/LDS/ALDS model in [object-governance-and-raci.md](object-governance-and-raci.md).
+Its text search covers rendered article content and the matrix, normalizes case/diacritics and
+offers reset/no-results feedback. Terms are also an object category in the responsibility views.
+Migration `0042_object_governance` makes term ownership explicit and independent of domain
+classification. Domain/term owner and deputy assignments govern those objects; the former
+global register role is removed. This supersedes earlier descriptive-only wording for these
+specific owner assignments. Other module authorization remains subject to its established checks.
+
 ## Navigation
 
 Application glossary words use a light-gray wavy underline in the catalog UI, matching DAAIF's separate application glossary. Popup descriptions and detail links remain keyboard and pointer accessible.

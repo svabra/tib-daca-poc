@@ -48,7 +48,7 @@ Update generated sections with `npm run docs:data-model`. Validate them with
 
 | Persistence context | Storage | Tables | Alembic head | Migration fingerprint |
 |---|---|---:|---|---|
-| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 97 | `0038_model_assistance_origins` | `29d9de1bb3a3d761` |
+| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 100 | `0044_office_alds_mandates` | `770a2024abee5c72` |
 | [Control-plane data model](control-plane.md) | PostgreSQL (`daca_control_plane`) | 6 | `20260803_0001` | `ff3a5ea9ca863788` |
 | [Sample data-product model](sample-data-product.md) | PostgreSQL (`daca_sample`) | 4 | `0004_vibdbu_buildings` | `62c6765d78832f77` |
 
@@ -129,9 +129,11 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.logical_model_reviews`
 - `catalog.logical_model_versions`
 - `catalog.logical_models`
+- `catalog.mapping_canvas_layouts`
 - `catalog.metadata_delivery_outbox`
 - `catalog.metadata_publications`
 - `catalog.ontology_term_alignments`
+- `catalog.organization_steward_mandates`
 - `catalog.physical_columns`
 - `catalog.physical_databases`
 - `catalog.physical_domain_assignments`
@@ -153,6 +155,7 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.provenance_events`
 - `catalog.role_change_events`
 - `catalog.seed_markers`
+- `catalog.semantic_graph_states`
 - `catalog.service_level_revisions`
 - `catalog.site_glossary_localizations`
 - `catalog.site_glossary_terms`

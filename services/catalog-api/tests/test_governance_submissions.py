@@ -112,6 +112,27 @@ def create_ready_submission(client, session_factory, suffix: str = "v1") -> tupl
     return product_id, created.json()
 
 
+@pytest.mark.parametrize("change", ["role_removed", "controller_replaced", "became_product_deputy"])
+def test_publication_decision_rechecks_current_role_and_independence(client, session_factory, change):
+    product_id, submission = create_ready_submission(client, session_factory)
+    with session_factory() as session:
+        product = session.get(DataProduct, uuid.UUID(product_id))
+        if change == "role_removed":
+            controller = session.get(DemoUser, submission["approverUserId"])
+            controller.roles = [role for role in controller.roles if role != "publication_approver"]
+        elif change == "controller_replaced":
+            product.control_person_user_id = "kassandra.valdata"
+        else:
+            product.deputy_owner_user_id = submission["approverUserId"]
+        session.commit()
+    result = client.post(f"/api/v1/governance-submissions/{submission['id']}/decision",
+                         headers={"X-DaCa-User": submission["approverUserId"], "If-Match": f'"{submission["revision"]}"'},
+                         json={"decision": "approve", "comment": "Role audit", "policyRevision": submission["policyRevision"]})
+    assert result.status_code == 403, result.text
+    with session_factory() as session:
+        assert session.get(GovernanceSubmission, uuid.UUID(submission["id"])).status == "pending_approval"
+
+
 @pytest.mark.parametrize("invalid_controller", ["missing", "inactive", "owner"])
 def test_governance_review_fails_closed_for_invalid_control_person(
     client, session_factory, invalid_controller

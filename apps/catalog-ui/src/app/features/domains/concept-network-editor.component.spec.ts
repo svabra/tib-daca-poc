@@ -1,10 +1,11 @@
+import { UserPreferencesService } from '../../core/user-preferences.service';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService } from '../../core/demo-identity.service';
-import { DomainSummary, GlossaryTermProposal, GlossaryTermSummary } from '../../core/catalog.models';
+import { DomainSummary, GlossaryTermProposal, GlossaryTermSummary, SemanticGraphState } from '../../core/catalog.models';
 import { ConceptNetworkEditorComponent } from './concept-network-editor.component';
 const DOMAIN = { id: 'domain', preferredLabel: 'Personal', definition: 'Personal und Organisation', status: 'active', updatedAt: '2026-10-22T08:00:00Z', revision: 1 } as DomainSummary;
 function term(id: string, label: string): GlossaryTermSummary { return { id, urn: `urn:term:${id}`, originCatalogId: 'catalog', revision: 1, status: 'active', preferredLabel: label, definition: `Definition ${label}`, domains: [DOMAIN], labels: [{ language: 'de', preferredLabel: label, alternativeLabels: [], definition: `Definition ${label}` }, { language: 'en', preferredLabel: `EN ${label}`, alternativeLabels: ['Synonym'], definition: 'English definition' }], relations: [], updatedAt: DOMAIN.updatedAt }; }
@@ -13,11 +14,49 @@ const TERMS = [A, term('b', 'Person'), term('c', 'Anstellung')];
 const proposal = (termId: string) => ({ id: `proposal-${termId}`, targetTermId: termId, operation: 'update', status: 'in_review', requesterUserId: 'editor', revision: 1, updatedAt: DOMAIN.updatedAt, reviewPayload: {} } as GlossaryTermProposal);
 describe('ConceptNetworkEditorComponent', () => {
     const userId = signal('editor');
-    const api = { loadGlossaryTermProposals: vi.fn(() => of([] as GlossaryTermProposal[])), createGlossaryTermProposal: vi.fn((_payload: unknown) => of(proposal('a'))) };
-    beforeEach(() => { localStorage.clear(); sessionStorage.clear(); userId.set('editor'); api.loadGlossaryTermProposals.mockReturnValue(of([])); api.createGlossaryTermProposal.mockReturnValue(of(proposal('a'))); vi.clearAllMocks(); TestBed.configureTestingModule({ imports: [ConceptNetworkEditorComponent], providers: [provideRouter([]), { provide: CatalogApiService, useValue: api }, { provide: DemoIdentityService, useValue: { userId } }] }); });
+    let graph:SemanticGraphState;
+    const api = {loadDomains:()=>of([DOMAIN,{...DOMAIN,id:'neighbor',preferredLabel:'Nachbar'}]),loadGlossaryTerms:()=>of([...TERMS,term('d','Externer Begriff')]),loadGlossaryTerm:()=>of({...term('d','Externer Begriff'),domains:[]}),retireTermDirect:vi.fn((value:GlossaryTermSummary)=>of({...value,status:'retired' as const,revision:value.revision+1})),loadSemanticGraph:vi.fn(()=>of(structuredClone(graph))),saveSemanticGraph:vi.fn((_kind:string,value:Pick<SemanticGraphState,'positions'|'hiddenNodeIds'|'additionalNodeIds'>)=>{graph={...graph,revision:graph.revision+1,positions:value.positions,hiddenNodeIds:value.hiddenNodeIds,additionalNodeIds:value.additionalNodeIds};return of(structuredClone(graph));}), loadGlossaryTermProposals: vi.fn(() => of([] as GlossaryTermProposal[])), createGlossaryTermProposal: vi.fn((_payload: unknown) => of(proposal('a'))) };
+    beforeEach(() => { graph={revision:0,positions:{},relations:[],canEditLayout:true,canEditRelations:false};localStorage.clear(); sessionStorage.clear(); userId.set('editor');api.saveSemanticGraph.mockImplementation((_kind,value)=>{graph={...graph,revision:graph.revision+1,positions:value.positions,hiddenNodeIds:value.hiddenNodeIds,additionalNodeIds:value.additionalNodeIds};return of(structuredClone(graph));}); api.loadGlossaryTermProposals.mockReturnValue(of([])); api.createGlossaryTermProposal.mockReturnValue(of(proposal('a'))); vi.clearAllMocks(); TestBed.configureTestingModule({ imports: [ConceptNetworkEditorComponent], providers: [{provide:UserPreferencesService,useValue:{language:signal('de')}},provideRouter([]), { provide: CatalogApiService, useValue: api }, { provide: DemoIdentityService, useValue: { userId } }] }); });
     afterEach(() => { TestBed.resetTestingModule(); vi.restoreAllMocks(); localStorage.clear(); sessionStorage.clear(); });
     function render(domain = DOMAIN, terms = TERMS) { const fixture = TestBed.createComponent(ConceptNetworkEditorComponent); fixture.componentRef.setInput('domain', domain); fixture.componentRef.setInput('terms', terms); fixture.detectChanges(); return fixture; }
-    it('shows explicit domain and term edges, follows either side and persists arbitrary positions per user', () => {
+    it.each([['interfacesWith','hat eine fachliche Schnittstelle zu'],['overlapsWith','hat Überschneidungen mit']] as const)('labels %s consistently in neighboring-domain and organization graphs',(type,label)=>{
+        const link={sourceId:'neighbor',targetId:DOMAIN.id,relationType:type};graph.relations=[link];
+        const fixture=render(),component=fixture.componentInstance;component.toggleLinkedDomains(true);fixture.detectChanges();
+        expect(component.edges().find(edge=>edge.id.startsWith('domain-link:'))?.label).toBe(label);
+        fixture.componentRef.setInput('organization',{id:'office',label:'Amt',domains:[DOMAIN,{...DOMAIN,id:'neighbor'}],links:[link]});fixture.detectChanges();
+        expect(component.edges().find(edge=>edge.id.startsWith('domain-link:'))?.label).toBe(label);
+        expect(api.saveSemanticGraph).not.toHaveBeenCalled();
+    });
+    it('shows term ports only on sides reached by a visible relationship',()=>{
+        const fixture=render(DOMAIN,TERMS.map(value=>({...value,relations:[]}))),component=fixture.componentInstance,root=fixture.nativeElement as HTMLElement;
+        component.moveNode('domain:domain',{x:30,y:150});
+        for(const [index,id] of ['a','b','c'].entries())component.moveNode('term:'+id,{x:400,y:30+index*130});
+        fixture.detectChanges();
+        expect(root.querySelectorAll('.is-term .ontology-port.is-left')).toHaveLength(3);
+        expect(root.querySelectorAll('.is-term .ontology-port.is-right')).toHaveLength(0);
+        component.moveNode('term:c',{x:15,y:450});fixture.detectChanges();
+        expect(root.querySelector('[data-term-id="c"] .ontology-port.is-left')).toBeNull();
+        expect(root.querySelector('[data-term-id="c"] .ontology-port.is-right')).not.toBeNull();
+        component.hideTerm('term:c');fixture.detectChanges();expect(root.querySelectorAll('.is-term .ontology-port')).toHaveLength(2);
+        expect(api.saveSemanticGraph).not.toHaveBeenCalled();expect(api.createGlossaryTermProposal).not.toHaveBeenCalled();
+    });
+    it('shows only direct neighboring domains on request and preserves their layout while hidden',async()=>{
+        graph.relations=[{sourceId:'neighbor',targetId:DOMAIN.id,relationType:'partOf'},{sourceId:'neighbor',targetId:'unrelated',relationType:'related'}];
+        const fixture=render(),component=fixture.componentInstance;
+        expect(component.nodes().filter(node=>node.kind==='domain')).toHaveLength(1);
+        component.toggleLinkedDomains(true);fixture.detectChanges();
+        expect(component.nodes().filter(node=>node.kind==='domain').map(node=>node.id)).toEqual(['domain:domain','domain:neighbor']);
+        expect(component.edges().some(edge=>edge.source==='domain:neighbor'&&edge.target==='domain:domain'&&edge.label==='ist Unterdomäne von')).toBe(true);
+        const neighbor=component.nodes().find(node=>node.id==='domain:neighbor')!;
+        component.moveNode('term:a',{x:neighbor.x,y:neighbor.y});
+        const placed=component.nodes().find(node=>node.id==='domain:neighbor')!;
+        expect(Math.abs(placed.y-neighbor.y)).toBeGreaterThanOrEqual(124);
+        component.moveNode('domain:neighbor',{x:650,y:220});await component.saveLayout();
+        component.toggleLinkedDomains(false);component.moveNode('term:a',{x:420,y:180});await component.saveLayout();
+        expect(graph.positions['domain:neighbor']).toEqual({x:650,y:220});
+        expect(component.nodes().some(node=>node.id==='domain:neighbor')).toBe(false);
+    });
+    it('stages positions locally and shares the explicit layout save across identities', async () => {
         const fixture = render(), component = fixture.componentInstance, root = fixture.nativeElement as HTMLElement;
         expect(root.querySelectorAll('.graph-node.is-term')).toHaveLength(3);
         expect(component.edges()).toHaveLength(4);
@@ -31,12 +70,37 @@ describe('ConceptNetworkEditorComponent', () => {
         root.querySelector<HTMLElement>('[data-node-id="term:a"] header')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
         fixture.detectChanges();
         expect(component.nodes().find(node => node.id === 'term:a')?.y).toBe(340);
+        expect(api.saveSemanticGraph).not.toHaveBeenCalled();expect(component.layoutDirty()).toBe(true);
+        await component.saveLayout();expect(component.layoutDirty()).toBe(false);
         fixture.destroy();
         const reloaded = render();
         expect(reloaded.componentInstance.nodes().find(node => node.id === 'term:a')?.y).toBe(340);
         userId.set('another-user');
         reloaded.detectChanges();
-        expect(reloaded.componentInstance.positions()).toEqual({});
+        expect(reloaded.componentInstance.positions()['term:a'].y).toBe(340);
+    });
+    it('keeps a conflicting layout draft and can discard it without submitting term proposals',async()=>{
+        const component=render().componentInstance;component.moveNode('term:a',{x:400,y:200});
+        api.saveSemanticGraph.mockReturnValueOnce(throwError(()=>new Error('409')));
+        await component.saveLayout();expect(component.layoutDirty()).toBe(true);expect(component.positions()['term:a']).toEqual({x:400,y:200});
+        expect(component.error()).toContain('Entwurf bleibt erhalten');component.discardLayout();expect(component.layoutDirty()).toBe(false);expect(api.createGlossaryTermProposal).not.toHaveBeenCalled();
+    });
+    it('hides a card without deleting its concept or relationships and saves that visibility',async()=>{
+        const fixture=render(),component=fixture.componentInstance;
+        component.hideTerm('term:a');expect(component.nodes().some(node=>node.id==='term:a')).toBe(false);expect(component.values()).toHaveLength(3);expect(component.values()[0].relations).toHaveLength(1);
+        await component.saveLayout();expect(graph.hiddenNodeIds).toEqual(['term:a']);component.showTerm('term:a');expect(component.nodes().some(node=>node.id==='term:a')).toBe(true);
+    });
+    it('selects a reference term without assigning its domain and stages the relationship separately',async()=>{
+        const component=render().componentInstance;component.openDrop('term:a',{x:650,y:300});component.dropAction('search');
+        await component.selectTerm({id:'d',label:'Externer Begriff',description:'Reference',route:[]});
+        expect(component.additionalIds()).toEqual(['term:d']);expect(component.values().find(term=>term.id==='d')?.domains).toEqual([]);
+        expect(component.edgeEdit()?.target).toBe('d');expect(api.createGlossaryTermProposal).not.toHaveBeenCalled();
+        await component.saveLayout();expect(graph.additionalNodeIds).toEqual(['term:d']);
+    });
+    it('prompts only for catalog deletion and respects cancellation',async()=>{
+        const component=render().componentInstance;component.sharedLayout.update(layout=>({...layout!,deletableNodeIds:['term:a']}));
+        const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);await component.deleteTerm('term:a');expect(api.retireTermDirect).not.toHaveBeenCalled();
+        confirm.mockReturnValue(true);await component.deleteTerm('term:a');expect(api.retireTermDirect).toHaveBeenCalledOnce();expect(component.nodes().some(node=>node.id==='term:a')).toBe(false);
     });
     it('initializes relation selectors correctly and keeps other cards fixed when edges change', async () => {
         const fixture=render(),component=fixture.componentInstance;

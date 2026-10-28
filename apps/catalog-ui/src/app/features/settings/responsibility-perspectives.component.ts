@@ -6,7 +6,7 @@ import { RoleTermComponent } from '../documentation/glossary-word.component';
 
 type Perspective = 'category' | 'person' | 'domain';
 type Copy = readonly [string, string, string, string];
-const ORDER: readonly ResponsibilityCategory[] = ['domain', 'logical_model', 'physical_representation', 'data_product'];
+const ORDER: readonly ResponsibilityCategory[] = ['domain', 'glossary_term', 'logical_model', 'physical_representation', 'data_product'];
 
 @Component({
   selector: 'daca-responsibility-perspectives',
@@ -157,6 +157,7 @@ export class ResponsibilityPerspectivesComponent {
   categoryLabel(category: ResponsibilityCategory): string {
     const labels: Record<ResponsibilityCategory, Copy> = {
       domain: ['Domänen', 'Domaines', 'Domini', 'Domains'],
+      glossary_term: ['Terme', 'Termes', 'Termini', 'Terms'],
       logical_model: ['Logische Modelle', 'Modèles logiques', 'Modelli logici', 'Logical models'],
       physical_representation: ['Physische Repräsentationen', 'Représentations physiques', 'Rappresentazioni fisiche', 'Physical representations'],
       data_product: ['Datenprodukte', 'Produits de données', 'Prodotti di dati', 'Data products'],

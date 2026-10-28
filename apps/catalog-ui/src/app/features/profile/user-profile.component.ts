@@ -7,7 +7,7 @@ import { CatalogLanguage, UserPreferencesService } from '../../core/user-prefere
 type Copy = readonly [string, string, string, string];
 type Capability = { title: Copy; detail: Copy };
 
-const MODEL_RIGHTS: Record<ModelingRole, Capability[]> = {
+const MODEL_RIGHTS: Record<Exclude<ModelingRole,'deputy_data_steward'>, Capability[]> = {
   data_owner: [
     { title: ['Modelle erstellen und bearbeiten', 'Créer et modifier des modèles', 'Creare e modificare modelli', 'Create and edit models'], detail: ['Im zugewiesenen Organisationsbereich, einschliesslich untergeordneter Stellen.', 'Dans le périmètre organisationnel attribué et ses unités subordonnées.', 'Nell’ambito organizzativo assegnato e nelle unità subordinate.', 'In the assigned organization and its subordinate units.'] },
     { title: ['Aus physischen Tabellen ableiten', 'Dériver de tables physiques', 'Derivare da tabelle fisiche', 'Derive from physical tables'], detail: ['Technische Entwürfe und Zuordnungen anlegen.', 'Créer des ébauches techniques et des correspondances.', 'Creare bozze tecniche e mappature.', 'Create technical drafts and mappings.'] },
@@ -32,7 +32,6 @@ const OTHER_RIGHTS: Record<string, Capability> = {
   data_owner: { title: ['Data Owner (Datenprodukt)', 'Responsable du produit de données', 'Responsabile del prodotto dati', 'Data product owner'], detail: ['Zugewiesene Datenprodukte und ihre Freigaben verwalten.', 'Gérer les produits de données attribués et leurs autorisations.', 'Gestire i prodotti dati assegnati e le autorizzazioni.', 'Manage assigned data products and their access grants.'] },
   data_consumer: { title: ['Data Consumer', 'Consommateur de données', 'Consumatore di dati', 'Data Consumer'], detail: ['Katalog durchsuchen, sichtbare Metadaten lesen und Zugriff beantragen.', 'Parcourir le catalogue, lire les métadonnées visibles et demander l’accès.', 'Esplorare il catalogo, leggere i metadati visibili e richiedere l’accesso.', 'Search the catalog, read visible metadata and request access.'] },
   data_analyst: { title: ['Data Analyst', 'Analyste de données', 'Analista dei dati', 'Data Analyst'], detail: ['Freigegebene Datenprodukte untersuchen und ihre Nutzungsinformationen einsehen.', 'Explorer les produits autorisés et leurs informations d’utilisation.', 'Esaminare i prodotti autorizzati e le informazioni d’uso.', 'Explore authorized data products and their usage information.'] },
-  domain_register_owner: { title: ['Domänenregister-Verantwortung', 'Responsable du registre des domaines', 'Responsabile del registro dei domini', 'Domain register owner'], detail: ['Domänenregister und Zuordnungen im eigenen Aufgabenbereich verwalten.', 'Gérer le registre des domaines et ses attributions dans son périmètre.', 'Gestire il registro dei domini e le assegnazioni nel proprio ambito.', 'Manage the domain register and assignments within your remit.'] },
   publication_approver: { title: ['Publikationsprüfung', 'Approbation de publication', 'Approvazione della pubblicazione', 'Publication approver'], detail: ['Zugewiesene Publikationsanträge prüfen.', 'Examiner les demandes de publication attribuées.', 'Esaminare le richieste di pubblicazione assegnate.', 'Review assigned publication requests.'] },
 };
 
@@ -40,6 +39,7 @@ const ROLE_LABELS: Record<ModelingRole, Copy> = {
   data_owner: ['Data Owner', 'Responsable des données', 'Responsabile dei dati', 'Data Owner'],
   deputy_data_owner: ['Stellvertretende Data Owner', 'Suppléance du responsable des données', 'Sostituto responsabile dei dati', 'Deputy Data Owner'],
   data_steward: ['Data Steward', 'Gestionnaire des données', 'Gestore dei dati', 'Data Steward'],
+  deputy_data_steward: ['Stv. Data Steward', 'Data Steward suppléant', 'Sostituto Data Steward', 'Deputy Data Steward'],
 };
 
 @Component({
@@ -86,7 +86,7 @@ export class UserProfileComponent {
   });
   tr(copy: Copy): string { return copy[({ de: 0, fr: 1, it: 2, en: 3 } satisfies Record<CatalogLanguage, number>)[this.preferences.language()]]; }
   roleLabel(role: ModelingRole): string { return this.tr(ROLE_LABELS[role]); }
-  modelRights(role: ModelingRole): Capability[] { return MODEL_RIGHTS[role]; }
+  modelRights(role: ModelingRole): Capability[] { return MODEL_RIGHTS[role==='deputy_data_steward'?'data_steward':role]; }
   otherRoleTitle(role: string): string { return OTHER_RIGHTS[role] ? this.tr(OTHER_RIGHTS[role].title) : role; }
   otherRoleDetail(role: string): string { return OTHER_RIGHTS[role] ? this.tr(OTHER_RIGHTS[role].detail) : ''; }
   ownerName(userId: string): string { return this.identity.users().find((user) => user.id === userId)?.displayName ?? userId; }

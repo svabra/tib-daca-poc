@@ -8,6 +8,7 @@ import {
   LogicalModel,
   LogicalModelWrite,
   MappingStatus,
+  MappingCanvasLayout,
   PhysicalColumn,
   PhysicalDomainState,
   PhysicalSnapshot,
@@ -23,7 +24,8 @@ export interface MappingEditorState {
   physicalColumnIds: string[];
 }
 
-export interface CanvasNodePosition { x: number; y: number; }
+import { CanvasNodePosition } from './data-models.models';
+export type { CanvasNodePosition } from './data-models.models';
 
 export interface PhysicalRepresentation {
   snapshot: PhysicalSnapshot;
@@ -51,6 +53,11 @@ export class MappingDraftFacade {
 
   readonly representations = signal<readonly PhysicalRepresentation[]>([]);
   readonly canvasNodePositions = signal<ReadonlyMap<string, CanvasNodePosition>>(new Map());
+  private readonly savedCanvasLayout = signal<MappingCanvasLayout>({revision:0,positions:{}});
+  readonly canvasDirty = computed(()=>{
+    const saved=this.savedCanvasLayout().positions,positions=this.canvasNodePositions();
+    return positions.size!==Object.keys(saved).length||[...positions].some(([key,point])=>saved[key]?.x!==point.x||saved[key]?.y!==point.y);
+  });
   readonly hiddenRepresentationIds = signal<ReadonlySet<string>>(new Set());
   readonly visibleRepresentations = computed(() => this.representations().filter((item) => !this.hiddenRepresentationIds().has(item.table.id)));
   readonly pendingRepresentations = computed(() => this.representations().filter((item) => !item.persisted && !item.preview));
@@ -73,7 +80,7 @@ export class MappingDraftFacade {
     const names=new Map(this.logicalDraft()?.fields.map((field)=>[field.id,field.name])??[]);
     return (this.model()?.fields??[]).map((field)=>names.has(field.rootId)?{...field,name:names.get(field.rootId)!}:field);
   });
-  readonly hasWorkspaceChanges = computed(()=>this.hasDirtyMappings()||this.logicalDraft()!==null);
+  readonly hasWorkspaceChanges = computed(()=>this.hasDirtyMappings()||this.logicalDraft()!==null||this.canvasDirty());
   previewLogicalDraft(modelId:string,versionId:string,value:LogicalModelWrite):void {
     if(this.model()?.id===modelId&&this.model()?.versionId===versionId)this.logicalDraft.set(value);
   }
@@ -110,12 +117,13 @@ export class MappingDraftFacade {
     this.pendingRemovals.set([]);
     this.logicalDraft.set(null);
     this.modelState.set(null);this.snapshotState.set(null);this.representations.set([]);
-    this.canvasNodePositions.set(new Map());this.hiddenRepresentationIds.set(new Set());
+    this.restoreCanvasLayout({revision:0,positions:{}});this.hiddenRepresentationIds.set(new Set());
     this.mappingsState.set([]);this.dirtyIdsState.set(new Set());this.driftState.set(null);
     this.selectedMappingId.set(null);this.selectedLogicalFieldId.set(null);this.pendingLogicalFieldId.set(null);this.editor.set(null);
   }
 
-  initialize(model: LogicalModel, snapshot: PhysicalSnapshot | null, mappings: readonly AssetMapping[], drift: DriftReport | null, representations?: readonly PhysicalRepresentation[]): void {
+  initialize(model: LogicalModel, snapshot: PhysicalSnapshot | null, mappings: readonly AssetMapping[], drift: DriftReport | null, representations?: readonly PhysicalRepresentation[], canvasLayout:MappingCanvasLayout={revision:0,positions:{}}): void {
+    this.restoreCanvasLayout(canvasLayout);
     this.pendingRemovals.set([]);
     this.logicalDraft.set(null);
     this.representations.set(representations ?? (snapshot?.tables ?? []).map((table) => ({ snapshot, table, persisted: true } as PhysicalRepresentation)));
@@ -138,7 +146,17 @@ export class MappingDraftFacade {
   }
 
   moveCanvasNode(key: string, position: CanvasNodePosition): void {
-    this.canvasNodePositions.update((positions) => new Map(positions).set(key, {x: Math.max(15, position.x), y: Math.max(15, position.y)}));
+    this.canvasNodePositions.update((positions) => new Map(positions).set(key, {x: Math.min(100_000,Math.max(15, position.x)), y: Math.min(100_000,Math.max(15, position.y))}));
+  }
+
+  restoreCanvasLayout(layout:MappingCanvasLayout):void{
+    this.savedCanvasLayout.set(layout);
+    this.canvasNodePositions.set(new Map(Object.entries(layout.positions)));
+  }
+  canvasLayoutDraft():MappingCanvasLayout|null{
+    if(!this.canvasDirty())return null;
+    const allowed=new Set(['logical',...this.representations().filter((item)=>!item.preview).map((item)=>'physical:'+item.table.id)]);
+    return{revision:this.savedCanvasLayout().revision,positions:Object.fromEntries([...this.canvasNodePositions()].filter(([key])=>allowed.has(key)))};
   }
 
   hideRepresentation(tableId: string): void {

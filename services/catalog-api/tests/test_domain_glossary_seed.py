@@ -23,7 +23,8 @@ def test_domain_glossary_reference_seed_is_graph_ready_and_idempotent(session_fa
         sibilla = session.get(DemoUser, "sibilla.micheli")
         assert sibilla is not None
         assert sibilla.organization == "VBS"
-        assert {"data_owner", "domain_register_owner"}.issubset(sibilla.roles)
+        assert "data_owner" in sibilla.roles
+        assert "domain_register_owner" not in sibilla.roles
 
         defence = session.get(Domain, DEFENCE_DOMAIN_ID)
         mobility = session.get(Domain, MOBILITY_DOMAIN_ID)

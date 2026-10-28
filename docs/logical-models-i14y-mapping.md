@@ -1,5 +1,52 @@
 # Logical models, I14Y concepts, physical models, and mappings
 
+## Authorization audit follow-up
+
+Migration `0043_deputy_steward_role` allows all four modeling roles. Active deputy stewards
+share scoped operational capabilities, while publication requires the model's named owner or
+named delegated deputy. An owner's delegation alone does not authorize every one of their
+models. Domain review decisions recheck current active domain owners/deputies, exclude the
+submitter and retain the existing revision/row locks. `canDecide` is server-computed; historical
+reviewer IDs are descriptive. Identity changes clear pending review reads in the UI.
+
+This does not complete object-level authorization for this module: version/source scope guards
+remain broad, model ownership still follows domain normalization in older paths, and some
+mapping decisions still require the primary owner. These are tracked explicitly in the
+[authorization audit](authorization-consistency-audit.md), rather than being interpreted as
+LDS/ALDS authority.
+
+## Shared mapping canvas positions
+
+Term/domain canvases additionally support hold-to-create/search and staged card hiding. Their
+reference cards do not add logical/physical model mappings or change domain membership; see
+[semantic diagrams](domains-and-glossary.md). Model-card quick dragging retains its existing
+mapping-workspace behavior.
+
+Mapping graph context menus also open the shared catalog-object search for terms, domains,
+logical models and accessible physical models. Search is navigation, not an implicit new mapping
+or representation. Read-only users retain search access; mutation actions remain disabled.
+
+The workspace loads `GET /api/v1/logical-models/{id}/canvas-layout` with its model and
+representations. One central arrangement belongs to the model root, shared across people,
+browsers and logical-model revisions. Node keys are `logical` and `physical:<table UUID>`;
+physical cards remain pinned to their representation's exact snapshot/table. Missing positions
+use the existing automatic arrangement. Hiding a drawing stays local and does not remove its
+saved position, representation or mappings.
+
+Owners/stewards in the model's organization can drag cards or move them with arrow keys.
+Moves become local workspace changes, enable **Entwurf speichern**, and participate in the
+unsaved-navigation warning. Saving supplies optional `canvasLayout: {revision, positions}` to
+the existing atomic mapping-drafts endpoint. The backend validates finite bounded coordinates,
+node membership and source access, locks the model root, checks the layout revision and commits
+layout, model, representation, mapping and audit changes together. A conflict returns 409 and
+keeps the local draft. Layout-only changes do not change logical-model or mapping versions.
+Readers cannot reposition shared cards.
+
+Positions for inaccessible/returned sources are omitted from responses and cannot be submitted.
+Partial updates preserve their stored positions. Seeds never rewrite the layout. On opening or
+reloading, other authorized readers receive the latest saved arrangement; this does not add live
+push synchronization between already-open browsers.
+
 ## AdA physical-model import journey
 
 Journey 14, **Import physisches Datenmodell – AdA**, lives at
@@ -876,10 +923,10 @@ emphasis, context-menu SKOS type/target/source editing and deletion. Both endpoi
 rewired onto other terms in the same domain. Term names and definitions are editable while
 preserving other language labels and domain memberships. The canvas provides sticky fullscreen
 plus/print controls, zoom, automatic layout, keyboard menus and a text alternative.
-Layout is browser-local per identity/domain; unfinished semantic drafts survive a reload in the
-same tab and are protected on navigation. `Änderungen einreichen` submits existing glossary
+Layout is shared per domain after explicit Layout speichern; unsaved layout changes stay local.
+Unfinished semantic drafts survive a reload in the same tab and are protected on navigation. `Änderungen einreichen` submits existing glossary
 update proposals with an expected term revision. It never directly publishes terminology;
 the existing responsible domain owners still approve the proposals. Open proposals by the
 current author reload as an explicitly pending preview with review links. If one of several
 term submissions fails, already submitted proposals are retained and only remaining drafts
-are retried. No new terminology store or SQL schema is introduced.
+are retried. No new terminology store is introduced; shared presentation uses the separate semantic_graph_states table.

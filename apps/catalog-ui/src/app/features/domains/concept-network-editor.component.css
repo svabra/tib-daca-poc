@@ -12,6 +12,8 @@
 .canvas-tools{position:absolute;right:1rem;top:.65rem;display:flex;gap:.4rem;z-index:8}
 .canvas-tools button{width:40px;height:40px;border:1px solid #b5c0ca;background:#fff;color:#145586;box-shadow:0 2px 5px #14202b22;font-size:1.7rem;display:grid;place-items:center;cursor:pointer}
 .canvas-tools svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5}
+.canvas-options{position:absolute;right:0;top:calc(100% + 6px);width:290px;max-width:calc(100vw - 3rem);z-index:10}
+.canvas-options p{margin:.35rem .6rem;font-size:.75rem;color:var(--daca-muted)}
 .semantic-graph{height:36rem;overflow:auto;border:1px solid #cbd3da;background:#f5f8fa}
 .semantic-graph:focus-visible{outline:3px solid #006699;outline-offset:2px}
 .canvas-size{position:relative}
@@ -34,7 +36,8 @@
 .graph-node header:focus-visible{outline:3px solid #006699;outline-offset:2px}
 .graph-node small{display:block;color:#a80014;font-size:10px;text-transform:uppercase;font-weight:800}
 .graph-node strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
-.graph-node p{font-size:11px;color:#52606c;margin:.1rem .7rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.graph-node p{font-size:11px;color:#52606c;margin:.1rem .7rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:grab;user-select:none;touch-action:none}
+.graph-node:active,.graph-node:active p{cursor:grabbing}
 .node-state{position:absolute;right:.3rem;bottom:.1rem;font-size:10px;color:#936000;background:#fff}
 .ontology-port{position:absolute;top:40px;width:18px;height:18px;padding:0;border:2px solid #fff;border-radius:50%;background:#145586;outline:1px solid #145586;cursor:crosshair;touch-action:none}
 .ontology-port.is-left{left:-10px}
@@ -80,3 +83,13 @@
 .domain-term-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:.75rem;margin:1rem 0}.domain-term-list article{padding:.75rem;border:1px solid #d6dade;background:#fff}.domain-term-list strong,.domain-term-list span{display:block}.domain-term-list span{font-size:.8rem;color:#52606c;margin-top:.3rem}.domain-term-list p{margin:.5rem 0}.domain-term-list b{font-size:.75rem;color:#936000}.network-editor.is-fullscreen .domain-term-list{display:none}
 
 .connection-hint{position:absolute;top:.5rem;left:.5rem;z-index:7;max-width:calc(100% - 7rem);padding:.5rem;margin:0;background:#e7f2f7;color:#145586;font-size:.8rem;pointer-events:none}
+
+.concept-context-menu{max-height:min(25rem,calc(100dvh - 1rem));overflow:auto}
+
+.hold-dot{fill:#e1001a;stroke:#fff;stroke-width:2}.hidden-nodes{display:flex;gap:.4rem;flex-wrap:wrap;margin:.5rem 0}.hidden-nodes button{min-height:40px;padding:.5rem;border:1px solid #b9c3cc;background:#fff;color:#145586;font:inherit;font-size:.8rem}.graph-node.is-pending{border-top-color:#936000;border-style:dashed}.graph-node.is-pending>a{position:absolute;bottom:0;right:.4rem;font-size:.7rem;background:#fff}
+
+.hold-line{fill:none;stroke:#e1001a;stroke-width:2;stroke-dasharray:none;pointer-events:none}.graph-node.is-holding .ontology-port{background:#e1001a;outline-color:#e1001a}
+
+/* The entire card is a drag surface, including its border and empty padding. */
+.graph-node{cursor:grab;user-select:none;touch-action:none}
+.graph-node:active{cursor:grabbing}

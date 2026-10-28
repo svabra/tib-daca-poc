@@ -195,7 +195,7 @@ export class MappingWorkspaceComponent {
   @ViewChild(LogicalModelEditorComponent) private fieldEditor?:LogicalModelEditorComponent;
   readonly identity=inject(DemoIdentityService);readonly facade=inject(MappingDraftFacade);private readonly api=inject(DataModelsApiService);private readonly catalogApi=inject(CatalogApiService);private readonly assistance=inject(ModelingAssistanceService);private readonly route=inject(ActivatedRoute);private readonly router=inject(Router);private readonly host=inject<ElementRef<HTMLElement>>(ElementRef);
   readonly manageScopes=signal<readonly ModelingScope[]>([]);
-  readonly canManageSelectedModel=computed(()=>{const model=this.facade.model();return Boolean(model&&!this.saving()&&!this.fallbackActive()&&model.status!=='retired'&&model.status!=='review_pending'&&this.manageScopes().some((scope)=>(scope.role==='data_owner'||scope.role==='data_steward')&&scope.descendantOrganizationIds.includes(model.office)));});
+  readonly canManageSelectedModel=computed(()=>{const model=this.facade.model();return Boolean(model&&!this.saving()&&!this.fallbackActive()&&model.status!=='retired'&&model.status!=='review_pending'&&this.manageScopes().some((scope)=>((scope.role === 'data_owner' || scope.role === 'deputy_data_owner')||(scope.role === 'data_steward' || scope.role === 'deputy_data_steward'))&&scope.descendantOrganizationIds.includes(model.office)));});
   readonly draftSaveDisabledReason=computed<string|null>(()=>{
     if(this.saving())return 'Der Entwurf wird gerade gespeichert. Bitte warten.';
     if(this.loading())return 'Der Arbeitsplatz wird noch geladen. Bitte warten.';
@@ -205,7 +205,7 @@ export class MappingWorkspaceComponent {
     if(model.status==='retired')return 'Das logische Modell ist stillgelegt und kann nicht mehr geändert werden.';
     if(model.status==='review_pending')return 'Das logische Modell befindet sich in der Domänenprüfung. Während der Prüfung können keine Änderungen gespeichert werden.';
     if(!this.canManageSelectedModel())return 'Zum Speichern benötigen Sie die Rolle Data Owner oder Data Steward im Organisationsbereich dieses Modells.';
-    if(!this.facade.hasWorkspaceChanges())return 'Keine ungespeicherten Änderungen an Feldmerkmalen, Repräsentationen oder Zuordnungen. Bestehende Entwürfe sind bereits gespeichert.';
+    if(!this.facade.hasWorkspaceChanges())return 'Keine ungespeicherten Änderungen an Kartenpositionen, Feldmerkmalen, Repräsentationen oder Zuordnungen. Bestehende Entwürfe sind bereits gespeichert.';
     return null;
   });
   readonly saveReasonOpen=signal(false);
@@ -268,7 +268,7 @@ export class MappingWorkspaceComponent {
   ngOnDestroy():void{const shell=this.host.nativeElement.querySelector('.mapping-shell');this.restoreFullscreenView();if(shell&&document.fullscreenElement===shell)void document.exitFullscreen?.().catch(()=>{});}
 
   private pickerTrigger:HTMLElement|null=null;
-  canDeactivate():boolean{return !this.facade.hasWorkspaceChanges()||window.confirm('Ungespeicherte Feldmerkmale, Repräsentationen und Zuordnungen verwerfen und den Arbeitsplatz verlassen?');}
+  canDeactivate():boolean{return !this.facade.hasWorkspaceChanges()||window.confirm('Ungespeicherte Kartenpositionen, Feldmerkmale, Repräsentationen und Zuordnungen verwerfen und den Arbeitsplatz verlassen?');}
   @HostListener('window:beforeunload',['$event']) beforeUnload(event:BeforeUnloadEvent):void{if(this.facade.hasWorkspaceChanges()){event.preventDefault();event.returnValue='';}}
   openRepresentationPicker(trigger:EventTarget|null=null):void{if(!this.canManageSelectedModel())return;this.pickerTrigger=trigger instanceof HTMLElement?trigger:null;this.pickerOpen.set(true);}
   closeRepresentationPicker():void{this.pickerOpen.set(false);queueMicrotask(()=>this.pickerTrigger?.focus());}
@@ -323,14 +323,14 @@ export class MappingWorkspaceComponent {
   }
   private loadSelection(modelId:string,snapshotId:string):void {
     const token=++this.selectionRequestToken;this.facade.clear();this.loading.set(true);this.error.set(null);
-    forkJoin({model:this.api.loadLogicalModel(modelId),mappings:this.api.listMappings(modelId),bindings:this.api.listRepresentations(modelId)}).pipe(
+    forkJoin({model:this.api.loadLogicalModel(modelId),mappings:this.api.listMappings(modelId),bindings:this.api.listRepresentations(modelId),canvasLayout:this.api.loadCanvasLayout(modelId)}).pipe(
       switchMap((selection)=>{
         const brokenSources=new Set(selection.mappings.filter((item)=>item.status==='broken').map((item)=>this.snapshotOptions().find((snapshot)=>snapshot.id===item.physicalSnapshotId)?.sourceId));
         const newestBroken=[...brokenSources].flatMap((sourceId)=>{const latest=this.snapshotOptions().filter((snapshot)=>snapshot.sourceId===sourceId).sort((left,right)=>right.revision-left.revision)[0];return latest?[latest.id]:[];});
         const ids=[...new Set([...newestBroken,...[...selection.bindings.map((item)=>item.physicalSnapshotId),...selection.mappings.filter((item)=>item.status!=='superseded').map((item)=>item.physicalSnapshotId),...(snapshotId?[snapshotId]:[])]])];
         return (ids.length?forkJoin(ids.map((id)=>this.api.loadPhysicalSnapshot(id))):of([] as PhysicalSnapshot[])).pipe(map((snapshots)=>({...selection,snapshots})));
       }),finalize(()=>{if(token===this.selectionRequestToken)this.loading.set(false);}),
-    ).subscribe({next:({model,mappings,bindings,snapshots})=>{
+    ).subscribe({next:({model,mappings,bindings,snapshots,canvasLayout})=>{
       if(token!==this.selectionRequestToken||modelId!==this.selectedModelId())return;
       const representations:PhysicalRepresentation[]=[];
       for(const snapshot of snapshots){for(const table of snapshot.tables){const pinned=bindings.some((item)=>item.physicalSnapshotId===snapshot.id&&item.physicalTableId===table.id);const linked=mappings.some((mapping)=>mapping.status!=='superseded'&&mapping.physicalSnapshotId===snapshot.id&&mapping.physicalColumnIds.some((id)=>table.columns.some((column)=>column.id===id)));if(pinned||linked)representations.push({snapshot:{...snapshot,tables:[table]},table,persisted:true});}}
@@ -341,7 +341,7 @@ export class MappingWorkspaceComponent {
       // An explicitly requested newer snapshot is a drift workspace selection,
       // not an implicit write or automatic replacement of historical evidence.
       if(active&&table&&!representations.some((item)=>item.table.id===table.id))representations.push({snapshot:{...active,tables:[table]},table,persisted:false,preview:!this.suggestRequested});
-      this.facade.initialize(model.body,active&&table?{...active,tables:[table]}:null,mappings,null,representations);
+      this.facade.initialize(model.body,active&&table?{...active,tables:[table]}:null,mappings,null,representations,canvasLayout);
       this.selectedSnapshotId.set(active?.id??'');this.selectedPhysicalTableId.set(table?.id??'');
       if(active)this.loadActiveDrift(active.id);
       if(this.suggestRequested&&active&&table){const review=exactMappingSuggestions(model.body.fields,table);this.acceptSuggestions(review.suggestions);this.suggestionReview.set(review);}
@@ -380,8 +380,8 @@ export class MappingWorkspaceComponent {
     const dirty=this.facade.mappings().filter((mapping)=>this.facade.dirtyIds().has(mapping.id));
     const representations=this.facade.pendingRepresentations().map((item)=>({physicalSnapshotId:item.snapshot.id,physicalTableId:item.table.id}));
     this.saving.set(true);this.error.set(null);
-    this.api.saveWorkspaceDraft(model,representations,dirty,this.facade.logicalDraft(),this.facade.pendingRemovals()).pipe(finalize(()=>this.saving.set(false))).subscribe({
-      next:(result)=>{this.facade.markRemovalsSaved(result.removedMappingIds??[]);for(const item of result.mappings)this.facade.replaceSaved(item.clientId,item.mapping);if(result.logicalModel)this.facade.rebaseAfterModelSave(result.logicalModel,result.currentMappings??[]);this.facade.markRepresentationsSaved(new Set(result.items.map((item)=>item.physicalTableId)));this.facade.announcement.set('Alle Mapping-Entwürfe wurden versioniert gespeichert.');this.issueRefreshKey.update((value)=>value+1);this.catalogApi.refreshWorkflowTasks();},
+    this.api.saveWorkspaceDraft(model,representations,dirty,this.facade.logicalDraft(),this.facade.pendingRemovals(),this.facade.canvasLayoutDraft()).pipe(finalize(()=>this.saving.set(false))).subscribe({
+      next:(result)=>{this.facade.markRemovalsSaved(result.removedMappingIds??[]);for(const item of result.mappings)this.facade.replaceSaved(item.clientId,item.mapping);if(result.logicalModel)this.facade.rebaseAfterModelSave(result.logicalModel,result.currentMappings??[]);this.facade.markRepresentationsSaved(new Set(result.items.map((item)=>item.physicalTableId)));if(result.canvasLayout)this.facade.restoreCanvasLayout(result.canvasLayout);this.facade.announcement.set('Alle Mapping-Entwürfe wurden versioniert gespeichert.');this.issueRefreshKey.update((value)=>value+1);this.catalogApi.refreshWorkflowTasks();},
       error:(error:Error)=>this.error.set(`${error.message} Es wurden keine Änderungen dieses Speichervorgangs übernommen; die lokalen Entwürfe bleiben erhalten.`),
     });
   }

@@ -11,6 +11,7 @@ import {
   DomainAuditEvent,
   DomainGlossaryFixtureState,
   DomainSummary,
+  SemanticGraphState,
   DomainModelMemberships,
   GovernanceSubmission,
   GlossaryTermProposal,
@@ -140,9 +141,9 @@ export type PolicyWire = {
 };
 
 type ConceptLocalizationWire = { language: string; preferredLabel: string; alternativeLabels?: string[]; definition: string; normalizedLabel: string };
-type DomainWire = { id: string; urn: string; originCatalogId: string; revision: number; lifecycle: 'active' | 'retired'; ownerUserId: string; deputyOwnerUserId: string; preferredLabel: string; localizations: ConceptLocalizationWire[]; productCount: number; termCount: number; updatedAt: string };
-type GlossaryTermWire = { id: string; urn: string; originCatalogId: string; revision: number; lifecycle: 'active' | 'retired'; preferredLabel: string; localizations: ConceptLocalizationWire[]; domainIds: string[]; relations: Array<{ id: string; relation: GlossaryTermSummary['relations'][number]['relationType']; targetTermId: string | null; targetUri: string | null; targetLabel: string }>; updatedAt: string };
-type ProposalReviewWire = { domainId: string; proposalRevision: number; ownerUserId: string; status: 'pending' | 'approved' | 'rejected'; decisionComment: string | null; decidedAt: string | null; updatedAt: string };
+type DomainWire = { canTransferOwnership?: boolean; canEditMetadata?: boolean; id: string; urn: string; originCatalogId: string; revision: number; lifecycle: 'active' | 'retired'; ownerUserId: string; deputyOwnerUserId: string; preferredLabel: string; localizations: ConceptLocalizationWire[]; productCount: number; termCount: number; updatedAt: string };
+type GlossaryTermWire = { ownerUserId?: string | null; deputyOwnerUserId?: string | null; id: string; urn: string; originCatalogId: string; revision: number; lifecycle: 'active' | 'retired'; preferredLabel: string; localizations: ConceptLocalizationWire[]; domainIds: string[]; relations: Array<{ id: string; relation: GlossaryTermSummary['relations'][number]['relationType']; targetTermId: string | null; targetUri: string | null; targetLabel: string }>; updatedAt: string };
+type ProposalReviewWire = { canDecide?: boolean; domainId: string; proposalRevision: number; ownerUserId: string; status: 'pending' | 'approved' | 'rejected'; decisionComment: string | null; decidedAt: string | null; updatedAt: string };
 type ProposalWire = Omit<GlossaryTermProposal, 'requesterName' | 'reviews'> & { reviews: ProposalReviewWire[] };
 
 export interface WorkflowTaskWire {
@@ -385,6 +386,13 @@ export class CatalogApiService {
       );
   }
 
+  loadSemanticGraph(kind:'domains'|'concepts'|'organizations',domainId?:string):Observable<SemanticGraphState>{
+    return this.http.get<SemanticGraphState>(`/api/v1/semantic-graphs/${kind}${domainId?'/'+encodeURIComponent(domainId):''}`,{headers:this.identity.headers()});
+  }
+  saveSemanticGraph(kind:'domains'|'concepts'|'organizations',value:{revision:number;positions:SemanticGraphState['positions'];relations?:SemanticGraphState['relations'];hiddenNodeIds?:string[];additionalNodeIds?:string[]},domainId?:string):Observable<SemanticGraphState>{
+    return this.http.put<SemanticGraphState>(`/api/v1/semantic-graphs/${kind}${domainId?'/'+encodeURIComponent(domainId):''}`,value,{headers:this.identity.headers()}).pipe(catchError(error=>throwError(()=>this.describeError(error))));
+  }
+
   loadDomains(includeRetired = false): Observable<readonly DomainSummary[]> {
     return this.http.get<Collection<DomainWire>>('/api/v1/domains', {
       headers: this.identity.headers(),
@@ -441,12 +449,27 @@ export class CatalogApiService {
     }).pipe(map((item) => this.normalizeDomainRequest(item)));
   }
 
-  updateDomainDirect(domain: DomainSummary, payload: { ownerUserId: string; deputyOwnerUserId: string; localizations: Array<{ language: string; preferredLabel: string; definition: string }> }): Observable<DomainSummary> {
+  updateDomainDirect(domain: DomainSummary, payload: { ownerUserId?: string; deputyOwnerUserId?: string; localizations: Array<{ language: string; preferredLabel: string; definition: string }> }): Observable<DomainSummary> {
     return this.http.patch<DomainWire>(`/api/v1/domains/${encodeURIComponent(domain.id)}`, payload, { headers: this.identity.headers().set('If-Match', `"${domain.revision}"`) }).pipe(map((item) => this.normalizeDomain(item)), tap(() => this.loadDomains(true).subscribe()));
+  }
+
+  transferDomainOwnership(domain:DomainSummary,payload:{ownerUserId:string;deputyOwnerUserId:string;reason:string}):Observable<DomainSummary>{
+    return this.http.post<DomainWire>(`/api/v1/domains/${encodeURIComponent(domain.id)}/transfer`,payload,{headers:this.identity.headers().set('If-Match',`"${domain.revision}"`)}).pipe(map(item=>this.normalizeDomain(item)),tap(()=>this.loadDomains(true).subscribe()));
   }
 
   retireDomainDirect(domain: DomainSummary): Observable<DomainSummary> {
     return this.http.post<DomainWire>(`/api/v1/domains/${encodeURIComponent(domain.id)}/retire`, {}, { headers: this.identity.headers().set('If-Match', `"${domain.revision}"`) }).pipe(map((item) => this.normalizeDomain(item)));
+  }
+
+  createDomainDirect(payload:{ownerUserId:string;deputyOwnerUserId:string;localizations:Array<{language:string;preferredLabel:string;definition:string}>}):Observable<DomainSummary>{
+    return this.http.post<DomainWire>('/api/v1/domains',payload,{headers:this.identity.headers()}).pipe(map(item=>this.normalizeDomain(item)),catchError(error=>throwError(()=>this.describeError(error))));
+  }
+  loadGlossaryTerm(termId:string):Observable<GlossaryTermSummary>{
+    const domains$=this.domainState().length?of(this.domainState()):this.loadDomains(true);
+    return domains$.pipe(switchMap(domains=>this.http.get<GlossaryTermWire>(`/api/v1/glossary/terms/${encodeURIComponent(termId)}`,{headers:this.identity.headers()}).pipe(map(item=>this.normalizeGlossaryTerm(item,domains)))));
+  }
+  retireTermDirect(term:GlossaryTermSummary):Observable<GlossaryTermSummary>{
+    return this.http.post<GlossaryTermWire>(`/api/v1/glossary/terms/${encodeURIComponent(term.id)}/retire-direct`,{},{headers:this.identity.headers().set('If-Match',`"${term.revision}"`)}).pipe(map(item=>this.normalizeGlossaryTerm(item,this.domainState())),catchError(error=>throwError(()=>this.describeError(error))));
   }
 
   decideDomainChangeRequest(request: DomainChangeRequest, decision: 'approve' | 'reject', comment: string): Observable<DomainChangeRequest> {
@@ -1033,7 +1056,7 @@ export class CatalogApiService {
     const preferred = item.localizations.find((label) => label.language.toLocaleLowerCase() === 'de') ?? item.localizations[0];
     return {
       id: item.id, urn: item.urn, originCatalogId: item.originCatalogId, revision: item.revision,
-      status: item.lifecycle, preferredLabel: item.preferredLabel, definition: preferred?.definition ?? '',
+      canTransferOwnership: item.canTransferOwnership === true, canEditMetadata: item.canEditMetadata === true, status: item.lifecycle, preferredLabel: item.preferredLabel, definition: preferred?.definition ?? '',
       labels: item.localizations.map((label) => ({ language: label.language, preferredLabel: label.preferredLabel, alternativeLabels: label.alternativeLabels ?? [], definition: label.definition })),
       ownerUserId: item.ownerUserId, ownerName: owner?.displayName ?? item.ownerUserId, ownerOrganization: owner?.organization ?? 'Organisation nicht verfügbar',
       deputyOwnerUserId: item.deputyOwnerUserId, deputyOwnerName: deputy?.displayName ?? item.deputyOwnerUserId, deputyOwnerOrganization: deputy?.organization ?? 'Organisation nicht verfügbar',
@@ -1044,6 +1067,7 @@ export class CatalogApiService {
   private normalizeGlossaryTerm(item: GlossaryTermWire, domains: readonly DomainSummary[]): GlossaryTermSummary {
     const preferred = item.localizations.find((label) => label.language.toLocaleLowerCase() === 'de') ?? item.localizations[0];
     return {
+      ownerUserId:item.ownerUserId,deputyOwnerUserId:item.deputyOwnerUserId,
       id: item.id, urn: item.urn, originCatalogId: item.originCatalogId, revision: item.revision, status: item.lifecycle,
       preferredLabel: item.preferredLabel, definition: preferred?.definition ?? '',
       labels: item.localizations.map((label) => ({ language: label.language, preferredLabel: label.preferredLabel, alternativeLabels: label.alternativeLabels ?? [], definition: label.definition })),
@@ -1061,7 +1085,7 @@ export class CatalogApiService {
       reviews: item.reviews.map((review) => {
         const domain = this.domainState().find((candidate) => candidate.id === review.domainId);
         const owner = this.identity.users().find((user) => user.id === review.ownerUserId);
-        return { id: `${item.id}:${review.domainId}`, domainId: review.domainId, domainLabel: domain?.preferredLabel ?? review.domainId, ownerUserId: review.ownerUserId, ownerName: owner?.displayName ?? review.ownerUserId, status: review.status, decisionComment: review.decisionComment, decidedAt: review.decidedAt };
+        return { canDecide:review.canDecide, id: `${item.id}:${review.domainId}`, domainId: review.domainId, domainLabel: domain?.preferredLabel ?? review.domainId, ownerUserId: review.ownerUserId, ownerName: owner?.displayName ?? review.ownerUserId, status: review.status, decisionComment: review.decisionComment, decidedAt: review.decidedAt };
       }),
     };
   }

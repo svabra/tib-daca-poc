@@ -6,6 +6,23 @@ describe('MappingDraftFacade', () => {
   let facade: MappingDraftFacade;
   beforeEach(() => { facade = new MappingDraftFacade(); facade.initialize(FALLBACK_LOGICAL_MODEL, FALLBACK_PHYSICAL_SNAPSHOT, FALLBACK_MAPPINGS, null); });
 
+  it('loads shared positions, stages moves with the draft, and retains them after a failed save',()=>{
+    const layout={revision:7,positions:{logical:{x:100,y:80}}};
+    facade.initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,FALLBACK_MAPPINGS,null,undefined,layout);
+    expect(facade.canvasNodePositions().get('logical')).toEqual({x:100,y:80});
+    expect(facade.hasWorkspaceChanges()).toBe(false);
+    facade.moveCanvasNode('logical',{x:180,y:120});
+    expect(facade.hasWorkspaceChanges()).toBe(true);expect(facade.hasDirtyMappings()).toBe(false);
+    expect(facade.canvasLayoutDraft()).toEqual({revision:7,positions:{logical:{x:180,y:120}}});
+    // No response means no baseline change; a conflict keeps the local draft.
+    expect(facade.canvasLayoutDraft()?.revision).toBe(7);
+    facade.moveCanvasNode('logical',{x:100,y:80});expect(facade.hasWorkspaceChanges()).toBe(false);
+    facade.moveCanvasNode('logical',{x:180,y:120});
+    facade.restoreCanvasLayout({revision:8,positions:{logical:{x:180,y:120}}});
+    expect(facade.hasWorkspaceChanges()).toBe(false);
+    facade.clear();expect(facade.canvasNodePositions().size).toBe(0);expect(facade.canvasLayoutDraft()).toBeNull();
+  });
+
   it('stages persisted removals locally, keeps them hidden on refresh, and discards them on reload',()=>{
     const mapping=FALLBACK_MAPPINGS[0];facade.selectMapping(mapping.id);
     facade.stageMappingRemoval(mapping.id);facade.stageMappingRemoval(mapping.id);

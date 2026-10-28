@@ -1,5 +1,160 @@
 # Current status
 
+Domain handover is available on details and the card menu. Server-computed
+`canTransferOwnership` distinguishes object ownership from office ALDS and department LDSD
+authority, including explicitly named deputies. `POST /domains/{id}/transfer` rechecks current
+roles, locks the domain/current mandate, checks ETag and validates a different active recipient
+and distinct deputy. A reason and explicit UI confirmation precede the direct, audited change.
+Former owner COR rows are revoked, office scope is pinned (including an explicitly unscoped
+handover), and existing term/model/product responsibilities are preserved. Only term creation
+reviews and logical-model domain reviews follow the handover; multi-domain task routing retains
+other domains' reviewers. Outdated domain requests become stale. Card reads reload on identity
+changes so a former actor's server capabilities are not reused.
+Verified with 42 distinct domain/metadata/scope backend cases (including concurrent handovers),
+all 488 frontend tests, production builds and the dedicated `domain-transfer` browser flow.
+The browser simulates a conflict response before the server receives any transfer, checks
+retained input/cancellation and exercises desktop/mobile scoped menus without changing live
+responsibilities. This was a targeted UI regression flow; no commit was created.
+
+Domain detail metadata editing now uses server-computed `canEditMetadata` for active object
+owners/deputies and explicitly appointed office ALDS/deputies. Native modal editing preserves
+existing languages, saves only localizations, checks ETag and records the domain audit event.
+ALDS rights follow the same trusted office/subordinate-object scope as organization networks;
+the metadata endpoint does not grant foreign-office edits, retirement or term approval.
+Ownership transfer now has its own scoped ALDS/LDSD action above.
+Migration `0044_office_alds_mandates` persists LDSD/ALDS appointments separately from object
+roles. The named assignments are bootstrapped once through an explicit seed function; subsequent
+seeds retain changed or revoked mandates. Static Information now names LDSD, deputy ALDS and
+the confirmed people/scopes. Operator provisioning records the appointment decision reference;
+there is still no appointment UI or complete general office-configuration workflow.
+The requested **Data Analytics Rapid Prototyping** domain is initialized once with Joel Ruod
+as Owner and Thomas Kriegli as deputy, preserving later edits/retirement. Verified: 485 frontend
+tests, 29 distinct domain/scope/backend regression cases, the production builds and the dedicated
+read-only browser flow across ten owner/ALDS/foreign-office cases, including mobile cancellation.
+The browser checks the updated LDSD/RACI reference too. This was a targeted UI regression flow,
+not a full commit gate; no commit was made.
+
+Domain/term card searches now include their assigned Data Owner and deputy. Person names and
+IDs match case- and accent-insensitively; term searches use explicit term ownership, not domain
+classification ownership. Search hints describe these fields in DE/FR/IT/EN.
+Verified with the six relevant component tests, the production UI build and the read-only
+`semantic-owner-search` browser flow covering both owner/deputy fields and filter clearing.
+
+Domain navigation now mirrors Terminology: one **Domänen** section with **Kacheln** and
+**Domänennetz** buttons, instead of a separate top-level network tab. The embedded graph keeps
+its editor, save/discard behavior and navigation guard. `/domains?view=network` is canonical;
+legacy `/domains/network` redirects preserve other query parameters.
+Verified with 21 relevant component tests, the production UI build and read-only browser flows
+for the domain submenu/dirty-view cancellation and the existing organization term network.
+
+The [28 October authorization audit](authorization-consistency-audit.md) found and corrected
+unrelated-user product PATCH access, inconsistent product deputy/list/SLA rights, stale
+publication approvers and overly broad delegated model publication. Pending logical-model
+reviews now recheck the current domain owner/deputy and exclude self-approval. Review reads
+are cleared/cancelled on identity changes. Migration `0043_deputy_steward_role` adds the fourth
+modeling role without granting it to anyone. Legacy model/source scope guards and independent
+model ownership still need alignment. The subsequent LDSD/ALDS implementation above adds
+appointment persistence and domain-metadata authority; general office configuration remains open. See the audit's open findings before treating the
+project as fully consistent with object ownership.
+The targeted audit covered 134 distinct catalog tests plus 46 Control Plane/PEP tests;
+all 483 frontend tests and 18 OPA cases pass. Build, lint, migration and documentation checks
+pass. Two read-only browser regression flows also pass; this was not a full 467-test catalog
+run or a full commit UI gate. No commit was created for the audit.
+
+Terminology now offers **Kacheln / Termnetz**, including a deep link with `?view=network`.
+The term network uses the acting person's current modeling organization by default and permits
+an explicit organization switch. Trusted object scopes and current primary owner memberships
+select active domains/terms, including subordinate organizations; term domain membership does
+not reassign ownership. Existing domain-detail graphs remain available. The same editor handles
+layout saving, held connections, local semantic drafts, proposal approval and navigation guards.
+Organization layouts use `organizations:<organization ID>` in the existing semantic graph table.
+Term card actions now share the compact **…** menu pattern, retaining the disabled TERMDAT item.
+Domain links support `related`, `partOf`, `interfacesWith` and `overlapsWith`. The new symmetric
+interface/overlap types are selectable through the existing relationship editor and survive
+explicit save, reload and reseeding. All graph views share labels/help in DE/FR/IT/EN. These
+types do not infer hierarchy or permissions; source-object ownership checks remain unchanged.
+The suggested directed dependency type is still a proposal.
+Organization-network startup now follows late identity/organization updates until the user
+chooses a scope explicitly. Graph reads retry only temporary connection/502/503/504 failures,
+at most twice; 401/403 errors are not retried. Both personas are checked on initial entry and
+on a subsequent normal session reload without a `demoUser` shortcut.
+
+Semantic graph endpoints are shown only on sides with a visible relationship. The 180 ms hold
+absorbs up to 8 CSS pixels of hand jitter without moving the card. Domain drags capture the
+pointer and resolve the card under the release coordinates before clearing the preview;
+target clicks also preserve an already selected source. Missing source ownership is explained
+inside the canvas. These interactions do not save relationships automatically.
+
+Domain overview cards now have one **…** action trigger instead of separate action buttons.
+The full card heading is a native detail-page link. Existing actions and role/lifecycle checks
+are retained in the compact menu, with keyboard navigation, Escape/outside dismissal, and
+focus restoration. Opening an edit action focuses the existing dialog's first field.
+
+Object governance replaces the global domain-register role (`0042_object_governance`). Domain
+owners/deputies control their domains and outgoing domain links; unrelated global role labels
+grant no authority. Accepted terms have explicit owner/deputy responsibility rows, initialized
+once from their responsible domain and retained across classification changes. Deputy Data
+Steward rows are supported and carry no owner decision right. Domain and glossary workflow
+responses expose trusted, actor-specific review capabilities; decisions recheck assignments.
+Terms also appear as data objects in the responsibility perspectives.
+
+The Information entry links to the expanded static documentation: object roles, departmental
+LDS/office ALDS mandates and all 19 source-matrix activities with a RACI legend, without
+department-specific abbreviations. SLDS is omitted as clarified by the user. A simple localized
+text search filters all static articles, including role descriptions and the matrix, with reset
+and no-results feedback. LDS/ALDS appointment tooling is outside this documentation change.
+
+Semantic-network usability: held domain-to-domain drops draw a local `related` edge immediately;
+the hold threshold is 180 ms and permission failures are explicit. All context menus now use
+shared compact typography/rows with touch sizing. Card descriptions retain a grab cursor and
+use the existing glossary tooltip appearance. Domänennetz is the second navigation entry;
+term lifecycle buttons match the other actions and include a disabled TERMDAT intake placeholder.
+The term graph's top-right display menu can show direct active domain neighbors, off by default.
+Neighbor positions share the existing revision-checked layout; visibility is a temporary view option.
+
+Term/domain cards now distinguish quick movement from a 180 ms hold. A held card exposes a red
+point/line; dropping onto blank canvas opens create/search actions, and dropping onto another
+card prepares a relationship. Each action opens a focused modal with Escape/cancel. Creation
+reuses glossary proposals and domain requests; eligible owners may create domains directly under their own ownership.
+Pending creation cards are personal until approval. A connection-search selection restores or
+adds a card; the four-type context browser remains navigation-only.
+
+Shared layouts now persist hidden cards and additional term references separately from governed
+domain assignments (`0041_semantic_graph_visibility`). Removing a drawing preserves its object
+and links; restore controls bring it back. Right-click connection actions stage type changes or
+deletions without a prompt. Register-only catalog deletion has an explicit confirmation, requires
+a current revision, and immediately retires the object with audit/history intact. Open term
+proposals block direct term retirement. Retired cards disappear from active canvases.
+
+Term layouts are now central and explicit: **Layout speichern** publishes the current arrangement
+for all readers; terminology proposals retain their separate domain-owner approval. A legacy
+private layout may be loaded as an unsaved draft only when no central layout exists.
+`/domains/network` adds the domain graph with shared layout, local relationship drafts, zoom,
+print, fullscreen, arrow-key movement, ports, rewiring and a textual alternative. Relationships are
+`related`, `interfacesWith`, `overlapsWith` (symmetric associations) and `partOf` (source is a subdomain of target); assigned source-domain owners/deputies
+manage those links. Cycles, inverse duplicates, self-links and new links to retired domains are rejected.
+All three graph editors expose term/domain/logical/physical object searches in their context menus.
+Selection opens the object; it never adds a card or link. Physical search uses authorized latest
+snapshots. Domain-to-domain navigation reloads the selected detail rather than retaining the old route data.
+Migration `0040_semantic_graph_states` stores the graph revision, positions and domain links with
+transactional audit evidence. No graph write grants source access or bypasses glossary approval.
+
+Mapping canvas positions are now shared per logical-model root through migration
+`0039_mapping_canvas_layouts`. Owners/stewards move cards locally, then **Entwurf speichern**
+commits their arrangement together with any model/mapping changes. All authorized readers load
+the same arrangement on opening/reloading the workspace. Separate layout revisions and the model
+row lock reject stale/concurrent writes without losing the local draft. Layout-only saves do not
+create model or mapping versions. Hidden drawings remain a local display choice; positions of
+inaccessible sources are filtered from responses and retained during another person's save.
+
+Release **0.2.0** adds shared model/term layouts, editable domain networks and organization-scoped
+term networks, compact context actions, owner search and searchable governance documentation.
+Current object assignments and explicit LDSD/ALDS mandates govern domain editing and ownership
+handover with revision checks and append-only audit. Apply all migrations through
+`0044_office_alds_mandates` before starting the API. Existing access returns and layout data
+remain intact. The authorization audit records remaining model/source scope limitations;
+see [the audit](authorization-consistency-audit.md).
+
 Release **0.1.32** packages the source-access workflow, mapping/editor changes and AdA import
 journey described below. All managed UI/API/package/image versions advance together; release
 0.1.31 notes are retained separately. The mandatory UI-regression hook can target an isolated
@@ -480,10 +635,10 @@ emphasis, context-menu SKOS type/target/source editing and deletion. Both endpoi
 rewired onto other terms in the same domain. Term names and definitions are editable while
 preserving other language labels and domain memberships. The canvas provides sticky fullscreen
 plus/print controls, zoom, automatic layout, keyboard menus and a text alternative.
-Layout is browser-local per identity/domain; unfinished semantic drafts survive a reload in the
-same tab and are protected on navigation. `Änderungen einreichen` submits existing glossary
+Layout is shared per domain after explicit Layout speichern; unsaved layout changes stay local.
+Unfinished semantic drafts survive a reload in the same tab and are protected on navigation. `Änderungen einreichen` submits existing glossary
 update proposals with an expected term revision. It never directly publishes terminology;
 the existing responsible domain owners still approve the proposals. Open proposals by the
 current author reload as an explicitly pending preview with review links. If one of several
 term submissions fails, already submitted proposals are retained and only remaining drafts
-are retried. No new terminology store or SQL schema is introduced.
+are retried. No new terminology store is introduced; shared presentation uses the separate semantic_graph_states table.

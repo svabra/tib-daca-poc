@@ -73,6 +73,7 @@ describe('MappingWorkspaceComponent request ordering',()=>{
       loadLogicalModel:vi.fn((id:string)=>modelDetails.get(id)!.model.asObservable()),
       loadPhysicalSnapshot:vi.fn((id:string)=>snapshotDetails.get(id)!.snapshot.asObservable()),
       listRepresentations:vi.fn(()=>of([])),
+      loadCanvasLayout:vi.fn(()=>of({revision:0,positions:{}})),
       listMappings:vi.fn((id:string)=>modelDetails.get(id)!.mappings.asObservable()),
       loadDrift:vi.fn((id:string)=>snapshotDetails.get(id)!.drift.asObservable()),
     };
@@ -159,10 +160,11 @@ describe('MappingWorkspaceComponent request ordering',()=>{
     expect(component.facade.dirtyIds()).toEqual(dirty);
     component.loading.set(false);
     expect(component.draftSaveDisabledReason()).toBeNull();
+    component.facade.moveCanvasNode('logical',{x:180,y:120});
     component.saveMappings();
     expect(component.draftSaveDisabledReason()).toContain('gerade gespeichert');
     expect(api.saveWorkspaceDraft).toHaveBeenCalledOnce();
-    expect(api.saveWorkspaceDraft).toHaveBeenCalledWith(FALLBACK_LOGICAL_MODEL,expect.any(Array),expect.any(Array),logicalDraft,[FALLBACK_MAPPINGS[0]]);
+    expect(api.saveWorkspaceDraft).toHaveBeenCalledWith(FALLBACK_LOGICAL_MODEL,expect.any(Array),expect.any(Array),logicalDraft,[FALLBACK_MAPPINGS[0]],{revision:0,positions:{logical:{x:180,y:120}}});
     save.error(new Error('Versionskonflikt'));
     expect(component.error()).toContain('keine Änderungen');
     expect(component.draftSaveDisabledReason()).toBeNull();
@@ -171,6 +173,8 @@ describe('MappingWorkspaceComponent request ordering',()=>{
     expect(component.facade.pendingRemovals()).toEqual([FALLBACK_MAPPINGS[0]]);
     expect(component.facade.logicalDraft()).toBe(logicalDraft);
     expect(component.facade.logicalFields()[0].name).toBe('LiveName');
+    expect(component.facade.canvasNodePositions().get('logical')).toEqual({x:180,y:120});
+    expect(component.facade.canvasDirty()).toBe(true);
     const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
     expect(component.canDeactivate()).toBe(false);
     expect(confirm).toHaveBeenCalledOnce();confirm.mockRestore();

@@ -100,6 +100,17 @@ external; its reverse proxy serves Catalog API, Swagger/OpenAPI and sample-produ
 
 ## Verification and rollback
 
+Release **0.2.0** pins all three first-party Deployments to the immutable `0.2.0` images.
+Wait for the GitHub image-publication workflow to succeed before applying those pins. The
+Catalog API startup applies migrations through `0044_office_alds_mandates` before seeding and
+serving traffic. These migrations preserve existing model versions, personal source-access
+returns and audit history. Reuse the deployed ConfigMaps, Secrets, PostgreSQL instance and
+Route; a version rollout does not require replacing them.
+
+Verify `/catalog-api/health/ready`, the API OpenAPI version and the UI version overlay after
+the rollout. Test the term/domain networks with an existing authorized persona. An image
+rollback does not reverse the new schema or transfer any object responsibilities.
+
 ```bash
 oc get pods,services,routes -n daai-brs-d -l app.kubernetes.io/part-of=tib-daca-poc
 oc logs deployment/daca-catalog-api -n daai-brs-d

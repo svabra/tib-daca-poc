@@ -9,6 +9,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import Field
 from sqlalchemy import select
 
+from .mapping_canvas import CanvasLayout, canvas_payload, save_canvas
 from .mapping_inconsistencies import rebase_mapping_versions, sync_mapping_inconsistencies
 from .modeling_api import (
     ActorDep,
@@ -94,6 +95,7 @@ class WorkspaceDraftWrite(ApiModel):
     representations: list[RepresentationWrite] = Field(default_factory=list, max_length=500)
     mappings: list[MappingDraftChange] = Field(default_factory=list, max_length=5000)
     removals: list[MappingRemoval] = Field(default_factory=list, max_length=5000)
+    canvas_layout: CanvasLayout | None = None
 
 
 class SavedMapping(ApiModel):
@@ -106,6 +108,7 @@ class WorkspaceDraftResponse(RepresentationCollection):
     removed_mapping_ids: list[uuid.UUID] = Field(default_factory=list)
     logical_model: LogicalModelResponse | None = None
     current_mappings: list[AssetMappingResponse] | None = None
+    canvas_layout: CanvasLayout
 
 
 def representation_id(model_id: uuid.UUID, table_id: uuid.UUID) -> uuid.UUID:
@@ -159,6 +162,24 @@ def representation_items(session, model_id: uuid.UUID, actor: str | None = None)
 
 def create_representation_router() -> APIRouter:
     router = APIRouter(prefix="/api/v1", tags=["modeling"])
+
+    def accessible_canvas_tables(session, model_id, actor):
+        tables = set()
+        for item in representation_items(session, model_id, actor):
+            try:
+                _require_snapshot_scope(session, actor, item["physicalSnapshotId"])
+            except HTTPException as exc:
+                if exc.status_code == 403:
+                    continue
+                raise
+            tables.add(item["physicalTableId"])
+        return tables
+
+    @router.get("/logical-models/{model_id}/canvas-layout", response_model=CanvasLayout)
+    def read_canvas(model_id: uuid.UUID, session: SessionDep, actor: ActorDep):
+        version = get_logical_version(session, model_id)
+        _require_version_scope(session, actor, version)
+        return canvas_payload(session, model_id, accessible_canvas_tables(session, model_id, actor))
 
     @router.get(
         "/logical-models/{model_id}/representations", response_model=RepresentationCollection
@@ -358,9 +379,14 @@ def create_representation_router() -> APIRouter:
             for item in saved:
                 item["mapping"] = by_id[item["mapping"]["id"]]
         sync_mapping_inconsistencies(session, model_id)
+        canvas_tables = accessible_canvas_tables(session, model_id, actor)
+        if body.canvas_layout is not None:
+            save_canvas(session, model_id, actor, body.canvas_layout, canvas_tables)
+            session.flush()
         result = {"items": representation_items(session, model_id, actor), "mappings": saved,
                   "removedMappingIds": removal_ids,
-                  "logicalModel": logical_payload, "currentMappings": current_mappings}
+                  "logicalModel": logical_payload, "currentMappings": current_mappings,
+                  "canvasLayout": canvas_payload(session, model_id, canvas_tables)}
         session.commit()
         return result
 

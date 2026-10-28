@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from collections import defaultdict
 from typing import Any
+from urllib.parse import quote
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -22,6 +23,9 @@ from .models import (
     DemoUser,
     Domain,
     DomainLocalization,
+    GlossaryTerm,
+    GlossaryTermDomain,
+    GlossaryTermLocalization,
     LogicalModel,
     LogicalModelVersion,
     PhysicalDatabase,
@@ -121,6 +125,13 @@ def catalog_responsibilities(session: Session, actor: str, language: str = "de")
         add_person(item, domain.owner_user_id, "data_owner", "domain_owner")
         add_person(item, domain.deputy_owner_user_id, "deputy_data_owner", "domain_deputy")
 
+    for term in session.scalars(select(GlossaryTerm).where(GlossaryTerm.lifecycle == "active")):
+        labels = list(session.scalars(select(GlossaryTermLocalization).where(GlossaryTermLocalization.term_id == term.id)))
+        label = _localized(labels, language)
+        name = label.preferred_label if label else term.urn
+        memberships = [str(identity) for identity in session.scalars(select(GlossaryTermDomain.domain_id).where(GlossaryTermDomain.term_id == term.id))]
+        add_object(f"glossary_term:{term.id}", "glossary_term", name, label.definition if label else "", f"/domains/terminology?q={quote(name)}", memberships)
+
     latest_models: dict[uuid.UUID, LogicalModelVersion] = {}
     for version in session.scalars(select(LogicalModelVersion).order_by(LogicalModelVersion.revision.desc())):
         latest_models.setdefault(version.logical_model_id, version)
@@ -196,6 +207,7 @@ def catalog_responsibilities(session: Session, actor: str, language: str = "de")
             continue
         target = (
             f"domain:{row.domain_id}" if row.domain_id else
+            f"glossary_term:{row.glossary_term_id}" if row.glossary_term_id else
             f"logical_model:{row.logical_model_id}" if row.logical_model_id else
             f"data_product:{row.data_product_id}" if row.data_product_id else None
         )

@@ -23,6 +23,7 @@ import {
   LogicalDerivationPreview,
   MappingStatus,
   MappingType,
+  MappingCanvasLayout,
   PhysicalDomainState,
   PhysicalDomainTarget,
   PhysicalSnapshot,
@@ -254,6 +255,7 @@ export class DataModelsApiService {
           domainId: textValue(value['domainId']),
           submitterUserId: textValue(value['submitterUserId']),
           reviewerUserId: textValue(value['reviewerUserId']),
+          canDecide: value['canDecide']===true,
           status: textValue(value['status'], 'pending') as LogicalModelReview['status'],
           reviewSnapshot: this.normalizeLogicalModel(value['reviewSnapshot']),
           decisionComment: nullableText(value['decisionComment']),
@@ -409,16 +411,20 @@ export class DataModelsApiService {
     )).pipe(map((value) => value.items));
   }
 
-  saveWorkspaceDraft(model: LogicalModel, representations: readonly {physicalSnapshotId: string; physicalTableId: string}[], drafts: readonly AssetMapping[], logicalDraft:LogicalModelWrite|null=null, removals:readonly AssetMapping[]=[]): Observable<{removedMappingIds?:string[];items: {physicalTableId:string}[]; mappings: {clientId: string; mapping: AssetMapping}[];logicalModel?:LogicalModel;currentMappings?:readonly AssetMapping[]}> {
+  loadCanvasLayout(modelId:string):Observable<MappingCanvasLayout>{
+    return this.identitySafe(this.http.get<MappingCanvasLayout>(`/api/v1/logical-models/${encodeURIComponent(modelId)}/canvas-layout`,{headers:this.identity.headers()}));
+  }
+
+  saveWorkspaceDraft(model: LogicalModel, representations: readonly {physicalSnapshotId: string; physicalTableId: string}[], drafts: readonly AssetMapping[], logicalDraft:LogicalModelWrite|null=null, removals:readonly AssetMapping[]=[], canvasLayout:MappingCanvasLayout|null=null): Observable<{canvasLayout?:MappingCanvasLayout;removedMappingIds?:string[];items: {physicalTableId:string}[]; mappings: {clientId: string; mapping: AssetMapping}[];logicalModel?:LogicalModel;currentMappings?:readonly AssetMapping[]}> {
     const mappings = drafts.map((item) => ({clientId: item.id,
       ...(item.id.startsWith('draft-mapping-') ? {} : {mappingId: item.id, versionId: item.versionId, lockVersion: item.lockVersion}),
       value: this.mappingPayload(item),
     }));
-    return this.identitySafe(this.http.post<{removedMappingIds?:string[];items:{physicalTableId:string}[];mappings: {clientId: string; mapping: unknown}[];logicalModel?:unknown;currentMappings?:unknown[]}>(
+    return this.identitySafe(this.http.post<{canvasLayout?:MappingCanvasLayout;removedMappingIds?:string[];items:{physicalTableId:string}[];mappings: {clientId: string; mapping: unknown}[];logicalModel?:unknown;currentMappings?:unknown[]}>(
       `/api/v1/logical-models/${encodeURIComponent(model.id)}/mapping-drafts`,
-      {logicalModelVersionId: model.versionId, representations, mappings,...(removals.length?{removals:removals.map((item)=>({mappingId:item.id,versionId:item.versionId,lockVersion:item.lockVersion}))}:{}),...(logicalDraft?{logicalModel:this.toLogicalModelPayload(logicalDraft)}:{})},
+      {logicalModelVersionId: model.versionId, representations, mappings,...(removals.length?{removals:removals.map((item)=>({mappingId:item.id,versionId:item.versionId,lockVersion:item.lockVersion}))}:{}),...(logicalDraft?{logicalModel:this.toLogicalModelPayload(logicalDraft)}:{}),...(canvasLayout?{canvasLayout}:{})},
       {headers: this.writeHeaders(`"${model.lockVersion}"`)},
-    )).pipe(map((result) => ({items:result.items,removedMappingIds:result.removedMappingIds??[],...(result.logicalModel?{logicalModel:this.normalizeLogicalModel(result.logicalModel),currentMappings:result.currentMappings?.map((item)=>this.normalizeMapping(item))??[]}:{}),mappings: result.mappings.map((item) => ({clientId: item.clientId, mapping: this.normalizeMapping(item.mapping)}))})));
+    )).pipe(map((result) => ({items:result.items,canvasLayout:result.canvasLayout,removedMappingIds:result.removedMappingIds??[],...(result.logicalModel?{logicalModel:this.normalizeLogicalModel(result.logicalModel),currentMappings:result.currentMappings?.map((item)=>this.normalizeMapping(item))??[]}:{}),mappings: result.mappings.map((item) => ({clientId: item.clientId, mapping: this.normalizeMapping(item.mapping)}))})));
   }
 
   listMappings(logicalModelId?: string, physicalSnapshotId?: string): Observable<readonly AssetMapping[]> {

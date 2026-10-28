@@ -1,7 +1,7 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 import { DomainSummary, GlossaryTermProposal, GlossaryTermSummary } from '../../core/catalog.models';
@@ -52,6 +52,8 @@ const TERM: GlossaryTermSummary = {
   revision: 4,
   status: 'active',
   preferredLabel: 'Gepanzertes Fahrzeug',
+  ownerUserId: 'noemie.rochat',
+  deputyOwnerUserId: 'lucien.morel',
   definition: 'Militärisches Landfahrzeug mit Schutzwirkung.',
   labels: [
     { language: 'de', preferredLabel: 'Gepanzertes Fahrzeug', alternativeLabels: ['Panzerfahrzeug'], definition: 'Militärisches Landfahrzeug mit Schutzwirkung.' },
@@ -102,7 +104,10 @@ async function render() {
     avatarUrl: null,
     roles: ['data_owner', 'data_consumer'],
   });
-  const identity = { user, userId: signal('sandro.wenger') };
+  const identity = { user, userId: signal('sandro.wenger'), users: signal([
+    {id:'noemie.rochat',displayName:'Noémie Rochat'},
+    {id:'lucien.morel',displayName:'Lucien Morel'},
+  ]) };
   await TestBed.configureTestingModule({
     imports: [DomainsGlossaryComponent],
     providers: [
@@ -115,11 +120,35 @@ async function render() {
   fixture.detectChanges();
   await fixture.whenStable();
   fixture.detectChanges();
-  return { fixture, api };
+  return { fixture, api, identity };
 }
 
 describe('DomainsGlossaryComponent term lifecycle proposals', () => {
   afterEach(() => TestBed.resetTestingModule());
+
+  it('clears the former identity capability and reloads transfer rights',async()=>{
+    const {fixture,api,identity}=await render(),component=fixture.componentInstance;
+    api.loadDomains.mockReturnValueOnce(of([{...DEFENCE,canTransferOwnership:true}]));component.load();fixture.detectChanges();
+    expect(component.domains()[0].canTransferOwnership).toBe(true);
+    const pending=new Subject<DomainSummary[]>();api.loadDomains.mockReturnValueOnce(pending.asObservable());identity.userId.set('cinthya.thor');fixture.detectChanges();
+    expect(component.domains()).toEqual([]);
+    pending.next([{...DEFENCE,canTransferOwnership:false}]);pending.complete();fixture.detectChanges();
+    expect(component.domains()[0].canTransferOwnership).toBe(false);
+  });
+
+  it('makes the complete domain heading a link and moves every action into its menu',async()=>{
+    const {fixture}=await render(),root=fixture.nativeElement as HTMLElement;
+    const card=root.querySelector<HTMLElement>('.domain-card')!,heading=card.querySelector<HTMLAnchorElement>('.domain-card-heading')!;
+    expect(heading.tagName).toBe('A');expect(heading.getAttribute('href')).toBe(`/domains/${DEFENCE.id}`);
+    expect(heading.contains(card.querySelector('daca-status-badge'))).toBe(true);
+    expect(card.querySelectorAll('button')).toHaveLength(1);expect(card.querySelector('.domain-actions>a')).toBeNull();
+    card.querySelector<HTMLButtonElement>('.domain-actions-trigger')!.click();fixture.detectChanges();await fixture.whenStable();
+    const edit=[...card.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(button=>button.textContent?.includes('Direkt bearbeiten'))!;
+    edit.click();fixture.detectChanges();await fixture.whenStable();
+    expect(card.querySelector('[role=menu]')).toBeNull();expect(fixture.componentInstance.directAction()).toBe(true);
+    expect(root.querySelector('.semantic-dialog')?.textContent).toContain('Domain direkt bearbeiten');
+    expect((document.activeElement as HTMLInputElement)?.value).toBe(DEFENCE.preferredLabel);
+  });
 
   it('keeps the legacy tab query contract while route-specific pages remain authoritative', () => {
     expect(resolveSemanticTab('domains', 'terms')).toBe('terms');
@@ -137,12 +166,18 @@ describe('DomainsGlossaryComponent term lifecycle proposals', () => {
     component.tab.set('terms');
     fixture.detectChanges();
 
+    expect(root.querySelectorAll('.term-card button')).toHaveLength(1);
+    root.querySelector<HTMLButtonElement>('.term-actions-trigger')!.click();fixture.detectChanges();await fixture.whenStable();
     const createLink = root.querySelector<HTMLAnchorElement>('.daca-page-heading a');
     const updateLink = root.querySelector<HTMLAnchorElement>('.term-actions a');
     expect(createLink?.textContent).toContain('Neuen Term vorschlagen');
     expect(createLink?.getAttribute('href')).toBe('/glossary/proposals/new');
     expect(updateLink?.textContent).toContain('Änderung vorschlagen');
     expect(updateLink?.getAttribute('href')).toBe(`/glossary/proposals/new?termId=${TERM.id}`);
+    const retirement=root.querySelector<HTMLButtonElement>('[data-term-action=request-retirement]');
+    expect(retirement?.getAttribute('role')).toBe('menuitem');
+    const termdat=root.querySelector<HTMLButtonElement>('[data-term-action=termdat]');
+    expect(termdat?.disabled).toBe(true);expect(termdat?.textContent).toContain('TERMDAT');
 
     component.tab.set('governance');
     fixture.detectChanges();
@@ -166,7 +201,7 @@ describe('DomainsGlossaryComponent term lifecycle proposals', () => {
       '/domains/governance',
     ]);
     expect(links[0].getAttribute('aria-current')).toBe('page');
-    expect(links[2].getAttribute('aria-current')).toBeNull();
+    expect(links[1].getAttribute('aria-current')).toBeNull();
 
     component.tab.set('terms');
     fixture.detectChanges();
@@ -195,9 +230,19 @@ describe('DomainsGlossaryComponent term lifecycle proposals', () => {
     confirm.mockRestore();
   });
 
-  it('finds every editable term by an alternative label and shows the abbreviation', async () => {
+  it('finds terms by labels and their own owners, and domains by owners or deputies', async () => {
     const { fixture } = await render();
     const component = fixture.componentInstance;
+    component.query.set('  sIbILLA  ');
+    expect(component.filteredDomains()).toEqual([DEFENCE]);
+    component.query.set('Sandro Wenger');
+    expect(component.filteredDomains()).toEqual([DEFENCE, MOBILITY]);
+    component.termQuery.set('noemie rochat');
+    expect(component.filteredTerms()).toEqual([TERM]);
+    component.termQuery.set('LUCIEN');
+    expect(component.filteredTerms()).toEqual([TERM]);
+    component.termQuery.set('sibilla');
+    expect(component.filteredTerms()).toEqual([]);
     component.tab.set('terms');
     component.termQuery.set('Panzerfahrzeug');
     fixture.detectChanges();
@@ -205,6 +250,7 @@ describe('DomainsGlossaryComponent term lifecycle proposals', () => {
     expect(component.filteredTerms()).toEqual([TERM]);
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('.semantic-card')?.textContent).toContain('Panzerfahrzeug');
+    root.querySelector<HTMLButtonElement>('.term-actions-trigger')!.click();fixture.detectChanges();await fixture.whenStable();
     expect(root.querySelector<HTMLAnchorElement>('.term-actions a')?.getAttribute('href')).toBe(
       `/glossary/proposals/new?termId=${TERM.id}`,
     );

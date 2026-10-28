@@ -1,5 +1,155 @@
 # Catalog data model
 
+## Domain handover audit and responsibility scope
+
+Handover reuses existing domain, responsibility and workflow tables; no migration or new JSON
+column is required. Active `data_owner`/`deputy_data_owner` COR rows for the domain are revoked
+and replaced by the selected pair, preserving other roles. The new rows keep the source
+`organization_id` and use `provenance=domain-handover`; a null organization with that provenance
+means explicitly unscoped and blocks fallback to the recipient's home office. This marker is
+also respected by organization graph membership. Domain named Owner fields, hash and revision
+change transactionally with these rows and existing database role-change audit triggers.
+
+The append-only domain event `ownership-transferred` stores `previousOwnerUserId`,
+`previousDeputyOwnerUserId`, `ownerUserId`, `deputyOwnerUserId`, `organizationIds` and a validated
+`reason`. Identity is exclusively authenticated; the request cannot supply actor or office scope.
+Outdated domain requests record `marked-stale` with reason `domain-ownership-transferred`.
+Domain-governed pending review/task assignments are reconciled while term-owned tasks and
+existing model/product owners stay intact. No historical model snapshots are rewritten.
+
+## LDSD and ALDS organization mandates
+
+Migration `0044_office_alds_mandates` introduces `organization_steward_mandates`, keyed by
+organization registry ID. `mandate_type` distinguishes `ldsd` and `alds`; service validation
+requires a department for LDSD and an office for ALDS. User and optional different deputy
+reference active directory people at assignment time. The service rechecks acting-person and
+office activity/validity on authorization. Revision, active state, operator, decision reference
+and update timestamp persist separately from the four object roles. No role is inferred from
+profile labels. The migration itself grants no assignments.
+
+Operator provisioning locks the current mandate, checks its expected revision and writes an
+append-only `organization-steward-mandate` audit event in the same transaction. The explicit
+demo bootstrap initializes the confirmed assignments once and leaves existing/revoked rows
+untouched. Domain metadata updates reuse the domain revision/content hash and existing audit.
+`canEditMetadata` is derived per actor, never stored or trusted from request input. Organization
+scope reuses the trusted organization-network object membership; no new layout JSON is added.
+LDSD appointment UI and general office configuration are not introduced by this migration.
+Mandate events currently use the general audit ledger, independently of the existing modeling
+role-change projection. The explicitly requested rapid-prototyping domain uses existing domain/
+localization tables, a stable UUID, named Owner/deputy and domain creation audit. Its bootstrap
+does not overwrite later metadata, ownership changes or retirement.
+
+## Four modeling roles and authorization audit
+
+Migration `0043_deputy_steward_role` extends `ck_data_model_role` on
+`data_model_role_assignments` with `deputy_data_steward`. No assignments are inserted or
+promoted. Downgrade refuses incompatible stored deputy-steward rows instead of silently
+deleting or changing them. Operational scope checks include active deputy stewards; object decisions
+must additionally check the concrete owner/deputy. Product ownership combines trusted named
+owner/deputy fields with active object responsibility rows and active people. List predicates
+use the same assignments. No permission flag is persisted from client input.
+
+The [authorization audit](../authorization-consistency-audit.md) records remaining model/source
+scope inconsistencies; the subsequent 0044 migration adds persisted LDSD/ALDS mandates. This migration completes
+role vocabulary, not the migration to universal object-scoped authorization.
+
+## Object ownership and RACI documentation
+
+Migration `0042_object_governance` adds nullable `glossary_term_id` to
+`catalog_object_responsibilities` and includes it in the exactly-one-target check. The role
+constraint also permits `deputy_data_steward`. A term index/FK preserve relational integrity.
+Existing terms receive explicit owner/deputy rows once from their first deterministic domain;
+new accepted terms initialize from the first proposed domain. Classification changes never
+reassign those rows. Inactive or revoked responsibility records are not recreated by seeds.
+The role-capture function records `glossary_term` targets in the append-only protocol.
+
+Legacy register-role profile entries are removed with audit evidence; pending domain reviews
+are routed to current object owners instead. There is no replacement catalog-wide role. Source
+checks on relation diffs and explicit term ownership enforce object authority. Actor capabilities
+in API responses are computed, never persisted or accepted as authorization input. RACI and
+Migration 0042 introduced no appointment records; migration 0044 above adds LDSD/ALDS persistence.
+
+## Shared semantic graphs
+
+Concept `positions` may also contain `domain:<UUID>` coordinates for active one-hop neighbors
+of the root domain in the saved global domain graph. The server validates this membership on
+every read/write; unrelated or two-hop domain coordinates are rejected. The display toggle is
+temporary UI state, default off. No additional persisted flag or migration is required.
+
+Migration `0041_semantic_graph_visibility` adds non-null JSON arrays `hidden_node_ids` and
+`additional_node_ids`, backfilled with empty lists. `hiddenNodeIds` holds rendered node keys;
+`additionalNodeIds` holds canonical `term:<UUID>` references to existing glossary terms. This
+is presentation membership, not `glossary_term_domains` membership. The API validates both
+against persisted catalog content (including outgoing links of reference terms), deduplicates
+lists and writes them with the graph revision/audit transaction. Optional fields preserve old
+clients' existing lists. Responses also compute role-based deletable IDs, retired IDs and domain
+creation capability; those permissions are not persisted or trusted from a request body.
+
+Direct term removal uses `POST /api/v1/glossary/terms/{id}/retire-direct` with `If-Match` and a
+current object owner or deputy assignment. It locks the term, rejects stale revisions and open target proposals,
+sets lifecycle/retired timestamp, increments revision, recomputes its content hash and appends
+`glossary-term` / `retired-direct` audit evidence in one transaction. Labels, incoming/outgoing
+links, domain assignments and historical references are retained. Domain removal reuses the
+existing object-owner retirement API. No table, source account or published permission is deleted.
+
+Pending creation coordinates are browser-session hints, scoped to identity and graph. The term
+cache `<concept draft key>:creations` maps proposal IDs to `{sourceId, point:{x,y}}`; the domain
+cache `daca.domain-network.pending.v1:<actor>` stores request IDs, labels/definitions and the same
+source/point hints. Accepted API proposals/requests remain authoritative. These personal cards
+are excluded from shared position writes and do not introduce a second terminology store.
+
+Organization term networks reuse this table with `graph_key = organizations:<organization ID>`
+and `domain_id = NULL`; no new column or migration is required. The API validates an active
+organization registry ID before every read/write. `positions`, `hidden_node_ids` and explicit
+`additional_node_ids` follow the existing JSON schemas. `relations` remains empty for these rows;
+semantic relationships are still governed through domain saves and glossary proposals.
+Object IDs are derived from explicit organizational responsibilities or the Data Owner's valid
+primary organization membership (including descendant organizations). Reads filter stale positions
+after responsibility changes; writes reject unknown/out-of-scope cards, except explicitly added
+term references. Organization layout editing checks scoped modeling assignments or responsibility
+for an included object, while optimistic revisions and advisory locking prevent lost updates.
+
+Migration `0040_semantic_graph_states` adds `semantic_graph_states`. `graph_key` is `domains`
+for the central domain graph or `concepts:<domain UUID>` for one term network. Concept rows
+also hold a restrictive domain foreign key; the updating person references `demo_users`.
+Each row stores a positive revision, timestamp, `positions` JSON and `relations` JSON.
+
+`positions` maps exact rendered node keys (`domain:<UUID>`, `term:<UUID>`, `product:<UUID>` or
+`uri:<approved external URI>`) to finite `x`/`y` coordinates between 15 and 100000. The API checks
+membership using persisted domain/product/term assignments and term relations. Domain graphs
+accept only domain node keys. A full position replacement supports explicitly saving automatic
+layout; missing positions use the current automatic arrangement.
+
+`relations` is empty for concept layouts. For the domain graph it holds objects with
+`sourceId`, `targetId` (existing domain UUIDs) and `relationType` (`related`, `partOf`,
+`interfacesWith` or `overlapsWith`). Interface/overlap links are symmetric associations;
+they do not infer hierarchy or permissions. The existing JSON shape is unchanged, so accepting
+the two additional validated values needs no schema migration. These
+JSON references are transactionally validated against domain rows; no cross-service keys are
+inferred. Self-links, duplicate unordered pairs, new links to retired domains and directed
+`partOf` cycles are rejected. No permission or domain-membership inheritance is implied.
+
+A deterministic PostgreSQL transaction advisory lock per graph serializes first inserts and
+updates. Concept saves additionally lock/recheck the owning domain's active state. Revision 0
+represents an absent row. The same transaction appends `semantic-graph` / `graph-saved` audit
+evidence, including node count and before/after domain links; source records and protected data
+are never copied. Seeds do not rewrite this state. Neither layouts nor domain links change
+logical-model versions, glossary proposals or source-access permissions.
+
+## Shared mapping canvas layout
+
+Migration `0039_mapping_canvas_layouts` introduces `mapping_canvas_layouts`: one mutable
+presentation record per logical-model root, with an independent positive revision, a JSON
+`positions` dictionary, authenticated updating person and timestamp. Keys are `logical` or
+`physical:<snapshot-bound table UUID>`; each value holds finite `x`/`y` canvas coordinates
+between 15 and 100000. Absence of a row is API revision 0 with the automatic layout.
+
+The mapping-drafts transaction locks the logical-model root and compares the supplied layout
+revision. Layout writes append a `mapping-canvas` / `layout-saved` audit event with revision and
+node count. They do not create logical-model/mapping versions. Physical keys must identify
+accessible existing or newly attached representations; filtered keys are never echoed or deleted
+by a partial write. No seed touches this table. Both foreign keys restrict hard deletion.
+
 ## Deferred relationship removals
 
 Unsaved workspace removals exist only in Angular memory. On Save draft, the optional `removals`
@@ -215,10 +365,10 @@ reads it from the actual footer. It never denotes the number of S3 objects (`obj
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
-- Alembic head: `0038_model_assistance_origins`
-- Schema fingerprint: `7a6014ebc42d3573`
-- Migration fingerprint: `29d9de1bb3a3d761`
-- Tables: `97`
+- Alembic head: `0044_office_alds_mandates`
+- Schema fingerprint: `d70b9e546b1e1927`
+- Migration fingerprint: `770a2024abee5c72`
+- Tables: `100`
 
 ## Domain status vocabulary
 
@@ -393,6 +543,7 @@ erDiagram
         string role
         string organization_id FK
         uuid domain_id FK
+        uuid glossary_term_id FK
         uuid logical_model_id FK
         uuid physical_source_id FK
         string physical_table_key
@@ -1006,6 +1157,13 @@ erDiagram
         datetime updated_at
         datetime retired_at
     }
+    mapping_canvas_layouts {
+        uuid logical_model_id PK,FK
+        integer revision
+        json positions
+        string updated_by_user_id FK
+        datetime updated_at
+    }
     metadata_delivery_outbox {
         uuid id PK
         uuid data_product_id FK
@@ -1036,6 +1194,17 @@ erDiagram
         uuid term_id FK
         string target_uri
         string relation
+    }
+    organization_steward_mandates {
+        string organization_id PK,FK
+        string user_id FK
+        integer revision
+        boolean active
+        string mandate_type
+        string deputy_user_id FK
+        string appointed_by
+        string decision_reference
+        datetime updated_at
     }
     physical_columns {
         json import_metadata
@@ -1265,6 +1434,17 @@ erDiagram
         string name PK
         datetime applied_at
     }
+    semantic_graph_states {
+        string graph_key PK
+        uuid domain_id FK
+        integer revision
+        json positions
+        json relations
+        json hidden_node_ids
+        json additional_node_ids
+        string updated_by_user_id FK
+        datetime updated_at
+    }
     service_level_revisions {
         uuid id PK
         uuid data_product_id FK
@@ -1476,6 +1656,7 @@ erDiagram
     demo_users ||--o{ catalog_object_responsibilities : "user_id"
     administrative_organizations o|--o{ catalog_object_responsibilities : "organization_id"
     domains o|--o{ catalog_object_responsibilities : "domain_id"
+    glossary_terms o|--o{ catalog_object_responsibilities : "glossary_term_id"
     logical_models o|--o{ catalog_object_responsibilities : "logical_model_id"
     physical_sources o|--o{ catalog_object_responsibilities : "physical_source_id"
     data_products o|--o{ catalog_object_responsibilities : "data_product_id"
@@ -1574,9 +1755,14 @@ erDiagram
     demo_users ||--o{ logical_model_versions : "created_by_user_id"
     demo_users ||--o{ logical_model_versions : "updated_by_user_id"
     demo_users ||--o{ logical_models : "created_by_user_id"
+    logical_models ||--o| mapping_canvas_layouts : "logical_model_id"
+    demo_users ||--o{ mapping_canvas_layouts : "updated_by_user_id"
     data_products ||--o{ metadata_delivery_outbox : "data_product_id"
     data_products ||--o{ metadata_publications : "data_product_id"
     canonical_ontology_terms ||--o{ ontology_term_alignments : "term_id"
+    administrative_organizations ||--o| organization_steward_mandates : "organization_id"
+    demo_users ||--o{ organization_steward_mandates : "user_id"
+    demo_users o|--o{ organization_steward_mandates : "deputy_user_id"
     physical_tables ||--o{ physical_columns : "physical_table_id"
     physical_schema_snapshots ||--o{ physical_databases : "snapshot_id"
     physical_sources ||--o{ physical_domain_assignments : "physical_source_id"
@@ -1607,6 +1793,8 @@ erDiagram
     data_product_fields o|--o{ product_semantic_mappings : "data_product_field_id"
     canonical_ontology_terms ||--o{ product_semantic_mappings : "ontology_term_id"
     data_products o|--o{ provenance_events : "data_product_id"
+    domains o|--o{ semantic_graph_states : "domain_id"
+    demo_users ||--o{ semantic_graph_states : "updated_by_user_id"
     data_products ||--o{ service_level_revisions : "data_product_id"
     demo_users ||--o{ service_level_revisions : "created_by_owner_user_id"
     demo_users ||--o{ service_level_revisions : "updated_by_owner_user_id"
@@ -1924,7 +2112,7 @@ Constraints and indexes:
 
 ### `catalog_object_responsibilities`
 
-Additional explicit person-to-domain, model, physical source/table or product responsibility links; descriptive, never an authorization grant.
+Explicit person-to-object roles, including deputy stewardship and independent term ownership. Domain handover revokes old Owner rows and pins the office (or explicit lack of office) with domain-handover provenance. Model, source/table and product modules retain their established checks.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -1933,6 +2121,7 @@ Additional explicit person-to-domain, model, physical source/table or product re
 | `role` | `VARCHAR(32)` | no | — | — |
 | `organization_id` | `VARCHAR(100)` | yes | FK | — |
 | `domain_id` | `CHAR(32)` | yes | FK | — |
+| `glossary_term_id` | `CHAR(32)` | yes | FK | — |
 | `logical_model_id` | `CHAR(32)` | yes | FK | — |
 | `physical_source_id` | `CHAR(32)` | yes | FK | — |
 | `physical_table_key` | `VARCHAR(1500)` | yes | — | — |
@@ -1943,12 +2132,13 @@ Additional explicit person-to-domain, model, physical source/table or product re
 
 Constraints and indexes:
 
-- Check `ck_catalog_object_responsibility_role`: `role IN ('data_owner', 'deputy_data_owner', 'data_steward')`
+- Check `ck_catalog_object_responsibility_role`: `role IN ('data_owner', 'deputy_data_owner', 'data_steward', 'deputy_data_steward')`
 - Check `ck_catalog_object_responsibility_table_source`: `physical_table_key IS NULL OR physical_source_id IS NOT NULL`
-- Check `ck_catalog_object_responsibility_target`: `(CASE WHEN domain_id IS NULL THEN 0 ELSE 1 END + CASE WHEN logical_model_id IS NULL THEN 0 ELSE 1 END + CASE WHEN physical_source_id IS NULL THEN 0 ELSE 1 END + CASE WHEN data_product_id IS NULL THEN 0 ELSE 1 END) = 1`
+- Check `ck_catalog_object_responsibility_target`: `(CASE WHEN domain_id IS NULL THEN 0 ELSE 1 END + CASE WHEN glossary_term_id IS NULL THEN 0 ELSE 1 END + CASE WHEN logical_model_id IS NULL THEN 0 ELSE 1 END + CASE WHEN physical_source_id IS NULL THEN 0 ELSE 1 END + CASE WHEN data_product_id IS NULL THEN 0 ELSE 1 END) = 1`
 - Foreign key `user_id` → `demo_users.id`; on delete `CASCADE`
 - Foreign key `organization_id` → `administrative_organizations.id`; on delete `RESTRICT`
 - Foreign key `domain_id` → `domains.id`; on delete `CASCADE`
+- Foreign key `glossary_term_id` → `glossary_terms.id`; on delete `CASCADE`
 - Foreign key `logical_model_id` → `logical_models.id`; on delete `CASCADE`
 - Foreign key `physical_source_id` → `physical_sources.id`; on delete `CASCADE`
 - Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
@@ -1956,11 +2146,12 @@ Constraints and indexes:
 - Index `ix_catalog_object_responsibility_model` on `logical_model_id`
 - Index `ix_catalog_object_responsibility_product` on `data_product_id`
 - Index `ix_catalog_object_responsibility_source` on `physical_source_id`
+- Index `ix_catalog_object_responsibility_term` on `glossary_term_id`
 - Index `ix_catalog_object_responsibility_user` on `user_id, active`
 
 ### `data_model_role_assignments`
 
-Organization-scoped Data Owner, delegated deputy and Data Steward assignments used only by the modeling module.
+Organization-scoped Data Owner, delegated deputy Data Owner, Data Steward and deputy Data Steward assignments used by legacy modeling guards; these are not LDSD/ALDS mandates or universal object ownership.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -1977,7 +2168,7 @@ Constraints and indexes:
 
 - Check `ck_data_model_delegation_not_self`: `delegated_owner_user_id IS NULL OR delegated_owner_user_id <> user_id`
 - Check `ck_data_model_deputy_owner_required`: `role <> 'deputy_data_owner' OR delegated_owner_user_id IS NOT NULL`
-- Check `ck_data_model_role`: `role IN ('data_owner', 'deputy_data_owner', 'data_steward')`
+- Check `ck_data_model_role`: `role IN ('data_owner', 'deputy_data_owner', 'data_steward', 'deputy_data_steward')`
 - Unique `uq_data_model_role_scope`: `user_id, organization_id, role`
 - Foreign key `user_id` → `demo_users.id`
 - Foreign key `organization_id` → `administrative_organizations.id`; on delete `RESTRICT`
@@ -3228,6 +3419,24 @@ Constraints and indexes:
 - Foreign key `created_by_user_id` → `demo_users.id`
 - Index `ix_logical_model_lifecycle` on `lifecycle`
 
+### `mapping_canvas_layouts`
+
+One shared presentation per logical-model root with independent optimistic revision, JSON node positions, updating actor/time and append-only layout-saved audit evidence; positions never change model content or source access.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `logical_model_id` | `CHAR(32)` | no | PK, FK | — |
+| `revision` | `INTEGER` | no | — | — |
+| `positions` | `JSON` | no | — | — |
+| `updated_by_user_id` | `VARCHAR(200)` | no | FK | — |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Check `ck_mapping_canvas_revision`: `revision >= 1`
+- Foreign key `logical_model_id` → `logical_models.id`; on delete `RESTRICT`
+- Foreign key `updated_by_user_id` → `demo_users.id`
+
 ### `metadata_delivery_outbox`
 
 Deduplicated local PoC evidence for simulated I14Y metadata deliveries.
@@ -3293,6 +3502,31 @@ Constraints and indexes:
 
 - Unique `uq_ontology_term_alignment`: `term_id, target_uri`
 - Foreign key `term_id` → `canonical_ontology_terms.id`; on delete `CASCADE`
+
+### `organization_steward_mandates`
+
+Explicit LDSD department and ALDS office mandates, with optional named deputy, active state, revision and appointment decision reference; operator provisioning appends audit evidence and seeds preserve changes/revocations.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `organization_id` | `VARCHAR(100)` | no | PK, FK | — |
+| `user_id` | `VARCHAR(200)` | no | FK | — |
+| `revision` | `INTEGER` | no | — | `1` |
+| `active` | `BOOLEAN` | no | — | `True` |
+| `mandate_type` | `VARCHAR(20)` | no | — | — |
+| `deputy_user_id` | `VARCHAR(200)` | yes | FK | — |
+| `appointed_by` | `VARCHAR(255)` | no | — | — |
+| `decision_reference` | `VARCHAR(1000)` | no | — | — |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Check `ck_steward_mandate_deputy`: `deputy_user_id IS NULL OR deputy_user_id <> user_id`
+- Check `ck_steward_mandate_revision`: `revision >= 1`
+- Check `ck_steward_mandate_type`: `mandate_type IN ('ldsd','alds')`
+- Foreign key `organization_id` → `administrative_organizations.id`; on delete `RESTRICT`
+- Foreign key `user_id` → `demo_users.id`; on delete `RESTRICT`
+- Foreign key `deputy_user_id` → `demo_users.id`; on delete `RESTRICT`
 
 ### `physical_columns`
 
@@ -3773,6 +4007,28 @@ Idempotency markers for deterministic PoC seed operations.
 Constraints and indexes:
 
 - No additional constraints or explicit indexes.
+
+### `semantic_graph_states`
+
+Shared revision-checked term/domain and organization-scoped concept layouts (organizations:<registry ID>, with null domain_id) with validated positions, hidden-node and additional-reference JSON plus domain related/partOf/interfacesWith/overlapsWith links; organization layout rows never store governed relationship edits; presentation does not change governed assignments. Updating person/time and atomic append-only graph-saved audit preserve traceability; glossary approval and access rights remain separate.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `graph_key` | `VARCHAR(200)` | no | PK | — |
+| `domain_id` | `CHAR(32)` | yes | FK | — |
+| `revision` | `INTEGER` | no | — | — |
+| `positions` | `JSON` | no | — | — |
+| `relations` | `JSON` | no | — | — |
+| `hidden_node_ids` | `JSON` | no | — | `list` |
+| `additional_node_ids` | `JSON` | no | — | `list` |
+| `updated_by_user_id` | `VARCHAR(200)` | no | FK | — |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Check `ck_semantic_graph_revision`: `revision >= 1`
+- Foreign key `domain_id` → `domains.id`; on delete `RESTRICT`
+- Foreign key `updated_by_user_id` → `demo_users.id`
 
 ### `service_level_revisions`
 
