@@ -110,13 +110,18 @@ jobs:
           ALEMBIC_DATABASE_URL: postgresql+psycopg://daca_sample_owner:daca_sample_owner_test@localhost:55432/daca_sample
         run: |
           docker exec daca-postgres-compat createdb -U daca_admin -O daca_catalog daca_catalog_test
-          uv run --package daca-catalog-api alembic -c services/catalog-api/alembic.ini upgrade head
-          uv run --package daca-catalog-api daca-catalog-seed
-          uv run --package daca-catalog-api daca-catalog-seed
+          # Exercise historical reversible migrations before crossing the role-cleanup barrier.
+          uv run --package daca-catalog-api alembic -c services/catalog-api/alembic.ini upgrade 0041_semantic_graph_visibility
           uv run --package daca-catalog-api alembic -c services/catalog-api/alembic.ini downgrade 0015_domains_glossary
           uv run --package daca-catalog-api alembic -c services/catalog-api/alembic.ini upgrade head
           uv run --package daca-catalog-api daca-catalog-seed
           uv run --package daca-catalog-api daca-catalog-seed
+          # A reverse role migration must fail and roll back all preceding downgrade steps.
+          if uv run --package daca-catalog-api alembic -c services/catalog-api/alembic.ini downgrade 0041_semantic_graph_visibility > "$RUNNER_TEMP/daca-migration-barrier.log" 2>&1; then
+            echo "::error::The object-governance migration unexpectedly allowed an automatic downgrade."
+            exit 1
+          fi
+          grep --fixed-strings "Object governance has no destructive automatic downgrade" "$RUNNER_TEMP/daca-migration-barrier.log"
           uv run --package daca-catalog-api alembic -c services/catalog-api/alembic.ini check
           uv run --package daca-control-plane-api alembic -c services/control-plane-api/alembic.ini upgrade head
           uv run --package daca-control-plane-api daca-control-plane-seed

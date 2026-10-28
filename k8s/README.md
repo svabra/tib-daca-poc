@@ -111,6 +111,11 @@ Verify `/catalog-api/health/ready`, the API OpenAPI version and the UI version o
 the rollout. Test the term/domain networks with an existing authorized persona. An image
 rollback does not reverse the new schema or transfer any object responsibilities.
 
+The publication workflow tests reversible migrations through `0041_semantic_graph_visibility`
+before upgrading to the current head and checking the seed twice. It then verifies that the
+`0042_object_governance` downgrade barrier rejects automatic role restoration transactionally;
+the seeded head schema must still pass Alembic's consistency check afterwards.
+
 ```bash
 oc get pods,services,routes -n daai-brs-d -l app.kubernetes.io/part-of=tib-daca-poc
 oc logs deployment/daca-catalog-api -n daai-brs-d

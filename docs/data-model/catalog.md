@@ -4449,3 +4449,12 @@ coordinates. `sessionStorage` key `daca.concept-network.draft.v1:<user>:<domain>
 edits. These presentation/draft caches are scoped per user/domain, carry no authorization,
 and are not part of the authoritative catalog schema. Proposals and approval remain server-side;
 open proposals are reloaded from the existing governance API, rather than trusted browser state.
+
+### Object-governance migration boundary
+
+Migration `0042_object_governance` deliberately rejects automatic downgrade: restoring the
+removed register role or dropping explicit object ownership would discard governance evidence.
+Release CI checks the reversible historical range through 0041 separately, then upgrades and
+seeds the current head twice. A downgrade attempt across 0042 must fail transactionally; the
+seeded head must still pass Alembic's schema check afterwards. Operational reversal requires a
+reviewed backup restoration and does not happen as part of an image rollback.

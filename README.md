@@ -103,6 +103,10 @@ handover with revision checks and append-only audit. Apply all migrations throug
 remain intact. The authorization audit records remaining model/source scope limitations;
 see [the audit](docs/authorization-consistency-audit.md).
 
+Release CI tests historical reversible migrations before crossing the object-governance
+barrier, then verifies that an automatic downgrade is rejected without changing the seeded
+head schema. Reversing role cleanup requires a reviewed backup restoration.
+
 Release **0.1.32** adds personal source-access return and owner-reviewed restoration, draft-only
 mapping edits, improved field editing and the repeatable AdA CSV-import journey. Release 0.1.31
 notes remain in the version history. For a separate local UI-regression stack, set

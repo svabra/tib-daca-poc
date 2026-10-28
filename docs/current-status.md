@@ -155,6 +155,10 @@ handover with revision checks and append-only audit. Apply all migrations throug
 remain intact. The authorization audit records remaining model/source scope limitations;
 see [the audit](authorization-consistency-audit.md).
 
+Release CI exercises the historical reversible migration range before upgrading to the current
+head. It explicitly checks the transactional downgrade rejection at object-governance migration
+0042 and verifies that the seeded head remains consistent; ordinary rollouts stay forward-only.
+
 Release **0.1.32** packages the source-access workflow, mapping/editor changes and AdA import
 journey described below. All managed UI/API/package/image versions advance together; release
 0.1.31 notes are retained separately. The mandatory UI-regression hook can target an isolated
