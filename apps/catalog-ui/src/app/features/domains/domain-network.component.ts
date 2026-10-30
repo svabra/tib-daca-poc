@@ -21,6 +21,7 @@ interface LinkEdit{index:number|null;sourceId:string;targetId:string;relationTyp
 @Component({selector:'daca-domain-network',standalone:true,imports:[RouterLink,FormsModule,TooltipDirective,CatalogObjectBrowserComponent,SemanticCreateDialogComponent],changeDetection:ChangeDetectionStrategy.OnPush,templateUrl:'./domain-network.component.html',styleUrls:['./concept-network-editor.component.css','./domain-network.component.css']})
 export class DomainNetworkComponent {
   readonly embedded=input(false);
+  readonly visibleDomainIds=input<readonly string[] | null>(null);
   private readonly api=inject(CatalogApiService);private readonly identity=inject(DemoIdentityService);private readonly host=inject<ElementRef<HTMLElement>>(ElementRef);private readonly injector=inject(Injector);private request?:Subscription;
   readonly domains=signal<readonly DomainSummary[]>([]);readonly saved=signal<SemanticGraphState|null>(null);readonly positions=signal<Record<string,Point>>({});readonly links=signal<DomainNetworkLink[]>([]);
   readonly loading=signal(true);readonly saving=signal(false);readonly error=signal('');readonly notice=signal('');readonly zoom=signal(.8);readonly fullscreen=signal(false);readonly printing=signal(false);
@@ -39,13 +40,13 @@ export class DomainNetworkComponent {
   readonly pendingCards=signal<{id:string;label:string;definition:string;point:Point;sourceId:string}[]>([]);
   private dropContext:{sourceId:string;point:Point}|null=null;
   readonly heldPreview=computed(()=>{const hold=this.hold.active(),source=this.nodes().find(node=>node.id===hold?.id);if(!hold||!source||!this.canSource(source.id))return null;const end=this.point(hold),start={x:source.x+(end.x>=source.x+115?230:0),y:source.y+50};return{start,end,path:`M ${start.x} ${start.y} L ${end.x} ${end.y}`};});
-  readonly hiddenDomains=computed(()=>this.domains().filter(domain=>this.hiddenIds().includes('domain:'+domain.id)));
+  readonly hiddenDomains=computed(()=>this.domains().filter(domain=>(this.visibleDomainIds()===null||this.visibleDomainIds()!.includes(domain.id))&&this.hiddenIds().includes('domain:'+domain.id)));
   readonly nodes=computed<DomainNode[]>(()=>{
     const graph=new dagre.graphlib.Graph();graph.setGraph({rankdir:'LR',nodesep:45,ranksep:110,marginx:35,marginy:35});graph.setDefaultEdgeLabel(()=>({}));
     for(const domain of this.domains())graph.setNode(domain.id,{width:230,height:100});
     for(const link of this.links())if(graph.hasNode(link.sourceId)&&graph.hasNode(link.targetId))graph.setEdge(link.sourceId,link.targetId);
     dagre.layout(graph);
-    return this.domains().map((domain,index)=>{const point=graph.node(domain.id) as Point,automatic=this.links().length?{x:point.x-115,y:point.y-50}:{x:35+(index%3)*340,y:35+Math.floor(index/3)*150};return{domain,id:domain.id,...(this.positions()['domain:'+domain.id]??automatic)};}).filter(node=>!this.hiddenIds().includes('domain:'+node.id)&&(this.showRetired()||node.domain.status==='active'));
+    return this.domains().map((domain,index)=>{const point=graph.node(domain.id) as Point,automatic=this.links().length?{x:point.x-115,y:point.y-50}:{x:35+(index%3)*340,y:35+Math.floor(index/3)*150};return{domain,id:domain.id,...(this.positions()['domain:'+domain.id]??automatic)};}).filter(node=>(this.visibleDomainIds()===null||this.visibleDomainIds()!.includes(node.id))&&!this.hiddenIds().includes('domain:'+node.id)&&(this.showRetired()||node.domain.status==='active'));
   });
   readonly edges=computed(()=>this.links().flatMap((link,index)=>{
     const source=this.nodes().find(node=>node.id===link.sourceId),target=this.nodes().find(node=>node.id===link.targetId);if(!source||!target)return[];
@@ -68,8 +69,8 @@ export class DomainNetworkComponent {
     if(actor===this.identity.userId()){this.applySaved(graph);this.notice.set('Domänennetz für alle gespeichert.');}
   }catch(error){if(actor===this.identity.userId())this.error.set(`${error instanceof Error?error.message:'Nicht gespeichert.'} Der lokale Entwurf bleibt erhalten. Laden Sie bei einem Konflikt die Seite neu.`);}finally{if(actor===this.identity.userId())this.saving.set(false);}}
   discard():void{const saved=this.saved();if(saved)this.applySaved(saved);this.edit.set(null);this.connecting.set(null);this.notice.set('Lokalen Entwurf verworfen.');}
-  autoLayout():void{if(!this.canLayout())return;this.positions.set({});this.layoutDirty.set(true);}
-  private pin():void{this.positions.set(Object.fromEntries(this.nodes().map(node=>['domain:'+node.id,{x:node.x,y:node.y}])));}
+  autoLayout():void{if(!this.canLayout())return;this.positions.update(positions=>this.visibleDomainIds()===null?{}:Object.fromEntries(Object.entries(positions).filter(([id])=>!this.visibleDomainIds()!.includes(id.slice(7)))));this.layoutDirty.set(true);}
+  private pin():void{this.positions.update(positions=>({...positions,...Object.fromEntries(this.nodes().map(node=>['domain:'+node.id,{x:node.x,y:node.y}]))}));}
   private point(event:Pick<PointerEvent,'clientX'|'clientY'>):Point{const rect=this.host.nativeElement.querySelector('.graph-canvas')!.getBoundingClientRect();return{x:(event.clientX-rect.left)/this.zoom(),y:(event.clientY-rect.top)/this.zoom()};}
   hasPort(id:string,side:'left'|'right'):boolean{return this.edges().some(edge=>(edge.sourceId===id&&edge.sourceSide===side)||(edge.targetId===id&&edge.targetSide===side));}
   private capture(event:PointerEvent):void{try{(event.currentTarget as Element)?.setPointerCapture(event.pointerId);}catch{/* Synthetic events may not have an active pointer. */}}

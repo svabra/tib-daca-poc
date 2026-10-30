@@ -200,12 +200,12 @@ export class LogicalModelEditorComponent {
   readonly moveOrganizations=computed(()=>[...new Set(this.modelingScopes().filter((scope)=>(scope.role === 'data_owner' || scope.role === 'deputy_data_owner')||(scope.role === 'data_steward' || scope.role === 'deputy_data_steward')).flatMap((scope)=>scope.descendantOrganizationIds??[]))]);
   openFieldMove(trigger:EventTarget|null):void{
     if(!this.model()||!this.canRemoveFields()||this.saving())return;
-    if(this.form.dirty||this.mappingDraftsPending()){this.error.set('Speichern oder verwerfen Sie zuerst alle offenen Feld- und Zuordnungsänderungen.');return;}
+    if(this.form.dirty||this.mappingDraftsPending()){this.error.set('Speichern oder verwerfen Sie zuerst alle offenen Feld- und Mapping-Änderungen.');return;}
     if(this.fields.length<=1){this.error.set('Das letzte Feld kann nicht verschoben werden. Ein logisches Modell benötigt mindestens ein Feld.');return;}
     this.fieldMoveTrigger=trigger instanceof HTMLElement?trigger:null;this.fieldMoveOpen.set(true);
   }
   closeFieldMove():void{this.fieldMoveOpen.set(false);this.fieldMoveTrigger?.focus();}
-  fieldMoved(model:LogicalModel,etag:string):void{this.model.set(model);this.etag.set(etag);this.patch(model);this.form.markAsPristine();this.closeFieldMove();this.notice.set('Das Feld wurde ins Zielmodell verschoben. Die physischen Zuordnungen wurden nicht übertragen.');this.modelSaved.emit(model);this.catalogApi.refreshWorkflowTasks();}
+  fieldMoved(model:LogicalModel,etag:string):void{this.model.set(model);this.etag.set(etag);this.patch(model);this.form.markAsPristine();this.closeFieldMove();this.notice.set('Das Feld wurde ins Zielmodell verschoben. Die physischen Mappings wurden nicht übertragen.');this.modelSaved.emit(model);this.catalogApi.refreshWorkflowTasks();}
 
   readonly canPublishCurrentModel = computed(() => this.identity.canPublishModel(this.model()));
   readonly canEditCurrentModel = computed(() => {

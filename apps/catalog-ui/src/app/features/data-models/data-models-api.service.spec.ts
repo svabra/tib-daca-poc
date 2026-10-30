@@ -12,6 +12,17 @@ describe('DataModelsApiService', () => {
   beforeEach(() => { TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(), { provide: DemoIdentityService, useValue: { userId, user: computed(() => ({ displayName: 'Cinthya Thor', email: 'cinthya.thor@vtg.admin.ch', organization: 'Verteidigung' })), headers: computed(() => new HttpHeaders({ 'X-DaCa-User': userId() })) } }] }); api = TestBed.inject(DataModelsApiService); http = TestBed.inject(HttpTestingController); });
   afterEach(() => { http.verify(); TestBed.resetTestingModule(); });
 
+  it('uses the trusted connection flag without guessing connectivity from the source type',()=>{
+    let snapshots:readonly import('./data-models.models').PhysicalSnapshot[]=[];
+    api.listPhysicalSnapshots().subscribe((items)=>snapshots=items);
+    http.expectOne('/api/v1/physical-snapshots').flush({items:[
+      {id:'connected',sourceAdapterType:'postgresql',sourceConnectionConfigured:true},
+      {id:'metadata',sourceAdapterType:'postgresql',sourceConnectionConfigured:false},
+      {id:'legacy',sourceAdapterType:'postgresql'},
+    ]});
+    expect(snapshots.map((snapshot)=>snapshot.sourceConnectionConfigured)).toEqual([true,false,undefined]);
+  });
+
   it('presents zero-based API positions from one and preserves them on save and reload', () => {
     const wire={id:'model-order',versionId:'v1',lockVersion:1,revision:1,status:'draft',
       localizations:[{language:'de',title:'Gebäude',description:'Modell'}],identifiers:['ORDER-TEST'],
@@ -184,6 +195,28 @@ describe('DataModelsApiService', () => {
     const imported=http.expectOne('/api/v1/physical-sources/source-1/imports');expect(imported.request.headers.get('If-Match')).toBe('"7"');expect(imported.request.body).toEqual({fixtureVariant:'drift'});imported.flush({snapshot:{id:'snapshot-2',sourceId:'source-1',sequence:2},databases:[]},{headers:{ETag:'"8"'}});
     const snapshot=http.expectOne('/api/v1/physical-snapshots/snapshot-2');snapshot.flush({snapshot:{id:'snapshot-2',sourceId:'source-1',sequence:2},databases:[]});
     const mapping=http.expectOne('/api/v1/asset-mappings');expect(mapping.request.body.logicalFieldVersionIds).toEqual(['field-1']);mapping.flush({id:'mapping-1',versionId:'mapping-version-1',lockVersion:1,logicalModelVersionId:'version-1',logicalFieldVersionIds:['field-1'],physicalSnapshotId:'snapshot-2',physicalColumnIds:['column-1'],mappingType:'Direct',status:'draft'});
+  });
+
+  it('keeps a metadata import pending beyond eight seconds and accepts its confirmed result',()=>{
+    vi.useFakeTimers();
+    try {
+      const next=vi.fn(),error=vi.fn();api.importPhysicalSource('slow-source',7,'drift').subscribe({next,error});
+      const request=http.expectOne('/api/v1/physical-sources/slow-source/imports');
+      vi.advanceTimersByTime(12000);
+      expect(request.cancelled).toBe(false);expect(error).not.toHaveBeenCalled();
+      request.flush({snapshot:{id:'confirmed-snapshot',sourceId:'slow-source',sequence:8},databases:[]});
+      expect(next.mock.calls[0][0].body.id).toBe('confirmed-snapshot');
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('still bounds metadata imports at sixty seconds',()=>{
+    vi.useFakeTimers();
+    try {
+      const error=vi.fn();api.importPhysicalSource('unavailable-source',7).subscribe({error});
+      const request=http.expectOne('/api/v1/physical-sources/unavailable-source/imports');
+      vi.advanceTimersByTime(60001);
+      expect(request.cancelled).toBe(true);expect(error).toHaveBeenCalledOnce();
+    } finally { vi.useRealTimers(); }
   });
 
   it('uses immutable submit and supersede workflow routes with optimistic locking', () => {

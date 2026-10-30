@@ -11,8 +11,8 @@ import { AssetMappingWrite, DataClassification, MappingType } from './data-model
     <dialog #dialog class="mapping-dialog" (cancel)="cancel($event)">
       @if(facade.editor()){
         <form [formGroup]="form" (ngSubmit)="save()">
-          <header><div><p class="daca-eyebrow">DaCa Asset Mapping</p><h2>{{ facade.selectedMapping()?.status === 'broken' ? 'Gebrochene Zuordnung auflösen' : facade.editor()?.mappingId ? 'Zuordnung bearbeiten' : 'Zuordnung hinzufügen' }}</h2></div><button type="button" aria-label="Dialog schliessen" (click)="facade.closeEditor()">×</button></header>
-          <p>@if(facade.selectedMapping()?.status === 'broken'){Wählen Sie gültige Spalten des aktuellen Snapshots. Beim Speichern entsteht eine neue Draft-Version; die gebrochene Vorgängerversion bleibt erhalten.}@else{Mehrere logische Quellen und mehrere physische Repräsentationen können in einer versionierten Zuordnung verbunden werden.}</p>
+          <header><div><p class="daca-eyebrow">DaCa Asset Mapping</p><h2>{{ facade.selectedMapping()?.status === 'broken' ? 'Gebrochenes Mapping auflösen' : facade.editor()?.mappingId ? 'Mapping bearbeiten' : 'Mapping hinzufügen' }}</h2></div><button type="button" aria-label="Dialog schliessen" (click)="facade.closeEditor()">×</button></header>
+          <p>@if(facade.selectedMapping()?.status === 'broken'){Wählen Sie gültige Spalten des aktuellen Snapshots. Beim Speichern entsteht eine neue Draft-Version; die gebrochene Vorgängerversion bleibt erhalten.}@else{Mehrere logische Quellen und mehrere physische Repräsentationen können in einem versionierten Mapping verbunden werden.}</p>
           @if(error()){<p class="daca-alert is-error" role="alert">{{ error() }}</p>}
           <div class="dialog-grid">
             <label>Logische Felder *<select multiple size="6" formControlName="logicalFieldVersionIds" autofocus>@for(field of facade.logicalFields();track field.id){<option [value]="field.id">{{ field.entityName }}.{{ field.name }} · {{ field.dataType }}</option>}</select><small>Für abgeleitete Ziele können mehrere Felder gewählt werden.</small></label>
@@ -25,7 +25,7 @@ import { AssetMappingWrite, DataClassification, MappingType } from './data-model
             <label class="is-wide">Transformations-/Lookup-Regel<textarea rows="3" formControlName="transformationRule" placeholder="Für Derived, Lookup und Transformed die nachvollziehbare Regel angeben"></textarea></label>
             <label class="is-wide">Kommentar<textarea rows="3" formControlName="comment" placeholder="Fachliche Begründung oder Prüfhinsweis"></textarea></label>
           </div>
-          <footer><button class="daca-button is-secondary" type="button" (click)="facade.closeEditor()">Abbrechen</button><button class="daca-button" type="submit" [disabled]="form.invalid">Zuordnung übernehmen</button></footer>
+          <footer><button class="daca-button is-secondary" type="button" (click)="facade.closeEditor()">Abbrechen</button><button class="daca-button" type="submit" [disabled]="form.invalid">Mapping übernehmen</button></footer>
         </form>
       }
     </dialog>

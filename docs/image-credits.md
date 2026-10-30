@@ -1,5 +1,9 @@
 # Image credits
 
+Expert-search UI icons in `apps/catalog-ui/public/assets/catalog-search/` are unmodified
+[Tabler Icons v3.50.0](https://github.com/tabler/tabler-icons/tree/v3.50.0/icons/outline), distributed
+under the MIT license included beside the SVG files. They are rendered as local vector masks.
+
 The DaCa welcome-page rotation uses locally hosted, responsive AVIF and WebP derivatives.
 The following city photographs retain their authentic geography and landmark composition.
 Processing is documented per asset.

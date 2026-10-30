@@ -1,5 +1,34 @@
 # Domains and business glossary
 
+## Own-office display filter
+
+**Nur amtseigene anzeigen** is optional and initially off for domains and terms. It applies
+to cards and networks, combines with the existing card search, and remains in the URL as
+`ownOffice=1` across view changes and the two semantic tabs. The checkbox uses the shared
+catalog tooltip on hover or keyboard focus to explain the selected office and its subordinate
+units. Labels, tooltip, loading and failure messages support DE/FR/IT/EN.
+
+The resolved current identity's `office` supplies the same context used to default the
+organization term network. `GET /api/v1/semantic-graphs/organizations/{office}` supplies
+`scopeDomainIds` and `scopeTermIds` from trusted object responsibilities and active memberships.
+Explicit object organization takes precedence; terms retain their independent responsibility
+even when classified under a foreign domain. Broad editing mandates, display-name matching
+and a term's domain classification do not widen this filter. Missing office disables activation;
+unavailable scope shows retry with no fallback to all objects. Identity changes cancel old reads.
+
+The term network follows the own office while enabled; its organization selector reappears
+when disabled. Switching from a foreign network respects the existing unsaved-draft guard.
+Canvas filtering hides foreign reference cards and edges to them without changing saved
+positions, hidden/additional node IDs or relationships. Toggling does not save or dirty a graph;
+moving or arranging visible nodes retains the stored positions of filtered-out nodes.
+
+Browser regression: `npm run test:ui-regression -- --flow semantic-own-office` checks two
+identities against the server scope, both card/network views, keyboard tooltips, mobile filter
+layout, URL/tab retention and clearing. It verifies that both shared graph responses remain
+unchanged. Screenshots are local ignored artifacts under `output/ui-regression/semantic-own-office`.
+Focused unit cases also cover independent term ownership, failed/cancelled scope reads, missing
+office, local drafts and retaining foreign node positions while arranging the visible scope.
+
 ## Hand over domain responsibility
 
 **Domäne abtreten** appears on the detail page and in the card's **…** menu when the server

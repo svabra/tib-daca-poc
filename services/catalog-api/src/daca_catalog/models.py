@@ -2780,6 +2780,23 @@ class MappingCanvasLayout(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
+class MappingWorkspaceVisit(Base):
+    """Private, bounded navigation context; never a mapping draft or access grant."""
+
+    __tablename__ = "mapping_workspace_visits"
+    __table_args__ = (
+        CheckConstraint("view IN ('graph', 'table', 'drift')", name="ck_mapping_visit_view"),
+        Index("ix_mapping_visit_user_time", "user_id", "visited_at"),
+    )
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id", ondelete="CASCADE"), primary_key=True)
+    logical_model_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("logical_models.id", ondelete="CASCADE"), primary_key=True)
+    physical_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("physical_schema_snapshots.id", ondelete="SET NULL"))
+    physical_table_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("physical_tables.id", ondelete="SET NULL"))
+    view: Mapped[str] = mapped_column(String(16), nullable=False, default="graph")
+    visited_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
 class AssetMapping(Base):
     __tablename__ = "asset_mappings"
     __table_args__ = (

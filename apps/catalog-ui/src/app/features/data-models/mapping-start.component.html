@@ -1,0 +1,36 @@
+<nav class="mapping-start-breadcrumb" aria-label="Brotkrümelnavigation"><a routerLink="/models">{{i18n.t('dataModels')}}</a><span>›</span><span>{{i18n.t('mappingWorkspace')}}</span></nav>
+<section class="daca-page-heading mapping-start-heading"><div><p class="daca-eyebrow">{{i18n.t('mappingStartEyebrow')}}</p><h1>{{physical()?.table?.name||i18n.t('mappingWorkspace')}}</h1><p>{{i18n.t(physicalRoute()?'mappingPhysicalIntro':'mappingStartIntro')}}</p></div></section>
+@if(error()){<p class="daca-alert is-error" role="alert">{{error()}} <button type="button" (click)="load()">{{i18n.t('searchRetry')}}</button></p>}
+@if(!physicalRoute()){
+  <section class="mapping-start-selection" aria-label="Modellauswahl">
+    <article class="mapping-start-choice"><daca-search-icon name="hierarchy"/><div><h2>{{i18n.t('searchModel')}}</h2><p>{{i18n.t('mappingStartLogicalHint')}}</p></div><button #logicalTrigger class="daca-button is-secondary" type="button" [disabled]="loading()||opening()" [attr.aria-expanded]="logicalOpen()" aria-controls="mapping-logical-picker" (click)="openLogical()">{{i18n.t('mappingStartChooseLogical')}}</button></article>
+    <article class="mapping-start-choice"><daca-search-icon name="schema"/><div><h2>{{i18n.t('mappingStartPhysical')}}</h2><p>{{i18n.t('mappingStartPhysicalHint')}}</p></div><button #physicalTrigger class="daca-button is-secondary" type="button" [disabled]="opening()" (click)="physicalOpen.set(true)">{{i18n.t('mappingStartChoosePhysical')}}</button></article>
+  </section>
+}
+<div class="mapping-start-action">
+  @if(physicalLoading()){<daca-loading-indicator [label]="i18n.t('mappingPhysicalLoading')"/>}
+  @if(loading()){<daca-loading-indicator [label]="i18n.t('loadingModels')"/>}
+  @if(checking()||opening()){<daca-loading-indicator [label]="i18n.t(checking()?'mappingStartChecking':'mappingStartOpening')"/>}
+  @if(selectionNotice()){<p role="status">{{selectionNotice()}}</p>}
+</div>
+@if(logicalOpen()){
+  <section id="mapping-logical-picker" class="mapping-start-picker" aria-labelledby="mapping-logical-title" (keydown.escape)="closeLogical()"><header><h2 id="mapping-logical-title">{{i18n.t('mappingStartChooseLogical')}}</h2><button type="button" class="mapping-start-text" (click)="closeLogical()">{{i18n.t('mappingStartClose')}}</button></header><label for="mapping-model-query">{{i18n.t('mappingStartFindModel')}}</label><input #logicalQuery id="mapping-model-query" type="search" [value]="query()" (input)="search($event)">
+    <div class="mapping-start-models">@for(model of matches().slice(0,limit());track model.id){<button type="button" [disabled]="checking()||opening()" (click)="chooseModel(model)"><span><strong>{{title(model)}}</strong><small>{{model.identifiers[0]}} · {{i18n.t('fieldsCount',{count:model.fieldCount})}}</small></span><span>{{i18n.t('openModel')}}</span></button>}@empty{<p>{{i18n.t('noModels')}}</p>}</div>
+    <footer>@if(matches().length>limit()){<button class="mapping-start-text" type="button" (click)="limit.update(increaseLimit)">{{i18n.t('mappingStartMoreModels')}}</button>}<a routerLink="/models/new">{{i18n.t('newLogicalModel')}}</a></footer>
+  </section>
+}
+@if(physicalRoute()){
+  @if(physical();as physical){
+    <section class="mapping-physical-workspace daca-card" aria-label="Mapping-Arbeitsplatz">
+      <header><div><p class="daca-eyebrow">{{i18n.t('mappingStartPhysical')}}</p><strong>{{physical.snapshot.sourceName}}</strong></div><div><button class="daca-button mapping-physical-add" type="button" [disabled]="loading()||checking()||opening()" (click)="openLogical($event.currentTarget)">{{i18n.t('mappingStartChooseLogical')}}</button><button #physicalTrigger class="daca-button is-secondary" type="button" (click)="physicalOpen.set(true)">{{i18n.t('mappingStartChange')}}</button><a class="daca-button is-secondary" routerLink="/mappings">{{i18n.t('mappingStartBack')}}</a></div></header>
+      <daca-mapping-graph [physicalStart]="true" [logicalLoading]="loading()||checking()||opening()" [logicalSelectionLabel]="i18n.t('mappingStartChooseLogical')" [logicalSelectionHint]="i18n.t('mappingPhysicalIntro')" (selectLogical)="openLogical($event)"/>
+    </section>
+  }
+} @else {
+  <section class="mapping-start-recent" aria-labelledby="mapping-recent-title"><header><h2 id="mapping-recent-title">{{i18n.t('mappingStartRecent')}}</h2>@if(recent().length>5){<button class="mapping-start-text" type="button" [attr.aria-expanded]="showAllRecent()" (click)="showAllRecent.set(!showAllRecent())">{{i18n.t(showAllRecent()?'mappingStartLess':'mappingStartMoreRecent')}}</button>}</header>
+    @if(historyLoading()){<daca-loading-indicator [label]="i18n.t('mappingHistoryLoading')"/>}
+    @else if(historyError()){<p role="status">{{i18n.t('mappingStartHistoryError')}} <button type="button" class="mapping-start-text" (click)="load()">{{i18n.t('searchRetry')}}</button></p>}
+    @else{<ol>@for(item of visibleRecent();track item.logicalModelId){<li><div><a [routerLink]="['/models',item.logicalModelId,'mappings']" [queryParams]="recentParams(item)">{{title(item)}}</a><p>{{item.physicalLabel||i18n.t('mappingStartLogicalOnly')}}</p></div><time [attr.datetime]="item.visitedAt" [title]="item.visitedAt|date:'dd.MM.yyyy HH:mm'">{{item.visitedAt|date:'dd.MM.yyyy HH:mm'}}</time><a class="daca-button is-secondary" [routerLink]="['/models',item.logicalModelId,'mappings']" [queryParams]="recentParams(item)" [attr.aria-label]="i18n.t('mappingStartResume')+' '+title(item)">{{i18n.t('mappingStartResume')}}</a></li>}@empty{<p class="mapping-start-empty">{{i18n.t('mappingStartEmpty')}}</p>}</ol>}
+  </section>
+}
+@if(physicalOpen()){<daca-representation-picker [model]="selectedModel()" [selectionOnly]="true" [initialSnapshot]="initialPhysicalSnapshot()" (closed)="closePhysical()" (added)="choosePhysical($event)"/>}

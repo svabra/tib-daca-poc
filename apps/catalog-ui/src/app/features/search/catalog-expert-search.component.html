@@ -1,0 +1,77 @@
+<div class="catalog-search">
+  <nav class="expert-search-breadcrumb" aria-label="Brotkrümelnavigation"><a routerLink="/">{{i18n.t('home')}}</a><span aria-hidden="true">›</span><span>{{i18n.t('expertSearch')}}</span></nav>
+  <header class="search-heading">
+    <div><p class="daca-eyebrow">{{i18n.t('catalogSearch')}}</p><h1>{{i18n.t('expertSearch')}}</h1><p class="search-intro">{{i18n.t('searchNewIntro')}}</p></div>
+    <div class="search-mode-toggle" role="group" [attr.aria-label]="i18n.t('searchMode')">
+      <button type="button" data-search-mode="context" [attr.aria-pressed]="mode()==='context'" aria-controls="search-workspace" (click)="setMode('context')"><daca-search-icon name="hierarchy"/><span><strong>{{i18n.t('searchContextMode')}}</strong><small>{{i18n.t('searchContextSubtitle')}}</small></span></button>
+      <button type="button" data-search-mode="focus" [attr.aria-pressed]="mode()==='focus'" aria-controls="search-workspace" (click)="setMode('focus')"><daca-search-icon name="list-search"/><span><strong>{{i18n.t('searchFocusMode')}}</strong><small>{{i18n.t('searchFocusSubtitle')}}</small></span></button>
+    </div>
+  </header>
+
+  <form class="search-form" role="search" (submit)="$event.preventDefault()">
+    <div class="search-input-row"><div class="search-input-field"><label class="daca-sr-only" for="expert-search-input">{{i18n.t('searchTerm')}}</label><span class="expert-search-control"><daca-search-icon name="search"/><input id="expert-search-input" type="search" maxlength="200" autocomplete="off" [placeholder]="i18n.t('searchPlaceholder')" [value]="query()" (input)="updateQuery($any($event.target).value)" aria-describedby="expert-search-hint">@if(query()){<button type="button" [attr.aria-label]="i18n.t('clearSearch')" (click)="clearQuery()"><daca-search-icon name="x"/></button>}</span></div><button class="search-filter-button" type="button" aria-controls="search-filter-panel" [attr.aria-expanded]="filterOpen()" (click)="filterOpen.set(!filterOpen())"><daca-search-icon name="adjustments-horizontal"/>{{i18n.t('searchFilters')}}@if(filterCount()){<span>({{filterCount()}})</span>}</button></div>
+    <p id="expert-search-hint" class="search-hint">{{i18n.t('searchHint')}}</p>
+    @if(filterCount()){
+      <div class="search-chips" [attr.aria-label]="i18n.t('filterResults')">
+        @if(selectedOwner()!=='all'){<button type="button" (click)="setFilter('organization','all')">{{i18n.t('organization')}}: {{organizationLabel(selectedOwner())}}<daca-search-icon name="x"/></button>}
+        @if(selectedDomain()!=='all'){<button type="button" (click)="setFilter('domain','all')">{{i18n.t('searchDomain')}}: {{domainLabel()}}<daca-search-icon name="x"/></button>}
+        @if(selectedStatus()!=='all'){<button type="button" (click)="setFilter('status','all')">{{i18n.t('searchActive')}}<daca-search-icon name="x"/></button>}
+        @if(selectedConnection()!=='all'){<button type="button" (click)="setFilter('connection','all')">{{i18n.t(selectedConnection()==='connected'?'searchConnected':'searchMetadata')}}<daca-search-icon name="x"/></button>}
+        <button type="button" class="search-reset" (click)="resetFilters()">{{i18n.t('resetFilters')}}</button>
+      </div>
+    }
+    @if(filterOpen()){<section id="search-filter-panel" class="search-filter-panel" [attr.aria-label]="i18n.t('filterResults')"><ng-container *ngTemplateOutlet="organizationFilter"/><ng-container *ngTemplateOutlet="moreFilters"/></section>}
+  </form>
+
+  @if(data.partial()){<p class="search-load-notice" role="status">{{i18n.t('searchPartial')}} <button type="button" (click)="data.reload()">{{i18n.t('searchRetry')}}</button></p>}
+  @if(data.loading()||api.loading()){<p class="search-loading" role="status">{{i18n.t('searchLoading')}}</p>}
+
+  <div id="search-workspace" class="search-workspace" [class.is-context]="mode()==='context'" [class.has-preview]="preview()!==null" (pointerleave)="closePreviewSoon()" (keydown.escape)="closePreview()">
+    @if(mode()==='context'){
+      <aside class="search-sidebar" [attr.aria-label]="i18n.t('searchNarrow')"><h2>{{i18n.t('searchNarrow')}}</h2><nav [attr.aria-label]="i18n.t('searchAll')">
+        <button type="button" [attr.aria-pressed]="selectedKind()==='all'" [dacaTooltip]="kindExplanation('all')" (click)="selectKind('all')"><daca-search-icon name="category"/><span>{{i18n.t('searchAll')}}</span><b>{{matches().length}}</b></button>
+        @for(kind of kinds;track kind){<button type="button" [attr.aria-pressed]="selectedKind()===kind" [attr.data-search-kind]="kind" [dacaTooltip]="kindExplanation(kind)" (click)="selectKind(kind)"><daca-search-icon [name]="icons[kind]"/><span>{{kindLabel(kind,true)}}</span><b>{{counts()[kind]}}</b></button>}
+      </nav><details><summary>{{i18n.t('organization')}}<daca-search-icon name="chevron-down"/></summary><ng-container *ngTemplateOutlet="organizationFilter"/></details><details><summary>{{i18n.t('searchMoreFilters')}}<daca-search-icon name="chevron-down"/></summary><ng-container *ngTemplateOutlet="moreFilters"/></details><button type="button" class="search-reset" (click)="resetFilters()">{{i18n.t('resetFilters')}}</button></aside>
+    }
+
+    <section class="search-results" aria-labelledby="expert-search-results-title" [attr.aria-busy]="data.loading()||api.loading()">
+      <header class="search-results-header"><h2 id="expert-search-results-title" aria-live="polite">{{searchReady()?i18n.t('searchMatches',{count:results().length}):i18n.t('enterSearch')}}</h2><label class="search-sort"><span class="daca-sr-only">{{i18n.t('searchSort')}}</span><select [value]="sort()" (change)="sort.set($any($event.target).value)"><option value="relevance">{{i18n.t('searchRelevance')}}</option><option value="name">{{i18n.t('searchName')}}</option></select></label></header>
+      @if(mode()==='focus'){
+        <nav class="search-kind-strip" [attr.aria-label]="i18n.t('searchAll')"><button type="button" [attr.aria-pressed]="selectedKind()==='all'" [dacaTooltip]="kindExplanation('all')" (click)="selectKind('all')">{{i18n.t('all')}} <span>{{matches().length}}</span></button>@for(kind of kinds;track kind){<button type="button" [attr.aria-pressed]="selectedKind()===kind" [attr.data-search-kind]="kind" [dacaTooltip]="kindExplanation(kind)" (click)="selectKind(kind)">{{kindLabel(kind,true)}} <span>{{counts()[kind]}}</span></button>}</nav>
+      }
+      @if(!searchReady()){<div class="search-empty"><h3>{{i18n.t('minimumLength')}}</h3><p>{{i18n.t('refineResults')}}</p></div>}
+      @else if(!results().length&&!data.loading()&&!api.loading()){<div class="search-empty"><h3>{{i18n.t('noMatches')}}</h3><p>{{i18n.t('changeSearch')}}</p><a class="expert-search-term-link" routerLink="/glossary/proposals/new" [queryParams]="{q:query().trim()}">{{i18n.t('proposeTerm')}}</a></div>}
+      @else if(mode()==='context'){
+        <div class="search-context-list">
+          @for(group of groups();track group.key){
+            @if(group.children.length){
+              <article class="search-group" [attr.data-search-group]="group.key"><header class="search-group-header" (pointerenter)="schedulePreview(group.parent,$event.currentTarget)" (focusin)="schedulePreview(group.parent,$event.target)"><daca-search-icon [name]="assetIcon(group.parent)"/><div><h3><a [routerLink]="$any(group.parent.route)" [queryParams]="group.parent.params">{{group.parent.label}}</a></h3><p><span [dacaTooltip]="kindExplanation(group.parent.kind)">{{assetTypeLabel(group.parent)}}</span> &middot; {{contextLabel(group.parent)}}</p></div><button class="search-preview-button" type="button" [attr.aria-label]="i18n.t('searchPreviewOpen',{name:group.parent.label})" (click)="pinPreview(group.parent,$event.currentTarget)"><daca-search-icon name="info-circle"/></button><button class="search-group-toggle" type="button" [attr.aria-expanded]="!collapsedGroups().has(group.key)" [attr.aria-controls]="'search-children-'+group.parent.id" [attr.aria-label]="i18n.t(collapsedGroups().has(group.key)?'searchShowGroup':'searchHideGroup')+' '+group.parent.label" (click)="toggleGroup(group.key)"><small>{{i18n.t('searchGroupCount',{count:group.children.length})}}</small><daca-search-icon [name]="collapsedGroups().has(group.key)?'chevron-right':'chevron-down'"/></button></header>
+              @if(!collapsedGroups().has(group.key)){<div class="search-group-children" [id]="'search-children-'+group.parent.id">@for(asset of group.children;track asset.key){<ng-container *ngTemplateOutlet="assetRow;context:{$implicit:asset,child:true}"/>}</div>}
+              </article>
+            }@else{<ng-container *ngTemplateOutlet="assetRow;context:{$implicit:group.parent}"/>}
+          }
+        </div>
+      }@else{<div class="search-focus-list">@for(asset of visibleResults();track asset.key){<ng-container *ngTemplateOutlet="assetRow;context:{$implicit:asset}"/>}</div>}
+      @if(results().length>limit()){<button class="search-more" type="button" (click)="loadMore()">{{i18n.t('searchMore')}}<daca-search-icon name="chevron-down"/></button>}
+    </section>
+
+    @if(preview();as asset){
+      <aside class="search-preview" aria-labelledby="search-preview-title" (pointerenter)="keepPreview()" (focusin)="keepPreview()"><header><span>{{i18n.t('searchPreview')}}</span><div><button type="button" [attr.aria-pressed]="pinnedKey()!==null" [attr.aria-label]="i18n.t(pinnedKey()?'searchUnpin':'searchPin')" [title]="i18n.t(pinnedKey()?'searchUnpin':'searchPin')" (click)="togglePin()"><daca-search-icon [name]="pinnedKey()?'pinned':'pin'"/></button><button type="button" [attr.aria-label]="i18n.t('searchPreviewClose')" (click)="closePreview()"><daca-search-icon name="x"/></button></div></header>
+        <div class="search-preview-identity"><daca-search-icon [name]="assetIcon(asset)"/><div><p [dacaTooltip]="kindExplanation(asset.kind)">{{assetTypeLabel(asset)}}</p><h2 id="search-preview-title" tabindex="-1">{{asset.label}}</h2></div></div><p class="search-preview-path">{{contextLabel(asset)}}</p>
+        <div class="search-preview-description"><h3>{{i18n.t('searchDefinition')}}</h3><p>{{asset.description||i18n.t('searchNoDefinition')}}</p></div>
+        @if(asset.product;as product){<div class="search-preview-quality"><daca-quality-medal [medal]="product.qualityMedal??'bronze'" [score]="product.qualityScore??0"/></div>}
+        <dl>@if(asset.dataType){<div><dt>{{i18n.t('searchDataType')}}</dt><dd>{{asset.dataType}}</dd></div>}@if(asset.nullable!==undefined){<div><dt>{{i18n.t('searchRequired')}}</dt><dd>{{i18n.t(asset.nullable?'searchNo':'searchYes')}}</dd></div>}@if(asset.organization){<div><dt>{{i18n.t('organization')}}</dt><dd>{{organizationLabel(asset.organization)}}</dd></div>}@if(asset.domains.length){<div><dt>{{i18n.t('searchDomain')}}</dt><dd>@for(domain of asset.domains;track domain.id){<span>{{domain.label}}</span>}</dd></div>}@if(asset.product){<div><dt>{{i18n.t('searchInterfaces')}}</dt><dd>{{protocolLabel(asset)}}</dd></div>}@if(asset.updatedAt){<div><dt>{{i18n.t('searchUpdated')}}</dt><dd>{{asset.updatedAt|date:'dd.MM.yyyy'}}</dd></div>}</dl>
+        @if(asset.parent;as parent){<p class="search-parent-link">{{i18n.t('searchParent')}}: <a [routerLink]="$any(parent.route)" [queryParams]="parent.params">{{parent.label}}</a></p>}
+        @if(asset.connection;as connection){<p class="search-connection" [title]="connection.description"><daca-search-icon name="info-circle"/>{{connection.label}}</p>}
+        @if(asset.identifier){<details class="search-identifier"><summary>{{i18n.t('searchIdentifier')}}</summary><code>{{asset.identifier}}</code></details>}
+        <a class="daca-button is-secondary search-details" [routerLink]="$any(asset.route)" [queryParams]="asset.params"><daca-search-icon name="external-link"/>{{i18n.t('searchDetails')}}</a><p class="search-preview-hint">{{i18n.t('searchPreviewHint')}}</p>
+      </aside>
+    }
+  </div>
+</div>
+
+<ng-template #assetRow let-asset let-child="child">
+  <article class="search-row" [class.is-child]="child" [class.is-previewed]="preview()?.key===asset.key" [attr.data-search-key]="asset.key" (pointerenter)="schedulePreview(asset,$event.currentTarget)" (focusin)="schedulePreview(asset,$event.target)"><daca-search-icon [name]="assetIcon(asset)"/><div class="search-row-identity"><h3><a [routerLink]="asset.route" [queryParams]="asset.params">{{asset.label}}</a></h3><small>{{contextLabel(asset)}}</small><span class="search-row-kind" [dacaTooltip]="kindExplanation(asset.kind)">{{assetTypeLabel(asset)}}</span></div><p class="search-row-description">{{asset.description}}</p><button class="search-preview-button" type="button" [attr.aria-label]="i18n.t('searchPreviewOpen',{name:asset.label})" [attr.aria-pressed]="pinnedKey()===asset.key" (click)="pinPreview(asset,$event.currentTarget)"><daca-search-icon name="info-circle"/></button></article>
+</ng-template>
+<ng-template #organizationFilter><label class="search-filter-label">{{i18n.t('organization')}}<select [value]="selectedOwner()" (change)="setFilter('organization',$any($event.target).value)"><option value="all">{{i18n.t('allOrganizations')}}</option>@for(organization of organizations();track organization){<option [value]="organization">{{organizationLabel(organization)}}</option>}</select></label></ng-template>
+<ng-template #moreFilters><label class="search-filter-label">{{i18n.t('searchDomain')}}<select [value]="selectedDomain()" (change)="setFilter('domain',$any($event.target).value)"><option value="all">{{i18n.t('allDomains')}}</option>@for(domain of domains();track domain.id){<option [value]="domain.id">{{domain.label}}</option>}</select></label><label class="search-filter-label">{{i18n.t('searchStatus')}}<select [value]="selectedStatus()" (change)="setFilter('status',$any($event.target).value)"><option value="all">{{i18n.t('searchAllStatuses')}}</option><option value="active">{{i18n.t('searchActive')}}</option></select></label><label class="search-filter-label">{{i18n.t('searchConnection')}}<select [value]="selectedConnection()" (change)="setFilter('connection',$any($event.target).value)"><option value="all">{{i18n.t('searchAnyConnection')}}</option><option value="connected">{{i18n.t('searchConnected')}}</option><option value="metadata">{{i18n.t('searchMetadata')}}</option></select></label></ng-template>

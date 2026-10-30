@@ -105,6 +105,7 @@ html[data-daca-theme="dark"] body .product-filter-row button.is-active strong { 
 .expert-search-control:focus-within { border-color: var(--daca-blue); outline: 3px solid rgba(11,68,121,.18); outline-offset: 2px; }
 .expert-search-control svg { align-self: center; justify-self: center; width: 20px; height: 20px; fill: none; stroke: var(--daca-muted); stroke-width: 1.8; }
 .expert-search-control input { min-width: 0; border: 0; outline: 0; padding: 11px 4px 11px 0; background: transparent; color: var(--daca-ink); }
+.expert-search-control input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; display: none; }
 .expert-search-control button { border: 0; background: transparent; color: var(--daca-blue); font-size: 1.35rem; cursor: pointer; }
 .expert-search-control button:hover { background: var(--daca-blue-soft); }
 .expert-search-filters { display: grid; grid-template-columns: repeat(2, minmax(150px, 1fr)) auto; align-items: end; gap: 12px; }

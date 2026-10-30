@@ -1,5 +1,104 @@
 # Logical models, I14Y concepts, physical models, and mappings
 
+Physical source metadata imports use a bounded 60-second client request budget, independently
+of the ordinary eight-second reads. Revision and identity checks remain in force. The source
+stays in its loading state until confirmed success or a failure, including longer drift checks;
+the browser regression checks the success notice before verifying the new immutable snapshot.
+
+## UI terminology
+
+**Mapping** is the language-independent name for the logical-to-physical workspace section,
+including DE/FR/IT/EN. Use **Mapping hinzufügen**, **Mapping bearbeiten**, **Mapping übernehmen**
+and **Mappings** for plural references. The model tab stays singular **Mapping** in every
+language. This terminology concerns asset mappings; generic domain/role responsibility
+assignments are separate concepts. Technical route names, IDs and persisted history are unchanged.
+
+Physical search uses the generic **Data Structure** concept for tables, views and structured
+S3 objects/datasets; concrete result icons and types remain specific to the representation.
+Physical-field parent links use the same generic concept. This terminology does not rename
+persisted physical table/object metadata or mapping references. See [expert-search contexts](expert-search.md#storage-neutral-search-contexts).
+
+## Mapping entry and recent work
+
+**Mapping-Arbeitsplatz** on `/models` opens `/mappings`, with two compact logical/physical
+choices. Selecting a logical model immediately opens `/models/:id/mappings`. Selecting an object
+in the physical picker immediately opens `/mappings/physical/:snapshotId/:tableId`, with that
+exact representation in the real mapping canvas and a logical-counterpart selection action.
+There is no second **Mapping öffnen** confirmation. This physical-only start does not fabricate
+a logical model, create mappings or persist membership. Its URL preserves the physical selection
+on reload; model-based PostgreSQL recents begin once a logical model is opened.
+
+Model search initially shows eight matches, with more available. Lists stay closed until
+requested. The physical selection dialog is compact and opens an object on click; the normal
+attachment dialog still inspects the object and requires **Hinzufügen**. Choosing a logical
+counterpart in the physical canvas checks model-specific source permissions and automatically
+opens the pair. An incompatible selection remains visible with an explanation and no write.
+Small blue indicators show pending model, physical structure, source and history reads. Model
+and history reads are independent. On small screens the physical object uses the canvas width
+and the counterpart action appears in the toolbar; desktop retains the empty logical-side card.
+A logical model without a physical representation offers a visible **Physische Repräsentation
+auswählen** action for authorized editors, alongside the existing canvas context menu.
+
+A chosen counterpart opens `/models/:id/mappings?physicalSnapshotId=…&physicalTableId=…&addRepresentation=1`.
+That exact object becomes a local editable representation when not already bound. No field
+mappings or bindings are automatically saved. Explicit **Entwurf speichern** and unsaved-work
+navigation protection remain active. Existing `suggest=1` links keep their separate name-pair
+suggestion behavior. Legacy `/mappings?logicalModelId=…` forwards with query context; physical-
+snapshot-only links offer that snapshot's objects for selection. **Andere Modelle auswählen**
+returns to the entry page. Unavailable model-scoped links never open a different first model.
+
+**Letzte Mapping-Arbeiten** shows five entries and optionally up to ten, newest first, with one
+entry per logical model/user. Current title, physical context and visit time distinguish them;
+**Fortsetzen** restores the available exact model/object/view. This is navigation context;
+unsaved logical/mapping/layout drafts are not recovered.
+
+`GET /api/v1/me/mapping-workspaces` reads private history; `PUT …/:modelId` records a successfully
+opened/selected context. Existing authenticated modeling dependencies supply the actor, never
+the body. Reads reauthorize model and source access; inaccessible/retired models are omitted,
+and unavailable physical references are stripped while accessible logical models remain.
+Writes validate the physical object against its exact snapshot. Responses are private/no-store.
+Background refresh and fallback fixtures never create recent-work entries.
+
+Migration `0045_mapping_workspace_visits` persists personal context separately from expiring
+login sessions, shared canvas layout and immutable catalog evidence. User-row locking serializes
+updates/pruning to ten entries; browser writes are queued in interaction order. Neither history
+reads nor writes create catalog versions, bindings, audit events or access grants. A history
+failure leaves the workspace usable and reports that the recent-work entry was not saved.
+Finite queued history writes finish when leaving the workspace rather than being cancelled by
+route destruction; API timeouts still apply. Successfully saving field or mapping edits updates
+recency even when the selected object/view stays the same.
+
+## Visible physical bindings and automatic refresh
+
+**Repräsentationen dieses Modells** and the graph both use the facade's visible representation
+set, including draft attachments and explicitly opened drift previews. Hiding a physical card
+immediately removes it from both displays. **Ausgeblendete einblenden** restores hidden cards;
+it does not reimport structures or create bindings. Empty memberships and immutable historical
+mappings retain their existing storage semantics. Hiding is a local display choice.
+
+Both the list and graph show **Mit Quellenanbindung** when the catalog confirms a configured
+PostgreSQL/S3 source connector, or **Nur Strukturmetadaten** without a technical connection
+(including declared CSV inventories and fixtures). Legacy responses without a confirmed flag
+show **Anbindung unbekannt** rather than inferring a working endpoint from a type or path.
+`sourceConnectionConfigured` is a read projection of the trusted adapter/configuration reference;
+neither its reference nor credentials are needed in this indicator. A configured connector does
+not prove reachability or a published/authorized product-delivery endpoint.
+
+An idle, visible workspace reads model, mappings, representations, snapshot options, imported
+structures and shared canvas layout every five seconds and when focus/visibility returns.
+The snapshot overview reads only metadata summaries rather than loading every table/column;
+structure details are fetched for the workspace's referenced snapshots.
+Only one refresh runs at a time. Responses from earlier identities, selections or saves cannot
+replace newer work. Existing field selection, hidden cards, graph/table/drift mode and fullscreen
+are retained. Missing/inaccessible snapshot details are omitted without failing healthy cards.
+Temporary read failures retain the confirmed catalog state, show a notice and retry; they never
+switch to demo fixtures. A revoked/missing model clears its displayed content.
+
+Local model/mapping/layout drafts, pending connections and open editors pause automatic
+replacement and show a notice. Saving or reloading permits refresh again; explicit reload still
+asks before discarding local work. Imported structure changes become visible after the catalog
+has recorded a new snapshot; DaCa does not continuously inspect external databases or files.
+
 ## Authorization audit follow-up
 
 Migration `0043_deputy_steward_role` allows all four modeling roles. Active deputy stewards
@@ -43,9 +142,9 @@ keeps the local draft. Layout-only changes do not change logical-model or mappin
 Readers cannot reposition shared cards.
 
 Positions for inaccessible/returned sources are omitted from responses and cannot be submitted.
-Partial updates preserve their stored positions. Seeds never rewrite the layout. On opening or
-reloading, other authorized readers receive the latest saved arrangement; this does not add live
-push synchronization between already-open browsers.
+Partial updates preserve their stored positions. Seeds never rewrite the layout. Other authorized
+readers receive the latest arrangement on opening/reloading and through the five-second workspace
+refresh above. This uses HTTP reads, without a separate push protocol.
 
 ## AdA physical-model import journey
 

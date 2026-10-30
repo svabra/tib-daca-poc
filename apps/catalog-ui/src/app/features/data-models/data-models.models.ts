@@ -72,6 +72,16 @@ export interface LogicalEntity {
   fields: LogicalField[];
 }
 
+export interface RecentMappingWorkspace {
+  logicalModelId:string;
+  title:Record<string,string>;
+  physicalSnapshotId:string|null;
+  physicalTableId:string|null;
+  physicalLabel:string|null;
+  view:'graph'|'table'|'drift';
+  visitedAt:string;
+}
+
 export interface LogicalModelSummary {
   id: string;
   urn: string;
@@ -291,6 +301,7 @@ export interface PhysicalSnapshot {
   dataOwnerName: string | null;
   catalogPath: string;
   sourceType: 'postgresql' | 's3' | 'fixture' | 'csv';
+  sourceConnectionConfigured?: boolean;
   systemName: string;
   databaseName: string;
   revision: number;

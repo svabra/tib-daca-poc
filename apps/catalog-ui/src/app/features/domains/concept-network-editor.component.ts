@@ -62,6 +62,7 @@ export function relationLabel(value: string): string { return ({ broader: 'hat O
 @Component({ selector: 'daca-concept-network-editor', standalone: true, imports: [RouterLink, FormsModule,TooltipDirective,CatalogObjectBrowserComponent,SemanticCreateDialogComponent], changeDetection: ChangeDetectionStrategy.OnPush,
     templateUrl: './concept-network-editor.component.html', styleUrl: './concept-network-editor.component.css' })
 export class ConceptNetworkEditorComponent {
+    readonly visibleNodeIds = input<readonly string[] | null>(null);
     readonly domain = input<DomainSummary|null>(null);
     readonly organization = input<{id:string;label:string;domains:readonly DomainSummary[];links:readonly DomainNetworkLink[]}|null>(null);
     readonly contextId=computed(()=>this.organization()?.id??this.domain()?.id??'');
@@ -130,7 +131,7 @@ export class ConceptNetworkEditorComponent {
     readonly saveReason = computed(() => this.saving() ? 'Änderungen werden eingereicht.' : !this.editable() ? 'Die Domäne ist stillgelegt.' : this.conflicts() ? 'Ein Begriff wurde zwischenzeitlich geändert. Der lokale Entwurf bleibt erhalten; verwerfen Sie ihn vor einer erneuten Bearbeitung.' : this.pending().some(item => item.termId in this.dirty()) ? 'Ein betroffener Begriff hat bereits einen Vorschlag in Prüfung. Lokale Änderungen bleiben erhalten.' : !this.dirtyCount() ? 'Es gibt keine ungespeicherten fachlichen Änderungen.' : '');
     readonly layout = computed(() => this.initialLayout());
     readonly nodes = computed(() => {
-        const nodes = this.layout().nodes.filter(node=>!this.hiddenIds().includes(node.id)&&!this.sharedLayout()?.retiredNodeIds?.includes(node.id)).map(node => ({ ...node, ...this.positions()[node.id] }));
+        const nodes = this.layout().nodes.filter(node=>(this.visibleNodeIds()===null||this.visibleNodeIds()!.includes(node.id))&&!this.hiddenIds().includes(node.id)&&!this.sharedLayout()?.retiredNodeIds?.includes(node.id)).map(node => ({ ...node, ...this.positions()[node.id] }));
         const added = nodes.filter(node => node.kind === 'domain' && !this.networkDomains().some(domain=>'domain:'+domain.id===node.id) && !this.positions()[node.id]);
         const occupied = nodes.filter(node => !added.includes(node));
         for (const node of added) {
@@ -142,7 +143,7 @@ export class ConceptNetworkEditorComponent {
         }
         return nodes;
     });
-    readonly hiddenTerms=computed(()=>this.layout().nodes.filter(node=>node.kind==='term'&&this.hiddenIds().includes(node.id)));
+    readonly hiddenTerms=computed(()=>this.layout().nodes.filter(node=>(this.visibleNodeIds()===null||this.visibleNodeIds()!.includes(node.id))&&node.kind==='term'&&this.hiddenIds().includes(node.id)));
     readonly heldPreview=computed(()=>{const hold=this.hold.active(),node=this.nodes().find(node=>node.id===hold?.id);if(!hold||!node)return null;const end=this.canvasPoint(hold),start={x:node.x+(end.x>=node.x+115?230:0),y:node.y+50};return{start,end,path:`M ${start.x} ${start.y} L ${end.x} ${end.y}`};});
     readonly edges = computed(() => this.layout().edges.map(edge => this.positionEdge(edge)).filter((edge): edge is EdgeView => !!edge));
     readonly canvasWidth = computed(() => Math.max(1000, ...this.nodes().map(node => node.x + 270)));
@@ -257,7 +258,7 @@ export class ConceptNetworkEditorComponent {
     } }
     moveNode(id: string, p: Point, persist = true): void { this.positions.update(items => ({ ...items, [id]: { x: Math.max(15, Math.min(100000, p.x)), y: Math.max(15, Math.min(100000, p.y)) } })); if (persist)
         this.storeLayout(); }
-    resetLayout(): void { if(!this.sharedLayout()?.canEditLayout||this.layoutSaving())return;this.positions.set({}); this.storeLayout(); this.notice.set('Elemente automatisch angeordnet. Mit Layout speichern für alle übernehmen.'); }
+    resetLayout(): void { if(!this.sharedLayout()?.canEditLayout||this.layoutSaving())return;this.positions.update(positions=>this.visibleNodeIds()===null?{}:Object.fromEntries(Object.entries(positions).filter(([id])=>!this.visibleNodeIds()!.includes(id)))); this.storeLayout(); this.notice.set('Elemente automatisch angeordnet. Mit Layout speichern für alle übernehmen.'); }
     private initialLayout(): {
         nodes: Node[];
         edges: Edge[];

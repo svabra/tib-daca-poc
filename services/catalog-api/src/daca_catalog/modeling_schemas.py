@@ -522,6 +522,7 @@ class PhysicalSnapshotSummary(ApiModel):
     data_owner_name: str | None = None
     catalog_path: str
     source_adapter_type: Literal["fixture", "postgresql", "s3", "csv"]
+    source_connection_configured: bool = False
     sequence: int
     predecessor_snapshot_id: uuid.UUID | None
     fingerprint: str

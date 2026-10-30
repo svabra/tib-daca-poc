@@ -16,9 +16,9 @@ describe('Catalog runtime version overlay', () => {
     fixture.detectChanges();
     const overlay = fixture.nativeElement.querySelector('.daca-version-overlay') as HTMLElement;
     expect(overlay.textContent).toContain(`V${DACA_VERSION}`);
-    expect(overlay.textContent).toContain('Version ist aktuell');
-    expect(overlay.textContent).toContain('Co-Designed by V, armasuisse, ESTV und BIT');
-    expect(overlay.querySelector('.daca-version-overlay-credit')?.nextElementSibling?.classList.contains('daca-version-overlay-status')).toBe(true);
+    expect(overlay.closest('footer.daca-footer')).not.toBeNull();
+    expect(overlay.querySelector('.daca-version-overlay-status')).toBeNull();
+    expect(overlay.textContent).toContain('Co-Designed by V, armasuisse, ASTRA, ESTV und BIT');
     const settingsIcon = fixture.nativeElement.querySelector('.daca-header-settings') as HTMLAnchorElement;
     const themeIcon = fixture.nativeElement.querySelector('.daca-header-theme') as HTMLButtonElement;
     expect(settingsIcon.getAttribute('href')).toBe('/settings');
@@ -29,8 +29,9 @@ describe('Catalog runtime version overlay', () => {
     const dialog = fixture.nativeElement.querySelector('.daca-feature-dialog') as HTMLDialogElement;
     expect(dialog.hasAttribute('open')).toBe(true);
     expect(dialog.textContent).toContain(`V${DACA_VERSION}`);
-    expect(dialog.textContent).toContain('Domänen an andere Personen abtreten');
-    expect(dialog.textContent).toContain('Kartenpositionen gemeinsam speichern');
+    expect(dialog.textContent).toContain('Expertensuche nach Kontext oder Fokus');
+    expect(dialog.textContent).toContain('Nur amtseigene Domänen und Terme anzeigen');
+    expect(dialog.textContent).not.toContain('Domänen an andere Personen abtreten');
     expect(dialog.textContent).not.toContain('AdA-Import-Journey wiederholen');
     expect(dialog.textContent).not.toContain('Quellenberechtigungen zurückgeben');
     expect(dialog.textContent).not.toContain('Strukturinventare importieren und verwalten');
@@ -64,6 +65,7 @@ describe('Catalog runtime version overlay', () => {
     fixture.detectChanges();
 
     const reload = fixture.nativeElement.querySelector('[data-testid="app-update-reload"]') as HTMLButtonElement;
+    expect(fixture.nativeElement.querySelector('.daca-version-overlay-status')?.textContent).toContain('Neue Version ist bereit');
     expect(reload.getAttribute('aria-label')).toBe('Neue DaCa-Version V0.1.12 laden');
     await fixture.whenStable();
 

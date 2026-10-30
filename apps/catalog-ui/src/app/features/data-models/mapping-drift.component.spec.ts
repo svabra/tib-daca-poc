@@ -29,7 +29,7 @@ describe('MappingDriftComponent repair action', () => {
     const root=fixture.nativeElement as HTMLElement;
 
     const repair = root.querySelector<HTMLButtonElement>('.drift-actions button');
-    expect(repair?.textContent).toContain('Zuordnung auflösen');
+    expect(repair?.textContent).toContain('Mapping auflösen');
     repair!.click();
     expect(facade.editor()).toEqual({ mappingId: broken.id, logicalFieldVersionIds: broken.logicalFieldVersionIds, physicalColumnIds: [], physicalSnapshotId: FALLBACK_PHYSICAL_SNAPSHOT.id });
 

@@ -31,6 +31,7 @@ class CdpClient {
     this.sequence = 0;
     this.pending = new Map();
     this.httpFailures = [];
+    this.runtimeExceptions = [];
     this.loadedLoaders = new Set();
     this.dialogs = new Map();
     this.socket = new WebSocket(webSocketUrl);
@@ -41,8 +42,18 @@ class CdpClient {
     this.socket.addEventListener('close', () => {for(const pending of this.pending.values())pending.reject(new Error('Browser connection closed'));this.pending.clear();});
     this.socket.addEventListener('message', (event) => {
       const message = JSON.parse(String(event.data));
+      if(message.method==='Runtime.exceptionThrown')this.runtimeExceptions.push(message.params.exceptionDetails);
       if(args.get('--trace') && message.method==='Runtime.exceptionThrown')console.log('Browser exception:',JSON.stringify(message.params.exceptionDetails));
+      if(args.get('--trace')&&message.method==='Network.requestWillBeSent'&&message.params.request.url.includes('/api/v1/'))console.log('Browser read:',new Date().toISOString(),message.params.request.url);
       if(message.method==='Fetch.requestPaused'){
+        if(this.deferLogicalReads&&new URL(message.params.request.url).pathname==='/api/v1/logical-models'){
+          (this.deferredLogicalReads??=[]).push({requestId:message.params.requestId,sessionId:message.sessionId});return;
+        }
+        if(this.mockReadResponses){
+          const response=this.mockReadResponses.get(new URL(message.params.request.url).pathname);
+          const command=response?this.call('Fetch.fulfillRequest',{requestId:message.params.requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'application/json'}],body:Buffer.from(JSON.stringify(response)).toString('base64')},message.sessionId):this.call('Fetch.continueRequest',{requestId:message.params.requestId},message.sessionId);
+          void command.catch(error=>{this.interceptionError=error.message;});return;
+        }
         const mock=this.mockTransferResponse;
         this.interceptedTransfers??=[];this.interceptedTransfers.push(message.params.request);
         const command=mock?this.call('Fetch.fulfillRequest',{requestId:message.params.requestId,responseCode:mock.status,responseHeaders:[{name:'Content-Type',value:'application/problem+json'}],body:Buffer.from(JSON.stringify(mock.body)).toString('base64')},message.sessionId):this.call('Fetch.failRequest',{requestId:message.params.requestId,errorReason:'Aborted'},message.sessionId);
@@ -135,7 +146,8 @@ async function settleFrames() {
   await evaluate('new Promise(resolve=>{const fallback=setTimeout(resolve,200);requestAnimationFrame(()=>requestAnimationFrame(()=>{clearTimeout(fallback);resolve();}));})');
 }
 
-async function waitFor(expression, message, timeout = 12_000) {
+// Workspace readiness can span a 30s collection read followed by an 8s detail read.
+async function waitFor(expression, message, timeout = 45_000) {
   const deadline = Date.now() + timeout;
   let lastError;
   while (Date.now() < deadline) {
@@ -147,6 +159,7 @@ async function waitFor(expression, message, timeout = 12_000) {
     await sleep(120);
   }
   const state = await evaluate(`(() => ({url:location.pathname,profile:document.querySelector('a[href="/profile"]')?.textContent,
+    documentFocused:document.hasFocus(),activeElement:document.activeElement?.outerHTML.slice(0,500),
     pageText:document.body.innerText.slice(0,4000),alerts:[...document.querySelectorAll('[role="alert"]')].map(item=>item.textContent.slice(0,500)),
     dialogs:[...document.querySelectorAll('dialog[open]')].map(item=>item.innerText.slice(0,800))}))()`);
   throw new Error(`${message}${lastError ? ` (${lastError.message})` : ''}: ${JSON.stringify({...state,httpFailures:cdp.httpFailures})}`);
@@ -387,6 +400,7 @@ async function csvPhysicalModelsFlow() {
   let sourceId;
   async function selectFile(drop = false) {
     await waitFor("document.querySelector('.csv-import-trigger') && !document.querySelector('.csv-import-trigger').disabled", 'CSV loader entry not ready after navigation');
+    await evaluate("document.querySelector('.csv-import-trigger').focus({preventScroll:true})");
     await clickText('.csv-import-trigger', 'CSV');
     await waitFor("document.querySelector('daca-physical-csv-import dialog')?.open", 'CSV dialog did not open');
     if (!suppliedFile) await setControls({'daca-physical-csv-import .import-inputs select':'vbs-verteidigung'});
@@ -1203,8 +1217,17 @@ async function physicalFirstFlow() {
   invariant(await evaluate("document.querySelectorAll('.representation-list > button').length >= 2"), 'mapping workspace does not list both physical representations');
   await navigate(mappingPath, 'christian.man');
   await waitFor("document.querySelectorAll('.physical-representation').length >= 2", 'saved representations did not survive reload');
+  await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:2,y:2},sessionId);
+  await evaluate(`(() => {
+    window.saveReasonScrollAt=Date.now();
+    window.saveReasonScrollListener=()=>window.saveReasonScrollAt=Date.now();
+    document.addEventListener('scroll',window.saveReasonScrollListener,true);
+    document.querySelector('.draft-save-action').scrollIntoView({block:'center',behavior:'instant'});
+  })()`);
+  await waitFor('Date.now()-window.saveReasonScrollAt>400','save action did not stop scrolling');
+  await evaluate("document.removeEventListener('scroll',window.saveReasonScrollListener,true)");
   const saveHover=await evaluate(`(() => {
-    const trigger=document.querySelector('.draft-save-action');trigger.scrollIntoView({block:'center',behavior:'instant'});
+    const trigger=document.querySelector('.draft-save-action');
     const rect=trigger.getBoundingClientRect();return {x:rect.left+rect.width/2,y:rect.top+rect.height/2};
   })()`);
   await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:saveHover.x,y:saveHover.y},sessionId);
@@ -1291,7 +1314,8 @@ async function physicalFirstFlow() {
   await clickText('.representation-context-menu button','Darstellung der physischen Repräsentation entfernen');
   await waitFor(`document.querySelector('[data-representation-table-id="${beforeDrag.id}"]')===null`,'remove drawing did not hide its card');
   invariant(await evaluate("document.querySelector('.draft-save-action>button').disabled"),'removing a drawing dirtied persisted mappings');
-  await evaluate(`document.querySelector('[data-representation-id="${beforeDrag.id}"]').click()`);
+  invariant(await evaluate(`!document.querySelector('[data-representation-id="${beforeDrag.id}"]')`),'hidden representation remained in the physical bindings');
+  await clickText('.representation-actions button','Ausgeblendete einblenden');
   await waitFor(`document.querySelector('[data-representation-table-id="${beforeDrag.id}"]')?.offsetLeft===${beforeDrag.left+300}`,'restoring a drawing lost its position');
   const afterDrawingActions=expectStatus(await api('christian.man',`/api/v1/asset-mappings?logicalModelId=${modelId}`),200,'read mappings after canvas actions').body.items;
   invariant(JSON.stringify(afterDrawingActions.map((item)=>item.versionId).sort())===JSON.stringify(mappings.map((item)=>item.versionId).sort()),'canvas actions modified mapping versions');
@@ -1536,7 +1560,7 @@ async function domainAssignmentFlow(physical) {
   const pgId=await evaluate("[...document.querySelectorAll('.physical-representation')].find((card)=>!card.textContent.includes('.parquet')).dataset.representationTableId");
   await evaluate("document.querySelector('.field-endpoint').click();[...document.querySelectorAll('.physical-representation')].find((card)=>card.textContent.includes('.parquet')).querySelector('.column-endpoint').click()");
   await waitFor("document.querySelector('.mapping-dialog[open]')!==null",'local mapping editor did not open for domain rebase test');
-  await clickText('.mapping-dialog button','Zuordnung übernehmen');
+  await clickText('.mapping-dialog button','Mapping übernehmen');
   await waitFor("document.querySelector('.draft-save-action>button').disabled===false",'local mapping draft did not survive initial creation');
   const openLogical=async()=>{await evaluate("document.querySelector('.logical-node>header').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:250,clientY:200}))");await waitFor("[...document.querySelectorAll('.canvas-context-menu button')].some((button)=>button.textContent==='Domäne zuordnen')",'logical domain context action missing');};
   await openLogical();
@@ -1828,6 +1852,55 @@ async function domainMetadataFlow(){
   await governanceInformationFlow();
   invariant(await evaluate("document.querySelector('#rollen-zustaendigkeiten').textContent.includes('LDSD')&&document.querySelector('#rollen-zustaendigkeiten').textContent.includes('Thomas Kriegli')"),'updated mandate documentation is missing');
   console.log('PASS domain metadata: owner/deputy, ALDS/deputy, foreign-office denial, subordinate office, confirmed new domain, languages, cancellation and static LDSD reference; no catalog writes');
+}
+
+async function semanticOwnOfficeFlow(){
+  for(const actor of ['christian.spider','sibilla.micheli']){
+    await navigate('/domains/terminology?view=network',actor,1440,1000);
+    await waitFor("document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'",'office context did not load');
+    const office=await evaluate("document.querySelector('.organization-choice select').value");
+    invariant(office,'current identity has no resolved office');
+    const scope=expectStatus(await api(actor,'/api/v1/semantic-graphs/organizations/'+office),200,'read own office scope').body;
+    const domainGraph=expectStatus(await api(actor,'/api/v1/semantic-graphs/domains'),200,'read shared domains graph').body;
+    for(const [route,kind,allowed] of [['/domains/terminology','term',scope.scopeTermIds],['/domains','domain',scope.scopeDomainIds]]){
+      await navigate(route,actor,1440,1000);
+      const baseline=await evaluate("[...document.querySelectorAll('.semantic-grid>article')].map(card=>card.dataset.domainId??card.dataset.termId).sort()");
+      await evaluate("document.querySelector('.office-filter input').click()");
+      const expected=baseline.filter(id=>allowed.includes(id)).sort();
+      await waitFor(`location.search.includes('ownOffice=1')&&!document.querySelector('.office-filter .small-spinner')&&[...document.querySelectorAll('.semantic-grid>article')].map(card=>card.dataset.domainId??card.dataset.termId).sort().join(',')===${JSON.stringify(expected.join(','))}`,'own-office cards did not match server object scope');
+      invariant(expected.length<baseline.length,'own-office fixture does not distinguish a foreign office');
+      await evaluate("document.querySelector('.office-filter input').blur();document.querySelector('.office-filter').scrollIntoView({block:'center',behavior:'instant'})");await settleFrames();
+      await evaluate("window.officeScrollTime=Date.now();window.addEventListener('scroll',()=>window.officeScrollTime=Date.now(),true)");
+      await waitFor('Date.now()-window.officeScrollTime>400','page did not stop scrolling');
+      await evaluate("document.querySelector('.office-filter input').focus({preventScroll:true})");await settleFrames();
+      await waitFor("document.querySelector('[role=tooltip]')!==null",'office filter tooltip did not open on keyboard focus');
+      await captureScreenshot(`own-office-${actor}-${kind}-cards.png`);
+      await evaluate("document.querySelector('.office-filter input').blur()");
+      await clickText('.term-view-switch button',kind==='domain'?'Domänennetz':'Termnetz');
+      await waitFor(kind==='domain'?"document.querySelector('.domain-network')!==null":"document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'",'filtered network did not load');
+      const selector=kind==='domain'?'.domain-network [data-domain-id]':'.network-editor [data-node-id]';
+      const visible=await evaluate(`[...document.querySelectorAll('${selector}')].map(card=>card.dataset.domainId??card.dataset.nodeId)`);
+      invariant(visible.every(id=>kind==='domain'?scope.scopeDomainIds.includes(id):[...scope.scopeDomainIds.map(id=>'domain:'+id),...scope.scopeTermIds.map(id=>'term:'+id)].includes(id)),'foreign reference leaked through the network filter');
+      if(kind==='term')invariant(await evaluate("!document.querySelector('.organization-choice')"),'own-office network retained a foreign-office selector');
+      await capturePageSegmentScreenshot(kind==='domain'?'.domain-network':'.network-editor',`own-office-${actor}-${kind}-network.png`,1440,1000);
+      await setViewport(390,844);await settleFrames();
+      invariant(await evaluate("document.querySelector('.office-filter').getBoundingClientRect().right<=innerWidth+1"),'office filter overflowed on mobile');
+      await evaluate("document.querySelector('.office-filter').scrollIntoView({block:'start'})");
+      await captureScreenshot(`own-office-${actor}-${kind}-mobile.png`);
+      await setViewport(1440,1000);
+      await evaluate("document.querySelector('.office-filter input').click()");
+      await waitFor("!location.search.includes('ownOffice=1')",'clearing own-office filter did not update the URL');
+      if(kind==='term')invariant(await evaluate("!!document.querySelector('.organization-choice')"),'organization selector did not return');
+      await clickText('.term-view-switch button','Kacheln');
+      await waitFor(`document.querySelectorAll('.semantic-grid>article').length===${baseline.length}`,'clearing filter lost catalog cards');
+    }
+    invariant(JSON.stringify(expectStatus(await api(actor,'/api/v1/semantic-graphs/domains'),200,'verify domain graph unchanged').body)===JSON.stringify(domainGraph),'filtering changed the shared domain graph');
+    invariant(JSON.stringify(expectStatus(await api(actor,'/api/v1/semantic-graphs/organizations/'+office),200,'verify office graph unchanged').body)===JSON.stringify(scope),'filtering changed the office graph');
+    await navigate('/domains?ownOffice=1',actor);
+    await evaluate("document.querySelector('.semantic-tabs a[href^=\"/domains/terminology\"]').click()");
+    await waitFor("location.pathname==='/domains/terminology'&&document.querySelector('.office-filter input')?.checked",'own-office filter was lost between semantic tabs');
+  }
+  console.log('PASS own-office filter: trusted independent scopes, both identities, cards/networks, tooltip, mobile, clearing, tab/URL retention, no graph writes');
 }
 
 async function semanticOwnerSearchFlow(){
@@ -2163,12 +2236,23 @@ async function conceptNetworkEditingFlow() {
 }
 
 async function existingToExistingFlow(physical) {
-  const organizationModelId = 'be6eb7a4-6bf3-5387-8aaa-86c01a46290b';
-  const logicalModel = expectStatus(
-    await api('cinthya.thor', `/api/v1/logical-models/${organizationModelId}`),
-    200,
-    'load existing organization model',
+  const reference = expectStatus(
+    await api('cinthya.thor', '/api/v1/logical-models/be6eb7a4-6bf3-5387-8aaa-86c01a46290b'),
+    200, 'read existing organization model reference',
   ).body;
+  const stamp=Date.now();
+  // Create the existing logical side before mapping, without accumulating links on a shared seed model.
+  const logicalModel=expectStatus(await api('christian.man','/api/v1/logical-models',{method:'POST',body:{
+    identifiers:[`EDGE-EXISTING-${stamp}`],localizations:[{language:'de',title:`Existing mapping QA ${stamp}`,description:'Isolated existing-to-existing mapping regression.'}],
+    dataOwnerUserId:reference.dataOwnerUserId,deputyOwnerUserId:reference.deputyOwnerUserId,
+    creator:{type:'Application',applicationName:'Existing mapping QA'},dataDomainId:null,
+    organizationUnitId:reference.organizationId,dataClassification:'internal',dateCreated:new Date().toISOString().slice(0,10),
+    contactPoints:[{name:'Mapping QA',email:'mapping@example.test'}],publisher:reference.publisher,
+    accessRights:'urn:daca:access-rights:internal',entities:[{name:'organization_unit',businessObject:'Organisationseinheit',fields:[{
+      name:'code',position:0,dataType:'string',shortDescription:'Synthetic organization code.',classification:'internal',nullable:false,minCount:1,maxCount:1,
+    }]}],
+  }}),201,'create isolated existing logical model').body;
+  const organizationModelId=logicalModel.id;
   const snapshot = expectStatus(
     await api('cinthya.thor', `/api/v1/physical-snapshots/${physical.snapshotId}`),
     200,
@@ -2259,22 +2343,13 @@ async function existingToExistingFlow(physical) {
     return true;
   })()`);
   invariant(driftImportStarted, 'drift import action was unavailable');
-  let snapshots = [];
-  const importDeadline = Date.now() + 12_000;
-  while (Date.now() < importDeadline) {
-    snapshots = expectStatus(
-      await api('christian.man', `/api/v1/physical-snapshots?sourceId=${physical.sourceId}`),
-      200,
-      'list snapshots after drift',
-    ).body.items;
-    if (snapshots.some((snapshot) => snapshot.sequence > snapshotSequenceBeforeDrift)) break;
-    await sleep(120);
-  }
+  await waitFor("document.querySelector('.daca-alert.is-success')?.textContent.includes('wurde importiert')", 'fixture drift import did not report completion', 65000);
+  const snapshots = expectStatus(
+    await api('christian.man', `/api/v1/physical-snapshots?sourceId=${physical.sourceId}`),
+    200,
+    'list snapshots after confirmed drift import',
+  ).body.items;
   invariant(snapshots.some((snapshot) => snapshot.sequence > snapshotSequenceBeforeDrift), 'fixture drift import did not append its immutable snapshot');
-  await waitFor(
-    "!document.body.innerText.includes('Import läuft')",
-    'fixture drift import remained busy in Edge',
-  );
   const currentSnapshotId = snapshots.reduce((latest, snapshot) => (
     snapshot.sequence > latest.sequence ? snapshot : latest
   )).id;
@@ -2492,6 +2567,218 @@ async function sourceAccessReturnFlow() {
   }
 }
 
+async function expertSearchFlow(){
+  const actor='christian.man';
+  await cdp.call('Emulation.setFocusEmulationEnabled',{enabled:true},sessionId);
+  await navigate('/search?q=VIBDBU',actor);
+  await waitFor("document.querySelector('.search-loading')===null&&document.querySelector('[data-search-key^=\"field:\"]')!==null",'expert search did not load physical fields',30000);
+  invariant(await evaluate("document.querySelector('[data-search-mode=context]').getAttribute('aria-pressed')==='true'&&!!document.querySelector('.search-sidebar')"),'Context navigation is not the default');
+  invariant(await evaluate("(()=>{const h=document.querySelector('.search-heading h1').getBoundingClientRect(),tile=document.querySelector('[data-search-mode=context]').getBoundingClientRect();return tile.left>h.right&&tile.height>=70;})()"),'Mode tiles are not large controls to the right of the heading');
+  const initial=await evaluate("({query:document.querySelector('#expert-search-input').value,count:document.querySelector('#expert-search-results-title').textContent})");
+  await evaluate("document.querySelector('[data-search-key^=\"field:\"] .search-preview-button').click()");
+  await waitFor("document.querySelector('.search-preview')!==null",'Context preview did not open');
+  const previewTitle=await evaluate("document.querySelector('#search-preview-title').textContent");
+  await capturePageSegmentScreenshot('.catalog-search','expert-context-desktop.png',1440,1024);
+  await evaluate("document.querySelector('[data-search-mode=focus]').click()");
+  await waitFor("document.querySelector('.search-kind-strip')!==null&&document.querySelector('.search-sidebar')===null",'Focus mode did not replace the context navigator');
+  invariant(await evaluate(`document.querySelector('#expert-search-input').value===${JSON.stringify(initial.query)}&&document.querySelector('#expert-search-results-title').textContent===${JSON.stringify(initial.count)}&&document.querySelector('#search-preview-title').textContent===${JSON.stringify(previewTitle)}`),'Mode switch lost the query, results or pinned preview');
+  await waitFor("new URL(location.href).searchParams.get('mode')==='focus'",'Focus mode was not saved in the URL');
+  await capturePageSegmentScreenshot('.catalog-search','expert-focus-desktop.png',1440,1024);
+  await evaluate("document.querySelector('.search-preview>header button:last-child').click()");
+  await waitFor("document.querySelector('.search-preview')===null",'Preview did not close');
+  await evaluate("document.querySelector('[data-search-key^=\"field:\"] a').dispatchEvent(new FocusEvent('focusin',{bubbles:true}))");
+  await waitFor("document.querySelector('.search-preview')!==null",'Keyboard focus did not reveal the shared preview');
+  await evaluate("document.querySelector('.search-preview').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
+  await waitFor("document.querySelector('.search-preview')===null",'Escape did not close preview');
+  await evaluate("document.querySelector('[data-search-key^=\"field:\"]').dispatchEvent(new PointerEvent('pointerenter'))");
+  await waitFor("document.querySelector('.search-preview')!==null",'Mouse hover did not reveal the shared preview');
+  await evaluate("document.querySelector('.search-preview>header button:last-child').click()");
+  await evaluate("document.querySelector('.search-filter-button').click()");
+  await waitFor("document.querySelector('#search-filter-panel')!==null",'Filter panel did not open');
+  await evaluate("(()=>{const select=document.querySelector('#search-filter-panel select');select.value=[...select.options].find(option=>option.value!=='all').value;select.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  await waitFor("new URL(location.href).searchParams.has('organization')",'Organization filter was not retained in the URL');
+  await evaluate("document.querySelector('[data-search-mode=context]').click()");
+  invariant(await evaluate("document.querySelector('.search-chips')!==null&&document.querySelector('#expert-search-input').value==='VIBDBU'"),'Switching back lost the filters');
+  await clickText('.search-chips .search-reset','Filter zurücksetzen');
+  await evaluate("document.querySelector('.search-filter-button').click()");
+  for(const mode of ['context','focus']){
+    await setViewport(390,844);
+    await evaluate(`document.querySelector('[data-search-mode=${mode}]').click();document.querySelector('.search-heading').scrollIntoView({behavior:'instant'})`);
+    await settleFrames();
+    invariant(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),`${mode} search overflows mobile`);
+    await captureScreenshot(`expert-${mode}-mobile.png`);
+    await evaluate("document.querySelector('[data-search-key] .search-preview-button').click()");
+    await waitFor("document.querySelector('.search-preview')!==null",'Mobile preview did not open');
+    invariant(await evaluate("(()=>{const r=document.querySelector('.search-preview').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight;})()"),'Preview leaves the mobile viewport');
+    await evaluate("document.querySelector('.search-preview>header button:last-child').click()");
+  }
+  await setViewport(320,740);
+  invariant(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),'Search overflows a 320px viewport');
+  invariant(await evaluate("performance.getEntriesByType('resource').filter(item=>new URL(item.name).pathname==='/api/v1/logical-models').length===1"),'Search repeatedly reloads metadata');
+  invariant(cdp.runtimeExceptions.length===0,`Expert search raised browser exceptions: ${JSON.stringify(cdp.runtimeExceptions)}`);
+  await evaluate("document.querySelector('.expert-search-control button').click()");
+  await waitFor("document.querySelector('#expert-search-input').value===''&&!new URL(location.href).searchParams.has('q')",'Clear search did not reset the URL');
+  await navigate('/search?q=vehicle&kind=table',actor);
+  await waitFor("document.querySelector('.search-loading')===null&&document.querySelector('[data-search-key^=\"table:\"]')!==null",'Data Structures did not load');
+  await setViewport(1440,1024);
+  for(const mode of ['context','focus']){
+    await evaluate(`document.querySelector('[data-search-mode=${mode}]').click()`);
+    await waitFor("document.querySelector('[data-search-kind=structure]')?.getAttribute('aria-pressed')==='true'",'legacy table context did not select Data Structures');
+    const label=await evaluate("document.querySelector('[data-search-kind=structure]').textContent");invariant(label.includes('Data Structures'),'search context is still named Tables');
+    await evaluate("document.querySelector('.catalog-search').scrollIntoView({behavior:'instant',block:'start'})");await settleFrames();
+    await evaluate("document.querySelector('[data-search-kind=structure]').dispatchEvent(new MouseEvent('mouseenter'))");
+    await waitFor("[...document.querySelectorAll('[role=tooltip]')].some(item=>item.textContent.includes('S3-Objekte')&&item.textContent.includes('Tabellen'))",'Data Structure tooltip is missing');
+    await captureScreenshot(`data-structures-${mode}-tooltip.png`);
+    await evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
+    const icons=await evaluate("[...document.querySelectorAll('.search-row>daca-search-icon span')].map(item=>item.getAttribute('style'))");
+    invariant(icons.some(icon=>icon.includes('cube.svg'))&&icons.some(icon=>icon.includes('table.svg')),'S3 object and table results do not retain distinct icons');
+    const types=await evaluate("[...document.querySelectorAll('.search-row-kind')].map(item=>item.textContent)");
+    invariant(types.some(type=>type.includes('S3-Objekt'))&&types.includes('Tabelle'),'Data Structure results lost their concrete types');
+    invariant(await evaluate("new URL(location.href).searchParams.get('kind')==='structure'"),'new links do not use the generic structure context');
+  }
+  invariant(cdp.runtimeExceptions.length===0,`Search taxonomy raised browser exceptions: ${JSON.stringify(cdp.runtimeExceptions)}`);
+  console.log('PASS expert-search: default context, heading tiles, state-preserving mode switch, shared pin/focus/Escape preview, filters, mobile and clear');
+  console.log('PASS Data Structures: generic filter, legacy URL, table/object types and icons, existing accessible tooltips in both modes');
+}
+
+async function mappingStartFlow(){
+  const actor='christian.man';
+  await cdp.call('Emulation.setFocusEmulationEnabled',{enabled:true},sessionId);
+  await navigate('/models',actor);
+  cdp.deferLogicalReads=true;
+  await cdp.call('Fetch.enable',{patterns:[{urlPattern:'*/api/v1/logical-models',requestStage:'Request'}]},sessionId);
+  await evaluate("document.querySelector('a[href=\"/mappings\"]').click()");
+  await waitFor("location.pathname==='/mappings'&&!!document.querySelector('.mapping-start-selection')",'mapping start page did not appear');
+  await waitFor("!!document.querySelector('.mapping-start-action .small-spinner')&&document.querySelector('.mapping-start-choice:first-child button').disabled",'logical-model spinner was not shown');
+  invariant(await evaluate("!document.querySelector('.mapping-start-choice:nth-child(2) button').disabled"),'Slow logical models block the physical entry');
+  await capturePageSegmentScreenshot('daca-mapping-start','mapping-start-loading.png',1440,1000);
+  cdp.deferLogicalReads=false;
+  for(const request of cdp.deferredLogicalReads??[])await cdp.call('Fetch.continueRequest',{requestId:request.requestId},request.sessionId);
+  await cdp.call('Fetch.disable',{},sessionId);
+  await waitFor("!document.querySelector('.mapping-start-choice button').disabled",'mapping start options did not load');
+  invariant(await evaluate("document.querySelectorAll('.mapping-start-choice').length===2&&!document.querySelector('.mapping-shell')&&!document.querySelector('.mapping-start-picker')"),'Entry opens an arbitrary model or an expanded list');
+  await capturePageSegmentScreenshot('daca-mapping-start','mapping-start-desktop.png',1440,1000);
+  const models=expectStatus(await api(actor,'/api/v1/logical-models'),200,'read models for entry flow').body.items;
+  const sources=expectStatus(await api(actor,'/api/v1/physical-sources'),200,'read selectable physical sources').body.items;
+  let model,binding,source;
+  for(const candidate of models.filter(item=>item.hasPhysicalMapping)){
+    const bindings=expectStatus(await api(actor,`/api/v1/logical-models/${candidate.id}/representations`),200,'read existing mapping context').body.items;
+    binding=bindings.find(item=>sources.some(source=>source.latestSnapshotId===item.physicalSnapshotId));
+    if(binding){model=candidate;source=sources.find(item=>item.latestSnapshotId===binding.physicalSnapshotId);break;}
+  }
+  invariant(model&&source&&binding,'No existing latest-snapshot mapping context available');
+  const snapshot=expectStatus(await api(actor,`/api/v1/physical-snapshots/${binding.physicalSnapshotId}`),200,'read selected snapshot').body;
+  const table=snapshot.databases.flatMap(database=>database.schemas.flatMap(schema=>schema.tables)).find(item=>item.id===binding.physicalTableId);
+  invariant(table,'Selected physical object is missing');
+  await evaluate("document.querySelector('.mapping-start-choice:nth-child(2) button').click()");
+  await waitFor("document.querySelector('.representation-dialog[open] .source-options button')!==null",'physical-first picker did not open');
+  await setControls({'.representation-dialog nav input':source.name});
+  await clickText('.source-options button',source.name);
+  await waitFor("document.querySelector('.object-tree button')!==null",'physical source did not load');
+  await evaluate(`(()=>{const button=[...document.querySelectorAll('.object-tree button')].find(item=>item.querySelector('strong')?.textContent.trim()===${JSON.stringify(table.name)});if(!button)throw new Error('Physical object not listed');button.click();})()`);
+  const physicalRoute=`/mappings/physical/${binding.physicalSnapshotId}/${table.id}`;
+  await waitFor(`location.pathname===${JSON.stringify(physicalRoute)}&&!!document.querySelector('.mapping-physical-workspace [data-representation-table-id="${table.id}"]')`,'physical selection did not open its canvas immediately');
+  invariant(await evaluate("!!document.querySelector('.logical-placeholder')&&!document.querySelector('[data-logical-field-id]')&&!document.querySelector('.mapping-start-action button')"),'Physical entry invented a logical model or requires another confirmation');
+  await capturePageSegmentScreenshot('daca-mapping-start','mapping-physical-open.png',1440,1000);
+  await navigate(physicalRoute,actor,390,844);
+  invariant(await evaluate("document.documentElement.scrollWidth<=innerWidth+1&&getComputedStyle(document.querySelector('.mapping-physical-add')).display!=='none'"),'Physical entry overflows mobile or hides counterpart selection');
+  invariant(await evaluate("(()=>{const r=document.querySelector('.physical-representation').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;})()"),'Mobile physical object leaves the viewport');
+  await captureScreenshot('mapping-physical-mobile.png');
+  await setViewport(1440,900);
+  await evaluate("document.querySelector('.logical-placeholder button').click()");
+  await setControls({'#mapping-model-query':model.identifiers[0]||model.title});
+  await waitFor("document.querySelector('.mapping-start-models button')!==null",'logical model is not searchable');
+  await evaluate("document.querySelector('.mapping-start-models button').click()");
+  await waitFor(`location.pathname==='/models/${model.id}/mappings'&&!!document.querySelector('[data-representation-id="${table.id}"]')`,'chosen pair did not open in mapping workspace',30000);
+  await clickText('.mapping-toolbar nav button','Tabelle');
+  await waitFor(`(async()=>{const r=await fetch('/api/v1/me/mapping-workspaces',{headers:{'X-DaCa-User':${JSON.stringify(actor)}}});if(!r.ok)return false;const h=await r.json();return h[0]?.logicalModelId===${JSON.stringify(model.id)}&&h[0]?.physicalTableId===${JSON.stringify(table.id)}&&h[0]?.view==='table';})()`,'workspace context was not persisted');
+  await clickText('.mapping-heading a','Andere Modelle auswählen');
+  await waitFor("document.querySelector('.mapping-start-recent li')!==null",'recent mapping work did not appear');
+  invariant(await evaluate(`document.querySelector('.mapping-start-recent li a').getAttribute('href').startsWith('/models/${model.id}/mappings')`),'most recent work is not listed first');
+  await navigate('/mappings',actor);
+  await waitFor("document.querySelector('.mapping-start-recent li')!==null",'recent work did not survive a fresh page load');
+  await capturePageSegmentScreenshot('daca-mapping-start','mapping-start-recent.png',1440,1000);
+  await evaluate("document.querySelector('.mapping-start-recent li .daca-button').click()");
+  await waitFor(`location.pathname==='/models/${model.id}/mappings'&&document.querySelector('.mapping-toolbar nav button.is-active')?.textContent.trim()==='Tabelle'`,'resume did not restore mapping view');
+  invariant(await evaluate(`new URL(location.href).searchParams.get('physicalTableId')===${JSON.stringify(table.id)}`),'resume lost physical selection');
+  await navigate('/mappings',actor,390,844);
+  invariant(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),'mapping entry overflows mobile');
+  await captureScreenshot('mapping-start-mobile.png');
+  await setViewport(320,740);invariant(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),'mapping entry overflows 320px');
+  await navigate('/mappings',actor);
+  await evaluate("document.querySelector('.mapping-start-choice:first-child button').click()");
+  await setControls({'#mapping-model-query':model.identifiers[0]||model.title});
+  await evaluate("document.querySelector('.mapping-start-models button').click()");
+  await waitFor(`location.pathname==='/models/${model.id}/mappings'&&!!document.querySelector('.mapping-toolbar')`,'logical selection did not open its workspace immediately');
+  invariant(cdp.runtimeExceptions.length===0,`Mapping entry raised browser exceptions: ${JSON.stringify(cdp.runtimeExceptions)}`);
+  console.log('PASS mapping-start: loading spinner, immediate logical/physical opening, physical-first canvas, paired mapping, PostgreSQL recents, fresh-load resume, desktop/mobile');
+}
+
+async function mappingLiveRefreshFlow(){
+  const actor='christian.man';
+  await cdp.call('Emulation.setFocusEmulationEnabled',{enabled:true},sessionId);
+  await navigate('/',actor);
+  const models=expectStatus(await api(actor,'/api/v1/logical-models'),200,'read models for mapping refresh').body.items;
+  let model;
+  for(const candidate of models.filter(item=>item.hasPhysicalMapping)){
+    const bindings=expectStatus(await api(actor,`/api/v1/logical-models/${candidate.id}/representations`),200,'read candidate bindings').body.items;
+    if(bindings.length){model=candidate;break;}
+  }
+  invariant(model,'No mapped model is available for the read-only refresh flow');
+  const route=`/models/${model.id}/mappings?view=graph`;
+  const sameCards="(()=>{const ids=attribute=>[...document.querySelectorAll('['+attribute+']')].map(card=>card.getAttribute(attribute)).sort();return JSON.stringify(ids('data-representation-id'))===JSON.stringify(ids('data-representation-table-id'));})()";
+  await navigate(route,actor);
+  await waitFor("document.querySelector('.physical-representation')!==null",'mapping graph did not load');
+  invariant(await evaluate("[...document.querySelectorAll('.model-tabs a')].find(link=>link.getAttribute('href')?.endsWith('/mappings'))?.textContent.trim()==='Mapping'"),'Mapping tab is not named Mapping');
+  invariant(await evaluate(sameCards),'Bindings differ from the graph before hiding');
+  const originalCount=await evaluate("document.querySelectorAll('.physical-representation').length");
+  const tableId=await evaluate("document.querySelector('.physical-representation').dataset.representationTableId");
+  await evaluate("(()=>{const card=document.querySelector('.physical-representation');card.scrollIntoView({block:'center',behavior:'instant'});const rect=card.getBoundingClientRect();card.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:rect.left+20,clientY:rect.top+20}));})()");
+  await waitFor("document.querySelector('.representation-context-menu')!==null",'representation context menu did not open');
+  await clickText('.representation-context-menu button','Darstellung der physischen Repräsentation entfernen');
+  await waitFor(sameCards,'Binding list retained a hidden graph card');
+  invariant(await evaluate(`!document.querySelector('[data-representation-id="${tableId}"]')`),'Hidden card is still a binding');
+  await clickText('.representation-actions button','Ausgeblendete einblenden');
+  await waitFor(`document.querySelectorAll('.physical-representation').length===${originalCount}`,'hidden representation was not restored');
+  invariant(await evaluate(sameCards),'Bindings differ from restored graph');
+  const connectionLabels=await evaluate("[...document.querySelectorAll('.representation-list .daca-source-connection')].map(item=>item.textContent.trim())");
+  invariant(connectionLabels.every(label=>['Mit Quellenanbindung','Nur Strukturmetadaten','Anbindung unbekannt'].includes(label)),'Missing connection labels');
+  await capturePageSegmentScreenshot('.representation-panel','mapping-bindings-desktop.png',1440,900);
+
+  // Fulfil only GET reads in this isolated browser. No live catalog records change.
+  cdp.mockReadResponses=new Map([
+    [`/api/v1/logical-models/${model.id}/representations`,{items:[]}],
+    ['/api/v1/asset-mappings',{items:[],total:0}],
+    [`/api/v1/logical-models/${model.id}/canvas-layout`,{revision:0,positions:{}}],
+  ]);
+  await cdp.call('Fetch.enable',{patterns:[
+    {urlPattern:`*/api/v1/logical-models/${model.id}/representations`,requestStage:'Request'},
+    {urlPattern:'*/api/v1/asset-mappings?*',requestStage:'Request'},
+    {urlPattern:`*/api/v1/logical-models/${model.id}/canvas-layout`,requestStage:'Request'},
+  ]},sessionId);
+  const started=Date.now();
+  await waitFor("document.querySelectorAll('.physical-representation').length===0&&document.querySelectorAll('[data-representation-id]').length===0",'automatic refresh did not remove obsolete representations');
+  const removalMs=Date.now()-started;
+  invariant(removalMs<9000,`Automatic refresh took ${removalMs}ms, more than one polling interval plus request time`);
+  invariant(await evaluate("!document.body.innerText.includes('lokales, nicht persistierbares Beispielszenario')"),'Refresh installed fallback data');
+  cdp.mockReadResponses.clear();
+  await cdp.call('Fetch.disable',{},sessionId);delete cdp.mockReadResponses;
+  // Keep the headless page foregrounded and exercise the focus refresh path.
+  await cdp.call('Page.bringToFront',{},sessionId);
+  await evaluate("window.dispatchEvent(new Event('focus'))");
+  await waitFor("document.visibilityState==='visible'",'refresh target did not become visible');
+  await waitFor(`document.querySelectorAll('.physical-representation').length===${originalCount}`,'representations were not restored by the next refresh');
+  invariant(!cdp.interceptionError,cdp.interceptionError);
+  invariant(await evaluate(sameCards),'Bindings differ after automatic restoration');
+  await setViewport(390,844);
+  await evaluate("document.querySelector('.representation-panel').scrollIntoView({behavior:'instant'})");
+  await captureScreenshot('mapping-bindings-mobile.png');
+  invariant(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),'Bindings overflow the mobile page');
+  invariant(await evaluate("[...document.querySelectorAll('.representation-list>button>strong')].every(label=>{const range=document.createRange();range.selectNodeContents(label);const text=range.getBoundingClientRect(),card=label.parentElement.getBoundingClientRect();return text.left>=card.left&&text.right<=card.right+1;})"),'Physical representation names overlap neighbouring cards');
+  invariant(await evaluate(sameCards),'Mobile bindings differ from graph');
+  console.log(`PASS mapping-live-refresh: shared visibility, restore, connection labels, automatic removal/restoration, mobile; simulated removal detected in ${removalMs}ms`);
+}
+
 try {
   const browser = await connectBrowser();
   cdp = new CdpClient(browser.webSocketDebuggerUrl);
@@ -2508,11 +2795,13 @@ try {
     } catch {}`,
   }, sessionId);
   await cdp.call('Runtime.enable', {}, sessionId);
+  // Keep keyboard interaction in this headless page even after a download or an external browser gains focus.
+  await cdp.call('Emulation.setFocusEmulationEnabled', {enabled:true}, sessionId);
   await cdp.call('Network.enable', {}, sessionId);
   await cdp.call('Network.setCacheDisabled', { cacheDisabled: true }, sessionId);
   await cdp.call('Network.setBypassServiceWorker', { bypass: true }, sessionId);
 
-  if(args.get('--flow')==='domain-transfer'){await domainTransferFlow();} else if(args.get('--flow')==='domain-metadata'){await domainMetadataFlow();} else if(args.get('--flow')==='semantic-owner-search'){await semanticOwnerSearchFlow();} else if(args.get('--flow')==='domain-relation-types'){await domainRelationTypesFlow();} else if(args.get('--flow')==='organization-term-network'){await organizationTermNetworkFlow();} else if(args.get('--flow')==='domain-connection-gesture'){await domainConnectionGestureFlow();} else if(args.get('--flow')==='domain-card-actions'){await domainCardActionsFlow();} else if(args.get('--flow')==='governance-information'){await governanceInformationFlow();} else if(args.get('--flow')==='semantic-gestures'){await semanticGestureFlow();} else if(args.get('--flow')==='domain-network'){await domainNetworkFlow();} else if(args.get('--flow')==='field-move'){await fieldMoveFlow();} else if(args.get('--flow')==='hold-connections'){await holdConnectionFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});} else if(args.get('--flow')==='source-access-return'){await sourceAccessReturnFlow();} else if(args.get('--flow')==='csv-import'){await csvPhysicalModelsFlow();} else if(args.get('--flow')==='inventory-representation'){await inventoryRepresentationFlow();} else if(args.get('--flow')==='concept-network'){await conceptNetworkEditingFlow();} else if(args.get('--flow')==='line-editing'){
+  if(args.get('--flow')==='mapping-release-tail'){await navigate('/models','christian.man');const physical=await physicalFirstFlow();await existingToExistingFlow(physical);await dataModelJourneyTen();await sourceAccessReturnFlow();await fieldMoveFlow();console.log('PASS focused Mapping release tail');} else if(args.get('--flow')==='semantic-own-office'){await semanticOwnOfficeFlow();} else if(args.get('--flow')==='mapping-start'){await mappingStartFlow();} else if(args.get('--flow')==='expert-search'){await expertSearchFlow();} else if(args.get('--flow')==='mapping-live-refresh'){await mappingLiveRefreshFlow();} else if(args.get('--flow')==='domain-transfer'){await domainTransferFlow();} else if(args.get('--flow')==='domain-metadata'){await domainMetadataFlow();} else if(args.get('--flow')==='semantic-owner-search'){await semanticOwnerSearchFlow();} else if(args.get('--flow')==='domain-relation-types'){await domainRelationTypesFlow();} else if(args.get('--flow')==='organization-term-network'){await organizationTermNetworkFlow();} else if(args.get('--flow')==='domain-connection-gesture'){await domainConnectionGestureFlow();} else if(args.get('--flow')==='domain-card-actions'){await domainCardActionsFlow();} else if(args.get('--flow')==='governance-information'){await governanceInformationFlow();} else if(args.get('--flow')==='semantic-gestures'){await semanticGestureFlow();} else if(args.get('--flow')==='domain-network'){await domainNetworkFlow();} else if(args.get('--flow')==='field-move'){await fieldMoveFlow();} else if(args.get('--flow')==='hold-connections'){await holdConnectionFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});} else if(args.get('--flow')==='source-access-return'){await sourceAccessReturnFlow();} else if(args.get('--flow')==='csv-import'){await csvPhysicalModelsFlow();} else if(args.get('--flow')==='inventory-representation'){await inventoryRepresentationFlow();} else if(args.get('--flow')==='concept-network'){await conceptNetworkEditingFlow();} else if(args.get('--flow')==='line-editing'){
     invariant(args.get('--model-id')&&args.get('--snapshot-id'),'line-editing flow requires model-id and snapshot-id');
     await edgeEditingFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});
   } else {

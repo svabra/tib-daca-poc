@@ -1,6 +1,8 @@
 .env
 .venv/
 .uv-cache/
+.cache/
+.vscode/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -13,6 +15,8 @@ dist/
 coverage/
 playwright-report/
 test-results/
+# Local screenshots and test reports; curated documentation stays in docs/mockups/.
+/artifacts/
 output/
 .playwright-cli/
 *.log

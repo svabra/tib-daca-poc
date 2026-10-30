@@ -7,6 +7,16 @@ import { FALLBACK_LOGICAL_MODEL, FALLBACK_PHYSICAL_SNAPSHOT } from './mapping-fa
 
 describe('representation picker',()=>{
   afterEach(()=>TestBed.resetTestingModule());
+  it('opens a selected physical object on click in entry mode, while keeping normal attachment explicit',()=>{
+    TestBed.configureTestingModule({imports:[RepresentationPickerComponent],providers:[{provide:DataModelsApiService,useValue:{listPhysicalSources:()=>of([])}}]});
+    Object.defineProperty(HTMLDialogElement.prototype,'showModal',{configurable:true,value:function(this:HTMLDialogElement){this.setAttribute('open','');}});
+    const fixture=TestBed.createComponent(RepresentationPickerComponent);fixture.componentRef.setInput('selectionOnly',true);fixture.detectChanges();
+    const component=fixture.componentInstance,added=vi.fn(),snapshot=FALLBACK_PHYSICAL_SNAPSHOT,table=snapshot.tables[0];component.added.subscribe(added);
+    component.snapshot.set(snapshot);component.chooseTable(table);
+    expect(added).toHaveBeenCalledExactlyOnceWith({snapshot,table});
+    fixture.componentRef.setInput('selectionOnly',false);fixture.detectChanges();added.mockClear();component.chooseTable(table);
+    expect(added).not.toHaveBeenCalled();component.attach();expect(added).toHaveBeenCalledOnce();
+  });
   it('blocks foreign scopes, ignores stale source responses and adds only on explicit action',()=>{
     const first=new Subject<PhysicalSnapshot>(),second=new Subject<PhysicalSnapshot>();
     const base:PhysicalSource={id:'pg',revision:1,name:'PG demo',connectorType:'postgresql',systemName:'PG',databaseName:'demo',department:FALLBACK_LOGICAL_MODEL.department,office:FALLBACK_LOGICAL_MODEL.office,latestSnapshotId:'pg-snapshot',latestSnapshotSequence:1,latestSnapshot:null,catalogPath:'postgresql://demo/',ownerName:'Owner',updatedAt:''};

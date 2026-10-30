@@ -19,6 +19,21 @@ describe('ConceptNetworkEditorComponent', () => {
     beforeEach(() => { graph={revision:0,positions:{},relations:[],canEditLayout:true,canEditRelations:false};localStorage.clear(); sessionStorage.clear(); userId.set('editor');api.saveSemanticGraph.mockImplementation((_kind,value)=>{graph={...graph,revision:graph.revision+1,positions:value.positions,hiddenNodeIds:value.hiddenNodeIds,additionalNodeIds:value.additionalNodeIds};return of(structuredClone(graph));}); api.loadGlossaryTermProposals.mockReturnValue(of([])); api.createGlossaryTermProposal.mockReturnValue(of(proposal('a'))); vi.clearAllMocks(); TestBed.configureTestingModule({ imports: [ConceptNetworkEditorComponent], providers: [{provide:UserPreferencesService,useValue:{language:signal('de')}},provideRouter([]), { provide: CatalogApiService, useValue: api }, { provide: DemoIdentityService, useValue: { userId } }] }); });
     afterEach(() => { TestBed.resetTestingModule(); vi.restoreAllMocks(); localStorage.clear(); sessionStorage.clear(); });
     function render(domain = DOMAIN, terms = TERMS) { const fixture = TestBed.createComponent(ConceptNetworkEditorComponent); fixture.componentRef.setInput('domain', domain); fixture.componentRef.setInput('terms', terms); fixture.detectChanges(); return fixture; }
+    it('keeps local term drafts and foreign positions when filtering and arranging the visible scope',()=>{
+        graph.positions={'term:a':{x:400,y:70},'term:b':{x:700,y:200}};
+        const fixture=render(),component=fixture.componentInstance;
+        component.values.update(items=>items.map(item=>item.id==='a'?{...item,definition:'Lokaler Entwurf'}:item));
+        component.dirty.set({a:1});
+        fixture.componentRef.setInput('visibleNodeIds',['term:a']);fixture.detectChanges();
+        expect(component.nodes().map(node=>node.id)).toEqual(['term:a']);
+        expect(component.layoutDirty()).toBe(false);expect(component.dirtyCount()).toBe(1);
+        component.resetLayout();
+        expect(component.positions()['term:b']).toEqual({x:700,y:200});
+        fixture.componentRef.setInput('visibleNodeIds',null);fixture.detectChanges();
+        expect(component.values().find(item=>item.id==='a')?.definition).toBe('Lokaler Entwurf');
+        expect(component.nodes().some(node=>node.id==='term:b')).toBe(true);
+        expect(api.saveSemanticGraph).not.toHaveBeenCalled();expect(api.createGlossaryTermProposal).not.toHaveBeenCalled();
+    });
     it.each([['interfacesWith','hat eine fachliche Schnittstelle zu'],['overlapsWith','hat Überschneidungen mit']] as const)('labels %s consistently in neighboring-domain and organization graphs',(type,label)=>{
         const link={sourceId:'neighbor',targetId:DOMAIN.id,relationType:type};graph.relations=[link];
         const fixture=render(),component=fixture.componentInstance;component.toggleLinkedDomains(true);fixture.detectChanges();

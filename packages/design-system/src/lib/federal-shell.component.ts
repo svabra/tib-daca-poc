@@ -168,22 +168,23 @@ export interface DacaUserOption {
 
     <footer class="daca-footer">
       <div class="daca-header-inner daca-footer-inner">
-        @if (footerText(); as text) {
-          <span>{{ text }}</span>
-        } @else {
-          <span>Bundesamt f&uuml;r Informatik und Telekommunikation BIT</span>
-          <span>{{ footerProductName() ?? 'BIT DaCa' }} &middot; Central Data Catalog &middot; Proof of concept</span>
-        }
+        <div class="daca-footer-copy">
+          @if (footerText(); as text) {
+            <span>{{ text }}</span>
+          } @else {
+            <span>Bundesamt f&uuml;r Informatik und Telekommunikation BIT</span>
+            <span>{{ footerProductName() ?? 'BIT DaCa' }} &middot; Central Data Catalog &middot; Proof of concept</span>
+          }
+        </div>
+        <daca-version-overlay
+          [productName]="versionProductName()"
+          [description]="versionDescription()"
+          [locale]="locale() === 'de' ? 'de' : 'en'"
+          [featureScope]="versionFeatureScope()"
+          [ariaLabel]="locale() === 'de' ? 'DaCa-Anwendungsversion' : 'DaCa application version'"
+        />
       </div>
     </footer>
-
-    <daca-version-overlay
-      [productName]="versionProductName()"
-      [description]="versionDescription()"
-      [locale]="locale() === 'de' ? 'de' : 'en'"
-      [featureScope]="versionFeatureScope()"
-      [ariaLabel]="locale() === 'de' ? 'DaCa-Anwendungsversion' : 'DaCa application version'"
-    />
   `,
 })
 export class FederalShellComponent {

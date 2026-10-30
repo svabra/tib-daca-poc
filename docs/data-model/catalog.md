@@ -1,5 +1,16 @@
 # Catalog data model
 
+## Personal mapping workspace context
+
+Migration `0045_mapping_workspace_visits` adds private user/model navigation history with an
+optional exact physical snapshot/object pair, graph/table/drift view and last-visit timestamp.
+The service retains at most ten rows per user under a user-row lock. Reads reauthorize model
+and source references and return private/no-store responses. Deleted physical FKs become null;
+retired/inaccessible models are omitted. This mutable personal context contains no unsaved
+drafts, credentials, protected rows or authorization grants and does not change catalog audit
+or shared canvas state. It survives login expiry without altering `demo_login_sessions` or
+`demo_users.preferences`.
+
 ## Domain handover audit and responsibility scope
 
 Handover reuses existing domain, responsibility and workflow tables; no migration or new JSON
@@ -317,6 +328,12 @@ registrations rather than merging or deleting their snapshots and mappings. The 
 path is derived from that protected configuration and is metadata only: it never exposes a DSN,
 host credential, table rows, or connector secret.
 
+Snapshot responses derive `sourceConnectionConfigured` from a PostgreSQL/S3 adapter and a
+non-empty server configuration reference. CSV inventories and fixtures report false. This is a
+read-only indicator, not a new persisted snapshot attribute, health result or published data
+endpoint. The mapping graph and binding list use it to distinguish connected source metadata
+from declared structures; existing snapshot/membership/audit persistence is unchanged.
+
 The seeded VIBDBU real-estate source is a catalog-readable demonstration exception for
 modeling personas in other organizational scopes. Its structural snapshots are readable;
 source import and model writes still require the owning organizational assignment.
@@ -365,10 +382,10 @@ reads it from the actual footer. It never denotes the number of S3 objects (`obj
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
-- Alembic head: `0044_office_alds_mandates`
-- Schema fingerprint: `d70b9e546b1e1927`
-- Migration fingerprint: `770a2024abee5c72`
-- Tables: `100`
+- Alembic head: `0045_mapping_workspace_visits`
+- Schema fingerprint: `778dd6c66231f89d`
+- Migration fingerprint: `c67221775f4f57cf`
+- Tables: `101`
 
 ## Domain status vocabulary
 
@@ -1164,6 +1181,14 @@ erDiagram
         string updated_by_user_id FK
         datetime updated_at
     }
+    mapping_workspace_visits {
+        string user_id PK,FK
+        uuid logical_model_id PK,FK
+        uuid physical_snapshot_id FK
+        uuid physical_table_id FK
+        string view
+        datetime visited_at
+    }
     metadata_delivery_outbox {
         uuid id PK
         uuid data_product_id FK
@@ -1757,6 +1782,10 @@ erDiagram
     demo_users ||--o{ logical_models : "created_by_user_id"
     logical_models ||--o| mapping_canvas_layouts : "logical_model_id"
     demo_users ||--o{ mapping_canvas_layouts : "updated_by_user_id"
+    demo_users ||--o| mapping_workspace_visits : "user_id"
+    logical_models ||--o| mapping_workspace_visits : "logical_model_id"
+    physical_schema_snapshots o|--o{ mapping_workspace_visits : "physical_snapshot_id"
+    physical_tables o|--o{ mapping_workspace_visits : "physical_table_id"
     data_products ||--o{ metadata_delivery_outbox : "data_product_id"
     data_products ||--o{ metadata_publications : "data_product_id"
     canonical_ontology_terms ||--o{ ontology_term_alignments : "term_id"
@@ -3436,6 +3465,28 @@ Constraints and indexes:
 - Check `ck_mapping_canvas_revision`: `revision >= 1`
 - Foreign key `logical_model_id` → `logical_models.id`; on delete `RESTRICT`
 - Foreign key `updated_by_user_id` → `demo_users.id`
+
+### `mapping_workspace_visits`
+
+Private per-user recent mapping context, keyed by user/model and bounded to ten rows per user. Stores last physical snapshot/object, view and visit time; reads reauthorize model and source access. Not an unsaved draft, audit record, grant or shared canvas layout.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `user_id` | `VARCHAR(200)` | no | PK, FK | — |
+| `logical_model_id` | `CHAR(32)` | no | PK, FK | — |
+| `physical_snapshot_id` | `CHAR(32)` | yes | FK | — |
+| `physical_table_id` | `CHAR(32)` | yes | FK | — |
+| `view` | `VARCHAR(16)` | no | — | `graph` |
+| `visited_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Check `ck_mapping_visit_view`: `view IN ('graph', 'table', 'drift')`
+- Foreign key `user_id` → `demo_users.id`; on delete `CASCADE`
+- Foreign key `logical_model_id` → `logical_models.id`; on delete `CASCADE`
+- Foreign key `physical_snapshot_id` → `physical_schema_snapshots.id`; on delete `SET NULL`
+- Foreign key `physical_table_id` → `physical_tables.id`; on delete `SET NULL`
+- Index `ix_mapping_visit_user_time` on `user_id, visited_at`
 
 ### `metadata_delivery_outbox`
 

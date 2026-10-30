@@ -19,7 +19,7 @@ describe('MappingMatrixComponent', () => {
     const fixture = TestBed.createComponent(MappingMatrixComponent);
     fixture.detectChanges();
     const table = fixture.debugElement.query(By.css('table'));
-    const add = fixture.debugElement.queryAll(By.css('button')).find((item) => item.nativeElement.textContent.includes('Zuordnung'))!;
+    const add = fixture.debugElement.queryAll(By.css('button')).find((item) => item.nativeElement.textContent.includes('Mapping'))!;
     expect(table).toBeTruthy();
     add.triggerEventHandler('click', { currentTarget: add.nativeElement });
     expect(facade.editor()).not.toBeNull();

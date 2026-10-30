@@ -17,6 +17,20 @@ describe('organization term network',()=>{
   beforeEach(()=>{actor.set('spider');user.set({office:'armasuisse'});delayed=null;vi.clearAllMocks();TestBed.configureTestingModule({imports:[OrganizationTermNetworkComponent],providers:[provideRouter([]),{provide:CatalogApiService,useValue:api},{provide:DemoIdentityService,useValue:{userId:actor,user}},{provide:UserPreferencesService,useValue:{language:signal('de')}}]});});
   afterEach(()=>TestBed.resetTestingModule());
   function render(){const fixture=TestBed.createComponent(OrganizationTermNetworkComponent);fixture.componentRef.setInput('domains',[domain,{...domain,id:'outside'}]);fixture.componentRef.setInput('terms',[term,{...term,id:'outside'}]);fixture.detectChanges();return fixture;}
+  it('returns a manually selected foreign network to the own office and filters reference cards',()=>{
+    const fixture=render(),component=fixture.componentInstance;
+    component.changeOrganization({target:{value:'verteidigung'}} as unknown as Event);fixture.detectChanges();
+    expect(component.organizationId()).toBe('verteidigung');
+    fixture.componentRef.setInput('ownOfficeOnly',true);
+    fixture.componentRef.setInput('visibleNodeIds',['term:t']);fixture.detectChanges();
+    expect(component.organizationId()).toBe('armasuisse');
+    expect(fixture.nativeElement.querySelector('.organization-choice')).toBeNull();
+    expect(component.editor()?.nodes().map(item=>item.id)).toEqual(['term:t']);
+    expect(api.saveSemanticGraph).not.toHaveBeenCalled();
+    fixture.componentRef.setInput('ownOfficeOnly',false);fixture.componentRef.setInput('visibleNodeIds',null);fixture.detectChanges();
+    expect(component.editor()?.nodes()).toHaveLength(2);
+    expect(fixture.nativeElement.querySelector('.organization-choice')).not.toBeNull();
+  });
   it('selects the current organization when directory options arrive after the graph',async()=>{
     const directory=new Subject<{id:string;label:string}[]>();api.loadAdministrativeOrganizations.mockReturnValueOnce(directory);
     const fixture=render();directory.next([{id:'armasuisse',label:'armasuisse'}]);fixture.detectChanges();await fixture.whenStable();

@@ -69,6 +69,7 @@ from .i14y_publication import DisabledI14YPublicationAdapter, I14YPublicationPor
 from .import_journey_api import create_import_journey_router
 from .logical_model_review_api import create_logical_model_review_router
 from .mapping_inconsistency_api import create_mapping_inconsistency_router
+from .mapping_workspace_history_api import create_mapping_workspace_history_router
 from .model_domain_api import create_model_domain_router
 from .modeling_api import create_modeling_router
 from .modeling_assistance_api import create_modeling_assistance_router
@@ -6949,6 +6950,7 @@ def create_app(
     app.include_router(create_logical_model_review_router())
     app.include_router(create_mapping_inconsistency_router())
     app.include_router(create_modeling_resources_router())
+    app.include_router(create_mapping_workspace_history_router())
 
     @app.get("/health/live", response_model=HealthResponse, tags=["health"])
     def live() -> HealthResponse:

@@ -103,7 +103,7 @@ services:
       DACA_CONTROL_DEMO_AUTH: ${DACA_CONTROL_DEMO_AUTH:-true}
       DACA_CONTROL_ENDPOINT_HOST_ALLOWLIST: ${DACA_CONTROL_ENDPOINT_HOST_ALLOWLIST:-catalog-api}
     ports:
-      - "8002:8002"
+      - "${DACA_CONTROL_API_PORT:-8002}:8002"
     depends_on:
       postgres:
         condition: service_healthy

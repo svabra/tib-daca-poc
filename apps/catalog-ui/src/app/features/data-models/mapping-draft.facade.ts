@@ -54,6 +54,7 @@ export class MappingDraftFacade {
   readonly representations = signal<readonly PhysicalRepresentation[]>([]);
   readonly canvasNodePositions = signal<ReadonlyMap<string, CanvasNodePosition>>(new Map());
   private readonly savedCanvasLayout = signal<MappingCanvasLayout>({revision:0,positions:{}});
+  readonly canvasLayoutState=this.savedCanvasLayout.asReadonly();
   readonly canvasDirty = computed(()=>{
     const saved=this.savedCanvasLayout().positions,positions=this.canvasNodePositions();
     return positions.size!==Object.keys(saved).length||[...positions].some(([key,point])=>saved[key]?.x!==point.x||saved[key]?.y!==point.y);
@@ -122,6 +123,14 @@ export class MappingDraftFacade {
     this.selectedMappingId.set(null);this.selectedLogicalFieldId.set(null);this.pendingLogicalFieldId.set(null);this.editor.set(null);
   }
 
+  openPhysicalSelection(snapshot:PhysicalSnapshot,table:PhysicalTable):void{
+    this.clear();
+    const scoped={...snapshot,tables:[table]};
+    this.snapshotState.set(scoped);
+    // This is an existing physical object for inspection, not a saved logical membership.
+    this.representations.set([{snapshot:scoped,table,persisted:true}]);
+  }
+
   initialize(model: LogicalModel, snapshot: PhysicalSnapshot | null, mappings: readonly AssetMapping[], drift: DriftReport | null, representations?: readonly PhysicalRepresentation[], canvasLayout:MappingCanvasLayout={revision:0,positions:{}}): void {
     this.restoreCanvasLayout(canvasLayout);
     this.pendingRemovals.set([]);
@@ -145,6 +154,18 @@ export class MappingDraftFacade {
     this.snapshotState.update((snapshot)=>snapshot?update(snapshot):null);
   }
 
+  refreshSelection(model:LogicalModel,snapshot:PhysicalSnapshot|null,mappings:readonly AssetMapping[],representations:readonly PhysicalRepresentation[],canvasLayout:MappingCanvasLayout):void{
+    if(this.hasWorkspaceChanges()||this.editor()||this.pendingLogicalFieldId())return;
+    const selectedRoot=this.selectedField()?.rootId,selectedMappingId=this.selectedMappingId();
+    this.modelState.set(model);this.snapshotState.set(snapshot);this.mappingsState.set(mappings);
+    this.representations.set(representations);this.restoreCanvasLayout(canvasLayout);
+    const tables=new Set(representations.map((item)=>item.table.id));
+    this.hiddenRepresentationIds.update((ids)=>new Set([...ids].filter((id)=>tables.has(id))));
+    this.selectedLogicalFieldId.set(model.fields.find((field)=>field.rootId===selectedRoot)?.id??model.fields[0]?.id??null);
+    this.selectedMappingId.set(mappings.some((mapping)=>mapping.id===selectedMappingId&&mapping.status!=='superseded')?selectedMappingId:null);
+    this.driftState.set(null);
+  }
+
   moveCanvasNode(key: string, position: CanvasNodePosition): void {
     this.canvasNodePositions.update((positions) => new Map(positions).set(key, {x: Math.min(100_000,Math.max(15, position.x)), y: Math.min(100_000,Math.max(15, position.y))}));
   }
@@ -161,7 +182,7 @@ export class MappingDraftFacade {
 
   hideRepresentation(tableId: string): void {
     this.hiddenRepresentationIds.update((ids) => new Set(ids).add(tableId));
-    this.announcement.set('Darstellung entfernt. Über die Repräsentationsliste kann sie wieder angezeigt werden. Bindungen und Mappings bleiben erhalten.');
+    this.announcement.set('Darstellung aus Graph und physischen Bindungen ausgeblendet. Über «Ausgeblendete einblenden» wieder anzeigen. Gespeicherte Bindungen und Mappings bleiben erhalten.');
   }
 
   showRepresentation(tableId: string): void {
@@ -238,7 +259,7 @@ export class MappingDraftFacade {
   cancelConnection(): void {
     if (!this.pendingLogicalFieldId()) return;
     this.pendingLogicalFieldId.set(null);
-    this.announcement.set('Zuordnung abgebrochen.');
+    this.announcement.set('Mapping abgebrochen.');
     this.restoreFocus();
   }
 
@@ -262,7 +283,7 @@ export class MappingDraftFacade {
       return false;
     }
     if (compatibleType(field.dataType) !== compatibleType(column.dataType)) {
-      this.announcement.set('Keine direkte Verbindung erstellt: Die Datentypen passen nicht zusammen. Verwenden Sie «Zuordnung hinzufügen», um eine Transformation festzulegen.');
+      this.announcement.set('Keine direkte Verbindung erstellt: Die Datentypen passen nicht zusammen. Verwenden Sie «Mapping hinzufügen», um eine Transformation festzulegen.');
       return false;
     }
     this.pendingLogicalFieldId.set(null);
@@ -309,7 +330,7 @@ export class MappingDraftFacade {
       logicalFieldVersionIds: mapping.logicalFieldVersionIds.filter((id) => currentFieldIds.has(id)),
       physicalColumnIds: mapping.physicalColumnIds.filter((id) => currentColumnIds.has(id)),
     });
-    this.announcement.set(`Gebrochene Zuordnung ausgewählt. Wählen Sie gültige Spalten aus Snapshot ${latest?.revision ?? 'aktuell'} und speichern Sie eine neue Entwurfsversion.`);
+    this.announcement.set(`Gebrochenes Mapping ausgewählt. Wählen Sie gültige Spalten aus Snapshot ${latest?.revision ?? 'aktuell'} und speichern Sie eine neue Entwurfsversion.`);
   }
 
   closeEditor(restoreFocus = true): void {
@@ -356,7 +377,7 @@ export class MappingDraftFacade {
     this.selectMapping(id);
     const fieldNames = this.logicalFields().filter((field) => value.logicalFieldVersionIds.includes(field.id)).map((field) => field.name).join(', ');
     const targets = this.physicalColumns().filter((column) => value.physicalColumnIds.includes(column.id)).map((column) => column.qualifiedName).join(', ');
-    this.announcement.set(`${fieldNames} wurde ${targets} zugeordnet. Die Zuordnung ist noch als Entwurf zu speichern.`);
+    this.announcement.set(`${fieldNames} wurde ${targets} zugeordnet. Das Mapping ist noch als Entwurf zu speichern.`);
     this.closeEditor(restoreFocus);
     return next;
   }
@@ -418,7 +439,7 @@ export class MappingDraftFacade {
     this.mappingsState.update((items) => items.filter((item) => item.id !== id));
     this.dirtyIdsState.update((ids) => { const next = new Set(ids); next.delete(id); return next; });
     this.selectedMappingId.set(null);
-    this.announcement.set('Lokaler Zuordnungsentwurf entfernt.');
+    this.announcement.set('Lokaler Mapping-Entwurf entfernt.');
   }
 
   removeLocalColumn(mappingId: string, columnId: string): void {
@@ -427,7 +448,7 @@ export class MappingDraftFacade {
     const remaining = mapping.physicalColumnIds.filter((id) => id !== columnId);
     if (!remaining.length) { this.discardLocalMapping(mappingId); return; }
     this.mappingsState.update((items) => items.map((item) => item.id === mappingId ? { ...item, physicalColumnIds: remaining } : item));
-    this.announcement.set('Verbindung aus lokalem Zuordnungsentwurf entfernt.');
+    this.announcement.set('Verbindung aus lokalem Mapping-Entwurf entfernt.');
   }
 
   markValidation(mapping: AssetMapping): void {

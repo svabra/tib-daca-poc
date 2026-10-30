@@ -14,7 +14,7 @@ export type DataModelWorkspaceSection = 'model' | 'mappings' | 'drift';
     </nav>
     <nav class="model-tabs" aria-label="Bereiche dieses logischen Modells">
       <a [routerLink]="['/models', modelId()]" [class.is-active]="activeSection() === 'model'" [attr.aria-current]="activeSection() === 'model' ? 'page' : null">Logisches Modell</a>
-      <a [routerLink]="['/models', modelId(), 'mappings']" [class.is-active]="activeSection() === 'mappings'" [attr.aria-current]="activeSection() === 'mappings' ? 'page' : null">Zuordnungen</a>
+      <a [routerLink]="['/models', modelId(), 'mappings']" [class.is-active]="activeSection() === 'mappings'" [attr.aria-current]="activeSection() === 'mappings' ? 'page' : null">Mapping</a>
       <a [routerLink]="['/models', modelId(), 'drift']" [class.is-active]="activeSection() === 'drift'" [attr.aria-current]="activeSection() === 'drift' ? 'page' : null">Drift</a>
     </nav>
   `,

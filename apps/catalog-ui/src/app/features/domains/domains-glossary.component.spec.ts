@@ -1,10 +1,10 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService } from '../../core/demo-identity.service';
-import { DomainSummary, GlossaryTermProposal, GlossaryTermSummary } from '../../core/catalog.models';
+import { DomainSummary, GlossaryTermProposal, GlossaryTermSummary, SemanticGraphState } from '../../core/catalog.models';
 import { DomainsGlossaryComponent, resolveSemanticTab } from './domains-glossary.component';
 
 vi.mock('@bit-daca/design-system', async () => {
@@ -85,6 +85,7 @@ const PROPOSAL: GlossaryTermProposal = {
 
 function apiStub() {
   return {
+    loadSemanticGraph: vi.fn(() => of<SemanticGraphState>({revision: 0, positions: {}, relations: [], canEditLayout: false, canEditRelations: false, scopeDomainIds: [DEFENCE.id], scopeTermIds: [TERM.id]})),
     loadDomains: vi.fn(() => of([DEFENCE, MOBILITY])),
     loadGlossaryTerms: vi.fn(() => of([TERM])),
     loadDomainChangeRequests: vi.fn(() => of([])),
@@ -99,6 +100,7 @@ async function render() {
     id: 'sandro.wenger',
     displayName: 'Sandro Wenger',
     organization: 'BAZG',
+    office: 'bazg',
     email: 'sandro.wenger@example.test',
     phone: null,
     avatarUrl: null,
@@ -125,6 +127,50 @@ async function render() {
 
 describe('DomainsGlossaryComponent term lifecycle proposals', () => {
   afterEach(() => TestBed.resetTestingModule());
+
+  it('disables activation without an office and never falls back to all offices for an active URL filter',async()=>{
+    const {fixture, api, identity}=await render(),component=fixture.componentInstance;
+    identity.user.update(user=>({...user,office:''}));fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.office-filter input').disabled).toBe(true);
+    component.ownOfficeOnly.set(true);fixture.detectChanges();
+    expect(component.filteredDomains()).toEqual([]);expect(component.filteredTerms()).toEqual([]);
+    expect(api.loadSemanticGraph).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('.office-filter input').disabled).toBe(false);
+  });
+
+  it('filters by trusted independent object scope and combines it with text search', async () => {
+    const {fixture, api} = await render(), component = fixture.componentInstance;
+    // The scoped term belongs to a foreign domain: classification is not office ownership.
+    component.terms.set([{...TERM, domains: [MOBILITY]}, {...TERM, id: 'foreign', preferredLabel: 'Fremd', domains: [DEFENCE]}]);
+    const checkbox = fixture.nativeElement.querySelector('.office-filter input') as HTMLInputElement;
+    checkbox.click(); fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
+    expect(component.ownOfficeOnly()).toBe(true);
+    expect(api.loadSemanticGraph).toHaveBeenCalledWith('organizations', 'bazg');
+    expect(component.filteredDomains().map(item => item.id)).toEqual([DEFENCE.id]);
+    expect(component.filteredTerms().map(item => item.id)).toEqual([TERM.id]);
+    component.termQuery.set('Armored'); expect(component.filteredTerms()).toHaveLength(1);
+    component.termQuery.set('Fremd'); expect(component.filteredTerms()).toEqual([]);
+    expect((fixture.nativeElement.querySelector('a[href^="/domains/terminology"]') as HTMLAnchorElement).search).toContain('ownOffice=1');
+    checkbox.click(); fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
+    expect(component.filteredDomains()).toHaveLength(2);
+    expect(component.filteredTerms()[0].id).toBe('foreign');
+  });
+
+  it('shows a spinner, retains an empty scope on failure and cancels reads across identities', async () => {
+    const {fixture, api, identity} = await render(), component = fixture.componentInstance;
+    const pending = new Subject<SemanticGraphState>();
+    api.loadSemanticGraph.mockReturnValueOnce(pending);
+    component.ownOfficeOnly.set(true); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.office-filter .small-spinner')).not.toBeNull();
+    expect(component.filteredDomains()).toEqual([]);
+    api.loadSemanticGraph.mockReturnValueOnce(throwError(() => new Error('offline')));
+    identity.userId.set('other'); fixture.detectChanges();
+    pending.next({revision: 0, positions: {}, relations: [], canEditLayout: false, canEditRelations: false, scopeDomainIds: [MOBILITY.id]});
+    expect(component.officeError()).toBe(true); expect(component.filteredDomains()).toEqual([]);
+    component.loadOfficeScope(); fixture.detectChanges();
+    expect(component.filteredDomains().map(item => item.id)).toEqual([DEFENCE.id]);
+    expect(component.officeError()).toBe(false);
+  });
 
   it('clears the former identity capability and reloads transfer rights',async()=>{
     const {fixture,api,identity}=await render(),component=fixture.componentInstance;
@@ -257,6 +303,6 @@ describe('DomainsGlossaryComponent term lifecycle proposals', () => {
 
     component.termQuery.set('nicht vorhanden');
     fixture.detectChanges();
-    expect(root.textContent).toContain('Keine passenden Terminology-Terme gefunden.');
+    expect(root.textContent).toContain('Keine passenden Terminologie-Terme gefunden.');
   });
 });

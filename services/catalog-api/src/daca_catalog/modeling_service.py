@@ -1409,7 +1409,22 @@ def snapshot_tree(session: Session, snapshot: PhysicalSchemaSnapshot) -> dict[st
                 "schemas": schemas,
             }
         )
-    database_name = databases[0]["name"] if databases else None
+    return {
+        "snapshot": snapshot_summary(session, snapshot, source=source,
+                                     database_name=databases[0]["name"] if databases else None),
+        "databases": databases,
+    }
+
+
+def snapshot_summary(session: Session, snapshot: PhysicalSchemaSnapshot, *,
+                     source: PhysicalSource | None = None, database_name: str | None = None) -> dict[str, Any]:
+    """Read snapshot metadata without walking the schema/table/column hierarchy."""
+    if source is None:
+        source = session.get(PhysicalSource, snapshot.source_id)
+    if database_name is None:
+        database_name = session.scalar(select(PhysicalDatabase.name).where(
+            PhysicalDatabase.snapshot_id == snapshot.id
+        ).order_by(PhysicalDatabase.position, PhysicalDatabase.name).limit(1))
     data_owner_name = (
         session.scalar(
             select(DemoUser.display_name)
@@ -1435,22 +1450,22 @@ def snapshot_tree(session: Session, snapshot: PhysicalSchemaSnapshot) -> dict[st
         else source.config_ref if source is not None and source.config_ref else f"urn:daca:physical-source:{snapshot.source_id}"
     )
     return {
-        "snapshot": {
-            "id": snapshot.id,
-            "urn": snapshot.urn,
-            "originCatalogId": snapshot.origin_catalog_id,
-            "sourceId": snapshot.source_id,
-            "sourceName": source.name if source else "Unknown source",
-            "dataOwnerName": data_owner_name,
-            "catalogPath": catalog_path,
-            "sourceAdapterType": source.adapter_type if source else "fixture",
-            "sequence": snapshot.sequence,
-            "predecessorSnapshotId": snapshot.predecessor_snapshot_id,
-            "fingerprint": snapshot.fingerprint,
-            "importedByUserId": snapshot.imported_by_user_id,
-            "importedAt": snapshot.imported_at,
-        },
-        "databases": databases,
+        "id": snapshot.id,
+        "urn": snapshot.urn,
+        "originCatalogId": snapshot.origin_catalog_id,
+        "sourceId": snapshot.source_id,
+        "sourceName": source.name if source else "Unknown source",
+        "dataOwnerName": data_owner_name,
+        "catalogPath": catalog_path,
+        "sourceAdapterType": source.adapter_type if source else "fixture",
+        "sourceConnectionConfigured": bool(
+            source and source.adapter_type in {"postgresql", "s3"} and source.config_ref
+        ),
+        "sequence": snapshot.sequence,
+        "predecessorSnapshotId": snapshot.predecessor_snapshot_id,
+        "fingerprint": snapshot.fingerprint,
+        "importedByUserId": snapshot.imported_by_user_id,
+        "importedAt": snapshot.imported_at,
     }
 
 

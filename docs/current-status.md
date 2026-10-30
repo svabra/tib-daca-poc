@@ -1,5 +1,114 @@
 # Current status
 
+Release **0.2.1** synchronizes all managed package/runtime/image versions. Catalog release notes
+in DE/EN describe the new expert search, direct Mapping entry and private recents, physical
+binding refresh, own-office semantic filters and footer version controls; 0.2.0 remains archived.
+The control-plane release lists its shared version and footer updates separately.
+Local Control-plane API publishing supports `DACA_CONTROL_API_PORT` (default 8002); this
+workspace uses 18002 alongside DAAIF MCP on 8002. Docker-internal service ports remain unchanged.
+Browser regression readiness is bounded at 45 seconds: workspace bootstrap can combine the
+existing 30-second collection budget with an 8-second detail read. Action and focus assertions
+remain; the dedicated near-real-time binding refresh check still enforces its nine-second bound.
+Its canvas regression restores hidden representations through **Ausgeblendete einblenden**,
+asserts their absence from physical bindings while hidden, and checks preserved positions/mapping versions.
+Headless regression pages emulate foreground focus across downloads and focus the CSV entry
+before opening its dialog; Escape still must close it and restore the entry's DOM focus.
+Hover checks wait for scrolling to settle before measuring the target and moving the mouse;
+the disabled-save explanation, keyboard focus and Escape assertions remain unchanged.
+Physical source imports use a separate 60-second request budget with the same identity and
+revision checks. Delayed imports no longer report an unavailable API after eight seconds while
+the server is still completing drift analysis. The regression waits for the visible import
+confirmation before checking the appended immutable snapshot, avoiding repeated heavy list polling.
+`npm run test:ui-regression -- --flow mapping-release-tail` isolates physical-first mapping,
+drift/repair, the modeling journey, source access and field moves for focused diagnosis. The
+pre-commit hook continues to run the complete regression rather than this subset.
+Existing-to-existing regression models are isolated per run and reuse only the trusted seed's
+organization/owner/publisher context. Repeated gates no longer append hundreds of historical
+snapshot links to the shared organization demo model; existing demo records remain intact.
+
+Domains and terminology provide an optional **Nur amtseigene anzeigen** checkbox in both
+card and network views. `ownOffice=1` retains it across view and domain/terminology tab changes.
+The existing organization semantic-graph read supplies independent domain/term scope IDs from
+trusted object responsibilities (office plus subordinate units); explicit object scope takes
+precedence over the owner's home office. Term classification does not imply office ownership.
+The current identity's resolved `office` follows the same organization context as the term
+network. While enabled, that network follows this office and hides its foreign-office selector.
+Hover/focus tooltips explain the scope. Loading uses the small spinner; failed reads expose
+retry and an empty scope, and a missing office disables activation. No persistence contract or
+authorization rule changed. Filters affect visible nodes/edges only; graph positions,
+relationships, hidden/additional node IDs and local drafts remain intact.
+
+The model workspace tab and browser title use **Mapping** for all languages. Related mapping
+buttons, matrix/inspector/dialog labels and messages consistently use Mapping/Mappings;
+French and Italian mapping-context translations retain this term. Generic domain, role and
+ownership assignments keep their existing terminology. Routes and persisted mapping data retain
+their existing contracts.
+
+Expert search uses **Data Structures** instead of a table-only search context in both layouts.
+Tables, views/materialized views and S3/Parquet objects share this filter and count, while result
+rows, grouped headers and previews show their concrete type and icon. Field parent links use
+the generic data-structure label. Every search-context control uses the existing catalog
+tooltip on hover/focus, including explanations for physical fields, business terms/domains and
+metadata-only sources. Existing `kind=table` links still work; new links use `kind=structure`.
+There is no new persistence type, protocol, connector or search category without indexed data.
+
+`/mappings` now offers separate logical-model and physical-representation selection. Choosing
+a logical model opens its mapping immediately; choosing a physical object opens
+`/mappings/physical/:snapshotId/:tableId` with that exact object in the canvas. The logical
+counterpart can then be selected there and opens the paired mapping automatically after the
+existing permission check. There is no additional **Mapping öffnen** confirmation. Search/pickers
+open only when needed. Model, recent-history and physical-detail reads run independently with
+small blue, accessible loading indicators. A slow history read does not delay model opening.
+The selection-only physical picker opens an object on click; the normal attachment dialog
+retains its explicit Add action. New representations remain local and editable, without
+automatically generating field mappings. Existing deep links retain their context; unavailable
+model-scoped URLs never silently substitute another model.
+
+**Letzte Mapping-Arbeiten** initially shows five recent models and optionally up to ten.
+Migration `0045_mapping_workspace_visits` stores private per-user model, physical snapshot/object,
+view and visit time in PostgreSQL. Workspace opening/context changes record history; background
+polling does not. Writes are serialized in the browser and per-user in PostgreSQL. Reads recheck
+current model/source access and omit unavailable references. History stores no unsaved drafts,
+credentials, access grants or catalog revisions.
+
+Verification: six PostgreSQL history cases cover persistence, ordering/deduplication, bounded
+storage, invalid physical references, actor isolation and revoked/inactive resources. All 542
+web tests passed, including independent loading indicators, immediate logical/physical opening,
+counterpart permission checks and queued history completion after route destruction. The dedicated
+`mapping-start` browser flow delays a real model GET to verify the visible spinner, then passes
+direct physical-canvas opening, immediate logical selection, paired mapping, persistent recent
+work after a fresh load, graph/table view restoration and 390/320-px layouts. The existing
+`mapping-live-refresh` flow still passes (remote removal detected in 2.8 seconds). Migration
+0045 is applied locally; generated model documentation, production builds and Ruff checks pass.
+
+Expert search now offers **Kontext-Navigator** by default and **Fokus-Suche** as the alternative,
+selected through large tiles at the right of the heading. Both use the same URL-backed query,
+filters, result set and optional pinnable preview. Existing read APIs supply products, model
+summaries, sources, latest tables/physical fields, terms and domains. Identity changes cancel
+stale reads; partial load failures are reported. No new search persistence or data endpoint is
+introduced. [Design and current boundaries](expert-search.md) document the implementation.
+
+Expert search keeps one labelled clear button for a non-empty query. The browser-native search
+cancel decoration is suppressed so Chromium/Edge no longer display a second cross.
+
+The mapping workspace now derives **Physische Bindungen** from the same visible representations
+as its graph. Hidden cards disappear from both immediately and can be restored with
+**Ausgeblendete einblenden**. No stored representation or mapping history is deleted by hiding.
+Both views label source connection configuration separately from metadata-only structures;
+the server supplies a boolean derived from the source adapter and configuration reference,
+without exposing connection configuration or claiming endpoint health/product authorization.
+Visible, idle workspaces refresh every five seconds and on focus/visibility return, without
+overlapping requests. Refresh preserves field selection, local hidden cards and canvas view;
+unsaved mapping/model/layout edits and open editors pause replacement. Stale identity/save
+responses are ignored; temporary failures retry and never install fallback demo data.
+The snapshot list now reads summaries without loading every table/column. Local read time
+decreased from about 3.1s to 0.4s for the current catalog. Verified with all 501 frontend tests,
+six backend connection/summary cases, production builds, Ruff and the data-model documentation
+check. The dedicated read-only `mapping-live-refresh` UI-regression flow checks shared graph/list
+visibility, restoration, connector labels, simulated remote removal (observed within five seconds),
+focus refresh, mobile overflow and long-name wrapping. Remote changes are mocked GET responses in an isolated browser;
+no live mappings or structures are modified. No commit was created.
+
 Domain handover is available on details and the card menu. Server-computed
 `canTransferOwnership` distinguishes object ownership from office ALDS and department LDSD
 authority, including explicitly named deputies. `POST /domains/{id}/transfer` rechecks current
@@ -439,8 +548,14 @@ history and to the separate data-access view. The bounded UC and acceptance crit
 
 ## Release information for users
 
-Catalog and Control Plane now show the same translucent, blue-accented version card as DAAIF.
-The card places `Co-Designed by V, armasuisse, ESTV und BIT` above the version status.
+Catalog and Control Plane show version information in the page footer, in normal document flow.
+It sits beside the footer text on desktop and below it on small screens, without covering page
+content. The version, `Co-Designed by V, armasuisse, ASTRA, ESTV und BIT` credit and feature-list button
+remain available. The redundant current-version status is removed; an available PWA update still
+shows its ready status, reload action and confirmation dialog.
+Verified with seven version/update component tests and both production UI builds. Read-only
+catalog browser checks cover 1440px and 390px widths in light/dark themes, footer placement,
+horizontal overflow, feature-popup opening and focus return. No commit was created.
 Its popup describes only the latest release. The popup link opens a dedicated feature list with
 search across descriptions and tags. The settings icon opens a DAAIF-style settings page with a
 submenu for personal language, appearance, feature list and responsibilities. There is no tenant language

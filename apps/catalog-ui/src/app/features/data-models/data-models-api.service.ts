@@ -24,6 +24,7 @@ import {
   MappingStatus,
   MappingType,
   MappingCanvasLayout,
+  RecentMappingWorkspace,
   PhysicalDomainState,
   PhysicalDomainTarget,
   PhysicalSnapshot,
@@ -402,7 +403,7 @@ export class DataModelsApiService {
     return this.identitySafeResponse(this.http.post<unknown>(
       `/api/v1/physical-sources/${encodeURIComponent(sourceId)}/imports`, fixtureVariant ? { fixtureVariant } : {},
       { headers: this.writeHeaders(`"${revision}"`), observe: 'response' },
-    )).pipe(map((result) => ({ ...result, body: this.normalizePhysicalSnapshot(result.body) })));
+    ), 60000).pipe(map((result) => ({ ...result, body: this.normalizePhysicalSnapshot(result.body) })));
   }
 
   listRepresentations(modelId: string): Observable<readonly {id: string; physicalSnapshotId: string; physicalTableId: string}[]> {
@@ -413,6 +414,14 @@ export class DataModelsApiService {
 
   loadCanvasLayout(modelId:string):Observable<MappingCanvasLayout>{
     return this.identitySafe(this.http.get<MappingCanvasLayout>(`/api/v1/logical-models/${encodeURIComponent(modelId)}/canvas-layout`,{headers:this.identity.headers()}));
+  }
+
+  recentMappingWorkspaces():Observable<readonly RecentMappingWorkspace[]>{
+    return this.identitySafe(this.http.get<RecentMappingWorkspace[]>('/api/v1/me/mapping-workspaces',{headers:this.identity.headers()}));
+  }
+
+  rememberMappingWorkspace(modelId:string,selection:{physicalSnapshotId:string|null;physicalTableId:string|null;view:'graph'|'table'|'drift'}):Observable<void>{
+    return this.identitySafe(this.http.put<void>(`/api/v1/me/mapping-workspaces/${encodeURIComponent(modelId)}`,selection,{headers:this.identity.headers()}));
   }
 
   saveWorkspaceDraft(model: LogicalModel, representations: readonly {physicalSnapshotId: string; physicalTableId: string}[], drafts: readonly AssetMapping[], logicalDraft:LogicalModelWrite|null=null, removals:readonly AssetMapping[]=[], canvasLayout:MappingCanvasLayout|null=null): Observable<{canvasLayout?:MappingCanvasLayout;removedMappingIds?:string[];items: {physicalTableId:string}[]; mappings: {clientId: string; mapping: AssetMapping}[];logicalModel?:LogicalModel;currentMappings?:readonly AssetMapping[]}> {
@@ -855,6 +864,7 @@ export class DataModelsApiService {
     const sourceType = textValue(snapshot['sourceAdapterType'], 'fixture') as PhysicalSnapshot['sourceType'];
     return {
       id: textValue(snapshot['id']), sourceId: textValue(snapshot['sourceId']), sourceName: sourceType === 'csv' ? textValue(snapshot['sourceName']).replace(/\s*·\s*CSV-Struktur$/, '') : textValue(snapshot['sourceName'], textValue(snapshot['sourceId'])), sourceType,
+      sourceConnectionConfigured: typeof snapshot['sourceConnectionConfigured'] === 'boolean' ? snapshot['sourceConnectionConfigured'] : undefined,
       dataOwnerName: nullableText(snapshot['dataOwnerName']),
       catalogPath: textValue(snapshot['catalogPath'], firstDatabase['name'] ? `${sourceType === 's3' ? 's3' : 'postgresql'}://${textValue(firstDatabase['name'])}/` : ''),
       systemName: sourceType === 'csv' ? 'Strukturinventar' : sourceType === 's3' ? 'S3 Object Storage' : 'PostgreSQL', databaseName: textValue(firstDatabase['name'], textValue(root['databaseName'])),
@@ -935,8 +945,8 @@ export class DataModelsApiService {
     );
   }
 
-  private identitySafeResponse<T>(request: Observable<HttpResponse<T>>): Observable<ApiResult<T>> {
-    return this.identitySafe(request).pipe(map((response) => {
+  private identitySafeResponse<T>(request: Observable<HttpResponse<T>>, timeoutMs = 8000): Observable<ApiResult<T>> {
+    return this.identitySafe(request, timeoutMs).pipe(map((response) => {
       if (!response.body) throw new ModelingApiError('unknown', 502, 'Die Katalog-API hat keine Modelldaten geliefert.');
       return { body: response.body, etag: response.headers.get('etag') ?? `"${this.lockVersion(response.body)}"` };
     }));

@@ -69,6 +69,7 @@ from .modeling_service import (
     mapping_write_from_payload,
     persist_physical_import,
     record_audit,
+    snapshot_summary,
     snapshot_tree,
     utc_now,
     validate_mapping_version,
@@ -1092,7 +1093,7 @@ def create_modeling_router() -> APIRouter:
         rows = session.execute(statement.order_by(PhysicalSchemaSnapshot.imported_at.desc())).all()
         returned = returned_source_ids(session, actor)
         items = [
-            snapshot_tree(session, snapshot)["snapshot"]
+            snapshot_summary(session, snapshot, source=source)
             for snapshot, source in rows
             if source.id not in returned and ((source.department_code, source.organization_id) in scopes or source.id == VIBDBU_PHYSICAL_SOURCE_ID)
         ]

@@ -1,5 +1,14 @@
 # Personal settings in DaCa
 
+## Personal mapping context
+
+The mapping entry page shows **Letzte Mapping-Arbeiten** from PostgreSQL-backed personal
+workspace history. Successfully opened workspaces, explicit context changes and saved edits
+update the entry automatically. One context per model/user is kept, with ten entries maximum
+and five initially displayed. Resume rechecks current permissions. This is navigation context,
+not recovery of unsaved drafts, and is separate from the explicit language/theme storage choice
+described below. It survives local login expiry and is not browser local storage.
+
 DaCa follows the DAAIF settings layout: one page heading and a persistent context navigation beside
 the active panel. The header gear opens `/settings`, which redirects to `/settings/features`. The
 context navigation contains `/settings/language-personal`, `/settings/appearance`, and
@@ -15,5 +24,10 @@ dark choices through `requestTheme`; the same dialog confirms the storage scope 
 changes. The header day/night control uses the same service.
 
 The feature list keeps the existing searchable, versioned release history inside the settings
-layout. Its popup link still opens `/settings/features` directly. These routes require an active
+layout. Both applications place the version number, Co-Design credit (V, armasuisse, ASTRA, ESTV
+and BIT) and feature-list button in the page footer, beside its text on desktop and below it on
+mobile. This area scrolls with the
+page and has no floating card background or shadow. There is no current-version status message;
+an available PWA update still shows its ready status and the existing confirmation flow.
+The feature popup link still opens `/settings/features` directly. These routes require an active
 local user session, as does every other DaCa page.

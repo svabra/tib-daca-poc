@@ -15,13 +15,13 @@ import { mappingTypeDescription } from './mapping-types';
         <div>
           <p class="daca-eyebrow">Barrierefreier Tabellenmodus</p>
           <h2 id="mapping-matrix-title">Feldzuordnung</h2>
-          <p>{{ facade.logicalFields().length }} logische Felder · {{ facade.activeMappings().length }} aktive Zuordnungen · {{ openCount() }} offen</p>
+          <p>{{ facade.logicalFields().length }} logische Felder · {{ facade.activeMappings().length }} aktive Mappings · {{ openCount() }} offen</p>
         </div>
-        <button class="daca-button" type="button" (click)="facade.openCreate($event.currentTarget)">Zuordnung hinzufügen</button>
+        <button class="daca-button" type="button" (click)="facade.openCreate($event.currentTarget)">Mapping hinzufügen</button>
       </header>
-      <div class="matrix-region" role="region" tabindex="0" aria-label="Zuordnungsmatrix; horizontal scrollbar">
+      <div class="matrix-region" role="region" tabindex="0" aria-label="Mapping-Matrix; horizontal scrollbar">
         <table>
-          <thead><tr><th>Logisches Feld</th><th>Feldattribute</th><th>Zuordnung</th><th>Physische Ziele</th><th>Status</th><th><span class="visually-hidden">Aktionen</span></th></tr></thead>
+          <thead><tr><th>Logisches Feld</th><th>Feldattribute</th><th>Mapping</th><th>Physische Ziele</th><th>Status</th><th><span class="visually-hidden">Aktionen</span></th></tr></thead>
           <tbody>
             @for (field of facade.logicalFields(); track field.id) {
               @if (mappingsFor(field.id).length) {
@@ -68,6 +68,6 @@ export class MappingMatrixComponent {
   columnLabel(id:string):string{return this.facade.physicalColumns().find((column)=>column.id===id)?.qualifiedName??`Nicht im aktuellen Snapshot (${id})`;}
   statusLabel(status:MappingStatus):string{return MAPPING_STATUS_LABELS[status];}
   actionLabel(status:MappingStatus):string{return status==='draft'?'Bearbeiten':status==='broken'?'Auflösen':'Details';}
-  actionAriaLabel(status:MappingStatus,fieldName:string):string{return `${this.actionLabel(status)} der Zuordnung für ${fieldName}`;}
+  actionAriaLabel(status:MappingStatus,fieldName:string):string{return `${this.actionLabel(status)} des Mappings für ${fieldName}`;}
   activateMapping(mapping:AssetMapping,target:EventTarget|null):void{if(mapping.status==='draft')this.facade.openEdit(mapping.id,target);else if(mapping.status==='broken')this.facade.openBrokenResolution(mapping.id,target);else this.facade.selectMapping(mapping.id);}
 }

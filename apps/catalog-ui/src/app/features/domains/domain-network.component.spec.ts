@@ -15,6 +15,19 @@ describe('DomainNetworkComponent',()=>{
   beforeEach(()=>{graph={revision:0,positions:{},relations:[],canEditLayout:true,canEditRelations:true};vi.clearAllMocks();TestBed.configureTestingModule({imports:[DomainNetworkComponent],providers: [{provide:UserPreferencesService,useValue:{language:signal('de')}},provideRouter([]),{provide:CatalogApiService,useValue:api},{provide:DemoIdentityService,useValue:{userId:signal('editor')}}]});});
   afterEach(()=>TestBed.resetTestingModule());
   function render(){const fixture=TestBed.createComponent(DomainNetworkComponent);fixture.detectChanges();return fixture;}
+  it('filters visible nodes and edges without deleting positions, relations or a local draft', async()=>{
+    graph.positions={'domain:a':{x:35,y:35},'domain:b':{x:400,y:35}};
+    graph.relations=[{sourceId:'a',targetId:'b',relationType:'related'}];
+    const fixture=render(),component=fixture.componentInstance;
+    component.positions.update(items=>({...items,'domain:a':{x:70,y:70}}));component.layoutDirty.set(true);
+    fixture.componentRef.setInput('visibleDomainIds',['a']);fixture.detectChanges();
+    expect(component.nodes().map(item=>item.id)).toEqual(['a']);expect(component.edges()).toEqual([]);
+    expect(component.dirty()).toBe(true);
+    await component.save();
+    expect(graph.positions['domain:b']).toEqual({x:400,y:35});expect(graph.relations).toHaveLength(1);
+    fixture.componentRef.setInput('visibleDomainIds',null);fixture.detectChanges();
+    expect(component.nodes()).toHaveLength(3);expect(component.edges()).toHaveLength(1);
+  });
   it.each([['interfacesWith','hat eine fachliche Schnittstelle zu'],['overlapsWith','hat Überschneidungen mit']] as const)('stages, saves and reloads the %s relationship with its own label',async(type,label)=>{
     const fixture=render(),component=fixture.componentInstance;
     component.openEdit({index:null,sourceId:'a',targetId:'b',relationType:type});fixture.detectChanges();await fixture.whenStable();

@@ -1,225 +1,135 @@
-import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, linkedSignal, signal } from '@angular/core';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, ElementRef, inject, linkedSignal, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { CatalogI18nService } from '../../core/catalog-i18n.service';
-import { DataModelsApiService } from '../data-models/data-models-api.service';
-import { PhysicalSource } from '../data-models/data-models.models';
-import { DataProduct } from '../../core/catalog.models';
-import { QualityMedalComponent, QualityMedalLevel } from '../../shared/quality-medal.component';
+import { QualityMedalComponent } from '../../shared/quality-medal.component';
+import { TooltipDirective } from '../../shared/tooltip.directive';
 import { deliveryProtocols } from '../products/my-data-products';
-import {
-  CATALOG_SEARCH_MIN_LENGTH,
-  catalogSearchIsReady,
-  searchCatalogProducts,
-} from '../welcome/welcome-search';
+import { catalogSearchIsReady, normalizeCatalogSearch } from '../welcome/welcome-search';
+import { CatalogSearchDataService } from './catalog-search-data.service';
+import { CatalogSearchAsset, groupSearchAssets, SEARCH_ICONS, SEARCH_KINDS, searchAssetIcon, searchAssetMatches, SearchKind, SearchMode } from './catalog-search.models';
+import { SearchIconComponent } from './search-icon.component';
 
-@Component({
-  selector: 'daca-catalog-expert-search',
-  standalone: true,
-  imports: [DatePipe, RouterLink, QualityMedalComponent],
-  changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <nav class="expert-search-breadcrumb" aria-label="Brotkrümelnavigation">
-      <a routerLink="/">{{ i18n.t('home') }}</a><span aria-hidden="true">›</span><span>{{ i18n.t('expertSearch') }}</span>
-    </nav>
-
-    <section class="daca-page-heading expert-search-heading">
-      <div>
-        <p class="daca-eyebrow">{{ i18n.t('catalogSearch') }}</p>
-        <h1>{{ i18n.t('expertSearch') }}</h1>
-        <p>{{ i18n.t('expertIntro') }}</p>
-      </div>
-    </section>
-
-    <section class="daca-card expert-search-panel" aria-label="Expertensuche">
-      <form role="search" (submit)="$event.preventDefault()">
-        <div class="expert-search-field">
-          <label for="expert-search-input">{{ i18n.t('searchTerm') }}</label>
-          <span class="expert-search-control">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
-            <input
-              id="expert-search-input"
-              type="search"
-              autocomplete="off"
-              [placeholder]="i18n.t('searchPlaceholder')"
-              [value]="query()"
-              (input)="updateQuery($any($event.target).value)"
-              aria-describedby="expert-search-hint"
-            >
-            @if (query()) {
-              <button type="button" (click)="clearQuery()" [attr.aria-label]="i18n.t('clearSearch')">×</button>
-            }
-          </span>
-        </div>
-
-        <div class="expert-search-filters" [attr.aria-label]="i18n.t('filterResults')">
-          <label>
-            <span>{{ i18n.t('domain') }}</span>
-            <select [value]="selectedDomain()" (change)="selectedDomain.set($any($event.target).value)">
-              <option value="all">{{ i18n.t('allDomains') }}</option>
-              @for (domain of domains(); track domain) { <option [value]="domain">{{ domain }}</option> }
-            </select>
-          </label>
-          <label>
-            <span>{{ i18n.t('organization') }}</span>
-            <select [value]="selectedOwner()" (change)="selectedOwner.set($any($event.target).value)">
-              <option value="all">{{ i18n.t('allOrganizations') }}</option>
-              @for (owner of owners(); track owner) { <option [value]="owner">{{ owner }}</option> }
-            </select>
-          </label>
-          <button class="daca-button is-secondary" type="button" (click)="resetFilters()">{{ i18n.t('resetFilters') }}</button>
-        </div>
-      </form>
-      <p id="expert-search-hint" class="expert-search-hint">
-        {{ i18n.t('searchHint') }}
-      </p>
-    </section>
-
-    <section class="expert-search-results" aria-labelledby="expert-search-results-title" aria-live="polite">
-      <header>
-        <div>
-          <p class="daca-eyebrow">{{ i18n.t('results') }}</p>
-          <h2 id="expert-search-results-title">
-            @if (searchReady()) {
-              {{ resultCountLabel(results().length) }} @if (sourceResults().length) { · {{ sourceResults().length }} {{ i18n.t('sourcePlural') }} }
-            } @else {
-              {{ i18n.t('enterSearch') }}
-            }
-          </h2>
-        </div>
-        @if (searchReady()) { <p>{{ i18n.t('for') }} «{{ query().trim() }}»</p> }
-      </header>
-
-      @if (api.loading()) {
-        <div class="daca-card expert-search-empty">{{ i18n.t('loadingCatalog') }}</div>
-      } @else if (!searchReady()) {
-        <div class="daca-card expert-search-empty">
-          <strong>{{ i18n.t('minimumLength') }}</strong>
-          <p>{{ i18n.t('refineResults') }}</p>
-        </div>
-      } @else if (results().length === 0 && sourceResults().length === 0) {
-        <div class="daca-card expert-search-empty">
-          <strong>{{ i18n.t('noMatches') }}</strong>
-          <p>{{ i18n.t('changeSearch') }}</p>
-          <a class="expert-search-term-link" routerLink="/glossary/proposals/new" [queryParams]="{q:query().trim()}">{{ i18n.t('proposeTerm') }}</a>
-        </div>
-      } @else {
-        <div class="expert-search-list">
-          @for (product of results(); track product.id) {
-            <article class="daca-card expert-search-result">
-              <div class="expert-search-result-main">
-                <div class="expert-search-result-tags">
-                  <span>{{ product.domain }}</span>
-                  <span>{{ product.owner }}</span>
-                  <span>{{ lifecycleLabel(product) }}</span>
-                  <daca-quality-medal [medal]="qualityMedal(product)" [score]="product.qualityScore ?? 0" />
-                </div>
-                <h3><a [routerLink]="['/products', product.id, 'overview']">{{ product.title }}</a></h3>
-                <p>{{ product.description }}</p>
-                @if (product.keywords.length) {
-                  <ul aria-label="Schlagwörter">
-                    @for (keyword of product.keywords.slice(0, 5); track keyword) { <li>{{ keyword }}</li> }
-                  </ul>
-                }
-              </div>
-              <aside>
-                <dl>
-                  <div><dt>Schnittstellen</dt><dd>{{ protocolLabel(product) }}</dd></div>
-                  <div><dt>Aktualisiert</dt><dd>{{ product.updatedAt | date: 'dd.MM.yyyy' }}</dd></div>
-                  <div><dt>Identifier</dt><dd><code>{{ product.globalId }}</code></dd></div>
-                </dl>
-                <a class="daca-button is-secondary" [routerLink]="['/products', product.id, 'overview']">Produktdetails öffnen</a>
-              </aside>
-            </article>
-          }
-        </div>
-      }
-      @if (searchReady() && sourceResults().length) {
-        <section class="expert-source-results" aria-labelledby="expert-source-results-title">
-          <h2 id="expert-source-results-title">{{ i18n.t('visibleSources') }} ({{ sourceResults().length }})</h2>
-          <div class="expert-search-list">
-            @for (source of sourceResults(); track source.id) {
-              <article class="daca-card expert-search-result">
-                <div class="expert-search-result-main"><h3><a [routerLink]="['/physical-models', source.id]">{{ source.name }}</a></h3><p>{{ source.description }}</p><p>{{ source.ownerName }} · {{ source.catalogPath }}</p></div>
-                <a class="daca-button is-secondary" [routerLink]="['/physical-models', source.id]">{{ i18n.t('openSource') }}</a>
-              </article>
-            }
-          </div>
-        </section>
-      }
-    </section>
-  `,
-  styles: [`.expert-search-term-link{display:inline-block;margin-top:.7rem;color:#006699;font-size:.78rem;font-weight:700;text-decoration:underline;text-underline-offset:.16rem}.expert-source-results{margin-top:2rem}.expert-source-results h2{font-size:1.2rem}.expert-source-results .expert-search-result{display:flex;align-items:center;justify-content:space-between;gap:1rem}.expert-source-results .expert-search-result-main p{overflow-wrap:anywhere}`],
+@Component({selector:'daca-catalog-expert-search',standalone:true,
+  imports:[DatePipe,NgTemplateOutlet,RouterLink,QualityMedalComponent,SearchIconComponent,TooltipDirective],
+  providers:[CatalogSearchDataService],changeDetection:ChangeDetectionStrategy.OnPush,
+  templateUrl:'./catalog-expert-search.component.html',styleUrl:'./catalog-expert-search.component.css',
 })
 export class CatalogExpertSearchComponent {
-  readonly api = inject(CatalogApiService);
-  readonly i18n = inject(CatalogI18nService);
-  private readonly modelsApi = inject(DataModelsApiService);
-  private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
-  private readonly queryParams = toSignal(this.route.queryParamMap, { initialValue: this.route.snapshot.queryParamMap });
-
-  readonly query = linkedSignal(() => this.queryParams().get('q') ?? '');
-  readonly sources = signal<readonly PhysicalSource[]>([]);
-  readonly selectedDomain = signal('all');
-  readonly selectedOwner = signal('all');
-  readonly searchMinimumLength = CATALOG_SEARCH_MIN_LENGTH;
-  readonly searchReady = computed(() => catalogSearchIsReady(this.query()));
-  readonly domains = computed(() => this.uniqueValues(this.api.products().flatMap((product) => product.domains.length ? product.domains.map((domain) => domain.preferredLabel) : [product.domain])));
-  readonly owners = computed(() => this.uniqueValues(this.api.products().map((product) => product.owner)));
-  readonly results = computed(() => [...searchCatalogProducts(this.api.products(), this.query())]
-    .filter((product) => this.selectedDomain() === 'all' || product.domains.some((domain) => domain.preferredLabel === this.selectedDomain()) || (!product.domains.length && product.domain === this.selectedDomain()))
-    .filter((product) => this.selectedOwner() === 'all' || product.owner === this.selectedOwner())
-    .sort((left, right) => left.title.localeCompare(right.title, 'de-CH')));
-  readonly sourceResults = computed(() => {
-    if (!this.searchReady()) return [];
-    const needle = this.query().trim().toLocaleLowerCase('de-CH');
-    return this.sources().filter((source) => [source.name, source.description, source.catalogPath, source.ownerName, source.databaseName].join(' ').toLocaleLowerCase('de-CH').includes(needle));
+  readonly api=inject(CatalogApiService);
+  readonly data=inject(CatalogSearchDataService);
+  readonly i18n=inject(CatalogI18nService);
+  private readonly route=inject(ActivatedRoute);
+  private readonly router=inject(Router);
+  private readonly host=inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly params=toSignal(this.route.queryParamMap,{initialValue:this.route.snapshot.queryParamMap});
+  readonly query=linkedSignal(()=>this.params().get('q')??'');
+  readonly mode=linkedSignal<SearchMode>(()=>this.params().get('mode')==='focus'?'focus':'context');
+  readonly selectedKind=linkedSignal<SearchKind|'all'>(()=>{const value=this.params().get('kind');return value==='table'?'structure':SEARCH_KINDS.includes(value as SearchKind)?value as SearchKind:'all';});
+  readonly selectedDomain=linkedSignal(()=>this.params().get('domain')??'all');
+  readonly selectedOwner=linkedSignal(()=>this.params().get('organization')??'all');
+  readonly selectedStatus=linkedSignal(()=>this.params().get('status')==='active'?'active':'all');
+  readonly selectedConnection=linkedSignal(()=>['connected','metadata'].includes(this.params().get('connection')??'')?this.params().get('connection')!:'all');
+  readonly filterOpen=signal(false);
+  readonly limit=signal(30);
+  readonly sort=signal<'relevance'|'name'>('relevance');
+  readonly kinds=SEARCH_KINDS;
+  readonly icons=SEARCH_ICONS;
+  readonly collapsedGroups=signal<ReadonlySet<string>>(new Set());
+  readonly searchReady=computed(()=>catalogSearchIsReady(this.query()));
+  readonly organizations=computed(()=>[...new Set(this.data.assets().map(item=>item.organization).filter(Boolean))].sort((a,b)=>a.localeCompare(b)));
+  readonly domains=computed(()=>[...new Map(this.data.assets().flatMap(item=>item.domains).map(item=>[item.id,item])).values()].sort((a,b)=>a.label.localeCompare(b.label)));
+  readonly filterCount=computed(()=>[this.selectedOwner(),this.selectedDomain(),this.selectedStatus(),this.selectedConnection()].filter(value=>value!=='all').length);
+  readonly matches=computed(()=>{
+    if(!this.searchReady())return[];
+    return this.data.assets().filter(item=>searchAssetMatches(item,this.query()))
+      .filter(item=>this.selectedOwner()==='all'||item.organization===this.selectedOwner())
+      .filter(item=>this.selectedDomain()==='all'||item.domains.some(domain=>domain.id===this.selectedDomain()))
+      .filter(item=>this.selectedStatus()==='all'||['active','published','validated'].includes(item.status))
+      .filter(item=>this.selectedConnection()==='all'||item.connection?.configured===(this.selectedConnection()==='connected'));
   });
-
-  constructor() {
-    this.modelsApi.listPhysicalSources().subscribe({ next: (sources) => this.sources.set(sources), error: () => this.sources.set([]) });
-  }
-
-  updateQuery(value: string): void {
-    this.query.set(value);
-    void this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: { q: value.trim() || null },
-      queryParamsHandling: 'merge',
-      replaceUrl: true,
+  readonly counts=computed(()=>Object.fromEntries(SEARCH_KINDS.map(kind=>[kind,this.matches().filter(item=>item.kind===kind).length])) as Record<SearchKind,number>);
+  readonly results=computed(()=>{
+    const query=normalizeCatalogSearch(this.query());
+    return this.matches().filter(item=>this.selectedKind()==='all'||item.kind===this.selectedKind()).sort((a,b)=>{
+      if(this.sort()==='relevance'){const score=(item:CatalogSearchAsset)=>normalizeCatalogSearch(item.label)===query?2:normalizeCatalogSearch(item.label).startsWith(query)?1:0;const difference=score(b)-score(a);if(difference)return difference;}
+      return a.label.localeCompare(b.label,this.i18n.language());
     });
-  }
+  });
+  readonly visibleResults=computed(()=>this.results().slice(0,this.limit()));
+  readonly groups=computed(()=>groupSearchAssets(this.visibleResults()));
+  private readonly hoveredKey=signal<string|null>(null);
+  readonly pinnedKey=signal<string|null>(null);
+  readonly previewOpen=signal(false);
+  readonly preview=computed(()=>{
+    if(!this.previewOpen())return null;
+    const key=this.pinnedKey()??this.hoveredKey();
+    return this.results().find(item=>item.key===key)??this.groups().find(group=>group.parent.key===key)?.parent??null;
+  });
+  private hoverTimer?:ReturnType<typeof setTimeout>;
+  private closeTimer?:ReturnType<typeof setTimeout>;
+  private previewTrigger:HTMLElement|null=null;
+  private restoringPreviewFocus=false;
+  readonly protocolLabel=(asset:CatalogSearchAsset)=>asset.product?[...new Set(deliveryProtocols(asset.product))].join(' · '):'';
 
-  clearQuery(): void {
-    this.updateQuery('');
+  constructor(){
+    effect(()=>{this.query();this.selectedKind();this.selectedOwner();this.selectedDomain();this.selectedStatus();this.selectedConnection();untracked(()=>{this.limit.set(30);this.collapsedGroups.set(new Set());});});
+    effect(()=>{const key=this.pinnedKey()??this.hoveredKey();const available=this.results().some(item=>item.key===key)||this.groups().some(group=>group.parent.key===key);if(key&&!available)untracked(()=>this.closePreview(false));});
+    inject(DestroyRef).onDestroy(()=>{clearTimeout(this.hoverTimer);clearTimeout(this.closeTimer);});
   }
-
-  resetFilters(): void {
-    this.selectedDomain.set('all');
-    this.selectedOwner.set('all');
+  private updateUrl():void{
+    void this.router.navigate([],{relativeTo:this.route,queryParamsHandling:'merge',replaceUrl:true,queryParams:{
+      q:this.query().trim()||null,mode:this.mode()==='context'?null:this.mode(),kind:this.selectedKind()==='all'?null:this.selectedKind(),
+      domain:this.selectedDomain()==='all'?null:this.selectedDomain(),organization:this.selectedOwner()==='all'?null:this.selectedOwner(),
+      status:this.selectedStatus()==='all'?null:this.selectedStatus(),connection:this.selectedConnection()==='all'?null:this.selectedConnection(),
+    }});
   }
-
-  resultCountLabel(count: number): string {
-    return `${count} ${this.i18n.t(count === 1 ? 'productSingular' : 'productPlural')}`;
+  updateQuery(value:string):void{this.query.set(value);this.updateUrl();}
+  clearQuery():void{this.updateQuery('');this.host.nativeElement.querySelector<HTMLInputElement>('#expert-search-input')?.focus();}
+  setMode(mode:SearchMode):void{this.mode.set(mode);this.updateUrl();}
+  selectKind(kind:SearchKind|'all'):void{this.selectedKind.set(kind);this.updateUrl();}
+  loadMore():void{this.limit.update(value=>value+30);}
+  readonly assetIcon=searchAssetIcon;
+  organizationLabel(value:string):string{return this.data.organizationLabels().get(value)??value;}
+  contextLabel(asset:CatalogSearchAsset):string{return asset.context.map(value=>this.organizationLabel(value)).join(' › ');}
+  setFilter(name:'domain'|'organization'|'status'|'connection',value:string):void{
+    if(name==='domain')this.selectedDomain.set(value);else if(name==='organization')this.selectedOwner.set(value);
+    else if(name==='status')this.selectedStatus.set(value==='active'?'active':'all');else this.selectedConnection.set(value);
+    this.updateUrl();
   }
-
-  lifecycleLabel(product: DataProduct): string {
-    return ({ draft: 'Entwurf', active: 'Aktiv', deprecated: 'Veraltet', retired: 'Ausser Betrieb' } as const)[product.lifecycle];
+  resetFilters():void{this.selectedDomain.set('all');this.selectedOwner.set('all');this.selectedStatus.set('all');this.selectedConnection.set('all');this.updateUrl();}
+  toggleGroup(key:string):void{this.collapsedGroups.update(values=>{const next=new Set(values);if(next.has(key))next.delete(key);else next.add(key);return next;});}
+  domainLabel():string{return this.domains().find(item=>item.id===this.selectedDomain())?.label??this.selectedDomain();}
+  kindLabel(kind:SearchKind,plural=false):string{return this.i18n.t(({product:plural?'searchProducts':'searchProduct',logical:plural?'searchLogicalModels':'searchModel',structure:plural?'searchStructures':'searchStructure',field:plural?'searchFields':'searchField',term:plural?'searchTerms':'searchObjectTerm',domain:plural?'domains':'searchDomain',source:plural?'sourcePlural':'searchSource'} as const)[kind]);}
+  kindExplanation(kind:SearchKind|'all'):string{return this.i18n.t(({all:'searchAllExplanation',product:'searchProductExplanation',logical:'searchLogicalExplanation',structure:'searchStructureExplanation',field:'searchFieldExplanation',term:'searchTermExplanation',domain:'searchDomainExplanation',source:'searchSourceExplanation'} as const)[kind]);}
+  assetTypeLabel(asset:CatalogSearchAsset):string{
+    if(asset.kind!=='structure')return this.kindLabel(asset.kind);
+    if(asset.sourceType==='s3')return this.i18n.t(asset.physicalType==='parquet'?'searchS3ParquetObject':'searchS3Object');
+    if(asset.physicalType==='parquet')return this.i18n.t('searchParquetObject');
+    if(asset.physicalType==='view')return this.i18n.t('searchView');
+    if(asset.physicalType==='materialized_view')return this.i18n.t('searchMaterializedView');
+    return asset.physicalType==='table'?this.i18n.t('searchTable'):this.kindLabel('structure');
   }
-
-  qualityMedal(product: DataProduct): QualityMedalLevel {
-    return product.qualityMedal ?? 'bronze';
+  schedulePreview(asset:CatalogSearchAsset,trigger:EventTarget|null):void{
+    if(this.restoringPreviewFocus)return;
+    clearTimeout(this.closeTimer);clearTimeout(this.hoverTimer);if(this.pinnedKey())return;
+    this.hoverTimer=setTimeout(()=>{this.hoveredKey.set(asset.key);this.previewTrigger=trigger instanceof HTMLElement?trigger:null;this.previewOpen.set(true);},180);
   }
-
-  protocolLabel(product: DataProduct): string {
-    const protocols = deliveryProtocols(product);
-    return [...new Set(protocols)].join(' · ') || 'Nicht angegeben';
+  pinPreview(asset:CatalogSearchAsset,trigger:EventTarget|null):void{
+    clearTimeout(this.hoverTimer);clearTimeout(this.closeTimer);this.previewTrigger=trigger instanceof HTMLElement?trigger:null;
+    this.hoveredKey.set(asset.key);this.pinnedKey.set(asset.key);this.previewOpen.set(true);
+    setTimeout(()=>this.host.nativeElement.querySelector<HTMLElement>('.search-preview h2')?.focus({preventScroll:true}),0);
   }
-
-  private uniqueValues(values: readonly string[]): readonly string[] {
-    return [...new Set(values)].filter(Boolean).sort((left, right) => left.localeCompare(right, 'de-CH'));
+  togglePin():void{const item=this.preview();if(item)this.pinnedKey.set(this.pinnedKey()?null:item.key);}
+  keepPreview():void{clearTimeout(this.closeTimer);}
+  closePreviewSoon():void{
+    clearTimeout(this.hoverTimer);clearTimeout(this.closeTimer);if(this.pinnedKey())return;
+    this.closeTimer=setTimeout(()=>{if(!this.host.nativeElement.querySelector('.search-preview')?.contains(document.activeElement))this.closePreview(false);},250);
+  }
+  closePreview(restoreFocus=true):void{
+    clearTimeout(this.hoverTimer);clearTimeout(this.closeTimer);this.previewOpen.set(false);this.pinnedKey.set(null);this.hoveredKey.set(null);
+    if(restoreFocus){this.restoringPreviewFocus=true;try{this.previewTrigger?.focus({preventScroll:true});}finally{this.restoringPreviewFocus=false;}}
   }
 }

@@ -2,7 +2,7 @@ import { DacaFeatureLocale, DacaFeatureScope } from './feature-list';
 import { DACA_VERSION } from './version';
 
 // A version bump must supply new customer-facing notes before the UI can build.
-const CURRENT_RELEASE_VERSION: typeof DACA_VERSION = '0.2.0';
+const CURRENT_RELEASE_VERSION: typeof DACA_VERSION = '0.2.1';
 
 export interface DacaReleaseFeature {
   readonly title: string;
@@ -65,6 +65,23 @@ function localizedFeature(source: HistoricalFeature, locale: DacaFeatureLocale):
 
 export function dacaReleaseHistory(scope: DacaFeatureScope, locale: DacaFeatureLocale): readonly DacaRelease[] {
   const catalogFeatures: readonly DacaReleaseFeature[] = locale === 'de' ? [
+    { title: 'Längere Metadatenimporte zuverlässig abwarten', description: 'Quellenimporte dürfen bis zu einer Minute für Import und Drift-Prüfung benötigen. Die UI wartet auf das bestätigte Ergebnis; Identitäts- und Versionsschutz bleiben erhalten.', tags: ['Datenquellen', 'Import', 'Stabilität'] },
+    { title: 'Expertensuche nach Kontext oder Fokus', description: 'Der Kontext-Navigator zeigt Zusammenhänge; die Fokus-Suche bietet eine Trefferliste. Grosse Kacheln wechseln die Suchart und behalten Suchbegriff sowie Filter. Beide Ansichten bieten eine anheftbare Vorschau.', tags: ['Suche', 'Vorschau', 'Navigation'] },
+    { title: 'Data Structures über Speicherarten hinweg finden', description: 'Tabellen, Views und strukturierte S3-Objekte teilen einen generischen Suchkontext. Konkrete Typen behalten ihre Icons. Tooltips erklären die Suchkontexte; genau ein Löschkreuz leert den Suchbegriff.', tags: ['Suche', 'Datenquellen', 'Data Structures'] },
+    { title: 'Mapping direkt beginnen und letzte Arbeiten fortsetzen', description: 'Logisches Modell oder physische Repräsentation auswählen und sofort im Canvas öffnen. Kleine Spinner zeigen Ladezugriffe an. Letzte Mapping-Arbeiten merken Modell, physisches Objekt und Ansicht privat über Sitzungen hinweg. Der Modellreiter heisst in jeder Sprache Mapping.', tags: ['Mapping', 'Datenmodelle', 'Verlauf'] },
+    { title: 'Physische Bindungen aktuell halten', description: 'Bindungsliste und Graph zeigen dieselben sichtbaren Repräsentationen. Quellenanbindungen sind von reinen Strukturmetadaten unterscheidbar. Automatische Aktualisierung alle fünf Sekunden und bei Fensterrückkehr; lokale Entwürfe bleiben geschützt.', tags: ['Mapping', 'Datenquellen', 'Aktualisierung'] },
+    { title: 'Nur amtseigene Domänen und Terme anzeigen', description: 'Ein kompakter Filter grenzt Kacheln und Netze nach der Objektverantwortung im eigenen Amt und seinen Untereinheiten ein. Tooltips erklären den Umfang. Der Filter bleibt beim Ansichtswechsel erhalten und bewahrt ausgeblendete Karten und Beziehungen.', tags: ['Domänen', 'Terminologie', 'Amtsfilter'] },
+    { title: 'Version und Neuerungen im Footer', description: 'Versionsnummer und Neuerungen stehen im Footer und verdecken keine Inhalte. Der Co-Design-Hinweis nennt V, armasuisse, ASTRA, ESTV und BIT. Verfügbare Updates bleiben zugänglich.', tags: ['Updates', 'Bedienung', 'Co-Design'] },
+  ] : [
+    { title: 'Wait reliably for longer metadata imports', description: 'Source imports allow up to one minute for import and drift checks. The UI waits for the confirmed outcome while preserving identity and revision checks.', tags: ['Data sources', 'Import', 'Reliability'] },
+    { title: 'Expert search by context or focus', description: 'Context navigation shows relationships; focus search offers a result list. Large tiles switch modes while retaining the query and filters. Both views offer a pinnable preview.', tags: ['Search', 'Preview', 'Navigation'] },
+    { title: 'Find Data Structures across storage types', description: 'Tables, views and structured S3 objects share a generic search context with concrete type icons. Tooltips explain each context; one clear button resets the query.', tags: ['Search', 'Data sources', 'Data Structures'] },
+    { title: 'Start Mapping directly and resume recent work', description: 'Select a logical model or physical representation and open the canvas immediately. Small spinners indicate loading. Recent mapping work privately remembers the model, physical object and view across sessions. The model tab is named Mapping in every language.', tags: ['Mapping', 'Data models', 'History'] },
+    { title: 'Keep physical bindings current', description: 'The bindings list and graph show the same visible representations. Labels distinguish source connections from metadata-only structures. Refresh runs every five seconds and on window focus while protecting local drafts.', tags: ['Mapping', 'Data sources', 'Refresh'] },
+    { title: 'Show only your office’s domains and terms', description: 'A compact filter scopes cards and networks to object responsibilities in your office and subordinate units. Tooltips explain the scope. The filter survives view changes and preserves hidden cards and relationships.', tags: ['Domains', 'Terminology', 'Office filter'] },
+    { title: 'Version and release notes in the footer', description: 'The version and release notes sit in the footer without covering content. Co-Design credits name V, armasuisse, ASTRA, ESTV and BIT. Available updates remain accessible.', tags: ['Updates', 'Usability', 'Co-Design'] },
+  ];
+  const catalog20Features: readonly DacaReleaseFeature[] = locale === 'de' ? [
     { title: 'Domänen an andere Personen abtreten', description: 'Die Detailseite und das Kachelmenü bieten die Übergabe an neue Owner und Stellvertretungen. Zuständige Owner, ALDS und LDSD werden aktuell geprüft. Bestätigung, Begründung, Revision und Audit sichern den Wechsel; Amtsbereich und andere Objektverantwortlichkeiten bleiben erhalten.', tags: ['Domänen', 'Verantwortung', 'Governance'] },
     { title: 'Domänen bearbeiten und LDSD-/ALDS-Mandate erfassen', description: 'Domänennamen und Beschreibungen im Dialog ändern. Owner/Stellvertretungen und zuständige ALDS/Stellvertretungen werden aktuell geprüft; Speichern ist versioniert und protokolliert. Information enthält die präzisierten Rollen und bestätigten Zuordnungen.', tags: ['Domänen', 'Verantwortung', 'Governance'] },
     { title: 'Owner in Domänen und Termen finden', description: 'Kacheln nach Data Owner oder Stellvertretung durchsuchen. Namen und User-IDs werden ohne Unterscheidung von Grossschreibung oder Akzenten gefunden; bei Termen zählt die eigene Objektverantwortung.', tags: ['Suche', 'Domänen', 'Terminologie'] },
@@ -142,9 +159,12 @@ export function dacaReleaseHistory(scope: DacaFeatureScope, locale: DacaFeatureL
   ] : [
     { title: 'Shared version updated', description: 'The control plane displays the same current version as the data catalog.', tags: ['Updates', 'Operations'] },
   ];
-  const latest: DacaRelease = { version: CURRENT_RELEASE_VERSION, features: scope === 'catalog' ? catalogFeatures : controlPlaneFeatures };
+  const currentControlPlaneFeatures: readonly DacaReleaseFeature[] = [...controlPlaneFeatures, locale === 'de'
+    ? { title: 'Version im Footer nachschlagen', description: 'Versionsnummer, Neuerungen und Co-Design-Hinweis stehen im Footer und verdecken keine Inhalte. ASTRA und ESTV sind in den Co-Design-Angaben ergänzt.', tags: ['Updates', 'Bedienung', 'Co-Design'] }
+    : { title: 'Find version information in the footer', description: 'Version, release notes and Co-Design credits sit in the footer without covering content. ASTRA and ESTV are included in the credits.', tags: ['Updates', 'Usability', 'Co-Design'] }];
+  const latest: DacaRelease = { version: CURRENT_RELEASE_VERSION, features: scope === 'catalog' ? catalogFeatures : currentControlPlaneFeatures };
   const historical = scope === 'catalog' ? CATALOG_HISTORY : CONTROL_PLANE_HISTORY;
-  return [latest, { version: '0.1.32', features: scope === 'catalog' ? catalog32Features : controlPlaneFeatures }, { version: '0.1.31', features: scope === 'catalog' ? catalog31Features : controlPlaneFeatures }, { version: '0.1.30', features: scope === 'catalog' ? previousCatalogFeatures : controlPlaneFeatures }, ...historical.map((item) => ({ version: item.version, features: [localizedFeature(item, locale)] }))];
+  return [latest, { version: '0.2.0', features: scope === 'catalog' ? catalog20Features : controlPlaneFeatures }, { version: '0.1.32', features: scope === 'catalog' ? catalog32Features : controlPlaneFeatures }, { version: '0.1.31', features: scope === 'catalog' ? catalog31Features : controlPlaneFeatures }, { version: '0.1.30', features: scope === 'catalog' ? previousCatalogFeatures : controlPlaneFeatures }, ...historical.map((item) => ({ version: item.version, features: [localizedFeature(item, locale)] }))];
 }
 
 export function searchDacaReleases(scope: DacaFeatureScope, locale: DacaFeatureLocale, query: string): readonly DacaRelease[] {

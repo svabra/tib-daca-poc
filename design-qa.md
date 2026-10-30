@@ -41,3 +41,116 @@ Die Tabellen-/Relationsumschaltung bleibt links bei der Struktur. Die rechte Spa
 Keine offene P0-, P1- oder P2-Abweichung verbleibt.
 
 final result: passed
+
+---
+
+# Design QA – Expertensuche mit Kontext-Navigator und Fokus-Suche (30.10.2026)
+
+## Evidenz und Vergleich
+
+- Gewähltes Ziel: `output/imagegen/expertensuche-2026-10-30/04-auswahl-mit-umschalter-und-vorschau.png` (1488 × 1058). Die Rückmeldung verlangt Kontext-Navigator als Standard, Fokus-Suche als Alternative, grosse Kacheln rechts neben dem Titel und Vorschau in beiden Arten.
+- Implementierung: `/search?q=VIBDBU` mit echten, für Christian Man sichtbaren Katalogmetadaten. Desktop: 1440 × 1024 CSS-Pixel bei Device Scale Factor 1; mobile Prüfung bei 390 × 844 und 320 × 740.
+- Gemeinsamer visueller Vergleichseingang: `output/ui-regression/expert-search/design-comparison.png`; Referenz auf 1440 × 1024 normalisiert, Implementierung mit derselben Inhaltsbreite und angehefteter Feldvorschau. Suchphrase, Trefferzahlen und Feldinhalte unterscheiden sich, da der Entwurf Beispieldaten verwendet.
+- Fokussierter gemeinsamer Vergleich: `output/ui-regression/expert-search/design-focused-comparison.png` für die Auswahlkacheln und die Vorschau. Zusätzlich einzeln geprüft: `expert-context-desktop.png`, `expert-focus-desktop.png`, `expert-context-mobile.png` und `expert-focus-mobile.png` im selben Evidenzverzeichnis.
+
+## Ergebnis
+
+Die visuelle Hierarchie entspricht dem gewählten Konzept: Titel links, grosse Auswahlkacheln rechts, eine Suchzeile mit eingeklappten Filtern und darunter Navigation, Treffer und optionale Vorschau. Kontext gruppiert physische Felder unter ihrer Tabelle, Fokus zeigt dieselben Treffer als Liste. Die Vorschau übernimmt dieselbe Auswahl und Filter bei einem Wechsel.
+
+Bestehende Bundes-CI, Noto-Sans-Typografie, Breadcrumb und rote Bereichsbezeichnung bleiben erhalten. Die Implementierung verwendet die vorhandenen DaCa-Farb- und Abstandsvariablen sowie lokal gespeicherte, unveränderte Tabler-Icons. Echte Metadaten ersetzen die erfundenen Beispieltexte. Zusätzliche Organisations-, Domänen- und Aktualisierungsangaben sind nur in der Vorschau sichtbar; technische Kennungen sind eingeklappt. Die Vorschau ist bei langen Inhalten scrollbar. Auf mobilen Geräten werden Objekttypen horizontal und die Vorschau als schliessbares Overlay dargestellt.
+
+1. P1 behoben: Ein unbeabsichtigt mitbeobachteter API-Cache löste wiederholte Metadatenabfragen aus. Der Identitäts-Effekt beobachtet jetzt ausschliesslich die Identität; Unit- und Browser-Test sichern einmaliges Laden ab.
+2. P2 behoben: Beim Schliessen der Vorschau konnte die Fokus-Rückgabe sie erneut öffnen. Escape und Schliessen geben den Fokus jetzt ohne erneutes Öffnen zurück.
+3. P2 behoben: Modellkontexte verwenden aufgelöste Domänennamen und Organisationsbezeichnungen statt interner Referenzkennungen.
+4. P3 akzeptiert: Die produktive Bundes-CI hat eine kompaktere Typografie als das generierte Bild. Die vorhandene Anwendung bleibt die verbindliche Grundlage für Schriftgrössen und Farben.
+
+Validierung: 518 Web-Tests bestanden; nach der letzten Projektionsergänzung alle 20 Suchtests erneut bestanden. Produktionsbuild erfolgreich. `npm run test:ui-regression -- --flow expert-search --screenshot-dir output/ui-regression/expert-search` bestanden: Standardwahl, Kachelposition, URL-/Filtererhalt, Vorschau per Pointer und Tastatur, Pin/Escape, mobile Darstellung, keine wiederholten Modellabfragen und keine JavaScript-Ausnahmen. `npm run docs:data-model:check` bestanden. Der Build meldet für das neue Suchstylesheet 13,50 kB gegenüber dem 8-kB-Warnbudget; das 14-kB-Fehlerbudget wird eingehalten.
+
+Keine offene P0-, P1- oder P2-Abweichung verbleibt.
+
+final result: passed
+
+---
+
+# UX-Abnahme – Mapping-Einstieg und letzte Arbeiten (30.10.2026)
+
+Die Anforderung ersetzt den automatischen Einstieg in das erste Modell durch eine bewusste
+Auswahl. Der verifizierte Einstieg zeigt zwei kompakte Auswahlflächen und darunter letzte
+Arbeiten. Modellsuche und physische Objektinspektion sind zunächst geschlossen. Beide
+Auswahlreihenfolgen funktionieren; ein ausgewähltes logisches Modell kann auch ohne physische
+Auswahl geöffnet werden. Es gibt eine zentrale Aktion **Mapping öffnen**, ohne automatische
+Feldzuordnungen. Der bisherige Arbeitsplatz bietet **Andere Modelle auswählen**.
+
+Geprüfte Browser-Evidenz unter `output/ui-regression/mapping-start/`:
+
+- `mapping-start-desktop.png`: 1440 × 1000, geschlossener Einstieg.
+- `mapping-start-selected.png`: beide Seiten ausgewählt, lange Objektnamen brechen innerhalb der Fläche um.
+- `mapping-start-recent.png`: kompakte Liste mit Titel, physischem Kontext, Zeitpunkt und Fortsetzen.
+- `mapping-start-mobile.png`: 390 × 844, Auswahlflächen untereinander; auch 320 px ohne Seitenüberlauf geprüft.
+
+Schrift, Farben, Buttons, Flächen und Abstände verwenden die bestehenden Bundes-CI-Tokens.
+Die Bedienelemente sind mindestens 40/44 px hoch, logisch beschriftet und per Tastatur erreichbar.
+Das Schliessen der Auswahldialoge führt den Fokus zur auslösenden Aktion zurück. Die Liste zeigt
+zunächst höchstens fünf Modelle; mehr Einträge werden nur auf Wunsch eingeblendet. Der aktuelle
+Benutzer sieht ausschliesslich seine neu autorisierte Historie. Gespeichert wird Navigationskontext,
+kein ungespeicherter Mappingentwurf.
+
+Der Browser-Test bestätigt den Weg vom markierten Übersichtsbutton über physische Auswahl,
+Modellauswahl, geöffnetes Mapping und gespeicherte Ansicht bis zur erneuten Fortsetzung nach
+einem Seiten-Neuladen. Keine JavaScript-Ausnahmen; beide Mapping-Browserflüsse bestanden.
+Keine offene P0-, P1- oder P2-Abweichung.
+
+final result: passed
+
+---
+
+# UX-Abnahme – Speicherneutraler Suchkontext (30.10.2026)
+
+**Data Structures** ersetzt **Tabellen** als Kategorie in Kontext-Navigator und Fokus-Suche.
+Die Kategorien bleiben speicherneutral; Treffer und Vorschau verwenden konkrete Bezeichnungen
+und Standardicons: Tabelle, View/materialisierte View oder S3-/Parquet-Objekt. Ein generisches
+Kategorie-Icon ersetzt auch das frühere Tabellen-Icon bei **Alle Objekte**. Quellen zeigen je
+nach Typ Datenbank-, Cloud- oder Inventar-Icons. Physische Feldtreffer behalten ihr Feld-Icon.
+
+Die vorhandene `TooltipDirective` erklärt jeden Kontext per Mouse-over und Tastaturfokus im
+bekannten dunklen Katalogstil. Es entstehen keine zusätzlichen dauerhaften Panels oder
+verschachtelten Schaltflächen. Die Tooltiptexte erläutern insbesondere die Zusammenfassung
+von Tabellen, Views und strukturierten S3-Objekten/Datasets sowie den Unterschied zwischen
+fachlichen Begriffen, Datendomänen und physischen Strukturfeldern.
+
+Browser-Evidenz: `output/ui-regression/expert-search/data-structures-context-tooltip.png` und
+`data-structures-focus-tooltip.png`. Gemischte echte Tabellen-/S3-Treffer, alte und neue
+Filterlinks, Icons und Beschriftungen sind im Browser geprüft. Alle 538 Web-Tests und der
+erweiterte Expertensuch-Browserfluss bestanden; keine JavaScript-Ausnahme.
+
+final result: passed
+
+---
+
+# UX-Abnahme – Modelle direkt öffnen und Ladezustand anzeigen (30.10.2026)
+
+Diese Überarbeitung ersetzt den zuvor dokumentierten zweistufigen Auswahl-/Öffnen-Ablauf.
+Ein Klick auf ein logisches Modell öffnet unmittelbar dessen Mapping. Ein Klick auf ein
+physisches Objekt öffnet `/mappings/physical/:snapshotId/:tableId` direkt mit der gewählten
+Repräsentation im echten Canvas. Das logische Gegenstück wird dort gewählt; nach erfolgreicher
+Berechtigungsprüfung öffnet das Paar automatisch. Es gibt keine weitere Bestätigung über
+**Mapping öffnen** und keinen automatisch erzeugten logischen Entwurf.
+
+Der kleine blaue 20-px-Spinner folgt dem vorhandenen TERMDAT-Lademuster. Modell-, Verlauf-,
+Quellen- und Strukturabrufe zeigen ihn unabhängig voneinander mit zugänglichem Statustext;
+reduzierte Bewegung wird respektiert. Eine langsame Verlaufsliste blockiert die Modellauswahl
+nicht, und der physische Einstieg bleibt während des Modellabrufs bedienbar.
+
+Visuell geprüft unter `output/ui-regression/mapping-start/`:
+
+- `mapping-start-loading.png`: 1440 × 1000; echter Modellabruf im Test angehalten, Spinner sichtbar, physischer Einstieg verfügbar.
+- `mapping-physical-open.png`: gewählte Repräsentation im Canvas, logische Gegenseite mit Auswahlaktion.
+- `mapping-physical-mobile.png`: 390 × 844; Gegenstück-Aktion in der Toolbar, physische Karte innerhalb des Viewports, lange Namen umbrechend.
+
+Der physische Start zeigt nur verfügbare Inspektions- und Auswahlaktionen; Legende,
+Speicherhinweis und Modellbearbeitungsaktionen erscheinen nach dem logischen Einstieg.
+Der normale Repräsentations-Anfügedialog behält seine ausdrückliche Hinzufügen-Aktion;
+die reine Einstiegsauswahl öffnet direkt beim Objektklick. Kein horizontaler Seitenüberlauf
+bei 390/320 px. Alle 542 Web-Tests und der erweiterte `mapping-start`-Browserfluss bestanden.
+
+final result: passed

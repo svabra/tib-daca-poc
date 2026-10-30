@@ -41,9 +41,19 @@ export const DACA_FEATURE_RELEASE = {
         introduction: 'DaCa ist der zentrale Datenkatalog der Data Platform BIT und bringt Metadaten, Freigaben und Aufgaben an einem Ort zusammen.',
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
+          { title: 'Längere Metadatenimporte zuverlässig abwarten', description: 'Quellenimporte erhalten bis zu einer Minute für Import und Drift-Prüfung. Die UI wartet auf das bestätigte Ergebnis; Identitäts- und Versionsschutz bleiben erhalten.' },
+          { title: 'Mapping einheitlich benennen', description: 'Der Modellreiter heisst in allen Sprachen Mapping. Zugehörige Aktionen, Dialoge und Statushinweise verwenden Mapping beziehungsweise Mappings.' },
+          { title: 'Ausgewählte Modelle sofort im Mapping öffnen', description: 'Logische Modelle öffnen direkt ihren Arbeitsplatz. Physische Objekte öffnen sofort den Canvas; das logische Gegenstück kann dort gewählt werden. Kleine Spinner begleiten die unabhängigen Ladezugriffe. Die zusätzliche Bestätigung «Mapping öffnen» entfällt.' },
+          { title: 'Speicherneutral nach Data Structures suchen', description: 'Tabellen, Views und strukturierte S3-Objekte teilen einen Suchkontext. Treffer und Vorschau behalten konkrete Typen und Icons; die bekannten Tooltips erklären alle Suchkontexte per Maus und Tastatur.' },
+          { title: 'Mappings beginnen und letzte Arbeiten fortsetzen', description: 'Logische oder physische Repräsentation zuerst auswählen. Letzte Mapping-Arbeiten zeigen kompakt fünf Modelle; der private PostgreSQL-Verlauf merkt Modell, physisches Objekt und Ansicht. Aktuelle Berechtigungen werden erneut geprüft; ungespeicherte Entwürfe bleiben separat.' },
+          { title: 'Expertensuche nach Kontext oder Fokus bedienen', description: 'Grosse Kacheln neben dem Titel wechseln zwischen Kontext-Navigator und Fokus-Suche. Suchbegriff und Filter bleiben erhalten; beide Ansichten bieten eine anheftbare Vorschau. Tabellen und physische Felder, Produkte, Modelle, Quellen, Terme und Domänen werden über bestehende Katalog-Lesezugriffe gefunden.' },
+          { title: 'Suchbegriff eindeutig löschen', description: 'Die Expertensuche zeigt genau ein Löschkreuz. Die beschriftete Schaltfläche bleibt per Tastatur erreichbar; das zusätzliche Browser-Kreuz entfällt.' },
+          { title: 'Physische Bindungen mit dem Graph abgleichen', description: 'Graph und Bindungsliste zeigen dieselben sichtbaren Repräsentationen; Ausblenden und Einblenden wirken sofort auf beide. Kennzeichnungen unterscheiden konfigurierte Quellenanbindungen von reinen Strukturmetadaten. Geöffnete Arbeitsplätze aktualisieren sich alle fünf Sekunden und bei Fensterrückkehr; lokale Bearbeitungen pausieren die Übernahme.' },
+          { title: 'Version im Footer nachschlagen', description: 'Versionsnummer, Co-Design-Hinweis und Neuerungen stehen im Footer und verdecken keine Inhalte. Auf kleinen Bildschirmen folgen sie unter dem Footertext. Der Hinweis «Version ist aktuell» entfällt; verfügbare Updates bleiben sichtbar.' },
           { title: 'Domänenverantwortung übertragen', description: 'Domänen an neue Owner und Stellvertretungen abtreten – als zuständiger Owner, ALDS oder LDSD. Personensuche, Begründung und Bestätigung; Versionsschutz und Audit. Amtsbereich und eigenständige Objektverantwortlichkeiten bleiben erhalten.' },
           { title: 'Domänen direkt bearbeiten und Amtsmandate unterscheiden', description: 'Owner, Stellvertretung sowie zuständige ALDS und deren Stellvertretungen bearbeiten Domänennamen und Beschreibungen. Gesonderte LDSD-/ALDS-Zuordnungen, Versionsschutz und Audit; die statische Information erklärt Rollen und bestätigte Zuständigkeiten.' },
           { title: 'Domänen und Terme nach Owner suchen', description: 'Die Kachelsuche findet Data Owner und Stellvertretungen über Name oder User-ID, unabhängig von Grossschreibung und Akzenten. Terme verwenden ihre eigenen Verantwortlichkeiten.' },
+          { title: 'Domänen und Terme nach eigenem Amt filtern', description: '«Nur amtseigene anzeigen» grenzt Kacheln und Netze anhand der Objektverantwortung im eigenen Amt und seinen Untereinheiten ein. Tooltips erklären den Umfang. Filter bleiben beim Ansichtswechsel erhalten; ausgeblendete Karten und Beziehungen bleiben gespeichert.' },
           { title: 'Domänen als Kacheln oder Netz anzeigen', description: 'Unter Domänen zwischen Kacheln und Domänennetz wechseln, wie bei der Terminologie. Bestehende Netzlinks bleiben erreichbar; ungespeicherte Änderungen werden beim Ansichtswechsel geprüft.' },
           {
             title: 'Objektrechte und aktuelle Prüfer konsistenter prüfen',
@@ -203,7 +213,7 @@ export const DACA_FEATURE_RELEASE = {
           },
           {
             title: 'Neue Versionen ohne F5 übernehmen',
-            description: 'DaCa öffnet für jeden bereitstehenden Build automatisch einen Dialog mit bisheriger und neuer Version, Warnung zu ungespeicherten Seiteninhalten, Neuerungen und Link zur Featureliste. «Update durchführen» lädt die Anwendung vollständig neu; «Update später durchführen» erhält die laufende Arbeit. Die Versionskarte nennt V, armasuisse, ESTV und BIT als Co-Designer über dem Versionsstatus.',
+            description: 'DaCa öffnet für jeden bereitstehenden Build automatisch einen Dialog mit bisheriger und neuer Version, Warnung zu ungespeicherten Seiteninhalten, Neuerungen und Link zur Featureliste. «Update durchführen» lädt die Anwendung vollständig neu; «Update später durchführen» erhält die laufende Arbeit. Der Footer nennt V, armasuisse, ASTRA, ESTV und BIT als Co-Designer.',
           },
           {
             title: 'PoC anhand geführter Journeys erleben',
@@ -252,9 +262,19 @@ export const DACA_FEATURE_RELEASE = {
         introduction: 'DaCa is the central data catalog of the BIT data platform and brings metadata, approvals and tasks together in one place.',
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
+          { title: 'Wait reliably for longer metadata imports', description: 'Source imports allow up to one minute for import and drift checks. The UI waits for the confirmed outcome while preserving identity and revision checks.' },
+          { title: 'Use Mapping consistently', description: 'The model tab is named Mapping in every language. Related actions, dialogs and status messages use Mapping or Mappings.' },
+          { title: 'Open selected models directly in mapping', description: 'Logical models open their workspace immediately. Physical objects open the canvas directly, with logical-counterpart selection available there. Small spinners accompany independent loading; no second Open mapping confirmation is required.' },
+          { title: 'Search Data Structures across storage types', description: 'Tables, views and structured S3 objects share one context. Results and previews retain concrete types and icons, while the existing tooltips explain each search context on hover and keyboard focus.' },
+          { title: 'Start mappings and resume recent work', description: 'Choose the logical or physical side first. Recent mapping work shows five models with private PostgreSQL context for model, physical object and view. Current access is rechecked; unsaved drafts remain separate.' },
+          { title: 'Choose context or focus in expert search', description: 'Large tiles beside the title switch between context navigation and a focused list while preserving the query and filters. Both offer a pinnable preview. Existing catalog reads supply products, models, sources, latest tables and physical fields, terms and domains.' },
+          { title: 'Clear search with one control', description: 'Expert search shows one clear button with a translated accessible name and keyboard support. The duplicate browser-native cross is hidden.' },
+          { title: 'Keep physical bindings aligned with the graph', description: 'The graph and binding list show the same visible representations; hiding and restoring updates both immediately. Labels distinguish configured source connectors from metadata-only structures. Open workspaces refresh every five seconds and on focus; local edits pause replacement.' },
+          { title: 'Find version information in the footer', description: 'The version, Co-Design credit and release notes sit in the footer without covering content. On small screens they follow the footer text. The current-version message is omitted; available updates remain visible.' },
           { title: 'Transfer domain responsibility', description: 'Assign a new Owner and deputy as the current Owner, scoped ALDS or department LDSD. Person search, reason and confirmation, with revisions and audit. Office scope and independent object responsibilities are preserved.' },
           { title: 'Edit domain metadata with explicit office mandates', description: 'Owners, deputies and appointed office ALDS/deputies edit domain names and descriptions. Separate LDSD/ALDS assignments, revision checks and audit evidence; static Information explains confirmed responsibilities.' },
           { title: 'Search domains and terms by owner', description: 'Card search matches Data Owner and deputy names or user IDs without case or accent differences. Terms use their own assigned responsibilities.' },
+          { title: 'Filter domains and terms by your office', description: 'Show only my office’s items scopes cards and networks to object responsibilities in your office and subordinate units. Tooltips explain the scope. Filters survive view changes; hidden cards and relationships remain stored.' },
           { title: 'View domains as cards or a network', description: 'Switch between Cards and Domain network within Domains, matching Terminology. Existing network links still work and view changes check for unsaved edits.' },
           {
             title: 'Check object rights and current reviewers consistently',
@@ -398,7 +418,7 @@ export const DACA_FEATURE_RELEASE = {
           },
           {
             title: 'Apply new versions without F5',
-            description: 'DaCa automatically offers each ready build with its version transition, unsaved-content warning, release notes and feature-list link. Apply update reloads the app; Update later keeps the current work. The version card credits V, armasuisse, ESTV und BIT above its status.',
+            description: 'DaCa automatically offers each ready build with its version transition, unsaved-content warning, release notes and feature-list link. Apply update reloads the app; Update later keeps the current work. The footer credits V, armasuisse, ASTRA, ESTV and BIT.',
           },
           {
             title: 'Explore the PoC through guided journeys',
@@ -449,9 +469,10 @@ export const DACA_FEATURE_RELEASE = {
         introduction: 'Die Control Plane zeigt Betriebsbeobachtungen zum zentralen DaCa und bewahrt Konfigurationen des früheren PoC-Prototyps auf.',
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
+          { title: 'Version im Footer nachschlagen', description: 'Versionsnummer, Co-Design-Hinweis und Neuerungen stehen im Footer und verdecken keine Inhalte. Auf kleinen Bildschirmen folgen sie unter dem Footertext. Der Hinweis «Version ist aktuell» entfällt; verfügbare Updates bleiben sichtbar.' },
           {
             title: 'Neue Versionen ohne F5 übernehmen',
-            description: 'DaCa öffnet für jeden bereitstehenden Build automatisch einen Dialog mit bisheriger und neuer Version, Warnung zu ungespeicherten Seiteninhalten, Neuerungen und Link zur Featureliste. «Update durchführen» lädt die Anwendung vollständig neu; «Update später durchführen» erhält die laufende Arbeit. Die Versionskarte nennt V, armasuisse, ESTV und BIT als Co-Designer über dem Versionsstatus.',
+            description: 'DaCa öffnet für jeden bereitstehenden Build automatisch einen Dialog mit bisheriger und neuer Version, Warnung zu ungespeicherten Seiteninhalten, Neuerungen und Link zur Featureliste. «Update durchführen» lädt die Anwendung vollständig neu; «Update später durchführen» erhält die laufende Arbeit. Der Footer nennt V, armasuisse, ASTRA, ESTV und BIT als Co-Designer.',
           },
           {
             title: 'Katalogeinträge beobachten',
@@ -476,9 +497,10 @@ export const DACA_FEATURE_RELEASE = {
         introduction: 'The Control Plane shows operations observations for central DaCa and retains earlier PoC configuration records.',
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
+          { title: 'Find version information in the footer', description: 'The version, Co-Design credit and release notes sit in the footer without covering content. On small screens they follow the footer text. The current-version message is omitted; available updates remain visible.' },
           {
             title: 'Apply new versions without F5',
-            description: 'DaCa automatically offers each ready build with its version transition, unsaved-content warning, release notes and feature-list link. Apply update reloads the app; Update later keeps the current work. The version card credits V, armasuisse, ESTV und BIT above its status.',
+            description: 'DaCa automatically offers each ready build with its version transition, unsaved-content warning, release notes and feature-list link. Apply update reloads the app; Update later keeps the current work. The footer credits V, armasuisse, ASTRA, ESTV and BIT.',
           },
           {
             title: 'Observe catalog records',

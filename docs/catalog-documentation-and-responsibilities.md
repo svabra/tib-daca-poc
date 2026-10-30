@@ -21,6 +21,14 @@ specific owner assignments. Other module authorization remains subject to its es
 
 ## Navigation
 
+The [expert search](expert-search.md) opens in context navigation and provides an alternative
+focus list through large heading tiles. Both share the same search/filter state and an optional
+hover/focus preview that can be pinned. Field results retain their source/table context; details
+open the existing catalog routes. Search visibility follows the existing service read scopes.
+
+Expert search retains the semantic search input and one translated, keyboard-accessible clear
+button. Its browser-native cancel decoration is hidden to avoid duplicate clear controls.
+
 Application glossary words use a light-gray wavy underline in the catalog UI, matching DAAIF's separate application glossary. Popup descriptions and detail links remain keyboard and pointer accessible.
 
 The header information icon opens `/documentation`. Its three sections are User Journeys,

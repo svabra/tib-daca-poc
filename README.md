@@ -1,5 +1,49 @@
 # BIT DaCa
 
+Release **0.2.1** brings context/focus expert search with previews, direct Mapping entry and
+private recent work, synchronized physical bindings, own-office semantic filters and footer
+version information. The searchable release history retains the 0.2.0 notes.
+Physical metadata imports have a bounded 60-second request budget so a longer drift check
+does not prematurely report an unavailable API after eight seconds.
+
+Domains and terminology offer **Nur amtseigene anzeigen** in card and network views.
+The filter uses the current user's office and its subordinate units with trusted object
+responsibilities, independently of a term's domain classification. Tooltips explain the scope;
+filtering preserves shared graph data and local drafts. See [office filtering](docs/domains-and-glossary.md#own-office-display-filter).
+
+The logical-to-physical workspace tab is **Mapping** in every application language. Mapping
+actions, headings and status messages use the same term; plural references use **Mappings**.
+
+Expert search groups physical assets under **Data Structures** across storage types, including
+tables, views and structured S3 objects/datasets. Results and previews retain concrete types
+and icons. Existing catalog tooltips explain each search context on hover and keyboard focus.
+
+**Mapping-Arbeitsplatz** now opens a selection page instead of an arbitrary first model.
+Selecting a logical model opens its mapping immediately. Selecting a physical object opens
+that representation directly in the canvas, with its logical counterpart selectable there.
+No additional **Mapping öffnen** confirmation is needed. Small loading spinners accompany
+independent model, physical-detail and recent-work reads. Five
+**Letzte Mapping-Arbeiten** let the current user resume model, physical object and view;
+PostgreSQL keeps a bounded private history across sessions, separate from unsaved drafts.
+See [mapping entry and recent work](docs/logical-models-i14y-mapping.md#mapping-entry-and-recent-work).
+
+Expert search now defaults to **Kontext-Navigator** with grouped table/field context. Large tiles
+beside the heading switch to **Fokus-Suche** while retaining the query and filters. Both modes
+offer hover/focus previews that can be pinned, closed or opened as existing catalog details.
+See [expert-search behavior and boundaries](docs/expert-search.md).
+
+The mapping workspace's **Physische Bindungen** lists exactly the physical cards visible in the
+graph, including local drafts and drift previews. Hiding or restoring a drawing updates both
+views immediately. **Mit Quellenanbindung** identifies a configured source connector;
+**Nur Strukturmetadaten** identifies structures without a technical connection. The workspace
+refreshes every five seconds while visible and on focus; local edits pause replacement of the
+displayed state so unsaved work survives.
+
+Catalog and Control Plane show their version, Co-Design credit (V, armasuisse, ASTRA, ESTV and BIT)
+and **Neu in dieser Version** in the page footer. The version area scrolls with the page and
+stacks below the footer text on small screens. The redundant current-version status is omitted; available PWA updates still
+offer their notification and confirmation dialog.
+
 Domains can be handed over through **Domäne abtreten** on their detail page or card menu.
 Current object owners/deputies, office ALDS/deputies and the department LDSD/deputy can assign
 new active people with a reason and explicit confirmation. The handover preserves office
@@ -227,6 +271,10 @@ continue to require the same organization as the logical model.
 | PostgreSQL 18.4 | Catalog, Control Plane, Sample-Daten und direkter Produktzugriff | localhost:55432 |
 | pgAdmin | Nur lokale Verwaltung der drei PostgreSQL-Datenbanken | http://localhost:5051 |
 
+The Control-plane API host port is configurable with `DACA_CONTROL_API_PORT` (default `8002`).
+Use e.g. `18002` in the local `.env` when the DAAIF MCP server already occupies `8002`.
+The Control-plane UI continues to use the internal Docker service address.
+
 The only supported protocols are HTTP and PostgreSQL wire protocol. Catalog metadata and
 governance are managed centrally. The older trust/sync configuration prototype does not
 transfer catalog resources.
@@ -419,7 +467,8 @@ start with an empty logical form or from an existing data source; the adjacent a
 named **Sichtbare Datenquellen**. The DAAIF-aligned first level presents active connection cards.
 The page now uses **Sichtbare Datenquellen** with a direct expert-search link that carries the
 current filter text as `q`; the expert search applies it to visible physical sources as well as
-data products. The synthetic SAP VIBDBU real-estate source is readable across
+data products. Its labelled clear button is the only search-clear cross; the browser-native
+decoration is suppressed. The synthetic SAP VIBDBU real-estate source is readable across
 modeling scopes; import and changes remain limited to its owning scope. The catalog header
 offers a local sign-in view backed by a revocable, HttpOnly demo session, profile avatar and
 sign-out, language selection and a light/dark switch. Header actions and the language selector
@@ -697,8 +746,8 @@ The root [`VERSION`](VERSION) file is the sole DaCa release-version source. The 
 keeps the first-party Node and Python package metadata and lockfiles, service runtime constants,
 the shared UI version constant, focused OpenAPI documents, and OpenShift image pins synchronized.
 Do not edit those derived release surfaces individually.
-Release 0.1.29 lists the mapping graph's field focus and context actions in the catalog feature
-history; the previous 0.1.28 notes remain searchable there. The control plane shares the version
+Release 0.2.1 lists the search, Mapping, office filter and footer improvements in the catalog feature
+history; previous release notes remain searchable there. The control plane shares the version
 without presenting catalog-only changes as its own features.
 
 Validate the repository before CI/CD builds or publishing images:
@@ -711,17 +760,17 @@ Prepare a release with a strict `X.Y.Z` version. The command first refuses an in
 repository, then updates all managed surfaces and validates the result:
 
 ```powershell
-npm run version:bump -- 0.2.0
+npm run version:bump -- 0.2.1
 ```
 
-The lower-right version box in both web applications uses the DAAIF card design and opens a
+The footer version information in both web applications opens a
 short, plain-language summary of the newest release. The link in that popup opens
 `/settings/features`, where users can search the tagged release history by feature or topic.
 When a new Angular PWA build is ready, Catalog and Control Plane automatically open the DAAIF-style
 update dialog once per build. It shows the current and target versions, warns that unsaved page
 content will be lost, offers the target release notes and links to the feature list. Users can
 apply the update with a full reload or leave their current work open and update later from the
-version card.
+footer version controls.
 The settings icon beside the theme control opens `/settings` and its DAAIF-style submenu with
 personal language settings, appearance, and the feature list. Tenant language settings are absent
 because DaCa has no tenancy. Both the settings and day/night icons show translated hover/focus
