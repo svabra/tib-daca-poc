@@ -53,11 +53,11 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
           <span>Datenquelle</span>
           <strong>{{ sourceLabel() }}</strong>
         </article>
-        <article class="quality-context-node is-product" data-graph-node="product">
+        <article class="quality-context-node is-product daca-canvas-card" data-canvas-kind="product" data-graph-node="product">
           <span>Datenprodukt</span>
           <strong>{{ productTitle() }}</strong>
         </article>
-        <article class="quality-context-node is-owner" data-graph-node="owner">
+        <article class="quality-context-node is-owner daca-canvas-card" data-canvas-kind="organization" data-graph-node="owner">
           <span>Verantwortliche Organisation</span>
           <strong>{{ ownerLabel() }}</strong>
         </article>

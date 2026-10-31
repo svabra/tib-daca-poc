@@ -94,6 +94,7 @@ export interface LogicalModelSummary {
   identifierMode?: 'manual' | 'organization_derived';
   department: string;
   office: string;
+  organizationLabel?: string;
   dataDomain: NamedReference;
   dataOwner: NamedReference;
   deputyDataOwner: NamedReference | null;

@@ -1,0 +1,20 @@
+/* Shared native-SVG highway skin for the data landscape and lineage. */
+.daca-highway-glow,.daca-highway-edge,.daca-highway-band,.daca-highway-spine { fill:none; stroke-linecap:butt; stroke-linejoin:round; pointer-events:none; }
+.daca-highway-glow { stroke:#56beff; stroke-width:18; opacity:.12; filter:blur(2px); }
+.daca-highway-edge { stroke:#6cc4ff; stroke-width:14; opacity:.18; }
+.daca-highway-band { stroke-width:12; opacity:.8; }
+.daca-highway-blue-stop { stop-color:#9bd8ff; stop-opacity:.65; }
+.daca-highway-white-stop { stop-color:var(--daca-surface); stop-opacity:.9; }
+.daca-highway-spine { stroke:#48a9fa; stroke-width:1; opacity:.75; }
+.daca-highway-packet { pointer-events:none; offset-path:var(--flow-path); offset-anchor:0px 0px; offset-rotate:auto; animation:daca-packet-travel var(--flow-duration,3s) linear infinite; }
+.daca-highway-tail { stroke:none; }
+.daca-highway-halo { fill:#4abaff; opacity:.3; transform-box:fill-box; transform-origin:center; animation:daca-packet-pulse 1.4s ease-in-out infinite; }
+.daca-highway-core { fill:#168cff; stroke:#f1fbff; stroke-width:1.1; animation:daca-packet-brightness 1.4s ease-in-out infinite; }
+@keyframes daca-packet-travel { from { offset-distance:0%; } to { offset-distance:100%; } }
+@keyframes daca-packet-pulse { 0%,100% { scale:.55; opacity:.12; } 50% { scale:1.4; opacity:.6; } }
+@keyframes daca-packet-brightness { 0%,100% { opacity:.9; } 50% { opacity:1; } }
+@media(prefers-reduced-motion:reduce) {
+  .daca-highway-packet,.daca-highway-halo,.daca-highway-core { animation:none; }
+  .daca-highway-packet { offset-distance:var(--flow-rest,50%); }
+  .daca-highway-tail { opacity:.45; }
+}

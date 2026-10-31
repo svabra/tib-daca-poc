@@ -1,3 +1,4 @@
+import { catalogCopy } from './core/catalog-localization';
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
@@ -74,7 +75,7 @@ export class App {
     { label: 'Meine Datenprodukte', path: '/products' },
     { label: 'Datenquellen', path: '/physical-models' },
     { label: 'Datenmodelle', path: '/models' },
-    { label: 'Domäne und Terminology', path: '/domains' },
+    { label: 'Domäne und Terminologie', path: '/domains' },
     { label: 'Aufgaben', path: '/tasks' },
   ];
   readonly navigation = computed<readonly DacaNavigationItem[]>(() => this.navigationDefinition.map((item) => ({
@@ -100,7 +101,7 @@ export class App {
         '/search': ['Expertensuche', 'Recherche avancée', 'Ricerca avanzata', 'Expert search'],
         '/physical-models': ['Sichtbare Datenquellen', 'Sources de données visibles', 'Fonti dati visibili', 'Visible data sources'],
         '/models': ['Datenmodelle', 'Modèles de données', 'Modelli di dati', 'Data models'],
-        '/domains': ['Domäne und Terminology', 'Domaine et terminologie', 'Dominio e terminologia', 'Domain and terminology'],
+        '/domains': ['Domäne und Terminologie', 'Domaine et terminologie', 'Dominio e terminologia', 'Domain and terminology'],
         '/tasks': ['Aufgaben', 'Tâches', 'Attività', 'Tasks'],
         '/profile': ['Mein Profil', 'Mon profil', 'Il mio profilo', 'My profile'],
         '/settings/language-personal': ['Spracheinstellungen', 'Paramètres linguistiques', 'Impostazioni lingua', 'Language settings'],
@@ -112,7 +113,7 @@ export class App {
         '/documentation/static': ['Statische Dokumentation', 'Documentation statique', 'Documentazione statica', 'Static documentation'],
         '/documentation/glossary': ['DaCa Glossar', 'Glossaire DaCa', 'Glossario DaCa', 'DaCa glossary'],
       };
-      const title = titles[route]?.[({ de: 0, fr: 1, it: 2, en: 3 })[language]];
+      const title = titles[route] ? catalogCopy(titles[route], language) : undefined;
       if (title) setTimeout(() => { document.title = `${title} | DaCa`; }, 0);
     });
   }
@@ -123,24 +124,23 @@ export class App {
       'Meine Datenprodukte': ['Mes produits de données', 'I miei prodotti di dati', 'My data products'],
       'Datenquellen': ['Sources de données', 'Fonti dati', 'Data sources'],
       'Datenmodelle': ['Modèles de données', 'Modelli di dati', 'Data models'],
-      'Domäne und Terminology': ['Domaine et terminologie', 'Dominio e terminologia', 'Domain and terminology'],
+      'Domäne und Terminologie': ['Domaine et terminologie', 'Dominio e terminologia', 'Domain and terminology'],
       'Aufgaben': ['Tâches', 'Attività', 'Tasks'],
     };
-    const index = ({ de: -1, fr: 0, it: 1, en: 2 })[this.preferences.language()];
-    return index < 0 ? label : translated[label]?.[index] ?? label;
+    return translated[label] ? catalogCopy([label, ...translated[label]], this.preferences.language()) : label;
   }
 
   login(userId: string): void { this.session.login(userId); }
   preferenceValue(name: string, value: string): string {
     if (name === 'theme') return value === 'dark' ? this.ui('dark') : this.ui('light');
-    return ({ de: 'Deutsch', fr: 'Français', it: 'Italiano', en: 'English' } as Record<string, string>)[value] ?? value;
+    return ({ de: 'Deutsch', fr: 'Français', it: 'Italiano', en: 'English', rm: 'Rumantsch Grischun' } as Record<string, string>)[value] ?? value;
   }
   preferenceTitle(name: string): string {
     const labels: Record<string, readonly [string, string, string, string]> = {
       language: ['Sprache speichern', 'Enregistrer la langue', 'Salva la lingua', 'Save language'],
       theme: ['Erscheinungsbild speichern', 'Enregistrer l’apparence', 'Salva l’aspetto', 'Save appearance'],
     };
-    return labels[name]?.[({ de: 0, fr: 1, it: 2, en: 3 })[this.preferences.language()]] ?? name;
+    return labels[name] ? catalogCopy(labels[name], this.preferences.language()) : name;
   }
   ui(key: string): string {
     const labels: Record<string, readonly [string, string, string, string]> = {
@@ -160,6 +160,6 @@ export class App {
       dark: ['Dunkler Modus', 'Mode sombre', 'Modalità scura', 'Dark mode'],
       footerText: ['DaCa · Zentraler Datenkatalog · Proof of Concept. Teil der Data Platform BIT.', 'DaCa · Catalogue de données central · Preuve de concept. Fait partie de la plateforme de données de l’OFIT.', 'DaCa · Catalogo centrale dei dati · Prova di concetto. Parte della piattaforma dati dell’UFIT.', 'DaCa · Central Data Catalog · Proof of concept. Part of the BIT data platform.'],
     };
-    return labels[key]?.[({ de: 0, fr: 1, it: 2, en: 3 })[this.preferences.language()]] ?? key;
+    return labels[key] ? catalogCopy(labels[key], this.preferences.language()) : key;
   }
 }

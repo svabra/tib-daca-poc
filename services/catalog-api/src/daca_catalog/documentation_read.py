@@ -38,6 +38,7 @@ from .models import (
     SiteGlossaryLocalization,
     SiteGlossaryTerm,
 )
+from .organization_display import organization_display
 from .physical_source_access import returned_source_ids
 
 
@@ -79,7 +80,7 @@ def glossary_entries(session: Session, language: str = "de", query: str = "") ->
 
 def catalog_responsibilities(session: Session, actor: str, language: str = "de") -> dict[str, Any]:
     users = {row.id: row for row in session.scalars(select(DemoUser).where(DemoUser.active.is_(True)))}
-    organizations = {row.id: row.display_name for row in session.scalars(select(AdministrativeOrganization))}
+    organizations = {row.id: organization_display(session).label(row.id) for row in session.scalars(select(AdministrativeOrganization))}
     role_rows = list(session.scalars(select(DataModelRoleAssignment).where(DataModelRoleAssignment.active.is_(True))))
     role_scopes: dict[str, list[dict[str, str]]] = defaultdict(list)
     scopes_by_user: dict[str, set[tuple[str, str]]] = defaultdict(set)
@@ -222,7 +223,7 @@ def catalog_responsibilities(session: Session, actor: str, language: str = "de")
     relevant_users = {row["userId"] for item in objects for row in item["responsibilities"]}
     relevant_users.update(role_scopes)
     people = [{
-        "id": user.id, "name": user.display_name, "organization": user.organization,
+        "id": user.id, "name": user.display_name, "organization": organization_display(session).user(user),
         "avatarUrl": user.avatar_url, "roles": role_scopes[user.id],
     } for user in users.values() if user.id in relevant_users]
     people.sort(key=lambda person: person["name"].casefold())
@@ -255,7 +256,7 @@ def role_change_history(
     # active role row has disappeared from the current-person projection.
     for organization in session.scalars(select(AdministrativeOrganization)):
         visible["organization"].add(organization.id)
-        labels[("organization", organization.id)] = organization.display_name
+        labels[("organization", organization.id)] = organization_display(session).label(organization.id)
     model_ids = {uuid.UUID(value) for value in visible["logical_model"]}
     if model_ids:
         for version in session.scalars(select(LogicalModelVersion).where(

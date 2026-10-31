@@ -19,7 +19,7 @@ export const FALLBACK_LOGICAL_MODEL: LogicalModel = {
   versionId: 'fallback-model-version-2', status: 'draft', title: { de: 'Organisationseinheiten', fr: 'Unités organisationnelles', it: '', en: 'Organisational units' },
   description: { de: 'Fachliches Modell der Organisationseinheiten der Verteidigung.', fr: '', it: '', en: '' }, identifiers: ['VBS-ORG-UNIT'],
   department: 'VBS', office: 'vbs-verteidigung', dataDomain: { id: 'domain-personal', displayName: 'Personal' },
-  dataOwner: { id: 'christian.spider', displayName: 'Christian Spider' }, deputyDataOwner: { id: 'sibilla.micheli', displayName: 'Sibilla Micheli' },
+  dataOwner: { id: 'christian.spider', displayName: 'Christiano Stadello' }, deputyDataOwner: { id: 'sibilla.micheli', displayName: 'Sibilla Di Ciesa' },
   steward: { id: 'cinthya.thor', displayName: 'Cinthya Thor' }, creator: { type: 'application', applicationName: 'HR-Core' }, classification: 'internal',
   dateCreated: '2026-08-20', mediaFormats: [], fieldCount: fields.length, hasPhysicalMapping: true, productId: null, distributionIds: [],
   createdBy: { id: 'cinthya.thor', displayName: 'Cinthya Thor' }, createdAt: '2026-08-20T08:00:00Z', updatedAt: '2026-09-05T09:10:00Z',
@@ -31,7 +31,7 @@ export const FALLBACK_LOGICAL_MODEL: LogicalModel = {
 };
 
 export const FALLBACK_PHYSICAL_SNAPSHOT: PhysicalSnapshot = {
-  id: 'fallback-hr-snapshot-2', sourceId: 'fallback-hr-core', sourceName: 'HR-PROD', dataOwnerName: 'Christian Spider', catalogPath: 'postgresql://hr_core/', sourceType: 'postgresql', systemName: 'PostgreSQL', databaseName: 'hr_core', revision: 2,
+  id: 'fallback-hr-snapshot-2', sourceId: 'fallback-hr-core', sourceName: 'HR-PROD', dataOwnerName: 'Christiano Stadello', catalogPath: 'postgresql://hr_core/', sourceType: 'postgresql', systemName: 'PostgreSQL', databaseName: 'hr_core', revision: 2,
   contentHash: 'sha256:fallback', importedAt: '2026-09-05T07:20:00Z', importedBy: { id: 'cinthya.thor', displayName: 'Cinthya Thor' }, previousSnapshotId: 'fallback-hr-snapshot-1', driftCount: 1,
   tables: [{ id: 'table-org-unit', stableKey: 'hr_core.public.org_unit', schemaName: 'public', name: 'org_unit', kind: 'table', storageLocation: null, mediaType: null, objectCount: null, sizeBytes: null, schemaConfidence: 'declared', partitionKeys: [], comment: null, columns: [
     { id: 'column-org-id', name: 'org_unit_id', ordinalPosition: 1, dataType: 'uuid', length: null, precision: null, scale: null, nullable: false, comment: null },

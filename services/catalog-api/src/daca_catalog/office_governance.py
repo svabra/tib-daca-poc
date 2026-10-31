@@ -29,11 +29,12 @@ def can_edit_domain_metadata(session, actor, domain):
     return _mandate_domain_authority(session, actor, domain, {"alds"})
 
 
-def domain_creation_reviewers(session, owner_user_id, requester_user_id):
+def domain_creation_reviewers(session, owner_user_id, requester_user_id, *, organization_ids=None):
     """New domains require an active office ALDS mandate, independent of proposed ownership."""
     from .modeling_api import _descendant_ids
 
-    scopes = {row.id for row in active_scope_organizations(session, person_organization_ids(session, owner_user_id))}
+    scopes = {row.id for row in active_scope_organizations(session,
+        person_organization_ids(session, owner_user_id) if organization_ids is None else organization_ids)}
     if not scopes:
         return set()
     reviewers = set()
@@ -73,7 +74,11 @@ def _mandate_domain_authority(session, actor, domain, kinds, *, lock=False):
     if lock:
         query = query.with_for_update(of=OrganizationStewardMandate)
     source = active_scope_organizations(session, domain_organization_ids(session, domain))
-    for mandate in session.scalars(query):
+    snapshot = session.info.get("semantic_read") if not lock else None
+    if snapshot and snapshot.actor != actor:
+        snapshot = None
+    mandates = (row for row in snapshot.mandates if row.mandate_type in kinds and snapshot.active_organizations({row.organization_id})) if snapshot else session.scalars(query)
+    for mandate in mandates:
         organization = session.get(AdministrativeOrganization, mandate.organization_id)
         if mandate.mandate_type == "alds" and organization.organization_type == "office" and any(row.id in _descendant_ids(session, organization.id) for row in source):
             return True
@@ -129,6 +134,23 @@ REQUESTED_MANDATES = (
 )
 
 
+def profile_mandates(session, labels):
+    """Read current mandates for display; this projection grants no permissions."""
+    from .schemas import OrganizationMandateResponse
+
+    result = {}
+    for row in session.scalars(select(OrganizationStewardMandate).where(OrganizationStewardMandate.active.is_(True))):
+        if not active_scope_organizations(session, {row.organization_id}):
+            continue
+        for person, deputy in ((row.user_id, False), (row.deputy_user_id, True)):
+            if person:
+                result.setdefault(person, []).append(OrganizationMandateResponse(
+                    organization_id=row.organization_id, organization_name=labels.label(row.organization_id),
+                    mandate_type=row.mandate_type, is_deputy=deputy,
+                ))
+    return result
+
+
 def seed_requested_steward_mandates(session):
     """One-time requested demo assignments; never overwrite changes or revocations."""
     for organization, kind, person, deputy in REQUESTED_MANDATES:
@@ -137,6 +159,44 @@ def seed_requested_steward_mandates(session):
         provision_steward_mandate(session, organization_id=organization, user_id=person,
             deputy_user_id=deputy, mandate_type=kind, expected_revision=0,
             operator="daca-bootstrap", decision_reference="User-confirmed governance assignments, 2026-10-28")
+
+
+def seed_data_analytics_domain(session):
+    """The ESTV Data Analytics domain is distinct from Joel's Rapid Prototyping domain."""
+    from .domain_glossary_seed import ORIGIN_CATALOG_ID, canonical_hash, stable_id
+    from .models import CatalogObjectResponsibility, Domain, DomainLocalization
+
+    identity = stable_id("domain:data-analytics")
+    existing = session.get(Domain, identity)
+    if existing:
+        return existing
+    if not session.get(AdministrativeOrganization, "efd-estv-bi"):
+        return None
+    if not all(active_actor(session, actor) for actor in ("thomas.kriegli", "joel.ruod")):
+        return None
+    labels = [
+        {"language": "de", "preferred_label": "Data Analytics",
+         "definition": "Fachdomäne für Datenanalysen und Business Intelligence in der ESTV."},
+        {"language": "en", "preferred_label": "Data Analytics",
+         "definition": "Subject domain for data analytics and business intelligence at the Federal Tax Administration."},
+    ]
+    domain = Domain(id=identity, urn=f"urn:daca:domain:{identity}", origin_catalog_id=ORIGIN_CATALOG_ID,
+        revision=1, lifecycle="active", owner_user_id="thomas.kriegli", deputy_owner_user_id="joel.ruod")
+    domain.content_hash = canonical_hash({"urn": domain.urn, "originCatalogId": domain.origin_catalog_id,
+        "lifecycle": domain.lifecycle, "ownerUserId": domain.owner_user_id,
+        "deputyOwnerUserId": domain.deputy_owner_user_id, "localizations": labels})
+    session.add(domain)
+    session.flush()
+    for label in labels:
+        session.add(DomainLocalization(domain_id=identity, normalized_label="data analytics", **label))
+    for role, person in (("data_owner", "thomas.kriegli"), ("deputy_data_owner", "joel.ruod")):
+        session.add(CatalogObjectResponsibility(id=stable_id(f"data-analytics:{role}"), domain_id=identity,
+            user_id=person, role=role, organization_id="efd-estv-bi", active=True, provenance="poc-confirmed-assignment"))
+    session.add(AuditEvent(id=uuid.uuid4(), resource_type="domain", resource_id=str(identity),
+        action="created", actor="daca-bootstrap", revision=1,
+        details={"source": "User-confirmed Data Analytics owner, 2026-10-31"}))
+    session.flush()
+    return domain
 
 
 def seed_rapid_prototyping_domain(session):

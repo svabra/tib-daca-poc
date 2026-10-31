@@ -1,6 +1,16 @@
 from contextlib import contextmanager
 
-from daca_catalog import modeling_seed, office_governance, rohs_cps_seed, site_glossary_seed
+from daca_catalog import (
+    building_demand_seed,
+    estv_sg_seed,
+    modeling_seed,
+    office_governance,
+    poc_portraits,
+    protected_buildings_seed,
+    rohs_cps_seed,
+    site_glossary_seed,
+    zeughaus_seed,
+)
 from daca_catalog import seed as seed_module
 
 
@@ -33,6 +43,14 @@ def test_catalog_seed_cli_runs_foundational_and_modeling_seeds(monkeypatch, caps
         "seed_site_glossary_terms",
         lambda actual_session: calls.append(("glossary", actual_session)),
     )
+    for module, function, label in [
+        (zeughaus_seed, "seed_zeughaus_product", "zeughaus"),
+        (estv_sg_seed, "seed_estv_sg_product", "estv-sg"),
+        (protected_buildings_seed, "seed_protected_buildings_product", "protected-buildings"),
+        (building_demand_seed, "seed_building_demand_product", "building-demand"),
+    ]:
+        monkeypatch.setattr(module, function, lambda actual_session, label=label: calls.append((label, actual_session)))
+    monkeypatch.setattr(poc_portraits, "seed_poc_portraits", lambda actual_session: calls.append(("portraits", actual_session)))
     monkeypatch.setattr(rohs_cps_seed, "seed_rohs_cps_catalog", lambda actual_session: calls.append(("rohs-cps", actual_session)))
 
     monkeypatch.setattr(office_governance, "seed_requested_steward_mandates", lambda actual_session: calls.append(("mandates", actual_session)))
@@ -43,7 +61,12 @@ def test_catalog_seed_cli_runs_foundational_and_modeling_seeds(monkeypatch, caps
     assert calls == [
         ("catalog", session),
         ("modeling", session),
+        ("zeughaus", session),
+        ("estv-sg", session),
+        ("protected-buildings", session),
+        ("building-demand", session),
         ("rohs-cps", session),
+        ("portraits", session),
         ("mandates", session),
         ("rapid-domain", session),
         ("glossary", session),

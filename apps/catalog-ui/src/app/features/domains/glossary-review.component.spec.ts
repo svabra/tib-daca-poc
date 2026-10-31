@@ -24,7 +24,7 @@ const DOMAIN: DomainSummary = {
   definition: 'Fachliche Verteidigungsdaten',
   labels: [],
   ownerUserId: 'sibilla.micheli',
-  ownerName: 'Sibilla Micheli',
+  ownerName: 'Sibilla Di Ciesa',
   ownerOrganization: 'VBS',
   deputyOwnerUserId: 'sandro.wenger',
   deputyOwnerName: 'Sandro Wenger',

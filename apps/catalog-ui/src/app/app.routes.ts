@@ -7,7 +7,7 @@ import { DOMAIN_ROUTES } from './features/domains/domain.routes';
 import { DATA_MODEL_ROUTES } from './features/data-models/data-model.routes';
 
 export const routes: Routes = [
-  { path: '', pathMatch: 'full', component: WelcomePageComponent, title: 'Willkommen | DaCa' },
+  { path: '', pathMatch: 'full', component: WelcomePageComponent, canDeactivate: [(component: WelcomePageComponent) => component.canDeactivate()], title: 'Willkommen | DaCa' },
   {
     path: 'profile',
     pathMatch: 'full',
@@ -78,7 +78,7 @@ export const routes: Routes = [
   {
     path: 'poc-simulation/domain-glossary',
     loadComponent: () => import('./features/poc-simulation/domain-glossary-fixture.component').then((m) => m.DomainGlossaryFixtureComponent),
-    title: 'Domäne und Terminology | PoC Simulation',
+    title: 'Domäne und Terminologie | PoC Simulation',
   },
   {
     path: 'poc-simulation/quality-below-threshold',
@@ -101,6 +101,7 @@ export const routes: Routes = [
   { path: 'settings', pathMatch: 'full', redirectTo: 'settings/features' },
   { path: 'settings/language-personal', loadComponent: () => import('./features/settings/catalog-settings.component').then((m) => m.CatalogSettingsComponent), data: { settingsSection: 'language' }, title: 'Spracheinstellungen | DaCa' },
   { path: 'settings/appearance', loadComponent: () => import('./features/settings/catalog-settings.component').then((m) => m.CatalogSettingsComponent), data: { settingsSection: 'appearance' }, title: 'Erscheinungsbild | DaCa' },
+  { path: 'settings/home', loadComponent: () => import('./features/settings/catalog-settings.component').then((m) => m.CatalogSettingsComponent), data: { settingsSection: 'home' }, title: 'Startseite konfigurieren | DaCa' },
   { path: 'settings/features', loadComponent: () => import('./features/settings/catalog-settings.component').then((m) => m.CatalogSettingsComponent), data: { settingsSection: 'features' }, title: 'Featureliste | DaCa' },
   { path: 'settings/responsibilities', loadComponent: () => import('./features/settings/catalog-settings.component').then((m) => m.CatalogSettingsComponent), data: { settingsSection: 'responsibilities' }, title: 'Rollen und Zuständigkeiten | DaCa' },
   { path: 'settings/role-changes', loadComponent: () => import('./features/settings/catalog-settings.component').then((m) => m.CatalogSettingsComponent), data: { settingsSection: 'role-changes' }, title: 'Rollenprotokoll | DaCa' },

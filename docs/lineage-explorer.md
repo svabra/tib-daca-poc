@@ -1,5 +1,11 @@
 # Lineage explorer
 
+Lineage product cards use the normal theme surface even when selected, matching domain-network product cards. The footer displays the actual Data Owner instead of the catalog identifier, and the accessible card name includes Data Owner. Missing ownership remains explicitly unknown; catalog identity is still available in the shared summary and selected-object details.
+
+Data-highway packet flights now start and finish beneath the opaque source and target cards, instead of stopping at or before their visible borders. A shared 36-unit overlap covers the packet head, halo and 28-unit trail before the animation loops; smaller organization cards use an inset rectangle near their center. Lineage retains its routed visible path, while the data landscape retains exact subcurves of its ribbon. Three-second flight duration, direction, packet counts, reciprocal lanes, title clearance and saved layouts are preserved.
+
+Lineage & provenance now uses the same slim blue-white data-highway skin as the organization landscape: gradient ribbons extend under the cards, one tailed pulsing packet per declared relationship crosses the source-to-target flight, including covered ends, in three seconds, and reduced motion leaves a stationary packet. Dagre routing and parallel relationships are retained; solid/dashed center spines still distinguish verified/declared evidence. Lineage cards share the domain-network asset-card structure (240 x 95 pixels, left type stripe, small icon/caption, wrapped title and compact metadata). Known products and explicit canonical organization/model/physical/term/domain URNs use the central type colors; unresolved sources, transformations and consumer references retain their actual lineage role. Provenance events and owner-only access-log authorization are unchanged.
+
 ## Owner-only access receipts
 
 Right-click an edge or its relationship pill, or use Shift+F10 on its keyboard-focusable path,
@@ -50,16 +56,9 @@ and direct-URL denial. These real test read receipts remain append-only evidence
 
 The product lineage page (`/products/:id/lineage`, also `/lineage`) draws metadata relationships
 from upstream source through processing/product to downstream consumer. Edge `sourceUrn` and
-`targetUrn` determine flow direction; relation names never reverse the arrows. Two staggered
-ice-blue SVG light bands travel along each routed edge, pulsing in brightness and width instead
-of showing circular particles. They illustrate direction, not live traffic.
-`prefers-reduced-motion: reduce` hides impulses while retaining static arrows and relationship styles.
+`targetUrn` determine flow direction; relation names never reverse the flow. Slim, softly glowing blue-white ribbons and circular packets with tapered tails use the shared data-highway CSS skin from the organization landscape. Each relationship has one illustrative packet crossing its source-to-target flight, including covered ends, at uniform speed in exactly three seconds. Flat ribbon ends extend under cards; wide transparent paths retain shared hover/focus tooltips and access-log context actions. The center spine remains solid for verified evidence and dashed for declared evidence. Reduced motion shows a stationary midpoint packet with no pulse or card movement. These animations illustrate metadata relationships, not live traffic or measured product volume.
 
-Cards use semantic kinds, not sibling position: source blue, transformation amber, product red,
-consumer green. Compact 208 × 112 px cards have 2 px corners, wrapped titles (up to three lines)
-and a catalog footer. Hover/focus lifts the existing card border by 2 px without adding an outline
-or a second border; keyboard focus also underlines the title. Reduced motion disables the lift.
-Selected cards retain their type-colored border without an extra surrounding ring;
+Cards share `daca-canvas-object` with domain-network assets: 240 x 95 px, 2 px corners, a 3 px left stripe, muted icon/type caption, two-line title and compact footer (Data Owner for products; catalog for reference-only roles). Known catalog products use mustard even when their lineage role is source or consumer. Explicit canonical logical-model, physical-representation/declaration/snapshot, organization, domain and term URNs use the corresponding shared type token and caption. Reference-only source/transform/consumer roles are not relabelled as models or organizations; their original role colors remain available. Hover/focus lifts the card by 2 px; the selected card retains the normal theme surface. Keyboard focus underlines the title and
 the full title is available in the summary. Dagre reserves relationship-label dimensions and routes
 each edge independently, including parallel relationships. Label pills stay in the space between
 cards. The graph has a content-derived extent and scrolls within its own surface on narrow screens.
@@ -105,5 +104,5 @@ new-tab targets, unknown-owner handling and keyboard summary access. Shared-tool
 the interactive pointer gap and cleanup alongside existing plain/fullscreen behaviors. The
 `lineage-explorer` Edge regression flow checks real SVG motion, legend colors and explanations,
 native new-tab opening, reference deep links, reduced motion and mobile bounds. The compact-card
-checks include the actual Edge flow, with 208 × 112 px bounds,
-2 px corners, a single moving border and changing light-band position/brightness.
+checks include the actual Edge flow, with 240 × 95 px bounds,
+2 px corners, a single left type stripe, shared domain-card typography, covered ribbon ends, three-second packet travel, changing halo brightness and static reduced-motion packets.

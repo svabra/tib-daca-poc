@@ -70,7 +70,7 @@ import { CatalogApiService } from '../../core/catalog-api.service';
           <div class="catalog-divider"></div>
           <p class="catalog-caption">Next review</p>
           <strong>15 September 2026</strong>
-          <p class="catalog-muted">Owner: ESTV Data Office · all required controls assigned</p>
+          <p class="catalog-muted">Data Owner: ESTV Data Office · all required controls assigned</p>
         </div>
       </aside>
     </div>

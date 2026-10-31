@@ -3,7 +3,7 @@ import { LogicalModelSummary, PhysicalSnapshot, PhysicalSource, PhysicalTable } 
 import { physicalConnectionStatus } from '../data-models/physical-connection-status';
 import { catalogDataProductMatches, catalogProductMatches } from '../welcome/welcome-search';
 
-export type SearchKind='product'|'logical'|'structure'|'field'|'term'|'domain'|'source';
+export type SearchKind='product'|'logical'|'structure'|'field'|'term'|'domain'|'source'|'organization';
 export type SearchMode='context'|'focus';
 export interface SearchDomain {id:string;label:string;}
 export interface CatalogSearchAsset {
@@ -16,8 +16,8 @@ export interface CatalogSearchAsset {
 }
 export interface SearchGroup {key:string;parent:CatalogSearchAsset;matches:readonly CatalogSearchAsset[];children:readonly CatalogSearchAsset[];parentMatches:boolean;}
 
-export const SEARCH_KINDS:readonly SearchKind[]=['product','logical','structure','field','term','domain','source'];
-export const SEARCH_ICONS:Record<SearchKind,string>={product:'box',logical:'hierarchy',structure:'schema',field:'forms',term:'book',domain:'database',source:'server'};
+export const SEARCH_KINDS:readonly SearchKind[]=['product','logical','structure','field','term','domain','organization','source'];
+export const SEARCH_ICONS:Record<SearchKind,string>={product:'box',logical:'hierarchy',structure:'schema',field:'forms',term:'book',domain:'database',source:'server',organization:'hierarchy'};
 
 export function searchAssetIcon(asset:CatalogSearchAsset):string{
   if(asset.kind==='structure'){

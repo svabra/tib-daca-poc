@@ -1,5 +1,26 @@
 # DaCa persistent data model
 
+The confirmed PoC personas use their actual home organizations independently of scoped object duties:
+Sibilla Di Ciesa is in GS-VBS (`vbs-gs`) and holds the VBS Local Data Steward Department (LDSD)
+mandate. Christiano Stadello (`christian.spider`, stable ID retained) belongs to armasuisse and
+holds its Amt Local Data Steward (ALDS) mandate. Thomas Wikinger is the armasuisse Local Data
+Steward (LDS), represented by its scoped `data_steward` modeling assignment. Thomas Kriegli and
+Joel Ruod belong to EFD / ESTV / BI (Business Intelligence, `efd-estv-bi`). Thomas owns the new
+**Data Analytics** domain, with Joel as its PoC deputy. The separate **Data Analytics Rapid
+Prototyping** domain keeps Joel as Data Owner and Thomas as deputy.
+
+The one-time `poc-persona-governance-scopes-2026-10-31-v1` correction updates current names,
+contacts, directory entries and primary memberships. Stable IDs, portraits, product ownership,
+control people, existing object duties and historical evidence remain intact. The existing
+Verteidigung and Personal domains retain explicit `vbs-verteidigung` scope even though their
+responsible people have different home offices. The profile separately shows current ALDS/LDSD
+mandates and scoped modeling assignments. New domains require their own office's ALDS approval;
+Journey 08 explains creation under Lawrence Hill in Verteidigung followed by an evidenced
+handover to Sibilla when a fresh exercise is needed. Apply an existing-runtime correction with
+`docker compose exec -T catalog-api uv run --no-sync python -m daca_catalog.poc_identity_updates`.
+Later operator changes, revocations and domain retirement are preserved.
+
+
 This documentation is the durable reference for every persistence context owned by the DaCa
 monorepo. Request and response DTOs remain documented by each service's OpenAPI document.
 DaCa's central catalog is the authoritative metadata and governance store. Control-plane trust
@@ -18,11 +39,11 @@ only imported structure metadata uses the existing catalog inventory/snapshot pe
 - IDs passed between services are projections or references, not cross-database foreign keys.
 
 The VIBDBU demonstration seeds active `data_steward` assignments in
-`vbs-armasuisse-immobilien` for Christian Spider and Christian Man. Their primary Verteidigung
-memberships remain. These assignments are idempotent and appear in the profile through the
+`vbs-armasuisse-immobilien` for Christiano Stadello and Christian Man. Their primary memberships are armasuisse (Christiano) and Verteidigung (Christian Man). These assignments are idempotent and appear in the profile through the
 existing modeling-personas API; the table shape does not change.
-The six Verteidigung modeling personas also receive explicit primary memberships in
-`vbs-verteidigung`, so additional role scopes cannot be mistaken for their home organization.
+Modeling role scopes do not determine home organizations: Sibilla has primary membership in
+`vbs-gs`, Christiano in `vbs-armasuisse`, and the other four original personas in
+`vbs-verteidigung`. Additional model-editing scopes remain explicitly assigned.
 
 The `role_change_events` sequence records a baseline of active role relationships at migration
 `0028_role_change_protocol` and every subsequent assignment, change or removal to modeling

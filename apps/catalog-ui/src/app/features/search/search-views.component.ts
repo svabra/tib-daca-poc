@@ -219,7 +219,7 @@ export class SearchViewsComponent {
   }
 
   kindLabel(kind: SearchKind | 'all'): string {
-    return this.i18n.t(({all: 'searchAll', product: 'searchProducts', logical: 'searchLogicalModels', structure: 'searchStructures', field: 'searchFields', term: 'searchTerms', domain: 'domains', source: 'sourcePlural'} as const)[kind]);
+    return this.i18n.t(({all: 'searchAll', product: 'searchProducts', logical: 'searchLogicalModels', structure: 'searchStructures', field: 'searchFields', term: 'searchTerms', domain: 'domains', source: 'sourcePlural', organization: 'searchOrganizations'} as const)[kind]);
   }
   organizationLabel(id: string): string { return this.organizationLabels().get(id) ?? id; }
   domainKnown(id: string): boolean { return this.domains().some(domain => domain.id === id); }

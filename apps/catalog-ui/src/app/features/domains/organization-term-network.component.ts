@@ -17,7 +17,7 @@ import { ConceptNetworkEditorComponent } from './concept-network-editor.componen
     @if(loading()){<p role="status">{{i18n.t('loadingTermNetwork')}}</p>}@else if(context();as current){
       <p class="scope-description">{{i18n.t('termNetworkScope',{name:current.label,domains:scopedDomains().length,terms:scopedTerms().length})}} {{i18n.t('termNetworkScopeHint')}}</p>
       @if(!scopedDomains().length&&!scopedTerms().length){<p class="daca-alert" role="status">{{i18n.t('emptyOrganizationNetwork')}}</p>}
-      <daca-concept-network-editor [organization]="current" [terms]="scopedTerms()" [visibleNodeIds]="visibleNodeIds()"/>
+      <daca-concept-network-editor [initialGraph]="graph()" [organization]="current" [terms]="scopedTerms()" [visibleNodeIds]="visibleNodeIds()"/>
     }
   `,styles:[`.organization-choice{display:grid;gap:.4rem;max-width:38rem;font-weight:700;margin:0 0 1rem}.organization-choice select{font:inherit;min-height:44px;padding:.55rem;max-width:100%;border:1px solid var(--daca-border-strong)}.scope-description{font-size:.875rem;color:var(--daca-text-muted)}`],
 })

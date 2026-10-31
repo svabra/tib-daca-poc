@@ -82,3 +82,9 @@ Before every commit, run `npm run test:ui-regression`. The versioned `.githooks/
 runs the same command; install it with `npm run setup:git-hooks` (also invoked by `npm install`).
 Do not bypass this gate. The matching pull-request workflow stores browser evidence only on a
 failure and retains it for three days.
+
+## UI vocabulary
+
+Always name the role `Data Owner` in every UI language, including deputies and help text.
+Use `Terminologie` for the German business-vocabulary collection and `Terminologiebegriff`
+for individual entries (French: Terminologie, Italian: Terminologia, English: Terminology).

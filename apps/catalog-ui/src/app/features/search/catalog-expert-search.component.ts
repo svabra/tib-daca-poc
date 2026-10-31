@@ -1,4 +1,5 @@
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, ElementRef, inject, linkedSignal, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -6,6 +7,7 @@ import { CatalogApiService } from '../../core/catalog-api.service';
 import { CatalogI18nService } from '../../core/catalog-i18n.service';
 import { QualityMedalComponent } from '../../shared/quality-medal.component';
 import { TooltipDirective } from '../../shared/tooltip.directive';
+import { LoadingIndicatorComponent } from '../../shared/loading-indicator.component';
 import { deliveryProtocols } from '../products/my-data-products';
 import { catalogSearchIsReady, normalizeCatalogSearch } from '../welcome/welcome-search';
 import { CatalogSearchDataService } from './catalog-search-data.service';
@@ -15,7 +17,7 @@ import { SearchViewsComponent } from './search-views.component';
 import { SearchView, SearchViewConfiguration } from './search-views-api.service';
 
 @Component({selector:'daca-catalog-expert-search',standalone:true,
-  imports:[DatePipe,NgTemplateOutlet,RouterLink,QualityMedalComponent,SearchIconComponent,TooltipDirective,SearchViewsComponent],
+  imports:[DatePipe,FormsModule,NgTemplateOutlet,RouterLink,QualityMedalComponent,SearchIconComponent,TooltipDirective,SearchViewsComponent,LoadingIndicatorComponent],
   providers:[CatalogSearchDataService],changeDetection:ChangeDetectionStrategy.OnPush,
   templateUrl:'./catalog-expert-search.component.html',styleUrl:'./catalog-expert-search.component.css',
 })
@@ -23,6 +25,7 @@ export class CatalogExpertSearchComponent {
   readonly api=inject(CatalogApiService);
   readonly data=inject(CatalogSearchDataService);
   readonly i18n=inject(CatalogI18nService);
+  readonly searching=computed(()=>this.data.loading()||this.api.loading());
   private readonly route=inject(ActivatedRoute);
   private readonly router=inject(Router);
   private readonly host=inject<ElementRef<HTMLElement>>(ElementRef);
@@ -45,15 +48,15 @@ export class CatalogExpertSearchComponent {
   readonly kinds=SEARCH_KINDS;
   readonly icons=SEARCH_ICONS;
   readonly collapsedGroups=signal<ReadonlySet<string>>(new Set());
-  readonly searchReady=computed(()=>catalogSearchIsReady(this.query())||(!!this.activeViewId()&&!this.query().trim()));
-  readonly organizations=computed(()=>[...new Set(this.data.assets().map(item=>item.organization).filter(Boolean))].sort((a,b)=>a.localeCompare(b)));
+  readonly searchReady=computed(()=>catalogSearchIsReady(this.query())||(!this.query().trim()&&(!!this.activeViewId()||this.filterCount()>0||this.selectedKind()!=='all')));
+  readonly organizations=computed(()=>[...new Set([...this.data.assets().map(item=>item.organization),...this.data.organizationLabels().keys()].filter(Boolean))].sort((a,b)=>a.localeCompare(b)));
   readonly domains=computed(()=>[...new Map(this.data.assets().flatMap(item=>item.domains).map(item=>[item.id,item])).values()].sort((a,b)=>a.label.localeCompare(b.label)));
   readonly filterCount=computed(()=>[this.selectedOwner(),this.selectedDomain(),this.selectedStatus(),this.selectedConnection()].filter(value=>value!=='all').length);
   readonly matches=computed(()=>{
     if(!this.searchReady())return[];
     return this.data.assets().filter(item=>!this.query().trim()||searchAssetMatches(item,this.query()))
-      .filter(item=>this.selectedOwner()==='all'||item.organization===this.selectedOwner())
-      .filter(item=>this.selectedDomain()==='all'||item.domains.some(domain=>domain.id===this.selectedDomain()))
+      .filter(item=>this.selectedOwner()==='all'||this.data.matchesOrganization(item,this.selectedOwner()))
+      .filter(item=>this.selectedDomain()==='all'||this.data.matchesDomain(item,this.selectedDomain()))
       .filter(item=>this.selectedStatus()==='all'||['active','published','validated'].includes(item.status))
       .filter(item=>this.selectedConnection()==='all'||item.connection?.configured===(this.selectedConnection()==='connected'));
   });
@@ -120,8 +123,8 @@ export class CatalogExpertSearchComponent {
   resetFilters():void{this.selectedDomain.set('all');this.selectedOwner.set('all');this.selectedStatus.set('all');this.selectedConnection.set('all');this.updateUrl();}
   toggleGroup(key:string):void{this.collapsedGroups.update(values=>{const next=new Set(values);if(next.has(key))next.delete(key);else next.add(key);return next;});}
   domainLabel():string{return this.domains().find(item=>item.id===this.selectedDomain())?.label??this.selectedDomain();}
-  kindLabel(kind:SearchKind,plural=false):string{return this.i18n.t(({product:plural?'searchProducts':'searchProduct',logical:plural?'searchLogicalModels':'searchModel',structure:plural?'searchStructures':'searchStructure',field:plural?'searchFields':'searchField',term:plural?'searchTerms':'searchObjectTerm',domain:plural?'domains':'searchDomain',source:plural?'sourcePlural':'searchSource'} as const)[kind]);}
-  kindExplanation(kind:SearchKind|'all'):string{return this.i18n.t(({all:'searchAllExplanation',product:'searchProductExplanation',logical:'searchLogicalExplanation',structure:'searchStructureExplanation',field:'searchFieldExplanation',term:'searchTermExplanation',domain:'searchDomainExplanation',source:'searchSourceExplanation'} as const)[kind]);}
+  kindLabel(kind:SearchKind,plural=false):string{return this.i18n.t(({product:plural?'searchProducts':'searchProduct',logical:plural?'searchLogicalModels':'searchModel',structure:plural?'searchStructures':'searchStructure',field:plural?'searchFields':'searchField',term:plural?'searchTerms':'searchObjectTerm',domain:plural?'domains':'searchDomain',source:plural?'sourcePlural':'searchSource',organization:plural?'searchOrganizations':'organization'} as const)[kind]);}
+  kindExplanation(kind:SearchKind|'all'):string{return this.i18n.t(({all:'searchAllExplanation',product:'searchProductExplanation',logical:'searchLogicalExplanation',structure:'searchStructureExplanation',field:'searchFieldExplanation',term:'searchTermExplanation',domain:'searchDomainExplanation',source:'searchSourceExplanation',organization:'searchOrganizationExplanation'} as const)[kind]);}
   assetTypeLabel(asset:CatalogSearchAsset):string{
     if(asset.kind!=='structure')return this.kindLabel(asset.kind);
     if(asset.sourceType==='s3')return this.i18n.t(asset.physicalType==='parquet'?'searchS3ParquetObject':'searchS3Object');

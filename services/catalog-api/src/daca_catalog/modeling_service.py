@@ -66,6 +66,7 @@ from .models import (
     PhysicalTable,
     TerminologyTermVersion,
 )
+from .organization_display import organization_display
 
 CATALOG_URN = "urn:daca:catalog:bit-poc"
 
@@ -269,6 +270,7 @@ def logical_version_payload(session: Session, model: LogicalModel, version: Logi
         "deputyOwnerUserId": dataset_version.deputy_owner_user_id,
         "departmentCode": dataset_version.department_code,
         "organizationId": dataset_version.organization_id,
+        "organizationLabel": organization_display(session).label(dataset_version.organization_id),
         "organizationUnitId": dataset_version.organization_id,
         "dataDomainId": dataset_version.data_domain_id,
         "dataDomainLabel": domain_reference(session, dataset_version.data_domain_id)["displayName"] if dataset_version.data_domain_id else None,
@@ -425,6 +427,7 @@ def logical_summary_payload(session: Session, model: LogicalModel,
         "deputyOwnerUserId": dataset.deputy_owner_user_id,
         "departmentCode": dataset.department_code,
         "organizationId": dataset.organization_id,
+        "organizationLabel": organization_display(session).label(dataset.organization_id),
         "organizationUnitId": dataset.organization_id,
         "dataDomainId": dataset.data_domain_id,
         "dataClassification": dataset.data_classification,

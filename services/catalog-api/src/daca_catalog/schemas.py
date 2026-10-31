@@ -923,6 +923,13 @@ class HealthResponse(ApiModel):
     version: str
 
 
+class OrganizationMandateResponse(ApiModel):
+    organization_id: str
+    organization_name: str
+    mandate_type: Literal["ldsd", "alds"]
+    is_deputy: bool = False
+
+
 class DemoUserResponse(ApiModel):
     id: str
     display_name: str
@@ -932,6 +939,9 @@ class DemoUserResponse(ApiModel):
     avatar_url: str | None
     roles: list[str]
     supervisor_user_id: str | None = None
+    office: str | None = None
+    department: str | None = None
+    organization_mandates: list[OrganizationMandateResponse] = Field(default_factory=list)
 
 
 IdentityDirectorySource = Literal["federal", "cantonal", "municipal", "federal_related"]

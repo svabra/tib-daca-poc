@@ -1,5 +1,115 @@
 # Catalog data model
 
+Marker `poc-verteidigung-armasuisse-building-demand-v1` adds product `1bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb` / `urn:daca:ch:verteidigung:building-use-demand` as the reverse counterpart of the protected-building inventory. Existing product/domain-assignment/audit/provenance/marker tables and `catalogUsage` members are reused. Data Owner is `lawrence.hill`, deputy `hong.an.captain`, consumer `giuseppe.starwars`, domain Verteidigung. The marker is independent of the inventory marker, so the image startup seed also upgrades databases where the forward fixture already exists. Neither product, existing people/roles, retirement nor access policies are reset; no endpoints or access receipts are created. No new schema, JSON member or migration is added.
+
+The additive marker `poc-armasuisse-verteidigung-protected-buildings-v1` creates product `1aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa` / `urn:daca:ch:armasuisse:protected-buildings` in the existing product, domain-assignment, seed-marker, provenance and audit tables. It reuses Data Owner `giuseppe.starwars`, deputy `thomas.wikinger`, consumer `christian.man` and the existing Immobilienmanagement VBS domain. Existing `catalogUsage` members record the synthetic armasuisse → Verteidigung consumption, without a published policy, endpoint or access receipt. The main image seed runs it after modeling prerequisites on fresh and upgraded databases; its marker preserves edited/retired products on restart. No schema, JSON member or migration is added.
+
+`domain_network_views.configuration` keeps schemaVersion 1 and accepts `product:<UUID>`, `term:<UUID>`, `logical:<UUID>` and `physical:<UUID>` anchors alongside existing `domain:<UUID>` entries in `positions`. New/changed product anchors require a non-retired, domain-assigned product readable by the actor using the existing catalog authorization. Other object anchors must belong to the existing actor-readable domain-object projection, including current physical-source role scope and returned-access exclusions. Unknown, inaccessible and unsupported references are rejected without exposing their existence. Previously saved, unchanged anchors may be retained after an object becomes unavailable/retired, allowing unrelated edits and later removal. Transient rectangle/group selection is never persisted; group movement saves the same ordinary position entries. Coordinates retain existing CanvasPosition bounds and the 2000-position limit; per-user isolation, revision conflicts and shared-relationship authorization are unchanged. No table, JSON member or migration is added.
+
+The additive marker `poc-second-estv-st-gallen-product-v1` provisions product `19999999-9999-4999-8999-999999999999` / `urn:daca:ch:estv:municipal-federal-tax-indicators` using existing `data_products`, `data_product_domains`, `seed_markers`, provenance and audit tables. Existing ESTV personas Kassandra Valdata/Ariane Keller are Data Owner/deputy; existing St. Gallen personas Beat Stalder/Sarah Brunner occur in the existing `catalogUsage` consumption/shared metadata. These records document synthetic catalog consumption only; there is no new endpoint, published policy or access receipt. The one-time seed copies original ESTV tax-statistics domain assignments and preserves later edits/retirement. The organization projection deduplicates source-product URNs per directed organization pair across usage, policy and lineage, so one visible point represents one distinct product. No new schema, JSON member or migration is introduced.
+
+The existing `organization-network-layout` schemaVersion 1 additionally uses `offices["domain:<domain UUID>"]` for personal domain-bubble anchors. Domain and organization anchors share the original nested `(202, 240)` coordinate frame and overview `(34, 30)` frame, with the same bounds, 2000-anchor total, revision checks and per-user/per-level isolation. Hidden domain-layer anchors remain stored. Auto-arrange clears the current scope only as a draft; explicit Save persists that reset. No new JSON members, database schema or migration are introduced.
+
+Personal search View configuration keeps `schemaVersion: 1` and additionally accepts `kind: organization`. Existing `organization` and `domain` filters hold canonical IDs for new canvas links; legacy organization text values remain readable. No new stored keys, tables or migrations are introduced. The organization-network projection adds read-only `objectKeys` lists for nodes/domains, authorized per actor and never persisted. They include visible product/model/term/domain assignments, inherited organization scope and consumption; domain membership includes directly assigned organizations, excluding the domain itself.
+
+`DemoUser.preferences.language` additionally accepts `rm` (Rumantsch Grischun), alongside `de`, `fr`, `it` and `en`. The existing profile PUT validates the code and merges it under the user row lock, preserving theme, organization-network layouts and other JSON members. Browser-only overrides stay local; no new persisted structure, database column or migration is needed. Documentation reads accept `lang=rm` and retain their existing stored-label fallback when Romansh metadata is absent. The read-only organization projection adds an `rm` localization; it does not persist translated or inferred labels. See [localization](../localization.md).
+
+Organization layout `schemaVersion: 1` retains its existing anchor frame: nested office anchors are relative to canvas origin `(202, 240)`, overview anchors to `(34, 30)`, and satellites to `(0, 0)`. The expanded title-side strip starts at canvas y=120, so nested office y values may now be as low as -120. `OrganizationOfficePosition` permits only this bounded extension; office x remains nonnegative, and overview/satellite y remains nonnegative. Old positive anchors are read and saved unchanged. The UI offsets nested office y by +120 for the expanded rendering field and subtracts it when saving. No migration or new preference keys are introduced; existing revisions, private-profile isolation and append-only save audits apply.
+
+The read-only organization-network projection adds `consumedProductCount` and `directConsumedProductCount` beside the existing offered `productCount` and `directProductCount`. Consumption uses sets of visible source product URNs per organization and ancestor, derived from catalog usage, current published policy recipients and active lineage. It does not persist counters, grants or access receipts; inferred lineage and pending requests do not contribute.
+
+`GET /api/v1/me/recent-work` is a non-persistent read model over existing `audit_events`, logical-model version authorship and current catalog roots/localizations. Related mapping, snapshot and resolved proposal events project to their root objects. It creates no history table, preferences or audit events. This differs from persisted Mapping workspace visits. Current visibility and lifecycle are reapplied before returning up to three items per category.
+
+`GET/PUT /api/v1/organization-network/view` persists the current active user's private organization-canvas anchors in the existing `demo_users.preferences` JSON, under key `organization-network-layout`. No migration or new table is required. The value is `{revision, configuration: {schemaVersion: 1, scopes: {...}}}`. Scope keys are the focused organization ID or reserved `overview`; each scope contains `offices` and `satellites` dictionaries mapping organization IDs to finite `{x, y}` anchors. Office coordinates retain the original normalized anchor frame described above; satellites use the 960 × 650 stage. Rendering clamps anchors to the current bounds. Layouts contain no organization metadata, roles, permissions, product records, credentials or access evidence.
+
+The DTO rejects extra fields, unsupported schema versions, prototype-related keys, nonfinite/out-of-range coordinates (>100000), negative x, nested office y below -120, and negative overview/satellite y, overlong identifiers, more than 100 scopes and more than 2000 total anchors. The server always selects the authenticated current user, with no caller-supplied user selector. Both reads and writes use `Cache-Control: no-store`. A profile-row lock plus the expected revision prevents lost concurrent layout updates; stale revisions return 409. The preference JSON is merged with existing keys. Theme/language writes also lock and refresh the profile row before merging so concurrent preference writes retain the layout. Every successful layout save appends an `audit_events` record (`resource_type=organization-network-view`, `action=view-saved`, actor/resource ID=current user, new revision, details containing only `scopeCount`). Anchor coordinates are not copied into audit logs. Clearing one scope restores that level's automatic layout after explicit save; other scopes are retained. Current catalog metadata and policy projections are unchanged.
+
+The scoped seed `daca_catalog.zeughaus_seed` adds product UUID `18888888-8888-4888-8888-888888888888`, URN `urn:daca:ch:sg:zeughaeuser`, in the central `urn:daca:catalog:bit-poc` catalog. Existing `owner_user_id=beat.stalder` and `deputy_owner_user_id=sarah.brunner` record responsibility; `metadata.catalogUsage.consumerUserIds` / `sharedWithUserIds` reference existing armasuisse persona `giuseppe.starwars`. The normal `dataOwner`, language, spatial and containsPersonalData metadata fields describe this synthetic example. No schema, role, endpoint, policy or PDP/PostgreSQL projection changes are made. Creation appends one provenance event and one audit event. Marker `poc-zeughaeuser-st-gallen-armasuisse-v1` guards subsequent edits, retirement and deletion; missing/inactive prerequisite users prevent creation, and an existing product with the UUID or URN is retained.
+
+Apply to an existing installation without reseeding other data:
+
+`docker compose exec -T catalog-api uv run --no-sync python -m daca_catalog.zeughaus_seed`
+
+The organization network additionally reads the product's current `active_policy_revision`, published allow-policy selectors/grants, active directory groups and date-valid memberships to project organizational context. Explicit grants supersede legacy subject selectors. Legacy organization IDs resolve only through existing active system-managed groups; they are never promoted to person grants. Machines require request evidence bound to the same published grant before resolving the requester's trusted organizational affiliation. The read model returns aggregate organization IDs/counts/evidence kinds, without individual consumer details or receipt payloads. Catalog-usage and policy evidence for one product/recipient organization count once. This projection is not an authorization decision or a deployment/consumption receipt.
+
+Journey 08's trusted repeatable fixture reactivates the existing Verteidigung domain in its
+retained office scope. Its ALDS review therefore remains with Christian Man, independently of
+Sibilla's GS-VBS employment. This exception is limited to the stable, server-managed fixture
+request; public new-domain requests still use the proposed owner's current primary office.
+
+
+The marker `poc-persona-governance-scopes-2026-10-31-v1` corrects current `demo_users`,
+`identity_directory_entries` and `federal_person_memberships` for Sibilla (GS-VBS), Christiano
+(armasuisse), Thomas Kriegli and Joel Ruod (ESTV BI), and Thomas Wikinger (armasuisse).
+It retains existing primary membership IDs/dates, scoped modeling duties and product ownership,
+and appends `poc-persona-corrected` audit events. Missing directory/primary membership entries
+are added. Current ALDS/LDSD mandates are projected by `/demo-users` for the profile; they remain
+separate persisted mandates and never become global role flags. The existing Verteidigung and
+Personal domains receive explicit organization responsibilities when missing, avoiding an
+implicit office move when a responsible person's employment changes. The separate Data Analytics
+domain is seeded with Thomas as owner, Joel as PoC deputy and explicit `efd-estv-bi` scope.
+Existing records and retired domains are preserved on later runs. No schema migration or
+historical evidence rewrite is involved.
+
+
+Fausto Marzo belongs to **EFD BIT PS** (`efd-bit-ps`), without CPS. Fresh fixtures and the
+browser fallback use PS. The scoped `poc-fausto-ps-organization-v1` update corrects the existing
+user label, directory organization and primary membership in place; it creates no modeling role
+and preserves his portrait, identity and control-person assignments. Apply existing-runtime
+corrections with `python -m daca_catalog.poc_identity_updates` inside the catalog-api container.
+
+Fausto Marzo now has a synthetic local profile portrait at `/assets/data-owners/fausto-marzo.webp`.
+The scoped portrait backfill upgrades only his old FM initials placeholder or a missing photo,
+preserving custom photos and all roles/assignments. Source prompts and export details are
+recorded in `apps/catalog-ui/public/assets/data-owners/portraits.provenance.json`.
+
+## PoC identity display-name update
+
+`poc-sibilla-di-ciesa-display-name-v1` updates only `demo_users.display_name` and the matching
+`identity_directory_entries.display_name`/`updated_at` for stable identity `sibilla.micheli`.
+There is no identity replacement, schema or JSON-shape change, membership/role reassignment,
+contact change, or historical snapshot/audit rewrite. A committed marker makes the scoped
+operator update idempotent and preserves later editorial changes.
+
+## Organization explorer projection and unit fixture
+
+`GET /api/v1/organization-network` derives organization hierarchy, actor-scoped active-product
+counts, domains and aggregate relationship evidence from existing records. No graph layout or
+new JSON structure is persisted. `organization-explorer-estv-bi-v1` adds the affiliated PoC
+unit `efd-estv-bi` beneath `efd-estv` once; it creates no identity membership, grant or policy.
+A committed seed marker preserves subsequent edits and inactivation. Relationship threads
+use existing catalogUsage consumer/share references and known visible product lineage; they
+are not executed-access evidence. Welcome visibility is stored only in browser localStorage.
+See [organization explorer](../organization-explorer.md).
+
+## UI vocabulary projection
+
+Workflow task titles/details from earlier fixtures are normalized to the current Data Owner
+and Terminologie wording in the catalog UI read projection. Existing stored task records,
+audit evidence, field names and JSON structures are preserved. New system task titles and
+system-owned site-glossary descriptions use the same vocabulary.
+
+## ROHS CPS control-person fixture
+
+`rohs-cps-control-person-fausto-v1` creates the selectable `fausto.marzo` demo/directory identity
+with only `publication_approver`, a local WebP portrait and a primary PoC PS membership.
+It assigns `data_products.control_person_user_id` for all current `marcello.hebeisa` products
+once, increments changed product revisions and appends existing control-person audit events.
+Pending SLA/governance workflows abort the transaction. The marker preserves later edits and
+revocations; new Marcello products default to Fausto only while his approver role is active.
+No schema, persisted JSON shape, database role or access grant changes.
+
+## PoC identity portraits and display paths
+
+`seed_poc_portraits` fills missing `demo_users.avatar_url` values for 14 named selectable PoC
+personas with local `/assets/data-owners/*.webp` paths. It is idempotent, preserves existing
+photos and does not create memberships, roles or technical identities. No migration or new
+persisted JSON structure is introduced. API organization labels are read-time projections of
+valid primary `federal_person_memberships` plus `administrative_organizations`; the federal
+directory is a fallback only without primary membership history. Product `owner` policy
+attributes and official registry labels remain unchanged; owner metadata in read responses
+uses the current person profile without mutating stored product revisions or audit history.
+
 ## Personal mapping workspace context
 
 Migration `0045_mapping_workspace_visits` adds private user/model navigation history with an
@@ -405,7 +515,7 @@ reads it from the actual footer. It never denotes the number of S3 objects (`obj
 
 ## Persisted structured values
 
-- `domain_network_views.configuration` has schemaVersion=1, addedDomainIds (max 200 existing UUIDs), hiddenDomainIds (max 2000), positions keyed only by domain:<existing UUID> with bounded finite x/y, and unique visibleKinds product/term/logical/physical (product default). The user primary key is derived from trusted authentication; no supplied user ID, relationship or object payload is accepted. Audit details contain counts only. Shared domain relationships remain in semantic_graph_states. The rohs-cps-catalog-v1 seed marker preserves later changes to synthetic CPS catalog fixtures, scoped roles and registry memberships.
+- `domain_network_views.configuration` has schemaVersion=1, addedDomainIds (max 200 existing UUIDs), hiddenDomainIds (max 2000), positions keyed by domain:<existing UUID> or product/term/logical/physical:<readable UUID> with bounded finite x/y; changed object anchors use current catalog/source read scope, unchanged inaccessible anchors may be retained, and transient canvas selection is never stored, and unique visibleKinds product/term/logical/physical (product default). The user primary key is derived from trusted authentication; no supplied user ID, relationship or object payload is accepted. Audit details contain counts only. Shared domain relationships remain in semantic_graph_states. The rohs-cps-catalog-v1 seed marker preserves later changes to synthetic CPS catalog fixtures, scoped roles and registry memberships.
 - `search_views.configuration` is a strict schemaVersion=1 object: query (max 200 chars), mode (context/focus), kind (all/product/logical/structure/field/term/domain/source), organization/domain IDs or all, status (all/active), connection (all/connected/metadata), sort (relevance/name). `search_view_shares.snapshot` freezes name, description and that configuration at send time. No result rows, credentials or permission grants are copied. Recipient acceptance deep-copies this JSON; later source/copy edits and deletion do not synchronize. Private phrases, messages and descriptions are excluded from append-only audit details.
 - `data_products.keywords` is a string array; `contact`, `quality` and physical `metadata` hold DCAT-friendly extension objects.
 - `domain_change_requests.requested_payload` preserves the submitted domain draft while `review_payload` holds its revision-controlled working copy. For new domains, the original proposed owner's trusted active primary office determines the ALDS review scope; review edits cannot move the owner outside the deciding ALDS scope. Pending review tasks follow current mandates. Domains themselves remain relational and are not inferred from organizations.

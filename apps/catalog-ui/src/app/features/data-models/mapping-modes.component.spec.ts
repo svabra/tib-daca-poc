@@ -56,7 +56,7 @@ describe('mapping interaction modes', () => {
     fixture.detectChanges();
 
     const snapshotCard = fixture.nativeElement.querySelector('.physical-representation > header') as HTMLElement;
-    expect(snapshotCard.textContent).toContain('Data Ownerin: Christian Spider');
+    expect(snapshotCard.textContent).toContain('Data Owner: Christiano Stadello');
     expect(snapshotCard.textContent).toContain('hr_core.public.org_unit');
     const providerIcon = snapshotCard.querySelector('img') as HTMLImageElement;
     expect(providerIcon.alt).toBe('PostgreSQL');

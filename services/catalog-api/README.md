@@ -1,5 +1,9 @@
 # BIT DaCa Catalog API
 
+Verteidigung and armasuisse now exchange two distinct synthetic catalog products: armasuisse supplies **Schützenswerte Gebäude – armasuisse** to Verteidigung; Verteidigung supplies **Gebäudenutzungsbedarf der Verteidigung** (`urn:daca:ch:verteidigung:building-use-demand`) to armasuisse. The demand product reuses Data Owner Lawrence Hill, deputy Hong An Captain, consumer Giuseppe Starwars and the Verteidigung domain. One point travels in each direction on the same connection, with a small lane offset for visibility. A separate additive marker includes the reverse fixture in the Catalog API image startup seed, including upgrades of already seeded PoC databases, without overwriting either product or creating access grants.
+
+The PoC catalog includes **Schützenswerte Gebäude – armasuisse** (`urn:daca:ch:armasuisse:protected-buildings`). Existing Data Owner Giuseppe Starwars and deputy Thomas Wikinger provide the synthetic product in Immobilienmanagement VBS; existing Christian Man in Verteidigung consumes it. This creates the directed armasuisse → Verteidigung organization connection and one travelling point. The additive seed is part of `daca-catalog-seed`, which the Catalog API Docker image runs after migrations and before serving on every rollout, including existing databases. Its one-time marker preserves later edits and retirement. Catalog consumption metadata creates no endpoint, access policy or live access receipt.
+
 This independently runnable FastAPI project is the PostgreSQL-backed metadata store and Policy Administration Point (PAP) for one standalone DaCa catalog instance. The service contains aggregate-only synthetic ESTV examples and no real taxpayer or personal data.
 
 ## Responsibilities

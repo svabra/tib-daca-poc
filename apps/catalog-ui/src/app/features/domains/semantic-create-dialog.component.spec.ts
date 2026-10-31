@@ -19,7 +19,7 @@ describe('Domain canvas proposal form',()=>{
     const fixture=TestBed.createComponent(SemanticCreateDialogComponent);fixture.componentRef.setInput('kind','domain');fixture.detectChanges();
     return{fixture,component:fixture.componentInstance,api};
   }
-  it('includes concrete Owners/deputies and submits a request even for a Data Owner proposer',async()=>{
+  it('includes concrete Data Owners/deputies and submits a request even for a Data Owner proposer',async()=>{
     const {fixture,component,api}=render(),created=vi.fn();component.created.subscribe(created);
     expect(component.owners().map(user=>user.id)).toEqual(['proposer','owner','deputy']);
     component.label='New domain';component.definition='A personal proposal';component.owner='owner';component.deputy='deputy';

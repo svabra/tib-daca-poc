@@ -1,0 +1,84 @@
+{
+  "created": "2026-10-31",
+  "generator": "Built-in image_gen",
+  "purpose": "Synthetic PoC persona illustrations, not photographs of actual people",
+  "export": {
+    "format": "WebP",
+    "width": 256,
+    "height": 256,
+    "quality": 86
+  },
+  "portraits": [
+    {
+      "id": "marcello.hebeisa",
+      "prompt": "Use case: photorealistic-natural. Asset type: synthetic PoC employee profile portrait. Create a single realistic head-and-shoulders studio photograph of a fictional male office professional, age about 46, short dark curly hair with slight gray, clean shaven, medium olive skin, navy collared shirt. Friendly neutral expression, facing camera, centered square crop, plain warm gray background, soft even natural lighting, realistic texture. This is the fictional demo persona Marcello Hebeisa, not a depiction of an actual person. No text, logos, watermark or framing.",
+      "file": "marcello-hebeisa.webp"
+    },
+    {
+      "id": "matteo.duca",
+      "prompt": "Use case: photorealistic-natural. Asset type: synthetic PoC employee profile portrait. Create a SINGLE realistic head-and-shoulders studio photograph of one fictional office professional: male, about 38, short brown hair, light stubble, black rectangular glasses, light blue shirt. Friendly neutral expression, directly facing camera, centered square crop with complete head and shoulders, plain warm gray background, soft even natural lighting, realistic skin texture. Unique face. This is the fictional demo persona matteo duca, not a depiction of an actual person. No text, logos, watermark or framing.",
+      "file": "matteo-duca.webp"
+    },
+    {
+      "id": "christian.man",
+      "prompt": "Use case: photorealistic-natural. Asset type: synthetic PoC employee profile portrait. Create a SINGLE realistic head-and-shoulders studio photograph of one fictional office professional: male, about 44, short dark blond hair, neat beard, charcoal blazer and blue shirt. Friendly neutral expression, directly facing camera, centered square crop with complete head and shoulders, plain warm gray background, soft even natural lighting, realistic skin texture. Unique face. This is the fictional demo persona christian man, not a depiction of an actual person. No text, logos, watermark or framing.",
+      "file": "christian-man.webp"
+    },
+    {
+      "id": "christian.spider",
+      "prompt": "Use case: photorealistic-natural. Asset type: synthetic PoC employee profile portrait. Create a SINGLE realistic head-and-shoulders studio photograph of one fictional office professional: male, about 51, short salt-and-pepper hair, clean shaven, navy blazer and pale blue shirt. Friendly neutral expression, directly facing camera, centered square crop with complete head and shoulders, plain warm gray background, soft even natural lighting, realistic skin texture. Unique face. This is the fictional demo persona christian spider, not a depiction of an actual person. No text, logos, watermark or framing.",
+      "file": "christian-spider.webp"
+    },
+    {
+      "id": "cinthya.thor",
+      "prompt": "Use case: photorealistic-natural. Asset type: synthetic PoC employee profile portrait. Create a SINGLE realistic head-and-shoulders studio photograph of one fictional office professional: female, about 35, shoulder-length curly dark brown hair, brown skin, dark teal blouse. Friendly neutral expression, directly facing camera, centered square crop with complete head and shoulders, plain warm gray background, soft even natural lighting, realistic skin texture. Unique face. This is the fictional demo persona cinthya thor, not a depiction of an actual person. No text, logos, watermark or framing.",
+      "file": "cinthya-thor.webp"
+    },
+    {
+      "id": "daniel.wenger",
+      "prompt": "Use case: photorealistic-natural. Asset type: synthetic PoC employee profile portrait. Create a SINGLE realistic head-and-shoulders studio photograph of one fictional office professional: male, about 48, short auburn hair, thin rectangular glasses, gray sweater over white shirt. Friendly neutral expression, directly facing camera, centered square crop with complete head and shoulders, plain warm gray background, soft even natural lighting, realistic skin texture. Unique face. This is the fictional demo persona daniel wenger, not a depiction of an actual person. No text, logos, watermark or framing.",
+      "file": "daniel-wenger.webp"
+    },
+    {
+      "id": "eliane.rossi",
+      "prompt": "Use case: photorealistic-natural. Asset type: synthetic PoC employee profile portrait. Create a SINGLE realistic head-and-shoulders studio photograph of one fictional office professional: female, about 43, dark brown bob haircut, olive skin, navy blouse. Friendly neutral expression, directly facing camera, centered square crop with complete head and shoulders, plain warm gray background, soft even natural lighting, realistic skin texture. Unique face. This is the fictional demo persona eliane rossi, not a depiction of an actual person. No text, logos, watermark or framing.",
+      "file": "eliane-rossi.webp"
+    },
+    {
+      "id": "giuseppe.starwars",
+      "prompt": "Use case: photorealistic-natural. Asset type: synthetic PoC employee profile portrait. Create a SINGLE realistic head-and-shoulders studio photograph of one fictional office professional: male, about 52, wavy dark hair graying at temples, short beard, charcoal jacket. Friendly neutral expression, directly facing camera, centered square crop with complete head and shoulders, plain warm gray background, soft even natural lighting, realistic skin texture. Unique face. This is the fictional demo persona giuseppe starwars, not a depiction of an actual person. No text, logos, watermark or framing.",
+      "file": "giuseppe-starwars.webp"
+    },
+    {
+      "id": "hong.an.captain",
+      "prompt": "Use case: photorealistic-natural. Asset type: synthetic PoC employee profile portrait. Create a SINGLE realistic head-and-shoulders studio photograph of one fictional office professional: male, about 41, straight short black hair, East Asian appearance, clean shaven, blue collared shirt. Friendly neutral expression, directly facing camera, centered square crop with complete head and shoulders, plain warm gray background, soft even natural lighting, realistic skin texture. Unique face. This is the fictional demo persona hong an captain, not a depiction of an actual person. No text, logos, watermark or framing.",
+      "file": "hong-an-captain.webp"
+    },
+    {
+      "id": "lawrence.hill",
+      "prompt": "Use case: photorealistic-natural. Asset type: synthetic PoC employee profile portrait. Create a SINGLE realistic head-and-shoulders studio photograph of one fictional office professional: male, about 47, short black hair, dark brown skin, clean shaven, navy blazer and white shirt. Friendly neutral expression, directly facing camera, centered square crop with complete head and shoulders, plain warm gray background, soft even natural lighting, realistic skin texture. Unique face. This is the fictional demo persona lawrence hill, not a depiction of an actual person. No text, logos, watermark or framing.",
+      "file": "lawrence-hill.webp"
+    },
+    {
+      "id": "mirjam.keller",
+      "prompt": "Use case: photorealistic-natural. Asset type: synthetic PoC employee profile portrait. Create a SINGLE realistic head-and-shoulders studio photograph of one fictional office professional: female, about 45, short light brown hair, subtle round glasses, burgundy blouse. Friendly neutral expression, directly facing camera, centered square crop with complete head and shoulders, plain warm gray background, soft even natural lighting, realistic skin texture. Unique face. This is the fictional demo persona mirjam keller, not a depiction of an actual person. No text, logos, watermark or framing.",
+      "file": "mirjam-keller.webp"
+    },
+    {
+      "id": "sibilla.micheli",
+      "prompt": "Use case: photorealistic-natural. Asset type: synthetic PoC employee profile portrait. Create a SINGLE realistic head-and-shoulders studio photograph of one fictional office professional: female, about 40, long dark hair tied back, light olive skin, light gray blazer. Friendly neutral expression, directly facing camera, centered square crop with complete head and shoulders, plain warm gray background, soft even natural lighting, realistic skin texture. Unique face. This is the fictional demo persona sibilla micheli, not a depiction of an actual person. No text, logos, watermark or framing.",
+      "file": "sibilla-micheli.webp"
+    },
+    {
+      "id": "thomas.wikinger",
+      "prompt": "Use case: photorealistic-natural. Asset type: synthetic PoC employee profile portrait. Create a SINGLE realistic head-and-shoulders studio photograph of one fictional office professional: male, about 49, short blond hair, trimmed reddish beard, navy shirt. Friendly neutral expression, directly facing camera, centered square crop with complete head and shoulders, plain warm gray background, soft even natural lighting, realistic skin texture. Unique face. This is the fictional demo persona thomas wikinger, not a depiction of an actual person. No text, logos, watermark or framing.",
+      "file": "thomas-wikinger.webp"
+    },
+    {
+      "id": "fausto.marzo",
+      "prompt": "Use case: photorealistic-natural. Asset type: synthetic PoC employee profile portrait. Create a SINGLE realistic head-and-shoulders studio photograph of one fictional office professional: male, about 50, short neatly styled dark brown hair with gray at the temples, clean shaven, thin round dark eyeglasses, medium olive skin, charcoal jacket and muted blue shirt, no tie. Friendly composed expression, directly facing camera, complete head and shoulders, centered square crop, plain warm gray background, soft even natural lighting, realistic skin texture. Distinct face. This is the fictional demo persona Fausto Marzo, not a depiction of an actual person with that name. No text, logos, watermark or framing. Match the restrained photographic style of a Swiss public-administration demo profile.",
+      "file": "fausto-marzo.webp",
+      "created": "2026-10-31"
+    }
+  ]
+}

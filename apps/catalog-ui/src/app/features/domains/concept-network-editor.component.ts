@@ -1,3 +1,6 @@
+import { CanvasSelectionHintComponent } from '../../shared/canvas-selection-hint.component';
+import { CanvasFullscreen } from '../../shared/canvas-fullscreen';
+import { CanvasSelectionAdapter, CanvasSelectionDirective } from '../../shared/canvas-selection.directive';
 import { afterNextRender, ChangeDetectionStrategy, Component, computed, effect, ElementRef, HostListener, inject, Injector, input, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -59,9 +62,19 @@ export const RELATION_DESCRIPTIONS: Record<SkosRelationType, string> = {
     closeMatch: 'Die Bedeutungen sind ähnlich, aber nicht vollständig gleich.',
 };
 export function relationLabel(value: string): string { return ({ broader: 'hat Oberbegriff', narrower: 'hat Unterbegriff', related: 'verwandt mit', exactMatch: 'entspricht exakt', closeMatch: 'entspricht annähernd' } as Record<string, string>)[value] ?? value; }
-@Component({ selector: 'daca-concept-network-editor', standalone: true, imports: [RouterLink, FormsModule,TooltipDirective,CatalogObjectBrowserComponent,SemanticCreateDialogComponent], changeDetection: ChangeDetectionStrategy.OnPush,
-    templateUrl: './concept-network-editor.component.html', styleUrl: './concept-network-editor.component.css' })
+@Component({ selector: 'daca-concept-network-editor', standalone: true, imports: [CanvasSelectionHintComponent,CanvasSelectionDirective,RouterLink, FormsModule,TooltipDirective,CatalogObjectBrowserComponent,SemanticCreateDialogComponent], changeDetection: ChangeDetectionStrategy.OnPush,
+    templateUrl: './concept-network-editor.component.html', styleUrls: ['./concept-network-editor.component.css','../../shared/canvas-controls.css'] })
 export class ConceptNetworkEditorComponent {
+    readonly selection:CanvasSelectionAdapter={
+        context:()=>this.identity.userId()+':'+this.scopeId(),
+        enabled:()=>!!this.sharedLayout()?.canEditLayout&&!this.saving()&&!this.layoutSaving()&&!this.connecting()&&!this.hold.active(),
+        items:()=>this.nodes().filter(node=>node.kind!=='pending').map(node=>({id:node.id,x:node.x,y:node.y})),
+        begin:()=>{const before={positions:this.positions(),dirty:this.layoutDirty()};this.closeMenus();this.hold.cancel();this.positions.update(positions=>({...positions,...Object.fromEntries(this.selection.items().map(item=>[item.id,{x:item.x,y:item.y}]))}));return before;},
+        move:items=>this.positions.update(positions=>({...positions,...Object.fromEntries(items.map(item=>[item.id,{x:item.x,y:item.y}]))})),
+        finish:()=>this.storeLayout(),
+        cancel:snapshot=>{const before=snapshot as {positions:Record<string,Point>;dirty:boolean};this.positions.set(before.positions);this.layoutDirty.set(before.dirty);},
+    };
+    readonly initialGraph = input<SemanticGraphState|null>(null);
     readonly visibleNodeIds = input<readonly string[] | null>(null);
     readonly domain = input<DomainSummary|null>(null);
     readonly organization = input<{id:string;label:string;domains:readonly DomainSummary[];links:readonly DomainNetworkLink[]}|null>(null);
@@ -106,7 +119,8 @@ export class ConceptNetworkEditorComponent {
     readonly saving = signal(false);
     readonly notice = signal('');
     readonly error = signal('');
-    readonly fullscreen = signal(false);
+    private readonly fullscreenView = new CanvasFullscreen(() => this.host.nativeElement.querySelector('.network-editor'));
+    readonly fullscreen = this.fullscreenView.active;
     readonly printing = signal(false);
     readonly zoom = signal(.8);
     readonly edgeEdit = signal<EdgeEdit | null>(null);
@@ -161,8 +175,6 @@ export class ConceptNetworkEditorComponent {
         moved: boolean;
     } | null = null;
     private suppressedClick = false;
-    private previousOverflow = '';
-    private fullscreenTrigger: HTMLElement | null = null;
     constructor() {
         effect(() => {
             const scopeId=this.scopeId(), terms = this.terms(), actor = this.identity.userId();
@@ -210,7 +222,7 @@ export class ConceptNetworkEditorComponent {
         this.neighborRequest?.unsubscribe();this.canvasMenuOpen.set(false);this.showLinkedDomains.set(false);this.neighborsLoading.set(false);this.neighborDomains.set([]);this.neighborLinks.set([]);
         this.hold.cancel();this.layoutRequest?.unsubscribe();this.positions.set({});this.sharedLayout.set(null);this.extraTerms.set([]);this.additionalIds.set([]);this.hiddenIds.set([]);this.pendingCreates.set([]);this.layoutDirty.set(false);this.layoutSaving.set(false);this.selectionOpen.set(false);this.creationOpen.set(false);this.creationBusy.set(false);this.dropMenu.set(null);this.edgeContext.set(null);
         const scope=this.scope;
-        this.layoutRequest=this.api.loadSemanticGraph(this.graphKind(),this.contextId()).pipe(switchMap(layout=>(layout.additionalNodeIds?.length?this.api.loadGlossaryTerms():of([] as readonly GlossaryTermSummary[])).pipe(map(extras=>({layout,extras}))))).subscribe({next:({layout,extras})=>{
+        this.layoutRequest=(this.initialGraph()?of(this.initialGraph()!):this.api.loadSemanticGraph(this.graphKind(),this.contextId())).pipe(switchMap(layout=>(layout.additionalNodeIds?.length?this.api.loadGlossaryTerms():of([] as readonly GlossaryTermSummary[])).pipe(map(extras=>({layout,extras}))))).subscribe({next:({layout,extras})=>{
             if(scope!==this.scope)return;
             this.sharedLayout.set(layout);this.positions.set(layout.positions);this.hiddenIds.set(layout.hiddenNodeIds??[]);this.additionalIds.set(layout.additionalNodeIds??[]);this.extraTerms.set(extras.filter(term=>layout.additionalNodeIds?.includes('term:'+term.id)));if(this.extraTerms().length)this.restoreTerms([...this.terms(),...this.extraTerms()]);
             if(!layout.revision){try{
@@ -555,22 +567,13 @@ export class ConceptNetworkEditorComponent {
     isDirtyNode(node: Node): boolean { return node.kind === 'term' && node.id.slice(5) in this.dirty(); }
     isPendingNode(node: Node): boolean { return node.kind==='pending'||this.pending().some(item => node.id === `term:${item.termId}`); }
     zoomGraph(delta: number): void { this.zoom.update(value => Math.min(1.6, Math.max(.4, Math.round((value + delta) * 10) / 10))); }
-    async toggleFullscreen(trigger: HTMLElement): Promise<void> { if (this.fullscreen()) {
-        await this.exitFullscreen();
-        return;
-    } this.fullscreenTrigger = trigger; this.previousOverflow = document.body.style.overflow; document.body.style.overflow = 'hidden'; this.fullscreen.set(true); try {
-        await this.host.nativeElement.querySelector<HTMLElement>('.network-editor')?.requestFullscreen?.();
-    }
-    catch { /* The same viewport-filling editor remains available without native fullscreen. */ } }
-    private async exitFullscreen(): Promise<void> { if (document.fullscreenElement === this.host.nativeElement.querySelector('.network-editor'))
-        await document.exitFullscreen(); this.restoreFullscreen(); }
-    private restoreFullscreen(): void { if (!this.fullscreen())
-        return; this.fullscreen.set(false); document.body.style.overflow = this.previousOverflow; this.fullscreenTrigger?.focus(); }
+    toggleFullscreen(trigger: HTMLElement): Promise<void> { return this.fullscreenView.toggle(trigger); }
     @HostListener('document:fullscreenchange')
-    fullscreenChanged(): void { if (!document.fullscreenElement)
-        this.restoreFullscreen(); }
+    fullscreenChanged(): void { this.fullscreenView.changed(); }
+    @HostListener('document:keydown', ['$event'])
+    fullscreenKeydown(event: KeyboardEvent): void { this.fullscreenView.trapTab(event); }
     @HostListener('document:keydown.escape', ['$event'])
-    escape(event: Event): void { if (this.canvasMenuOpen()) { this.canvasMenuOpen.set(false);this.host.nativeElement.querySelector<HTMLElement>('.canvas-options-toggle')?.focus();event.preventDefault();return; } if (this.edgeEdit() || this.termEdit() || this.menu() || this.edgeContext()||this.dropMenu()||this.hold.active()||this.connecting() || this.drag) {
+    escape(event: Event): void { if(event.defaultPrevented||this.objectBrowser()||this.selectionOpen()||this.creationOpen()) return; if (this.canvasMenuOpen()) { this.canvasMenuOpen.set(false);this.host.nativeElement.querySelector<HTMLElement>('.canvas-options-toggle')?.focus();event.preventDefault();return; } if (this.edgeEdit() || this.termEdit() || this.menu() || this.edgeContext()||this.dropMenu()||this.hold.active()||this.connecting() || this.drag) {
         event.preventDefault();
         event.stopPropagation();
         this.edgeEdit.set(null);
@@ -581,7 +584,7 @@ export class ConceptNetworkEditorComponent {
     }
     else if (this.fullscreen()) {
         event.preventDefault();
-        void this.exitFullscreen();
+        void this.fullscreenView.exit();
     } }
     @HostListener('window:beforeunload', ['$event'])
     beforeUnload(event: BeforeUnloadEvent): void { if (this.dirtyCount() || this.saving()||this.layoutDirty()||this.layoutSaving()||this.creationOpen()) {
@@ -589,7 +592,7 @@ export class ConceptNetworkEditorComponent {
         event.returnValue = '';
     } }
     canDeactivate(): boolean { return !this.saving()&&!this.layoutSaving()&&!this.creationBusy() && ((!this.dirtyCount()&&!this.layoutDirty()&&!this.creationOpen()) || window.confirm('Es gibt ungespeicherte Layout- oder fachliche Änderungen. Seite verlassen? Das ungespeicherte Layout geht verloren; fachliche Entwürfe bleiben in diesem Tab.')); }
-    ngOnDestroy(): void { this.neighborRequest?.unsubscribe();this.layoutRequest?.unsubscribe();this.cancelDrag(); this.restoreFullscreen(); }
+    ngOnDestroy(): void { this.neighborRequest?.unsubscribe();this.layoutRequest?.unsubscribe();this.cancelDrag(); this.fullscreenView.destroy(); }
     async printCanvas(): Promise<void> { const canvas = this.host.nativeElement.querySelector<HTMLElement>('.graph-canvas'); if (!canvas)
         return; this.printing.set(true); try {
         await printMappingCanvas(canvas, `${this.networkTitle()} · Begriffsnetz${this.dirtyCount() ? ' · Lokaler Entwurf' : this.pending().length ? ' · Vorschau in Prüfung' : ''}`, { modelUpdatedAt: [this.domain()?.updatedAt??'', ...this.values().map(term => term.updatedAt)].sort().at(-1) ??new Date().toISOString(), modelRevision: this.domain()?.revision??this.sharedLayout()?.revision??0 });

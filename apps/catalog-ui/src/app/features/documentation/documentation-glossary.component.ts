@@ -1,3 +1,4 @@
+import { catalogCopy } from '../../core/catalog-localization';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
@@ -50,7 +51,7 @@ export class DocumentationGlossaryComponent {
   readonly error = signal('');
   readonly filtered = computed(() => { const q = this.query().trim().toLocaleLowerCase(); return q ? this.terms().filter((item) => [item.term, item.abbreviation || '', item.shortDescription].some((value) => value.toLocaleLowerCase().includes(q))) : this.terms(); });
   constructor() { effect(() => { this.preferences.language(); this.load(); }); }
-  tr(copy: Copy): string { return copy[({ de: 0, fr: 1, it: 2, en: 3 })[this.preferences.language()]]; }
+  tr(copy: Copy): string { return catalogCopy(copy, this.preferences.language()); }
   load(): void {
     this.loading.set(true); this.error.set('');
     const request: Observable<DocumentationGlossaryTerm | DocumentationGlossaryTerm[]> = this.termId

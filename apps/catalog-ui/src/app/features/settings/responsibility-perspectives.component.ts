@@ -1,3 +1,4 @@
+import { catalogCopy } from '../../core/catalog-localization';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DocumentationApiService, CatalogResponsibilityIndex, CatalogResponsibilityObject, CatalogResponsibilityPerson, ResponsibilityCategory, ResponsibilityRole } from '../../core/documentation-api.service';
@@ -151,7 +152,7 @@ export class ResponsibilityPerspectivesComponent {
       error: () => { this.loading.set(false); this.error.set(this.tr(['Zuständigkeiten konnten nicht geladen werden.', 'Impossible de charger les responsabilités.', 'Impossibile caricare le responsabilità.', 'Could not load responsibilities.'])); },
     });
   }
-  tr(copy: Copy): string { return copy[({ de: 0, fr: 1, it: 2, en: 3 })[this.preferences.language()]]; }
+  tr(copy: Copy): string { return catalogCopy(copy, this.preferences.language()); }
   inputValue(event: Event): string { return (event.target as HTMLInputElement).value; }
   matches(values: string[]): boolean { const needle = this.query().trim().toLocaleLowerCase(); return !needle || values.some((value) => value.toLocaleLowerCase().includes(needle)); }
   categoryLabel(category: ResponsibilityCategory): string {

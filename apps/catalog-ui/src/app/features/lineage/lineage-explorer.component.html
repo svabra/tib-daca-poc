@@ -12,7 +12,7 @@
     <button type="button" class="legend-term" [dacaTooltip]="verifiedHelp"><b></b><span>Verified</span></button>
     <button type="button" class="legend-term" [dacaTooltip]="declaredHelp"><b class="is-declared"></b><span>Declared</span></button>
   </div>
-  <div class="lineage-controls"><button type="button" class="daca-button is-secondary" (click)="focusProduct()">Datenprodukt fokussieren</button><span [dacaTooltip]="'Pfeile und hellblaue Impulse zeigen die Richtung des Datenflusses. Die Animation ist keine Anzeige von Live-Datenverkehr.'" tabindex="0">Datenfluss →</span></div>
+  <div class="lineage-controls"><button type="button" class="daca-button is-secondary" (click)="focusProduct()">Datenprodukt fokussieren</button><span [dacaTooltip]="'Hellblaue Datenbahnen mit pulsierenden Punkten und Schweif zeigen die Richtung des Datenflusses. Ein Punkt je Beziehung durchläuft die Verbindung in drei Sekunden. Die Animation zeigt keinen Live-Datenverkehr.'" tabindex="0">Datenfluss →</span></div>
 </div>
 <div class="lineage-layout">
   <section class="daca-card lineage-canvas-card" aria-labelledby="lineage-graph-title">
@@ -20,28 +20,36 @@
     <div class="lineage-canvas" tabindex="0" aria-label="Datenflussdiagramm, horizontal scrollbar">
       <div class="lineage-graph" [style.width.px]="graph().width" [style.height.px]="graph().height">
         <svg class="flow-edges" [attr.width]="graph().width" [attr.height]="graph().height" aria-label="Datenflusskanten">
-          <defs><marker id="lineage-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
-          @for (edge of graph().edges; track edge.id) {
-            <path class="lineage-edge-hit" [attr.data-edge-id]="edge.id" [attr.d]="edge.path" tabindex="0" role="button" [attr.aria-label]="edgeHelp(edge) + ' Kontextmenü öffnen.'" (contextmenu)="openEdgeMenu(edge,$event)" (keydown.shift.f10)="openEdgeMenu(edge,$event)" (keydown.enter)="openEdgeMenu(edge,$event)"/>
-            <path class="lineage-edge" [class.is-declared]="edge.state === 'declared'" [attr.d]="edge.path" marker-end="url(#lineage-arrow)"/>
-            @for (phase of pulsePhases; track phase) {
-              <g class="flow-pulse">
-                <path class="pulse-glow" [attr.d]="edge.path" pathLength="100" stroke-dasharray="18 100"><animate attributeName="stroke-dashoffset" values="18;-100" dur="3s" [attr.begin]="phase" repeatCount="indefinite"/></path>
-                <path class="pulse-core" [attr.d]="edge.path" pathLength="100" stroke-dasharray="18 100"><animate attributeName="stroke-dashoffset" values="18;-100" dur="3s" [attr.begin]="phase" repeatCount="indefinite"/><animate attributeName="stroke-width" values="1.5;3;1.5;3;1.5" dur="3s" [attr.begin]="phase" repeatCount="indefinite"/></path>
-                <animate attributeName="opacity" values="0;1;.35;1;0" keyTimes="0;.2;.48;.7;1" dur="3s" [attr.begin]="phase" repeatCount="indefinite"/>
-              </g>
+          <defs>
+            <linearGradient [attr.id]="highwayId+'-tail'" gradientUnits="userSpaceOnUse" x1="-28" y1="0" x2="-2" y2="0"><stop offset="0" stop-color="#eaf8ff" stop-opacity="0"/><stop offset=".35" stop-color="#83d1ff" stop-opacity=".25"/><stop offset="1" stop-color="#168cff" stop-opacity=".95"/></linearGradient>
+            @for (edge of graph().edges; track edge.id) {
+              <linearGradient [attr.id]="highwayId+'-band-'+edge.id" gradientUnits="userSpaceOnUse" [attr.x1]="edge.from.x" [attr.y1]="edge.from.y" [attr.x2]="edge.to.x" [attr.y2]="edge.to.y"><stop class="daca-highway-blue-stop" offset="0"/><stop class="daca-highway-white-stop" offset=".48"/><stop class="daca-highway-blue-stop" offset="1"/></linearGradient>
             }
+          </defs>
+          @for (edge of graph().edges; track edge.id) {
+            <g class="lineage-connection" [attr.data-source-id]="edge.source" [attr.data-target-id]="edge.target">
+              <path class="daca-highway-glow" aria-hidden="true" [attr.d]="edge.ribbonPath"/>
+              <path class="daca-highway-edge" aria-hidden="true" [attr.d]="edge.ribbonPath"/>
+              <path class="daca-highway-band" aria-hidden="true" [attr.d]="edge.ribbonPath" [attr.stroke]="'url(#'+highwayId+'-band-'+edge.id+')'"/>
+              <path class="lineage-edge daca-highway-spine" [class.is-declared]="edge.state === 'declared'" aria-hidden="true" [attr.d]="edge.ribbonPath"/>
+              <g class="daca-highway-packet" aria-hidden="true" [style.--flow-path]="'path(&quot;'+edge.flightPath+'&quot;)'" style="--flow-duration:3s;--flow-rest:50%">
+                <path class="daca-highway-tail" d="M -28 0 Q -12 -4 -2 -2.8 L -2 2.8 Q -12 4 -28 0 Z" [attr.fill]="'url(#'+highwayId+'-tail)'"/>
+                <circle class="daca-highway-halo" r="5.5"/>
+                <circle class="daca-highway-core" r="3.5"/>
+              </g>
+              <path class="lineage-edge-hit" [attr.data-edge-id]="edge.id" [attr.d]="edge.path" tabindex="0" role="button" [dacaTooltip]="edgeHelp(edge)" [attr.aria-label]="edgeHelp(edge) + ' Kontextmenü öffnen.'" (contextmenu)="openEdgeMenu(edge,$event)" (keydown.shift.f10)="openEdgeMenu(edge,$event)" (keydown.enter)="openEdgeMenu(edge,$event)"/>
+            </g>
           }
         </svg>
         @for (edge of graph().edges; track edge.id) {
           <button type="button" class="flow-label" [style.left.px]="edge.labelX" [style.top.px]="edge.labelY" [style.max-width.px]="edge.labelWidth" [dacaTooltip]="edgeHelp(edge)" (contextmenu)="openEdgeMenu(edge,$event)" (keydown.shift.f10)="openEdgeMenu(edge,$event)">{{ edge.label }}</button>
         }
         @for (node of graph().nodes; track node.id) {
-          <button type="button" [class]="'lineage-node is-' + node.kind" [class.is-selected]="selectedNode()?.id === node.id"
-            [style.left.px]="node.x - card.width / 2" [style.top.px]="node.y - card.height / 2" [attr.data-node-id]="node.id" [attr.data-kind]="node.kind"
-            [attr.aria-pressed]="selectedNode()?.id === node.id" [attr.aria-label]="kindLabel(node.kind) + ': ' + node.label" [dacaTooltip]="node.label" [dacaTooltipContent]="summary" (click)="selectedId.set(node.id)">
-            <span class="node-topline"><span class="node-type"><daca-search-icon [name]="icon(node.kind)"/>{{ kindLabel(node.kind) }}</span><daca-search-icon name="info-circle"/></span>
-            <strong class="lineage-node-title">{{ node.label }}</strong><span class="lineage-node-catalog">{{ node.catalog }}</span>
+          <button type="button" [class]="'lineage-node daca-canvas-card daca-canvas-object is-' + node.kind" [class.is-selected]="selectedNode()?.id === node.id"
+            [style.left.px]="node.x - card.width / 2" [style.top.px]="node.y - card.height / 2" [attr.data-node-id]="node.id" [attr.data-kind]="node.kind" [attr.data-canvas-kind]="canvasKind(node)"
+            [attr.aria-pressed]="selectedNode()?.id === node.id" [attr.aria-label]="objectLabel(node) + ': ' + node.label + (canvasKind(node) === 'product' ? ' · Data Owner: ' + owner(node) : '')" [dacaTooltip]="node.label" [dacaTooltipContent]="summary" (click)="selectedId.set(node.id)">
+            <span class="node-topline canvas-object-type"><daca-search-icon [name]="objectIcon(node)"/><small>{{ objectLabel(node) }}</small><daca-search-icon name="info-circle"/></span>
+            <strong class="lineage-node-title canvas-object-title">{{ node.label }}</strong><span class="lineage-node-catalog canvas-object-detail" [class.lineage-node-owner]="canvasKind(node) === 'product'">{{ canvasKind(node) === 'product' ? owner(node) : node.catalog }}</span>
           </button>
           <ng-template #summary>
             <div class="lineage-summary"><span class="summary-kind">{{ kindLabel(node.kind) }} · {{ node.catalog }}</span><strong>{{ node.label }}</strong>

@@ -6,6 +6,17 @@ import { FALLBACK_LOGICAL_MODEL, FALLBACK_MAPPINGS, FALLBACK_PHYSICAL_SNAPSHOT }
 
 describe('MappingGraphComponent field context menu', () => {
   afterEach(() => TestBed.resetTestingModule());
+  it('moves model cards together in the existing shared-layout draft and cancels atomically',()=>{
+    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade,provideRouter([])]});
+    const facade=TestBed.inject(MappingDraftFacade);facade.initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,FALLBACK_MAPPINGS,null);
+    const fixture=TestBed.createComponent(MappingGraphComponent);fixture.componentRef.setInput('canManage',true);fixture.detectChanges();
+    const component=fixture.componentInstance,items=component.selection.items(),original=facade.canvasNodePositions();expect(items.length).toBeGreaterThan(1);
+    const snapshot=component.selection.begin();component.selection.move(items.map(item=>({...item,x:item.x+25,y:item.y+30})));component.selection.finish();
+    expect(facade.canvasDirty()).toBe(true);
+    for(const item of items)expect(facade.canvasLayoutDraft()?.positions[item.id]).toEqual({x:item.x+25,y:item.y+30});
+    component.selection.cancel(snapshot);expect(facade.canvasNodePositions()).toEqual(original);expect(facade.canvasDirty()).toBe(false);
+    fixture.componentRef.setInput('canManage',false);fixture.detectChanges();expect(component.selection.enabled()).toBe(false);
+  });
 
   it('shows shared positions but prevents a reader from moving cards',()=>{
     TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade,provideRouter([])]});
@@ -238,7 +249,7 @@ describe('MappingGraphComponent field context menu', () => {
     expect(root.querySelector('h2')?.textContent).toContain('Organisationseinheiten');
     expect(root.querySelector('.canvas-tools .canvas-print')).not.toBeNull();
     fixture.componentRef.setInput('fullscreen',true);fixture.detectChanges();
-    expect(button.textContent?.trim()).toBe('−');expect(button.getAttribute('aria-label')).toBe('Vollbild verlassen');
+    expect(button.querySelector('[aria-hidden]')?.textContent?.trim()).toBe('−');expect(button.textContent).toContain('Vollbild verlassen');expect(button.getAttribute('aria-label')).toBe('Vollbild verlassen');
   });
 
   it('offers assignment only without a domain and opens assigned domains from both model headers',()=>{

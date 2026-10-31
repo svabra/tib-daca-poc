@@ -58,6 +58,8 @@ describe('Lineage explorer', () => {
   it('shows a keyboard-accessible summary with the exact URN and a native new-tab product link', () => {
     const {root} = render();
     const node = root.querySelector<HTMLButtonElement>('[data-kind="product"]')!;
+    expect(node.querySelector('.lineage-node-owner')?.textContent).toBe('Data Owner Test');
+    expect(node.getAttribute('aria-label')).toContain('Data Owner: Data Owner Test');
     node.focus();
     const summary = document.querySelector<HTMLElement>('.daca-glossary-tooltip[role="dialog"]')!;
     expect(summary.textContent).toContain('Data Owner Test');
@@ -71,6 +73,37 @@ describe('Lineage explorer', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
     expect(document.querySelector('.daca-glossary-tooltip')).toBeNull();
     expect(document.activeElement).toBe(node);
+  });
+
+  it('uses the domain-network card hierarchy and shared tailed highways without retyping reference roles', () => {
+    const {fixture,root} = render();
+    const component=fixture.componentInstance;
+    expect(root.querySelectorAll('.lineage-node.daca-canvas-object .canvas-object-type')).toHaveLength(nodes.length);
+    expect(root.querySelector('[data-kind="product"]')?.getAttribute('data-canvas-kind')).toBe('product');
+    expect(component.canvasKind(nodes[0])).toBe('source');
+    expect(component.canvasKind({...nodes[0],productId:'known-product'})).toBe('product');
+    for(const [urn,type] of [['logical-model','logical'],['physical-snapshot','physical'],['organization','organization'],['terminology','term'],['domain','domain']]) {
+      expect(component.canvasKind({...nodes[0],urn:`urn:daca:${urn}:example`})).toBe(type);
+    }
+    expect(component.canvasKind({...nodes[0],urn:'urn:daca:physical-source:connection'})).toBe('source');
+    expect(root.querySelectorAll('.daca-highway-band')).toHaveLength(edges.length);
+    expect(root.querySelectorAll('.daca-highway-packet .daca-highway-tail')).toHaveLength(edges.length);
+    expect(root.querySelector('marker')).toBeNull();
+    for(const packet of root.querySelectorAll<SVGElement>('.daca-highway-packet')) {
+      expect(packet.style.getPropertyValue('--flow-duration')).toBe('3s');
+      expect(packet.style.getPropertyValue('--flow-path')).toContain('path("M ');
+    }
+    for(const edge of component.graph().edges) {
+      expect(edge.ribbonPath).toMatch(new RegExp(`^M ${edge.from.x} ${edge.from.y}`));
+      expect(edge.ribbonPath).not.toBe(edge.path);
+      expect(edge.flightPath).not.toBe(edge.path);
+      const endpoints=edge.flightPath.match(/-?\d+(?:\.\d+)?/g)!.map(Number);
+      expect(Math.abs(endpoints[0]-edge.from.x)).toBeLessThan(LINEAGE_CARD.width/2);
+      expect(Math.abs(endpoints[1]-edge.from.y)).toBeLessThan(LINEAGE_CARD.height/2);
+      expect(Math.abs(endpoints[endpoints.length-2]-edge.to.x)).toBeLessThan(LINEAGE_CARD.width/2);
+      expect(Math.abs(endpoints[endpoints.length-1]-edge.to.y)).toBeLessThan(LINEAGE_CARD.height/2);
+    }
+    expect(component.edgeHelp(edges[0])).toContain('kein Live-Datenverkehr');
   });
 
   it('selects a referenced consumer from its deep link without inventing metadata', () => {

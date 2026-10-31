@@ -98,7 +98,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
     systems: ['DaCa', 'DAAIF REST'],
     roles: [
       { name: 'Beat Stalder', responsibility: 'Data Consumer · Kanton St. Gallen' },
-      { name: 'Joel Ruod', responsibility: 'Data Owner und fachlicher Ansprechpartner' },
+      { name: 'Joel Ruod', responsibility: 'EFD ESTV BI · Data Owner und fachlicher Ansprechpartner' },
     ],
     prerequisites: [
       'A Data Analyst’s Journey wurde abgeschlossen; das Gewerbesteuer-Datenprodukt ist aktiv und auffindbar.',
@@ -217,8 +217,8 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
     difficulty: 'Fortgeschritten',
     systems: ['DAAIF', 'DaCa', 'OPA'],
     roles: [
-      { name: 'Joel Ruod', responsibility: 'Data Analyst und Data Owner' },
-      { name: 'Thomas Kriegli', responsibility: 'Gespeicherte Kontrollperson und Publication Approver' },
+      { name: 'Joel Ruod', responsibility: 'EFD ESTV BI · Data Analyst und Data Owner' },
+      { name: 'Thomas Kriegli', responsibility: 'EFD ESTV BI · Data Owner «Data Analytics» · Gespeicherte Kontrollperson und Publication Approver' },
       { name: 'Beat Stalder', responsibility: 'Data Consumer · Kanton St. Gallen' },
       { name: 'Daniel Aebischer', responsibility: 'Data Consumer · Bundestresorerie' },
     ],
@@ -456,7 +456,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
       },
       {
         title: 'Kontextgraph kontrollieren',
-        description: 'Bestätigen Sie die Beziehungen zwischen Quelle, Produkt, Fachgebiet, Owner und REST-Bereitstellung.',
+        description: 'Bestätigen Sie die Beziehungen zwischen Quelle, Produkt, Fachgebiet, Data Owner und REST-Bereitstellung.',
         status: 'simulation',
         warning: 'KOBY Graphify ist in diesem PoC deterministisch simuliert und führt keinen externen AI-Aufruf aus.',
       },
@@ -467,7 +467,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
         checkpoint: 'Die Qualitätsansicht meldet 6/6 Kriterien und die Produktübersicht zeigt Platinum.',
         screenshots: [{
           src: `${IMAGE_ROOT}/journey-03-lineage.webp`,
-          alt: 'DaCa Lineage-Ansicht mit Quelle, Datenprodukt, Owner, Fachkontext und REST-Bereitstellung.',
+          alt: 'DaCa Lineage-Ansicht mit Quelle, Datenprodukt, Data Owner, Fachkontext und REST-Bereitstellung.',
           caption: 'Lineage und Provenienz machen Herkunft und Bearbeitungsschritte des synthetischen Produkts nachvollziehbar.',
         }],
       },
@@ -549,13 +549,13 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
     tags: ['Änderungsverlauf', 'Audit', 'Freigabe'],
     number: '06',
     title: 'Änderungen und Freigaben nachvollziehen',
-    summary: 'Owner, Approver und Data Consumer prüfen denselben echten Produktverlauf mit passend geschützter Evidenz.',
+    summary: 'Data Owner, Approver und Data Consumer prüfen denselben echten Produktverlauf mit passend geschützter Evidenz.',
     duration: '8–12 Minuten',
     difficulty: 'Einfach',
     systems: ['DaCa'],
     roles: [
-      { name: 'Joel Ruod', responsibility: 'Data Owner · freigegebene technische Evidenz' },
-      { name: 'Thomas Kriegli', responsibility: 'Publication Approver · freigegebene Prüfevidenz' },
+      { name: 'Joel Ruod', responsibility: 'EFD ESTV BI · Data Owner · freigegebene technische Evidenz' },
+      { name: 'Thomas Kriegli', responsibility: 'EFD ESTV BI · Data Owner «Data Analytics» · Publication Approver · freigegebene Prüfevidenz' },
       { name: 'Beat Stalder', responsibility: 'Data Consumer · sichere fachliche Zusammenfassung' },
     ],
     prerequisites: [
@@ -566,7 +566,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
     repeatability: 'Die Journey ist vollständig read-only. Sie erzeugt und verändert keine Audit-Ereignisse und benötigt deshalb keinen Reset.',
     verification: {
       label: 'Rollenbasiert verifiziert',
-      detail: 'Owner und Approver sehen freigegebene technische Evidenz; gewöhnliche Betrachter erhalten denselben fachlichen Verlauf ohne interne IDs, Kommentare oder Fehlerdetails.',
+      detail: 'Data Owner und Approver sehen freigegebene technische Evidenz; gewöhnliche Betrachter erhalten denselben fachlichen Verlauf ohne interne IDs, Kommentare oder Fehlerdetails.',
     },
     steps: [
       {
@@ -595,7 +595,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
         title: 'Filter und technische Aktivierung prüfen',
         description: 'Filtern Sie nach «Metadaten & Qualität», «Zugriff & Freigabe» und «Technische Aktivierung». Öffnen Sie als Joel die technische Evidenz einer Aktivierung.',
         status: 'implemented',
-        checkpoint: 'Policy-Revision und fachliche Zielsysteme bleiben sichtbar; nur interne Korrelations- und Prüfevidenz ist Owner oder Approver vorbehalten. Tokens und Zugangsdaten erscheinen nie.',
+        checkpoint: 'Policy-Revision und fachliche Zielsysteme bleiben sichtbar; nur interne Korrelations- und Prüfevidenz ist Data Owner oder Approver vorbehalten. Tokens und Zugangsdaten erscheinen nie.',
       },
       {
         title: 'Approver-Sicht mit Thomas vergleichen',
@@ -668,7 +668,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
     roles: [
       { name: 'Beat Stalder', responsibility: 'Data Consumer · beantragt die Verlängerung' },
       { name: 'Kassandra Valdata', responsibility: 'Data Owner · prüft Alt und Neu und erstellt den Policy-Entwurf' },
-      { name: 'Thomas Kriegli', responsibility: 'Kontrollperson · führt die Vier-Augen-Freigabe durch' },
+      { name: 'Thomas Kriegli', responsibility: 'EFD ESTV BI · Data Owner «Data Analytics» · Kontrollperson · führt die Vier-Augen-Freigabe durch' },
     ],
     prerequisites: [
       'Die deterministische Verlängerungs-Fixture für «ESTV-Steuerstatistik nach Kanton» ist vorbereitet oder wurde zurückgesetzt.',
@@ -799,7 +799,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
       },
       {
         title: 'Änderungsverlauf prüfen und Fixture zurücksetzen',
-        description: 'Öffnen Sie den Änderungsverlauf und prüfen Sie Antrag, Owner-Entscheid, Policy-Revision, Vier-Augen-Freigabe und Deployment als zusammenhängende Ereignisse. Kehren Sie danach zur Fixture-Verwaltung zurück und setzen Sie nur die Verlängerungs-Fixture zurück.',
+        description: 'Öffnen Sie den Änderungsverlauf und prüfen Sie Antrag, Data Owner-Entscheid, Policy-Revision, Vier-Augen-Freigabe und Deployment als zusammenhängende Ereignisse. Kehren Sie danach zur Fixture-Verwaltung zurück und setzen Sie nur die Verlängerungs-Fixture zurück.',
         status: 'implemented',
         actions: [
           {
@@ -834,10 +834,10 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
     outcome: 'Die aktive Domain «Verteidigung» ist versioniert und das Produkt ist mehreren Fachdomains zugeordnet; Organisation und Keywords bleiben unverändert.',
     repeatability: 'Die PoC-Fixture kann serverseitig idempotent vorbereitet und auf ihre synthetischen Artefakte zurückgesetzt werden.',
     steps: [
-      { title: 'Domain als Sandro beantragen', description: 'Öffnen Sie «Domäne und Terminology», beantragen Sie «Verteidigung» und weisen Sie unterschiedliche Personen als Owner und Stellvertretung aus.', status: 'implemented', actions: [{ label: 'Domainregister als Sandro öffnen', target: 'internal', path: '/domains', demoUserId: 'sandro.wenger' }], checkpoint: 'Der Antrag steht versioniert in der Governance-Liste; es wurde noch keine aktive Domain erzeugt.' },
-      { title: 'Registerentscheid als Christian treffen', description: 'Öffnen Sie den Antrag aus Christians Aufgaben, prüfen Sie Definition und Rollen und genehmigen Sie ihn.', status: 'implemented', actions: [{ label: 'Aufgaben als Christian öffnen', target: 'internal', path: '/tasks', demoUserId: 'christian.man' }, { label: 'Governance öffnen', target: 'internal', path: '/domains', demoUserId: 'christian.man' }], checkpoint: '«Verteidigung» ist aktiv; Sandro erhält eine Information zum Entscheid.' },
-      { title: 'Produkt mehreren Domains zuordnen', description: 'Öffnen Sie das Fahrzeugprodukt im Metadata Studio, prüfen Sie die als «Regelbasiert · PoC» markierten Vorschläge und wählen Sie «Verteidigung» sowie «Mobilität & Logistik».', status: 'implemented', actions: [{ label: 'Meine Datenprodukte als Sandro öffnen', target: 'internal', path: '/products', demoUserId: 'sandro.wenger' }], checkpoint: 'Eine neue Produktrevision enthält beide Domain-IDs; Keywords wurden nicht verändert.', warning: 'Vorschläge sind nachvollziehbare Fuzzy-Treffer und keine KI-Entscheide.', screenshots: [{ src: `${IMAGE_ROOT}/journey-08-semantic-suggestions.webp`, alt: 'Metadata Studio des Fahrzeugprodukts mit akzeptiertem zweisprachigem Glossarterm und erklärbaren Domainvorschlägen für Mobilität und Verteidigung.', caption: 'Die regelbasierte PoC-Hilfe nennt Score und konkrete Textübereinstimmung; Domains, Glossarterme und Keywords bleiben getrennte Metadaten.' }] },
-      { title: 'Beziehungen im Wissensgraph prüfen', description: 'Öffnen Sie die Domain-Detailseite und kontrollieren Sie Owner, Stellvertretung, Produkte, Terme und die zugängliche textuelle Beziehungsliste.', status: 'implemented', actions: [{ label: 'Domäne und Terminology öffnen', target: 'internal', path: '/domains', demoUserId: 'sandro.wenger' }], checkpoint: 'Die Fachdomain ist von den Organisationen der verantwortlichen Personen klar getrennt.', screenshots: [{ src: `${IMAGE_ROOT}/journey-08-domain-register.webp`, alt: 'DaCa Domainregister als Sandro mit Verteidigung und Mobilität und Logistik samt Data Ownern, Stellvertretungen und Inhaltszahlen.', caption: 'Das Register zeigt Fachdomains unabhängig von der Organisation der verantwortlichen Personen und macht Revision sowie Produkt- und Termanzahl sichtbar.' }] },
+      { title: 'Domain als Sandro beantragen', description: 'Öffnen Sie «Domäne und Terminologie», beantragen Sie «Verteidigung» und wählen Sie für eine neue Domäne im Amt Verteidigung Lawrence Hill als Data Owner und Hong An Captain als Stellvertretung. Die bestehende PoC-Domäne «Verteidigung» wird von Sibilla Di Ciesa (GS-VBS, LDSD VBS) verantwortet.', status: 'implemented', actions: [{ label: 'Domainregister als Sandro öffnen', target: 'internal', path: '/domains', demoUserId: 'sandro.wenger' }], checkpoint: 'Der Antrag steht versioniert in der Governance-Liste; es wurde noch keine aktive Domain erzeugt.' },
+      { title: 'Registerentscheid als Christian treffen', description: 'Öffnen Sie den Antrag aus Christians Aufgaben, prüfen Sie Definition und Rollen und genehmigen Sie ihn als ALDS von Verteidigung. Bei einer neu erstellten Übungsdomäne übertragen Sie anschliessend die Data Owner-Verantwortung über «Domäne abtreten» an Sibilla Di Ciesa und die Stellvertretung an Sandro Wenger; der Amtsbereich Verteidigung bleibt bestehen.', status: 'implemented', actions: [{ label: 'Aufgaben als Christian öffnen', target: 'internal', path: '/tasks', demoUserId: 'christian.man' }, { label: 'Governance öffnen', target: 'internal', path: '/domains', demoUserId: 'christian.man' }], checkpoint: '«Verteidigung» ist aktiv; Sandro erhält eine Information zum Entscheid.' },
+      { title: 'Produkt mehreren Domains zuordnen', description: 'Öffnen Sie das Fahrzeugprodukt im Metadata Studio, prüfen Sie die als «Regelbasiert · PoC» markierten Vorschläge und wählen Sie «Verteidigung» sowie «Mobilität & Logistik».', status: 'implemented', actions: [{ label: 'Meine Datenprodukte als Sandro öffnen', target: 'internal', path: '/products', demoUserId: 'sandro.wenger' }], checkpoint: 'Eine neue Produktrevision enthält beide Domain-IDs; Keywords wurden nicht verändert.', warning: 'Vorschläge sind nachvollziehbare Fuzzy-Treffer und keine KI-Entscheide.', screenshots: [{ src: `${IMAGE_ROOT}/journey-08-semantic-suggestions.webp`, alt: 'Metadata Studio des Fahrzeugprodukts mit akzeptiertem zweisprachigem Terminologiebegriff und erklärbaren Domainvorschlägen für Mobilität und Verteidigung.', caption: 'Die regelbasierte PoC-Hilfe nennt Score und konkrete Textübereinstimmung; Domains, Terminologie und Keywords bleiben getrennte Metadaten.' }] },
+      { title: 'Beziehungen im Wissensgraph prüfen', description: 'Öffnen Sie die Domain-Detailseite und kontrollieren Sie Data Owner, Stellvertretung, Produkte, Terme und die zugängliche textuelle Beziehungsliste.', status: 'implemented', actions: [{ label: 'Domäne und Terminologie öffnen', target: 'internal', path: '/domains', demoUserId: 'sandro.wenger' }], checkpoint: 'Die Fachdomain ist von den Organisationen der verantwortlichen Personen klar getrennt.', screenshots: [{ src: `${IMAGE_ROOT}/journey-08-domain-register.webp`, alt: 'DaCa Domainregister als Sandro, gefiltert auf Verteidigung, mit Sibilla Di Ciesa als Data Owner und der persönlichen Zugehörigkeit VBS GS.', caption: 'Das Register zeigt Fachdomains unabhängig von der Organisation der verantwortlichen Personen und macht Revision sowie Produkt- und Termanzahl sichtbar.' }] },
       { title: 'Entscheid zur Kenntnis nehmen', description: 'Öffnen Sie Sandros persönliche Aufgabenliste und bestätigen Sie die Information zum Domain-Entscheid.', status: 'implemented', actions: [{ label: 'Information als Sandro öffnen', target: 'internal', path: '/tasks', demoUserId: 'sandro.wenger' }], checkpoint: 'Die Information verschwindet nach der Kenntnisnahme aus der offenen Liste; die Auditspur bleibt erhalten.' },
     ],
   },
@@ -845,19 +845,19 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
     id: 'glossary-governance',
     tags: ['Glossar', 'Governance', 'Semantik'],
     number: '09',
-    title: 'Glossarterm gemeinsam prüfen und anhängen',
+    title: 'Terminologiebegriff gemeinsam prüfen und anhängen',
     summary: 'Einen zweisprachigen Term vorschlagen, über mehrere Domains einstimmig freigeben und automatisch mit dem Produkt verknüpfen.',
     duration: '10–15 Minuten',
     difficulty: 'Mittel',
     systems: ['DaCa', 'Catalog API', 'PostgreSQL', 'SKOS', 'JSON-LD'],
-    roles: [{ name: 'Sandro Wenger', responsibility: 'Antragsteller · schlägt den Term aus dem Produkt vor' }, { name: 'Sibilla Micheli', responsibility: 'Domain Owner «Verteidigung» · entscheidet' }, { name: 'Kassandra Valdata', responsibility: 'Domain Owner «Mobilität & Logistik» · entscheidet' }],
-    prerequisites: ['Journey 08 wurde abgeschlossen.', 'Das Fahrzeugprodukt gehört beiden Domains.'],
+    roles: [{ name: 'Sandro Wenger', responsibility: 'Antragsteller · schlägt den Term aus dem Produkt vor' }, { name: 'Sibilla Di Ciesa', responsibility: 'GS-VBS · LDSD VBS und Data Owner «Verteidigung» · entscheidet' }, { name: 'Kassandra Valdata', responsibility: 'Data Owner «Mobilität & Logistik» · entscheidet' }],
+    prerequisites: ['Journey 08 wurde abgeschlossen.', 'Das Fahrzeugprodukt gehört beiden Domains. Sibilla ist beim GS-VBS angestellt und entscheidet als benannte Data Owner der Domäne Verteidigung. Für die ämterübergreifende Suche bei Bedarf «Nur amtseigene anzeigen» ausschalten; ihre konkreten Review-Aufgaben bleiben direkt erreichbar.'],
     outcome: 'Der akzeptierte DE/EN-Term ist automatisch am Produkt, erhöht dessen Revision und erscheint in Suche sowie JSON-LD-Wissensgraph.',
     repeatability: 'Ein Fixture-Reset entfernt nur synthetische Vorschläge und Zuordnungen; produktive Löschungen bleiben Retirement/Tombstones.',
     steps: [
       { title: 'Zweisprachigen Term vorschlagen', description: 'Schlagen Sie im Metadata Studio «Gepanzertes Fahrzeug» und «Armored Vehicle» für beide gewählten Domains vor.', status: 'implemented', actions: [{ label: 'Produktmetadaten als Sandro öffnen', target: 'internal', path: '/products', demoUserId: 'sandro.wenger' }], checkpoint: 'Der Vorschlag hat pro Domain einen offenen Review und merkt das Quellprodukt für Auto-Attach vor.' },
-      { title: 'Review-Entwurf redigieren', description: 'Eine Stellvertretung darf Labels, Definition und die semantische Behandlung redigieren. Die Änderung setzt vorherige Freigaben zurück, erlaubt aber keinen Stellvertretungsentscheid.', status: 'implemented', actions: [{ label: 'Glossar-Governance öffnen', target: 'internal', path: '/domains', demoUserId: 'sandro.wenger' }], checkpoint: 'Alle Domain Owners sehen exakt dieselbe Vorschlagsrevision.' },
-      { title: 'Einstimmig freigeben', description: 'Sibilla genehmigt für «Verteidigung», Kassandra danach für «Mobilität & Logistik». Erst die zweite Freigabe akzeptiert den Term.', status: 'implemented', actions: [{ label: 'Als Sibilla entscheiden', target: 'internal', path: '/tasks', demoUserId: 'sibilla.micheli' }, { label: 'Als Kassandra entscheiden', target: 'internal', path: '/tasks', demoUserId: 'kassandra.valdata' }], checkpoint: 'Der akzeptierte Term ist am Produkt; Sandro erhält eine bestätigbare Information.', warning: 'Eine Ablehnung mit Begründung beendet den gesamten Vorschlag und erzeugt keine Produktzuordnung.', screenshots: [{ src: `${IMAGE_ROOT}/journey-09-glossary-review.webp`, alt: 'DaCa Reviewseite des zweisprachigen Terms Gepanzertes Fahrzeug und Armored Vehicle mit zwei genehmigten Domainfreigaben.', caption: 'Erst die Freigaben der primären Data Owner beider Domains setzen den gemeinsamen Vorschlag auf akzeptiert; die PoC-Hinweise bleiben rein unterstützend.' }] },
+      { title: 'Review-Entwurf redigieren', description: 'Eine Stellvertretung darf Labels, Definition und die semantische Behandlung redigieren. Die Änderung setzt vorherige Freigaben zurück, erlaubt aber keinen Stellvertretungsentscheid.', status: 'implemented', actions: [{ label: 'Terminologie-Governance öffnen', target: 'internal', path: '/domains', demoUserId: 'sandro.wenger' }], checkpoint: 'Alle Data Owners sehen exakt dieselbe Vorschlagsrevision.' },
+      { title: 'Einstimmig freigeben', description: 'Sibilla Di Ciesa (GS-VBS, LDSD VBS) entscheidet hier als konkret benannte Data Owner für «Verteidigung», Kassandra danach für «Mobilität & Logistik». Erst die zweite Freigabe akzeptiert den Term.', status: 'implemented', actions: [{ label: 'Als Sibilla entscheiden', target: 'internal', path: '/tasks', demoUserId: 'sibilla.micheli' }, { label: 'Als Kassandra entscheiden', target: 'internal', path: '/tasks', demoUserId: 'kassandra.valdata' }], checkpoint: 'Der akzeptierte Term ist am Produkt; Sandro erhält eine bestätigbare Information.', warning: 'Eine Ablehnung mit Begründung beendet den gesamten Vorschlag und erzeugt keine Produktzuordnung.', screenshots: [{ src: `${IMAGE_ROOT}/journey-09-sibilla-profile.webp`, alt: 'Profil von Sibilla Di Ciesa mit ihrer Zugehörigkeit zum GS-VBS und dem LDSD-Mandat für das VBS.', caption: 'Sibilla Di Ciesa gehört zum GS-VBS und ist LDSD des VBS. Bei diesem Review entscheidet sie als separat benannte Data Owner der Domäne Verteidigung; beide Domänenfreigaben bleiben erforderlich.' }] },
       { title: 'Mehrsprachigkeit und Relation prüfen', description: 'Bei gleicher Bedeutung sind DE und EN Labels desselben SKOS-Konzepts. Bei abweichendem Umfang wird ein eigenständiges Konzept mit geprüfter broader/narrower-Relation gewählt.', status: 'implemented', actions: [{ label: 'Domain- und Glossaransicht öffnen', target: 'internal', path: '/domains', demoUserId: 'sandro.wenger' }], checkpoint: 'Deutsche und englische Bezeichnung führen zum selben fachlichen Produktkontext.' },
       { title: 'Produktrevision und Information bestätigen', description: 'Prüfen Sie die akzeptierte Termzuordnung auf dem Produkt und bestätigen Sie anschliessend die Entscheidungsinformation in Sandros Aufgabenliste.', status: 'implemented', actions: [{ label: 'Produktübersicht als Sandro öffnen', target: 'internal', path: '/products', demoUserId: 'sandro.wenger' }, { label: 'Information bestätigen', target: 'internal', path: '/tasks', demoUserId: 'sandro.wenger' }], checkpoint: 'Produktrevision, Termzuordnung und bestätigte Information bilden eine konsistente nachvollziehbare Kette.' },
     ],
@@ -867,7 +867,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
     tags: ['Logisches Modell', 'Modellierung', 'Governance'],
     number: '10',
     title: 'Logisches Datenmodell erfassen',
-    summary: 'Ein einziges logisches Datenmodell ohne physische Repräsentation manuell erfassen, als Entwurf speichern und durch den Domain Owner prüfen lassen.',
+    summary: 'Ein einziges logisches Datenmodell ohne physische Repräsentation manuell erfassen, als Entwurf speichern und durch den Data Owner prüfen lassen.',
     duration: '10–15 Minuten',
     difficulty: 'Mittel',
     systems: ['DaCa', 'Catalog API', 'PostgreSQL', 'TERMDAT', 'DeepL Free', 'DCAT-AP-CH', 'SHACL'],
@@ -879,7 +879,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
       { title: 'Leeres logisches Modell öffnen', description: 'Melden Sie sich als Mirjam Keller an und öffnen Sie direkt «Neues logisches Modell». Dieser Einstieg beginnt mit einem leeren Formular; wählen Sie keine Datenquelle und keine physische Tabelle.', status: 'implemented', actions: [{ label: 'Leeren Editor als Mirjam öffnen', target: 'internal', path: '/models/new', demoUserId: 'mirjam.keller' }], checkpoint: 'Der Editor zeigt ein neues Modell ohne physische Repräsentation oder Deklaration und ohne Mapping.' },
       { title: 'Modellmerkmale und Organisation erfassen', description: 'Erfassen Sie den deutschen Titel «Immobilienportfolio VBS», eine fachliche Beschreibung und einen neuen eindeutigen Identifier. Wählen Sie VBS → armasuisse → armasuisse Immobilien sowie die DaCa-Domäne «Immobilienmanagement VBS». Die Domäne setzt Daniel Wenger als Data Owner und Eliane Rossi als Stellvertretung.', status: 'implemented', checkpoint: 'Der Scope, die Domäne und die verantwortlichen Personen stimmen überein; der Identifier ist verfügbar.' },
       { title: 'Entität und Felder manuell beschreiben', description: 'Fügen Sie eine logische Entität und fachliche Felder über «Feld hinzufügen» hinzu. Wählen Sie jedes Feld in der kompakten Tabelle aus und pflegen Sie rechts seine Merkmale wie Typ, Kardinalität und Beschreibung. Ein I14Y-Concept oder Geschäftsobjekt kann bewusst verknüpft werden, ist aber nicht Voraussetzung für den ersten Entwurf.', status: 'implemented', checkpoint: 'Die logischen Felder beschreiben ihre fachliche Bedeutung; es gibt weiterhin keine physische Zuordnung.' },
-      { title: 'Mehrsprachige Angaben prüfen', description: 'Ergänzen Sie Französisch, Italienisch oder Englisch manuell oder prüfen Sie bei unklassifizierten Texten einen serverseitigen Übersetzungsvorschlag. TERMDAT-Treffer werden erst nach bewusster Übernahme in das Modell geschrieben; bestehende Übersetzungen werden nicht automatisch überschrieben.', status: 'implemented', checkpoint: 'Titel und Beschreibung sind fachlich geprüft; freiwillige Terminology-Referenzen zeigen auf konkrete Versionen.', warning: 'Interne, vertrauliche und geheime Texte werden nicht an externe Übersetzungsdienste gesendet.' },
+      { title: 'Mehrsprachige Angaben prüfen', description: 'Ergänzen Sie Französisch, Italienisch oder Englisch manuell oder prüfen Sie bei unklassifizierten Texten einen serverseitigen Übersetzungsvorschlag. TERMDAT-Treffer werden erst nach bewusster Übernahme in das Modell geschrieben; bestehende Übersetzungen werden nicht automatisch überschrieben.', status: 'implemented', checkpoint: 'Titel und Beschreibung sind fachlich geprüft; freiwillige Terminologie-Referenzen zeigen auf konkrete Versionen.', warning: 'Interne, vertrauliche und geheime Texte werden nicht an externe Übersetzungsdienste gesendet.' },
       { title: 'Genau einen Entwurf speichern', description: 'Wählen Sie «Als Entwurf speichern». Ungültige Angaben werden am Feld markiert und unter der Aktion vollständig aufgelistet. Nach erfolgreichem Speichern öffnet sich das versionierte Modell; prüfen Sie in der Übersicht, dass «Keine physische Zuordnung» angezeigt wird.', status: 'implemented', actions: [{ label: 'Modellübersicht als Mirjam öffnen', target: 'internal', path: '/models', demoUserId: 'mirjam.keller' }], checkpoint: 'Ein einzelnes neues Modell ist als Entwurf gespeichert und besitzt keine Ableitung aus einer Tabelle.' },
       { title: 'Entwurf zur Domänenfreigabe einreichen', description: 'Öffnen Sie den gespeicherten Entwurf und wählen Sie «Zur Domänenfreigabe einreichen». Erst dieser separate Schritt erzeugt einen unveränderlichen Review-Snapshot und eine persönliche Aufgabe für Daniel Wenger.', status: 'implemented', checkpoint: 'Der Status lautet «Zur Prüfung»; Mirjam veröffentlicht nicht selbst und Eliane erhält keinen primären Prüfauftrag.' },
       { title: 'Als Daniel prüfen und publizieren', description: 'Öffnen Sie Daniels Aufgaben, prüfen Sie den Review-Snapshot und nehmen Sie ihn an. Die Annahme publiziert unmittelbar eine neue Modellversion. Alternativ kann Daniel mit Begründung Änderungen verlangen.', status: 'implemented', actions: [{ label: 'Aufgaben als Daniel öffnen', target: 'internal', path: '/tasks', demoUserId: 'daniel.wenger' }], checkpoint: '«Immobilienportfolio VBS» ist publiziert; die Versionshistorie bleibt nachvollziehbar und eine physische Repräsentation ist nicht erforderlich.' },
@@ -894,12 +894,12 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
     duration: '8–12 Minuten',
     difficulty: 'Mittel',
     systems: ['DaCa', 'Catalog API', 'PostgreSQL', 'SHACL'],
-    roles: [{ name: 'Christian Man', responsibility: 'Data Steward · leitet das Modell aus VIBDBU ab' }, { name: 'Christian Spider', responsibility: 'Data Steward in armasuisse Immobilien · kann dieselbe Ableitung bearbeiten' }, { name: 'Daniel Wenger', responsibility: 'Data Owner der Immobilien-Domäne · bleibt fachlich verantwortlich' }],
-    prerequisites: ['Die Quelle «SAP VIBDBU Gebäudebestand» und ihre physische Repräsentation sind im DaCa sichtbar.', 'Christian Man oder Christian Spider hat eine aktive Modellierungsrolle für armasuisse Immobilien.', 'Im Organisationsbereich der Quelle ist die aktive Domäne «Immobilienmanagement VBS» eindeutig bestimmbar.'],
+    roles: [{ name: 'Christian Man', responsibility: 'Data Steward · leitet das Modell aus VIBDBU ab' }, { name: 'Christiano Stadello', responsibility: 'ALDS armasuisse · zusätzlich Data Steward in armasuisse Immobilien · kann dieselbe Ableitung bearbeiten' }, { name: 'Daniel Wenger', responsibility: 'Data Owner der Immobilien-Domäne · bleibt fachlich verantwortlich' }],
+    prerequisites: ['Die Quelle «SAP VIBDBU Gebäudebestand» und ihre physische Repräsentation sind im DaCa sichtbar.', 'Christian Man oder Christiano Stadello hat eine aktive Modellierungsrolle für armasuisse Immobilien.', 'Im Organisationsbereich der Quelle ist die aktive Domäne «Immobilienmanagement VBS» eindeutig bestimmbar.'],
     outcome: 'Ein editierbarer technischer VIBDBU-Modellentwurf mit 47 Feldern und exakten 1:1-Mappings auf die festgehaltene Revision der physischen Repräsentation. Es werden keine Datenzeilen übernommen.',
     repeatability: 'Eine erneute Ableitung derselben Tabelle aus derselben Revision der physischen Repräsentation öffnet denselben Entwurf und erzeugt keine doppelten Mappings. Ein späterer Strukturimport erzeugt eine neue Revision der physischen Repräsentation und muss getrennt geprüft werden.',
     steps: [
-      { title: 'Sichtbare Datenquelle öffnen', description: 'Melden Sie sich als Christian Man an, öffnen Sie «Sichtbare Datenquellen» und wählen Sie «SAP VIBDBU Gebäudebestand». Christian Spider kann diesen Ablauf mit seiner zusätzlichen Data-Steward-Zuweisung ebenso durchführen.', status: 'implemented', actions: [{ label: 'VIBDBU als Christian Man öffnen', target: 'internal', path: '/physical-models/adf4a86e-7ab3-5035-b2cc-c8c907e79468', demoUserId: 'christian.man' }], checkpoint: 'Die Quelle ist verbunden, die physische Repräsentation ist vorhanden und die Verantwortung liegt bei armasuisse Immobilien.' },
+      { title: 'Sichtbare Datenquelle öffnen', description: 'Melden Sie sich als Christian Man an, öffnen Sie «Sichtbare Datenquellen» und wählen Sie «SAP VIBDBU Gebäudebestand». Christiano Stadello kann diesen Ablauf mit seiner zusätzlichen Data-Steward-Zuweisung ebenso durchführen.', status: 'implemented', actions: [{ label: 'VIBDBU als Christian Man öffnen', target: 'internal', path: '/physical-models/adf4a86e-7ab3-5035-b2cc-c8c907e79468', demoUserId: 'christian.man' }], checkpoint: 'Die Quelle ist verbunden, die physische Repräsentation ist vorhanden und die Verantwortung liegt bei armasuisse Immobilien.' },
       { title: 'Physische Tabelle und Felder prüfen', description: 'Klappen Sie im Quellenbaum die Datenbank «daca_sample» und das Schema «public» auf und wählen Sie «VIBDBU». Prüfen Sie die 47 Spalten, Typen, Längen und Kommentare. Diese Ansicht lädt keine Datenzeilen.', status: 'implemented', checkpoint: 'Der Pfad endet auf daca_sample.public.VIBDBU; die Tabellenansicht zeigt ausschliesslich Strukturmetadaten.' },
       { title: 'Logisches Modell ableiten', description: 'Öffnen Sie beim Tabellen-Eintrag das Menü «…» und wählen Sie «Logisches Modell ableiten». DaCa erstellt in einer Transaktion einen technischen logischen Entwurf und für jedes Feld ein direktes 1:1-Mapping auf die gewählte Revision der physischen Repräsentation.', status: 'implemented', checkpoint: 'Der Mapping-Arbeitsplatz öffnet sich mit dem neuen Modell und der ausgewählten physischen Repräsentation.', warning: 'Die Ableitung ist ein technischer Startpunkt. Fachliche Bedeutung, Klassifikation und I14Y-Entscheide sind vor einer Freigabe zu prüfen.' },
       { title: 'Generierte Struktur und Zuordnungen kontrollieren', description: 'Vergleichen Sie im Mapping-Arbeitsplatz die 47 logischen Felder mit den physischen Spalten. Die Kanten lesen sich als «wird repräsentiert durch»; Modell und Mappings sind versioniert und an genau diese Revision der physischen Repräsentation gebunden. Öffnen Sie den Modell-Editor und ergänzen Sie fachliche Beschreibungen und weitere erforderliche Merkmale.', status: 'implemented', checkpoint: 'Jede abgeleitete Spalte hat eine überprüfbare direkte Zuordnung; technische Vorschläge bleiben editierbar.' },
@@ -928,7 +928,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
     repeatability: 'Das Lesen der drei Perspektiven und des Protokolls ändert keine Zuordnung. Die Journey ist beliebig wiederholbar; für die Anzeige eines neuen Protokolleintrags muss zuvor eine echte Rollenänderung stattgefunden haben.',
     steps: [
       { title: 'Zuständigkeitsübersicht öffnen', description: 'Melden Sie sich als Christian Man an und öffnen Sie unter Einstellungen «Rollen und Zuständigkeiten». Alle Perspektiven lesen dieselben in PostgreSQL gespeicherten Personen-, Organisations- und Objektbeziehungen.', status: 'implemented', actions: [{ label: 'Zuständigkeiten als Christian öffnen', target: 'internal', path: '/settings/responsibilities', demoUserId: 'christian.man' }], checkpoint: 'Die Umschaltung «Perspektiven» bietet Kategorien, Personen und Domänen an.' },
-      { title: 'Vom Datenobjekt zur Person wechseln', description: 'Bleiben Sie bei «Kategorien», suchen Sie VIBDBU und wählen Sie die physische Repräsentation. Lesen Sie, wer als Data Steward zugeordnet ist und ob die Grundlage eine direkte Zuordnung oder eine Organisationsrolle ist. Öffnen Sie bei Bedarf die Rollenhilfe über den gewellten Begriff.', status: 'implemented', checkpoint: 'Christian Man und Christian Spider sind im Immobilienbereich als Data Stewards sichtbar; der Rollen-Tooltip führt zum Glossar.' },
+      { title: 'Vom Datenobjekt zur Person wechseln', description: 'Bleiben Sie bei «Kategorien», suchen Sie VIBDBU und wählen Sie die physische Repräsentation. Lesen Sie, wer als Data Steward zugeordnet ist und ob die Grundlage eine direkte Zuordnung oder eine Organisationsrolle ist. Öffnen Sie bei Bedarf die Rollenhilfe über den gewellten Begriff.', status: 'implemented', checkpoint: 'Christian Man und Christiano Stadello sind im Immobilienbereich als Data Stewards sichtbar; der Rollen-Tooltip führt zum Glossar.' },
       { title: 'Rechte einer Person überblicken', description: 'Wechseln Sie zu «Personen» und suchen Sie Christian Man. Die Matrix zählt seine sichtbaren Domänen, logischen Modelle, physischen Repräsentationen und Datenprodukte. Die Detailansicht listet die konkreten Objekte auf.', status: 'implemented', checkpoint: 'Die Personenzählung und die zuvor gewählte VIBDBU-Zuordnung beruhen auf denselben gespeicherten Beziehungen.' },
       { title: 'Verantwortung einer Domäne prüfen', description: 'Wechseln Sie zu «Domänen» und öffnen Sie «Immobilienmanagement VBS». Prüfen Sie Daniel Wenger als Data Owner, die Stellvertretung sowie die Verantwortlichen der zugeordneten Modelle und Repräsentationen.', status: 'implemented', checkpoint: 'Die Domänenansicht führt vom Bereich zu den verantwortlichen Personen und den konkreten Datenobjekten.' },
       { title: 'Rollenänderungen sequentiell lesen', description: 'Öffnen Sie im Einstellungsmenü «Rollenprotokoll». Prüfen Sie die fortlaufende Nummer, Aktion, betroffene Person, Rolle, Bereich und ausführende Person. «Anfangsbestand» kennzeichnet Zuordnungen, die vor Einführung des Protokolls bestanden; spätere Änderungen tragen ihren tatsächlichen Änderungsakteur. Laden Sie bei Bedarf ältere Einträge nach.', status: 'implemented', actions: [{ label: 'Rollenprotokoll öffnen', target: 'internal', path: '/settings/role-changes', demoUserId: 'christian.man' }], checkpoint: 'Eine Änderung ersetzt keinen älteren Eintrag; Zuweisung, Änderung und Entzug bleiben als getrennte, sortierte Ereignisse lesbar.' },
@@ -953,7 +953,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
     repeatability: 'Eine erneut entfernte Verbindung öffnet einen gelösten Vorgang wieder. Historische Modell- und Mappingversionen bleiben lesbar; der rein manuelle Modellaufbau ohne physische Bindung löst keinen Fehler aus.',
     steps: [
       { title: 'Verbindung oder logisches Feld bearbeiten', description: 'Öffnen Sie als Data Steward den Mapping-Arbeitsplatz eines physisch gebundenen Modells. Die kompakte Grafik lässt rechts Platz für Entität, Datentyp und weitere Feldmerkmale. Wählen Sie eine Zuordnung und «Verbindung entfernen»; alternativ ergänzen Sie ein logisches Feld ohne physische Verbindung oder entfernen ein bestehendes Feld über das rechte Panel.', status: 'implemented', actions: [{ label: 'Mapping-Arbeitsplatz öffnen', target: 'internal', path: '/models', demoUserId: 'christian.man' }], checkpoint: 'Der unverbundene logische Feldname erscheint im Fehlerbereich; der Modellentwurf bleibt speicherbar.' },
-      { title: 'Inkonsistenz und Aufgabe prüfen', description: 'DaCa bewertet jedes unverbundene logische Feld eines physisch gebundenen Modells als Inkonsistenzfehler und erstellt eine persönliche Aufgabe für den Data Owner. Ein rein logisches Modell ohne jemals zugeordnete physische Repräsentation bleibt hiervon ausgenommen.', status: 'implemented', actions: [{ label: 'Owner-Aufgaben öffnen', target: 'internal', path: '/tasks', demoUserId: 'daniel.wenger' }], checkpoint: 'Die Aufgabe führt zum betroffenen Modell und Feld. Der Fehler ist auch im Mapping-Arbeitsplatz sichtbar.' },
+      { title: 'Inkonsistenz und Aufgabe prüfen', description: 'DaCa bewertet jedes unverbundene logische Feld eines physisch gebundenen Modells als Inkonsistenzfehler und erstellt eine persönliche Aufgabe für den Data Owner. Ein rein logisches Modell ohne jemals zugeordnete physische Repräsentation bleibt hiervon ausgenommen.', status: 'implemented', actions: [{ label: 'Data Owner-Aufgaben öffnen', target: 'internal', path: '/tasks', demoUserId: 'daniel.wenger' }], checkpoint: 'Die Aufgabe führt zum betroffenen Modell und Feld. Der Fehler ist auch im Mapping-Arbeitsplatz sichtbar.' },
       { title: 'Als Data Owner entscheiden', description: 'Öffnen Sie den Inkonsistenzfehler, begründen Sie den Entscheid und wählen Sie «Inkonsistenz akzeptieren» oder einen zuständigen Data Steward und «Prüfung beauftragen». Akzeptieren schliesst die Entscheidungsaufgabe, lässt die Qualitätsbewertung Fehler jedoch bestehen.', status: 'implemented', checkpoint: 'Bei einer Beauftragung erscheint eine neue Aufgabe beim gewählten Data Steward; der Vorgang zeigt den Entscheid und die zuständige Person.' },
       { title: 'Als Data Steward auflösen', description: 'Öffnen Sie die zugewiesene Aufgabe. Verbinden Sie das logische Feld wieder mit einer passenden physischen Spalte und speichern Sie die versionierte Zuordnung. Falls das logische Feld fachlich nicht benötigt wird, entfernen Sie es im rechten Feldpanel und speichern die Modellrevision.', status: 'implemented', checkpoint: 'Der Vorgang wird automatisch als aufgelöst markiert; die offene Aufgabe verschwindet. Andere offene Inkonsistenzen bleiben sichtbar.' },
       { title: 'Versionen und Bewertung kontrollieren', description: 'Prüfen Sie den Mapping-Arbeitsplatz erneut und öffnen Sie die Modellhistorie. Die entfernte Verbindung oder das entfernte Feld bleibt in älteren Revisionen nachvollziehbar; das aktuelle Modell zeigt nur noch verbleibende offene Inkonsistenzen.', status: 'implemented', actions: [{ label: 'Modellübersicht öffnen', target: 'internal', path: '/models', demoUserId: 'christian.man' }], checkpoint: 'Die Auflösung ändert keine historische Version und schliesst nur die betroffenen Aufgaben.' },
@@ -967,7 +967,7 @@ export const POC_JOURNEYS: readonly PocJourney[] = [
     duration: '5 Minuten', difficulty: 'Einfach', systems: ['DaCa', 'CSV-Strukturinventar'],
     roles: [{name: 'Christian Man', responsibility: 'Data Steward · importiert und prüft das AdA-Beispielinventar im Bereich VBS / Verteidigung'}],
     prerequisites: [
-      'Eine aktive Data-Steward- oder Data-Owner-Rolle im gewählten Organisationsbereich ist vorhanden.',
+      'Eine aktive Data-Steward- oder Data Owner-Rolle im gewählten Organisationsbereich ist vorhanden.',
       'Das AdA-Beispielinventar kann über das Drei-Punkte-Menü auf der Journey-Kachel oder oben in dieser Anleitung heruntergeladen werden.',
       'Die Beispieldatei enthält 11 Tabellen und 62 Felder als Semikolon-CSV in UTF-8. Sie beschreibt einen Modellvorschlag mit synthetischem fachlichem Kontext.',
     ],

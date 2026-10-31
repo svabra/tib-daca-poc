@@ -1,9 +1,13 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { DacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-daca/design-system';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { CatalogI18nService } from '../../core/catalog-i18n.service';
+import { LandingPreferencesService } from '../../core/landing-preferences.service';
+import { TooltipDirective } from '../../shared/tooltip.directive';
+import { RecentWorkComponent } from './recent-work.component';
+import { OrganizationCanvasComponent } from './organization-canvas.component';
 import { DataProduct, StoredAccessRequest } from '../../core/catalog.models';
 import { selectNextWelcomeHeroTheme } from './welcome-hero-theme';
 import {
@@ -38,11 +42,17 @@ function selectSessionHeroTheme() {
 @Component({
   selector: 'daca-welcome-page',
   standalone: true,
-  imports: [DatePipe, RouterLink, StatusBadgeComponent, DacaGlossaryTermComponent],
+  imports: [DatePipe, RouterLink, StatusBadgeComponent, DacaGlossaryTermComponent, OrganizationCanvasComponent, TooltipDirective, RecentWorkComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="welcome-page">
-      <section class="welcome-hero" aria-labelledby="welcome-title">
+      <dialog #introDialog class="welcome-intro-confirm" aria-labelledby="intro-confirm-title">
+        <h2 id="intro-confirm-title">{{ i18n.t('welcomeHideTitle') }}</h2>
+        <p>{{ i18n.t('welcomeHideExplanation') }}</p>
+        <div><button type="button" class="daca-button is-secondary" (click)="introDialog.close()">{{ i18n.t('welcomeCancel') }}</button><button type="button" class="daca-button" (click)="landing.setWelcome(false); introDialog.close()">{{ i18n.t('welcomeHideConfirm') }}</button></div>
+      </dialog>
+      @if (landing.welcomeVisible()) {
+      <section class="welcome-hero welcome-intro" aria-labelledby="welcome-title">
         <picture class="welcome-hero-background" [class.is-loaded]="heroImageLoaded()" aria-hidden="true">
           <source
             type="image/avif"
@@ -77,10 +87,17 @@ function selectSessionHeroTheme() {
             </div>
             <p class="welcome-context">
               <span>Proof of Concept</span>
-              PoC Data Catalog · {{ i18n.t('welcomeContext') }}
+              {{ i18n.t('welcomeContext') }}
             </p>
           </div>
 
+          <button type="button" class="welcome-intro-dismiss" (click)="introDialog.showModal()" [attr.aria-label]="i18n.t('welcomeHideTitle')" [dacaTooltip]="i18n.t('welcomeHideTooltip')">×</button>
+      </section>
+      }
+      @if (landing.storageError()) { <p role="status" class="welcome-preference-notice">{{ i18n.t('welcomeStorageError') }}</p> }
+      <section class="welcome-workspace" [attr.aria-label]="i18n.t('welcomeWorkspace')">
+          <daca-organization-canvas />
+          <aside class="welcome-sidebar">
           <form
             class="welcome-search"
             role="search"
@@ -141,7 +158,6 @@ function selectSessionHeroTheme() {
                   <p>{{ i18n.t('noWelcomeProducts') }}</p>
                 }
                 @default {
-                  <p class="is-hint">{{ i18n.t('welcomeSearchTip') }}</p>
                 }
               }
             </div>
@@ -154,6 +170,8 @@ function selectSessionHeroTheme() {
               <strong>{{ i18n.t('openExpertSearch') }}</strong>
             </a>
           </form>
+          <daca-recent-work />
+          </aside>
       </section>
 
       <section id="handlungsbedarf" class="welcome-alerts" aria-labelledby="welcome-alerts-title">
@@ -265,7 +283,7 @@ function selectSessionHeroTheme() {
           </div>
           <p class="welcome-product-description">{{ productDescription() }}</p>
           <div class="welcome-product-meta" [attr.aria-label]="i18n.t('exampleProduct')">
-            <span>{{ i18n.t('ownerFemale') }}: {{ product().owner }}</span>
+            <span>{{ i18n.t('owner') }}: {{ product().owner }}</span>
             <span>Revision {{ product().revision }}</span>
             <span>{{ i18n.t('annually') }}</span>
             <span>REST &amp; PostgreSQL</span>
@@ -308,8 +326,11 @@ function selectSessionHeroTheme() {
   `,
 })
 export class WelcomePageComponent {
+  private readonly organizationCanvas = viewChild(OrganizationCanvasComponent);
+  canDeactivate(): boolean { return this.organizationCanvas()?.canDeactivate() ?? true; }
   readonly api = inject(CatalogApiService);
   readonly i18n = inject(CatalogI18nService);
+  readonly landing = inject(LandingPreferencesService);
   private readonly router = inject(Router);
   readonly product = computed(() => this.api.product());
   readonly productTitle = computed(() =>

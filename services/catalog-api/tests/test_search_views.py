@@ -153,3 +153,12 @@ def test_limits_and_authentication_do_not_silently_drop_data(client, monkeypatch
     assert client.post(PATH, headers=headers(), json={"name": "No space", "configuration": CONFIG}).status_code == 409
     assert client.get(PATH, headers={"X-DaCa-User": "missing-user"}).status_code == 401
     assert client.get(PATH, headers={"X-DaCa-User": ""}).status_code == 401
+
+
+def test_organization_kind_and_exact_domain_scope_round_trip_in_private_views(client):
+    configuration = {**CONFIG, "query": "", "kind": "organization", "organization": "all", "domain": "domain-id"}
+    view = create(client, configuration=configuration)
+    restored = client.get(PATH, headers=headers()).json()
+    assert restored[0]["configuration"] == configuration
+    assert client.get(PATH, headers=headers(B)).json() == []
+    assert view["configuration"]["kind"] == "organization"

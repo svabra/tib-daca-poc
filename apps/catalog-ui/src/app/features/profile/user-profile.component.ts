@@ -1,3 +1,4 @@
+import { catalogCopy } from '../../core/catalog-localization';
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DemoIdentityService, ModelingRole } from '../../core/demo-identity.service';
@@ -12,7 +13,7 @@ const MODEL_RIGHTS: Record<Exclude<ModelingRole,'deputy_data_steward'>, Capabili
     { title: ['Modelle erstellen und bearbeiten', 'Créer et modifier des modèles', 'Creare e modificare modelli', 'Create and edit models'], detail: ['Im zugewiesenen Organisationsbereich, einschliesslich untergeordneter Stellen.', 'Dans le périmètre organisationnel attribué et ses unités subordonnées.', 'Nell’ambito organizzativo assegnato e nelle unità subordinate.', 'In the assigned organization and its subordinate units.'] },
     { title: ['Aus physischen Tabellen ableiten', 'Dériver de tables physiques', 'Derivare da tabelle fisiche', 'Derive from physical tables'], detail: ['Technische Entwürfe und Zuordnungen anlegen.', 'Créer des ébauches techniques et des correspondances.', 'Creare bozze tecniche e mappature.', 'Create technical drafts and mappings.'] },
     { title: ['Strukturmetadaten verwalten', 'Gérer les métadonnées structurelles', 'Gestire i metadati strutturali', 'Manage structural metadata'], detail: ['Quellen registrieren und Strukturimporte auslösen.', 'Enregistrer des sources et lancer des importations de structure.', 'Registrare fonti e avviare importazioni della struttura.', 'Register sources and run structure imports.'] },
-    { title: ['Modelle veröffentlichen', 'Publier des modèles', 'Pubblicare modelli', 'Publish models'], detail: ['Nur wenn Sie für das konkrete Modell als Data Owner hinterlegt sind.', 'Seulement si vous êtes responsable du modèle concerné.', 'Solo se siete responsabili del modello specifico.', 'Only when you are the named Data Owner for the model.'] },
+    { title: ['Modelle veröffentlichen', 'Publier des modèles', 'Pubblicare modelli', 'Publish models'], detail: ['Nur wenn Sie für das konkrete Modell als Data Owner hinterlegt sind.', 'Seulement si vous êtes le Data Owner du modèle concerné.', 'Solo se siete il Data Owner del modello specifico.', 'Only when you are the named Data Owner for the model.'] },
   ],
   deputy_data_owner: [
     { title: ['Modelle erstellen und bearbeiten', 'Créer et modifier des modèles', 'Creare e modificare modelli', 'Create and edit models'], detail: ['Im zugewiesenen Organisationsbereich, einschliesslich untergeordneter Stellen.', 'Dans le périmètre organisationnel attribué et ses unités subordonnées.', 'Nell’ambito organizzativo assegnato e nelle unità subordinate.', 'In the assigned organization and its subordinate units.'] },
@@ -24,21 +25,21 @@ const MODEL_RIGHTS: Record<Exclude<ModelingRole,'deputy_data_steward'>, Capabili
     { title: ['Modelle erstellen und bearbeiten', 'Créer et modifier des modèles', 'Creare e modificare modelli', 'Create and edit models'], detail: ['Im zugewiesenen Organisationsbereich, einschliesslich untergeordneter Stellen.', 'Dans le périmètre organisationnel attribué et ses unités subordonnées.', 'Nell’ambito organizzativo assegnato e nelle unità subordinate.', 'In the assigned organization and its subordinate units.'] },
     { title: ['Aus physischen Tabellen ableiten', 'Dériver de tables physiques', 'Derivare da tabelle fisiche', 'Derive from physical tables'], detail: ['Technische Entwürfe und Zuordnungen anlegen.', 'Créer des ébauches techniques et des correspondances.', 'Creare bozze tecniche e mappature.', 'Create technical drafts and mappings.'] },
     { title: ['Strukturmetadaten verwalten', 'Gérer les métadonnées structurelles', 'Gestire i metadati strutturali', 'Manage structural metadata'], detail: ['Quellen registrieren und Strukturimporte auslösen.', 'Enregistrer des sources et lancer des importations de structure.', 'Registrare fonti e avviare importazioni della struttura.', 'Register sources and run structure imports.'] },
-    { title: ['Zur Prüfung einreichen', 'Soumettre à la validation', 'Inviare per la revisione', 'Submit for review'], detail: ['Entwürfe einreichen; die Veröffentlichung bleibt beim zuständigen Owner.', 'Soumettre des ébauches ; la publication relève du responsable.', 'Inviare bozze; la pubblicazione spetta al responsabile.', 'Submit drafts; publication remains with the responsible owner.'] },
+    { title: ['Zur Prüfung einreichen', 'Soumettre à la validation', 'Inviare per la revisione', 'Submit for review'], detail: ['Entwürfe einreichen; die Veröffentlichung bleibt beim zuständigen Data Owner.', 'Soumettre des ébauches ; la publication relève du Data Owner.', 'Inviare bozze; la pubblicazione spetta al Data Owner.', 'Submit drafts; publication remains with the responsible Data Owner.'] },
   ],
 };
 
 const OTHER_RIGHTS: Record<string, Capability> = {
-  data_owner: { title: ['Data Owner (Datenprodukt)', 'Responsable du produit de données', 'Responsabile del prodotto dati', 'Data product owner'], detail: ['Zugewiesene Datenprodukte und ihre Freigaben verwalten.', 'Gérer les produits de données attribués et leurs autorisations.', 'Gestire i prodotti dati assegnati e le autorizzazioni.', 'Manage assigned data products and their access grants.'] },
+  data_owner: { title: ['Data Owner (Datenprodukt)', 'Data Owner (produit de données)', 'Data Owner (prodotto dati)', 'Data Owner (data product)'], detail: ['Zugewiesene Datenprodukte und ihre Freigaben verwalten.', 'Gérer les produits de données attribués et leurs autorisations.', 'Gestire i prodotti dati assegnati e le autorizzazioni.', 'Manage assigned data products and their access grants.'] },
   data_consumer: { title: ['Data Consumer', 'Consommateur de données', 'Consumatore di dati', 'Data Consumer'], detail: ['Katalog durchsuchen, sichtbare Metadaten lesen und Zugriff beantragen.', 'Parcourir le catalogue, lire les métadonnées visibles et demander l’accès.', 'Esplorare il catalogo, leggere i metadati visibili e richiedere l’accesso.', 'Search the catalog, read visible metadata and request access.'] },
   data_analyst: { title: ['Data Analyst', 'Analyste de données', 'Analista dei dati', 'Data Analyst'], detail: ['Freigegebene Datenprodukte untersuchen und ihre Nutzungsinformationen einsehen.', 'Explorer les produits autorisés et leurs informations d’utilisation.', 'Esaminare i prodotti autorizzati e le informazioni d’uso.', 'Explore authorized data products and their usage information.'] },
   publication_approver: { title: ['Publikationsprüfung', 'Approbation de publication', 'Approvazione della pubblicazione', 'Publication approver'], detail: ['Zugewiesene Publikationsanträge prüfen.', 'Examiner les demandes de publication attribuées.', 'Esaminare le richieste di pubblicazione assegnate.', 'Review assigned publication requests.'] },
 };
 
 const ROLE_LABELS: Record<ModelingRole, Copy> = {
-  data_owner: ['Data Owner', 'Responsable des données', 'Responsabile dei dati', 'Data Owner'],
-  deputy_data_owner: ['Stellvertretende Data Owner', 'Suppléance du responsable des données', 'Sostituto responsabile dei dati', 'Deputy Data Owner'],
-  data_steward: ['Data Steward', 'Gestionnaire des données', 'Gestore dei dati', 'Data Steward'],
+  data_owner: ['Data Owner', 'Data Owner', 'Data Owner', 'Data Owner'],
+  deputy_data_owner: ['Stellvertretende Data Owner', 'Data Owner suppléant', 'Sostituto Data Owner', 'Deputy Data Owner'],
+  data_steward: ['Local Data Steward (LDS)', 'Local Data Steward (LDS)', 'Local Data Steward (LDS)', 'Local Data Steward (LDS)'],
   deputy_data_steward: ['Stv. Data Steward', 'Data Steward suppléant', 'Sostituto Data Steward', 'Deputy Data Steward'],
 };
 
@@ -54,10 +55,17 @@ const ROLE_LABELS: Record<ModelingRole, Copy> = {
       <div><h2 id="profile-name">{{ identity.user().displayName }}</h2><p>{{ primaryOrganization() }}</p><a [href]="'mailto:' + identity.user().email">{{ identity.user().email }}</a></div>
       <button class="daca-button is-secondary profile-logout" type="button" [disabled]="session.busy()" (click)="session.logout()">{{ tr(['Abmelden', 'Déconnexion', 'Disconnetti', 'Sign out']) }}</button>
     </section>
+    @if (identity.user().organizationMandates?.length) {
+      <section class="profile-section" aria-labelledby="mandates-title"><h2 id="mandates-title">{{ tr(['Organisationsmandate', 'Mandats organisationnels', 'Mandati organizzativi', 'Organizational mandates']) }}</h2>
+        <div class="profile-role-grid">@for (mandate of identity.user().organizationMandates; track mandate.organizationId) {
+          <article class="daca-card profile-other-role"><h3>{{ mandate.mandateType === 'ldsd' ? 'Local Data Steward Department (LDSD)' : 'Amt Local Data Steward (ALDS)' }}</h3><p>{{ mandate.organizationName }} @if (mandate.isDeputy) { · {{ tr(['Stellvertretung', 'Suppléance', 'Supplenza', 'Deputy']) }} }</p></article>
+        }</div>
+      </section>
+    }
     <section class="profile-section" aria-labelledby="organization-title"><h2 id="organization-title">{{ tr(['Organisation und Modellierungsrollen', 'Organisation et rôles de modélisation', 'Organizzazione e ruoli di modellazione', 'Organization and modeling roles']) }}</h2>
       @if (!identity.modelingAssignmentsAvailable()) { <p class="daca-alert is-error" role="alert">{{ tr(['Die aktuellen Modellierungsrollen konnten nicht geladen werden.', 'Impossible de charger les rôles de modélisation actuels.', 'Impossibile caricare i ruoli di modellazione attuali.', 'Current modeling roles could not be loaded.']) }}</p> }
       @else if (identity.user().modelingAssignments?.length) {
-        <p class="profile-hint">{{ tr(['Berechtigungen gelten für die angegebene Organisation und ihre untergeordneten Stellen. Eine Veröffentlichung erfordert zusätzlich die persönliche Owner-Zuordnung zum Modell.', 'Les droits s’appliquent à l’organisation indiquée et à ses unités subordonnées. La publication nécessite aussi une attribution personnelle au modèle.', 'Le autorizzazioni valgono per l’organizzazione indicata e le unità subordinate. Per pubblicare serve anche l’assegnazione personale al modello.', 'Permissions apply to the named organization and its subordinate units. Publishing also requires a personal owner assignment on the model.']) }}</p>
+        <p class="profile-hint">{{ tr(['Berechtigungen gelten für die angegebene Organisation und ihre untergeordneten Stellen. Eine Veröffentlichung erfordert zusätzlich die persönliche Data Owner-Zuordnung zum Modell.', 'Les droits s’appliquent à l’organisation indiquée et à ses unités subordonnées. La publication nécessite aussi une attribution personnelle au modèle.', 'Le autorizzazioni valgono per l’organizzazione indicata e le unità subordinate. Per pubblicare serve anche l’assegnazione personale al modello.', 'Permissions apply to the named organization and its subordinate units. Publishing also requires a personal Data Owner assignment on the model.']) }}</p>
         <div class="profile-role-grid">@for (assignment of identity.user().modelingAssignments; track assignment.id) {
           <article class="daca-card profile-role"><p class="daca-eyebrow">{{ assignment.departmentCode }}</p><h3>{{ assignment.organizationName }}</h3><p class="profile-role-name">{{ roleLabel(assignment.role) }}</p>
             @if (assignment.delegatedOwnerUserId) { <p>{{ tr(['Stellvertretung für', 'Suppléance de', 'Sostituto di', 'Deputy for']) }} {{ ownerName(assignment.delegatedOwnerUserId) }}</p> }
@@ -84,7 +92,7 @@ export class UserProfileComponent {
     const assignments = this.identity.user().modelingAssignments ?? [];
     return assignments.find((assignment) => assignment.organizationId === assignment.primaryOrganizationId)?.organizationName ?? this.identity.user().organization;
   });
-  tr(copy: Copy): string { return copy[({ de: 0, fr: 1, it: 2, en: 3 } satisfies Record<CatalogLanguage, number>)[this.preferences.language()]]; }
+  tr(copy: Copy): string { return catalogCopy(copy, this.preferences.language()); }
   roleLabel(role: ModelingRole): string { return this.tr(ROLE_LABELS[role]); }
   modelRights(role: ModelingRole): Capability[] { return MODEL_RIGHTS[role==='deputy_data_steward'?'data_steward':role]; }
   otherRoleTitle(role: string): string { return OTHER_RIGHTS[role] ? this.tr(OTHER_RIGHTS[role].title) : role; }

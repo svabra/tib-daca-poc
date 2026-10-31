@@ -2,21 +2,23 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { UserPreferencesService } from '../../core/user-preferences.service';
+import { LandingPreferencesService } from '../../core/landing-preferences.service';
 import { CatalogSettingsComponent } from './catalog-settings.component';
 
 describe('CatalogSettingsComponent', () => {
-  const language = signal<'de' | 'fr' | 'it' | 'en'>('de');
+  const language = signal<'de' | 'fr' | 'it' | 'en' | 'rm'>('de');
   const theme = signal<'light' | 'dark'>('light');
   const requestLanguage = vi.fn();
   const requestTheme = vi.fn();
 
-  function create(section: 'language' | 'appearance' | 'features' | 'responsibilities' | 'role-changes') {
+  function create(section: 'language' | 'appearance' | 'home' | 'features' | 'responsibilities' | 'role-changes') {
     TestBed.configureTestingModule({
       imports: [CatalogSettingsComponent],
       providers: [
         provideRouter([]),
         { provide: ActivatedRoute, useValue: { snapshot: { data: { settingsSection: section } } } },
         { provide: UserPreferencesService, useValue: { language, theme, requestLanguage, requestTheme } },
+        { provide: LandingPreferencesService, useValue: { welcomeVisible: signal(false), storageError: signal(false), setWelcome: vi.fn() } },
       ],
     });
     const fixture = TestBed.createComponent(CatalogSettingsComponent);
@@ -34,6 +36,7 @@ describe('CatalogSettingsComponent', () => {
     expect(links.map((link) => [link.textContent?.trim(), link.getAttribute('href')])).toEqual([
       ['Spracheinstellungen', '/settings/language-personal'],
       ['Erscheinungsbild', '/settings/appearance'],
+      ['Startseite', '/settings/home'],
       ['Featureliste', '/settings/features'],
       ['Rollen und Zuständigkeiten', '/settings/responsibilities'],
       ['Rollenprotokoll', '/settings/role-changes'],
@@ -44,6 +47,16 @@ describe('CatalogSettingsComponent', () => {
     expect(requestLanguage).toHaveBeenCalledWith('fr');
   });
 
+  it('offers Romansh with localized settings and the existing storage confirmation', () => {
+    language.set('rm');
+    const fixture=create('language'), root=fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('h2')?.textContent).toBe('Parameters da lingua persunals');
+    const select=root.querySelector<HTMLSelectElement>('.settings-language-field select')!;
+    expect(select.querySelector('option[value="rm"]')?.textContent).toBe('Rumantsch Grischun');
+    expect(select.value).toBe('rm');
+    select.dispatchEvent(new Event('change'));
+    expect(requestLanguage).toHaveBeenCalledWith('rm');
+  });
   it('offers light and dark mode through the existing preference confirmation', () => {
     const fixture = create('appearance');
     const buttons = [...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('.settings-theme-choice button')];

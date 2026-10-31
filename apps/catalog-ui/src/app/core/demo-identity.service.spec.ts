@@ -117,7 +117,7 @@ describe('DemoIdentityService', () => {
     http.expectOne('/api/v1/demo-users').flush([service.users()[0], sandro]);
     flushPersonas(http);
 
-    expect(service.user()).toEqual(expect.objectContaining(sandro));
+    expect(service.user()).toEqual(expect.objectContaining({...sandro, organization: 'EFD BAZG'}));
     expect(window.location.search).toBe('');
   });
 
@@ -153,14 +153,15 @@ describe('DemoIdentityService', () => {
     flushPersonas(http);
 
     const users = service.users();
-    expect(users).toHaveLength(23);
+    expect(users).toHaveLength(26);
+    expect(users.find((user) => user.id === 'fausto.marzo')).toEqual(expect.objectContaining({ displayName: 'Fausto Marzo', organization: 'EFD BIT PS', office: 'efd-bit-ps', roles: ['publication_approver'] }));
     const modelingIds = ['christian.spider', 'sibilla.micheli', 'cinthya.thor', 'lawrence.hill', 'hong.an.captain', 'christian.man', 'mirjam.keller', 'daniel.wenger', 'eliane.rossi', 'giuseppe.starwars', 'thomas.wikinger'];
-    expect(users.filter((user) => !modelingIds.includes(user.id)).every((user) => Boolean(user.avatarUrl))).toBe(true);
+    expect(users.every((user) => Boolean(user.avatarUrl))).toBe(true);
     expect(users.filter((user) => modelingIds.includes(user.id))).toHaveLength(11);
     expect(users.filter((user) => modelingIds.includes(user.id)).every((user) => user.department === 'VBS')).toBe(true);
-    expect(users.find((user) => user.id === 'sibilla.micheli')).toEqual(expect.objectContaining({ organization: 'Verteidigung', avatarUrl: null, roles: expect.arrayContaining(['data_owner']), modelingRoles: ['deputy_data_owner'] }));
-    expect(users.find((user) => user.id === 'giuseppe.starwars')).toEqual(expect.objectContaining({ organization: 'armasuisse', office: 'vbs-armasuisse', modelingRoles: ['data_owner'] }));
-    expect(users.find((user) => user.id === 'thomas.wikinger')).toEqual(expect.objectContaining({ organization: 'armasuisse', office: 'vbs-armasuisse', modelingRoles: ['data_steward'] }));
+    expect(users.find((user) => user.id === 'sibilla.micheli')).toEqual(expect.objectContaining({ organization: 'VBS GS', office: 'vbs-gs', avatarUrl: '/assets/data-owners/sibilla-micheli.webp', roles: expect.arrayContaining(['data_owner']), modelingRoles: ['deputy_data_owner'] }));
+    expect(users.find((user) => user.id === 'giuseppe.starwars')).toEqual(expect.objectContaining({ organization: 'VBS armasuisse', office: 'vbs-armasuisse', modelingRoles: ['data_owner'] }));
+    expect(users.find((user) => user.id === 'thomas.wikinger')).toEqual(expect.objectContaining({ organization: 'VBS armasuisse', office: 'vbs-armasuisse', modelingRoles: ['data_steward'] }));
     expect(users.map((user) => user.id)).toEqual(expect.arrayContaining([
       'joel.ruod',
       'lucien.morel',
@@ -174,20 +175,21 @@ describe('DemoIdentityService', () => {
     window.history.replaceState({}, '', '/models?demoUser=sibilla.micheli');
     const service = TestBed.inject(DemoIdentityService);
     const http = TestBed.inject(HttpTestingController);
-    const sibilla: DemoUser = { id:'sibilla.micheli',displayName:'Sibilla Micheli',organization:'Verteidigung',email:'sibilla.micheli@vbs.admin.ch',phone:null,avatarUrl:null,roles:['data_owner','data_consumer'] };
+    const sibilla: DemoUser = { id:'sibilla.micheli',displayName:'Sibilla Di Ciesa',organization:'VBS GS-VBS',office:'vbs-gs',organizationMandates:[{organizationId:'vbs',organizationName:'VBS',mandateType:'ldsd',isDeputy:false}],email:'sibilla.di.ciesa@vbs.admin.ch',phone:null,avatarUrl:null,roles:['data_owner','data_consumer'] };
     http.expectOne('/api/v1/demo-users').flush([sibilla]);
-    flushPersonas(http,[{id:'assignment-1',userId:'sibilla.micheli',displayName:'Sibilla Micheli',departmentCode:'VBS',organizationId:'vbs-verteidigung',organizationName:'Verteidigung',role:'deputy_data_owner',delegatedOwnerUserId:'christian.spider'}]);
+    flushPersonas(http,[{id:'assignment-1',userId:'sibilla.micheli',displayName:'Sibilla Di Ciesa',departmentCode:'VBS',organizationId:'vbs-verteidigung',organizationName:'Verteidigung',role:'deputy_data_owner',delegatedOwnerUserId:'christian.spider'}]);
     expect(service.user().roles).toEqual(sibilla.roles);
     expect(service.user().modelingRoles).toEqual(['deputy_data_owner']);
-    expect(service.user().office).toBe('vbs-verteidigung');
+    expect(service.user().office).toBe('vbs-gs');
+    expect(service.user().organizationMandates?.[0].mandateType).toBe('ldsd');
     expect(service.canPublishModels()).toBe(true);
   });
 
   it('grants model publication only to the scoped owner or the deputy delegated by that owner', () => {
     const service = TestBed.inject(DemoIdentityService);
     const http = TestBed.inject(HttpTestingController);
-    const christian: DemoUser = { id:'christian.spider',displayName:'Christian Spider',organization:'Verteidigung',email:'christian.spider@vtg.admin.ch',phone:null,avatarUrl:null,roles:['data_owner'] };
-    const sibilla: DemoUser = { id:'sibilla.micheli',displayName:'Sibilla Micheli',organization:'Verteidigung',email:'sibilla.micheli@vbs.admin.ch',phone:null,avatarUrl:null,roles:['data_owner'] };
+    const christian: DemoUser = { id:'christian.spider',displayName:'Christiano Stadello',organization:'Verteidigung',email:'christiano.stadello@ar.admin.ch',phone:null,avatarUrl:null,roles:['data_owner'] };
+    const sibilla: DemoUser = { id:'sibilla.micheli',displayName:'Sibilla Di Ciesa',organization:'Verteidigung',email:'sibilla.di.ciesa@vbs.admin.ch',phone:null,avatarUrl:null,roles:['data_owner'] };
     const lawrence: DemoUser = { id:'lawrence.hill',displayName:'Lawrence Hill',organization:'Verteidigung',email:'lawrence.hill@vtg.admin.ch',phone:null,avatarUrl:null,roles:['data_owner'] };
     http.expectOne('/api/v1/demo-users').flush([christian, sibilla, lawrence]);
     flushPersonas(http, [

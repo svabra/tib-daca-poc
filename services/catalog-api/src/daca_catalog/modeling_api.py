@@ -100,6 +100,7 @@ from .models import (
     PhysicalTable,
     WorkflowTask,
 )
+from .organization_display import organization_display
 from .physical_source_access import require_source_access, returned_source_ids
 
 SessionDep = Annotated[Session, Depends(get_session)]
@@ -166,6 +167,8 @@ def _organization_breadcrumb(session: Session, organization_id: str) -> list[dic
 
 
 def _descendant_ids(session: Session, organization_id: str) -> set[str]:
+    if snapshot := session.info.get("semantic_read"):
+        return snapshot.descendants(organization_id)
     children: dict[str, list[str]] = {}
     for row in session.scalars(select(AdministrativeOrganization).where(AdministrativeOrganization.active.is_(True))):
         if row.parent_id:
@@ -602,7 +605,7 @@ def create_modeling_router() -> APIRouter:
                 "displayName": user.display_name,
                 "departmentCode": assignment.department_code,
                 "organizationId": organization.id,
-                "organizationName": organization.display_name,
+                "organizationName": organization_display(session).label(organization.id),
                 "role": assignment.role,
                 "delegatedOwnerUserId": assignment.delegated_owner_user_id,
                 "primaryOrganizationId": primary_id,

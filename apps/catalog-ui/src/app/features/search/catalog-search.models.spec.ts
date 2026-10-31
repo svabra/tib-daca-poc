@@ -3,7 +3,7 @@ import { FALLBACK_PHYSICAL_SNAPSHOT } from '../data-models/mapping-fallback';
 import { PhysicalSource } from '../data-models/data-models.models';
 import { groupSearchAssets, physicalSearchAssets, productSearchAsset, searchAssetIcon, searchAssetMatches } from './catalog-search.models';
 
-export const SEARCH_SOURCE:PhysicalSource={id:FALLBACK_PHYSICAL_SNAPSHOT.sourceId,name:'Gebäudeinventar',revision:1,connectorType:'csv',department:'VBS',office:'armasuisse',systemName:'ImmoGIS',databaseName:'CSV',latestSnapshotId:FALLBACK_PHYSICAL_SNAPSHOT.id,latestSnapshotSequence:1,latestSnapshot:null,catalogPath:'urn:daca:source:test',ownerName:'Owner',updatedAt:'2026-10-30'};
+export const SEARCH_SOURCE:PhysicalSource={id:FALLBACK_PHYSICAL_SNAPSHOT.sourceId,name:'Gebäudeinventar',revision:1,connectorType:'csv',department:'VBS',office:'armasuisse',systemName:'ImmoGIS',databaseName:'CSV',latestSnapshotId:FALLBACK_PHYSICAL_SNAPSHOT.id,latestSnapshotSequence:1,latestSnapshot:null,catalogPath:'urn:daca:source:test',ownerName:'Data Owner',updatedAt:'2026-10-30'};
 
 describe('Catalog search asset projection',()=>{
   it.each([

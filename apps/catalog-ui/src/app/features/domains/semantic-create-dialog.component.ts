@@ -14,7 +14,7 @@ export interface SemanticCreation {kind:'term'|'domain';label:string;definition:
     <header><h2 id="semantic-create-title">{{kind()==='term'?'Neuen Begriff erstellen':'Neue Domäne erstellen'}}</h2><button class="daca-button is-secondary" type="button" aria-label="Schliessen" [disabled]="busy()" (click)="closed.emit()">×</button></header>
     @if(error()){<p class="daca-alert is-error" role="alert">{{error()}}</p>}
     @if(loading()){<daca-loading-indicator label="Formular wird geladen …"/>}@else if(kind()==='term'){
-      <p>Neue Begriffe werden von den zuständigen Domain Owners freigegeben. Bis dahin erscheint eine persönliche Vorschlagskarte.</p>
+      <p>Neue Begriffe werden von den zuständigen Data Owners freigegeben. Bis dahin erscheint eine persönliche Vorschlagskarte.</p>
       <daca-glossary-proposal-form [domains]="domains()" [terms]="terms()" [initialDomainIds]="domainId()?[domainId()]:[]" [initialRelationTargetTermId]="sourceTermId()" [submitting]="busy()" (proposalSubmit)="createTerm($event)" (proposalCancel)="!busy()&&closed.emit()" (targetSelect)="error.set('Nutzen Sie Begriff suchen, um einen bestehenden Begriff einzufügen.')"/>
     }@else{
       <p>Die Domäne erscheint vorläufig als persönliche Vorschlagskarte. Erst der zuständige ALDS (Amt Local Data Steward) oder seine mandatierte Stellvertretung gibt sie für den Katalog frei. Der Antragsteller kann nicht selbst bewilligen. Zuständig ist das Amt des vorgeschlagenen Data Owners.</p>

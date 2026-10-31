@@ -1,3 +1,4 @@
+import { federalOrganizationLabel } from './organization-label';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { catchError, forkJoin, of } from 'rxjs';
@@ -33,6 +34,7 @@ export interface DemoUser {
   modelingRoles?: readonly ModelingRole[];
   modelingAssignments?: readonly ModelingPersona[];
   supervisorUserId?: string | null;
+  organizationMandates?: readonly { organizationId: string; organizationName: string; mandateType: 'ldsd' | 'alds'; isDeputy: boolean }[];
 }
 
 export interface ModelPublicationScope {
@@ -45,7 +47,7 @@ export interface ModelPublicationScope {
 const KASSANDRA: DemoUser = {
   id: 'kassandra.valdata',
   displayName: 'Kassandra Valdata',
-  organization: 'ESTV',
+  organization: 'EFD ESTV',
   email: 'kassandra.valdata@estv.admin.ch',
   phone: '+41 58 000 00 11',
   avatarUrl: '/assets/kassandra-valdata.webp',
@@ -56,25 +58,28 @@ const POC_USERS: readonly DemoUser[] = [
   { id: 'ariane.keller', displayName: 'Ariane Keller', organization: 'ESTV', email: 'ariane.keller@estv.admin.ch', phone: '+41 58 000 00 12', avatarUrl: '/assets/data-owners/ariane-keller.webp', roles: ['data_owner', 'data_consumer'] },
   { id: 'beat.stalder', displayName: 'Beat Stalder', organization: 'Kanton St. Gallen', email: 'beat.stalder@sg.ch', phone: '+41 58 000 00 71', avatarUrl: '/assets/data-owners/beat-stalder.webp', roles: ['data_owner', 'data_consumer'] },
   { id: 'daniel.aebischer', displayName: 'Daniel Aebischer', organization: 'EFV', email: 'daniel.aebischer@efv.admin.ch', phone: '+41 58 000 00 51', avatarUrl: '/assets/data-owners/daniel-aebischer.webp', roles: ['data_owner', 'data_consumer'] },
-  { id: 'joel.ruod', displayName: 'Joel Ruod', organization: 'ESTV', email: 'joel.ruod@estv.admin.ch', phone: '+41 58 000 00 82', avatarUrl: '/assets/data-owners/joel-ruod.webp', roles: ['data_analyst', 'data_owner'], supervisorUserId: 'thomas.kriegli' },
+  { id: 'joel.ruod', displayName: 'Joel Ruod', organization: 'EFD ESTV BI', department: 'EFD', office: 'efd-estv-bi', email: 'joel.ruod@estv.admin.ch', phone: '+41 58 000 00 82', avatarUrl: '/assets/data-owners/joel-ruod.webp', roles: ['data_analyst', 'data_owner'], supervisorUserId: 'thomas.kriegli' },
   { id: 'lea.hofmann', displayName: 'Lea Hofmann', organization: 'BAZG', email: 'lea.hofmann@bazg.admin.ch', phone: '+41 58 000 00 92', avatarUrl: '/assets/data-owners/lea-hofmann.webp', roles: ['data_owner', 'data_consumer'] },
   { id: 'lucien.morel', displayName: 'Lucien Morel', organization: 'Kanton Neuchâtel', email: 'lucien.morel@ne.ch', phone: '+41 58 000 00 43', avatarUrl: '/assets/data-owners/lucien-morel.webp', roles: ['data_owner', 'data_consumer'] },
   { id: 'noemie.rochat', displayName: 'Noémie Rochat', organization: 'Kanton Neuchâtel', email: 'noemie.rochat@ne.ch', phone: '+41 58 000 00 42', avatarUrl: '/assets/data-owners/noemie-rochat.webp', roles: ['data_owner', 'data_consumer'] },
   { id: 'sandro.wenger', displayName: 'Sandro Wenger', organization: 'BAZG', email: 'sandro.wenger@bazg.admin.ch', phone: '+41 58 000 00 91', avatarUrl: '/assets/data-owners/sandro-wenger.webp', roles: ['data_owner', 'data_consumer'] },
   { id: 'sarah.brunner', displayName: 'Sarah Brunner', organization: 'Kanton St. Gallen', email: 'sarah.brunner@sg.ch', phone: '+41 58 000 00 72', avatarUrl: '/assets/data-owners/sarah-brunner.webp', roles: ['data_owner', 'data_consumer'] },
-  { id: 'christian.spider', displayName: 'Christian Spider', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'christian.spider@vtg.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'data_owner' },
-  { id: 'sibilla.micheli', displayName: 'Sibilla Micheli', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'sibilla.micheli@vbs.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'deputy_data_owner' },
-  { id: 'cinthya.thor', displayName: 'Cinthya Thor', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'cinthya.thor@vtg.admin.ch', phone: null, avatarUrl: null, roles: ['data_consumer'], primaryModelingRole: 'data_steward' },
-  { id: 'lawrence.hill', displayName: 'Lawrence Hill', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'lawrence.hill@vtg.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'data_owner' },
-  { id: 'hong.an.captain', displayName: 'Hong An Captain', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'hong-an.captain@vtg.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'deputy_data_owner' },
-  { id: 'christian.man', displayName: 'Christian Man', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'christian.man@vtg.admin.ch', phone: null, avatarUrl: null, roles: ['data_consumer'], primaryModelingRole: 'data_steward' },
-  { id: 'mirjam.keller', displayName: 'Mirjam Keller', organization: 'armasuisse Immobilien', department: 'VBS', office: 'vbs-armasuisse-immobilien', email: 'mirjam.keller@ar.admin.ch', phone: null, avatarUrl: null, roles: ['data_consumer'], primaryModelingRole: 'data_steward' },
-  { id: 'daniel.wenger', displayName: 'Daniel Wenger', organization: 'armasuisse Immobilien', department: 'VBS', office: 'vbs-armasuisse-immobilien', email: 'daniel.wenger@ar.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'data_owner' },
-  { id: 'eliane.rossi', displayName: 'Eliane Rossi', organization: 'armasuisse Immobilien', department: 'VBS', office: 'vbs-armasuisse-immobilien', email: 'eliane.rossi@ar.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'deputy_data_owner' },
-  { id: 'giuseppe.starwars', displayName: 'Giuseppe Starwars', organization: 'armasuisse', department: 'VBS', office: 'vbs-armasuisse', email: 'giuseppe.starwars@ar.admin.ch', phone: null, avatarUrl: null, roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'data_owner' },
-  { id: 'thomas.wikinger', displayName: 'Thomas Wikinger', organization: 'armasuisse', department: 'VBS', office: 'vbs-armasuisse', email: 'thomas.wikinger@ar.admin.ch', phone: null, avatarUrl: null, roles: ['data_consumer'], primaryModelingRole: 'data_steward' },
+  { id: 'christian.spider', displayName: 'Christiano Stadello', organization: 'VBS armasuisse', department: 'VBS', office: 'vbs-armasuisse', email: 'christiano.stadello@ar.admin.ch', phone: null, avatarUrl: '/assets/data-owners/christian-spider.webp', roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'data_owner' },
+  { id: 'sibilla.micheli', displayName: 'Sibilla Di Ciesa', organization: 'VBS GS-VBS', department: 'VBS', office: 'vbs-gs', email: 'sibilla.di.ciesa@vbs.admin.ch', phone: null, avatarUrl: '/assets/data-owners/sibilla-micheli.webp', roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'deputy_data_owner' },
+  { id: 'cinthya.thor', displayName: 'Cinthya Thor', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'cinthya.thor@vtg.admin.ch', phone: null, avatarUrl: '/assets/data-owners/cinthya-thor.webp', roles: ['data_consumer'], primaryModelingRole: 'data_steward' },
+  { id: 'lawrence.hill', displayName: 'Lawrence Hill', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'lawrence.hill@vtg.admin.ch', phone: null, avatarUrl: '/assets/data-owners/lawrence-hill.webp', roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'data_owner' },
+  { id: 'hong.an.captain', displayName: 'Hong An Captain', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'hong-an.captain@vtg.admin.ch', phone: null, avatarUrl: '/assets/data-owners/hong-an-captain.webp', roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'deputy_data_owner' },
+  { id: 'christian.man', displayName: 'Christian Man', organization: 'Verteidigung', department: 'VBS', office: 'vbs-verteidigung', email: 'christian.man@vtg.admin.ch', phone: null, avatarUrl: '/assets/data-owners/christian-man.webp', roles: ['data_consumer'], primaryModelingRole: 'data_steward' },
+  { id: 'mirjam.keller', displayName: 'Mirjam Keller', organization: 'armasuisse Immobilien', department: 'VBS', office: 'vbs-armasuisse-immobilien', email: 'mirjam.keller@ar.admin.ch', phone: null, avatarUrl: '/assets/data-owners/mirjam-keller.webp', roles: ['data_consumer'], primaryModelingRole: 'data_steward' },
+  { id: 'daniel.wenger', displayName: 'Daniel Wenger', organization: 'armasuisse Immobilien', department: 'VBS', office: 'vbs-armasuisse-immobilien', email: 'daniel.wenger@ar.admin.ch', phone: null, avatarUrl: '/assets/data-owners/daniel-wenger.webp', roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'data_owner' },
+  { id: 'eliane.rossi', displayName: 'Eliane Rossi', organization: 'armasuisse Immobilien', department: 'VBS', office: 'vbs-armasuisse-immobilien', email: 'eliane.rossi@ar.admin.ch', phone: null, avatarUrl: '/assets/data-owners/eliane-rossi.webp', roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'deputy_data_owner' },
+  { id: 'giuseppe.starwars', displayName: 'Giuseppe Starwars', organization: 'armasuisse', department: 'VBS', office: 'vbs-armasuisse', email: 'giuseppe.starwars@ar.admin.ch', phone: null, avatarUrl: '/assets/data-owners/giuseppe-starwars.webp', roles: ['data_owner', 'data_consumer'], primaryModelingRole: 'data_owner' },
+  { id: 'thomas.wikinger', displayName: 'Thomas Wikinger', organization: 'armasuisse', department: 'VBS', office: 'vbs-armasuisse', email: 'thomas.wikinger@ar.admin.ch', phone: null, avatarUrl: '/assets/data-owners/thomas-wikinger.webp', roles: ['data_consumer'], primaryModelingRole: 'data_steward' },
   { id: 'simone.wyss', displayName: 'Simone Wyss', organization: 'EFV', email: 'simone.wyss@efv.admin.ch', phone: '+41 58 000 00 52', avatarUrl: '/assets/data-owners/simone-wyss.webp', roles: ['data_owner', 'data_consumer'] },
-  { id: 'thomas.kriegli', displayName: 'Thomas Kriegli', organization: 'ESTV', email: 'thomas.kriegli@estv.admin.ch', phone: '+41 58 000 00 83', avatarUrl: '/assets/data-owners/thomas-kriegli.webp', roles: ['publication_approver', 'data_consumer'], supervisorUserId: null },
+  { id: 'thomas.kriegli', displayName: 'Thomas Kriegli', organization: 'EFD ESTV BI', department: 'EFD', office: 'efd-estv-bi', email: 'thomas.kriegli@estv.admin.ch', phone: '+41 58 000 00 83', avatarUrl: '/assets/data-owners/thomas-kriegli.webp', roles: ['publication_approver', 'data_consumer'], supervisorUserId: null },
+  { id: 'fausto.marzo', displayName: 'Fausto Marzo', organization: 'EFD BIT PS', department: 'EFD', office: 'efd-bit-ps', email: 'fausto.marzo@example.invalid', phone: null, avatarUrl: '/assets/data-owners/fausto-marzo.webp', roles: ['publication_approver'] },
+  { id: 'marcello.hebeisa', displayName: 'Marcello Hebeisa', organization: 'EFD BIT PS CPS', department: 'EFD', office: 'efd-bit-ps-cps', email: 'marcello.hebeisa@example.invalid', phone: null, avatarUrl: '/assets/data-owners/marcello-hebeisa.webp', roles: ['data_owner'], primaryModelingRole: 'data_owner' },
+  { id: 'matteo.duca', displayName: 'Matteo Duca', organization: 'EFD BIT PS CPS', department: 'EFD', office: 'efd-bit-ps-cps', email: 'matteo.duca@example.invalid', phone: null, avatarUrl: '/assets/data-owners/matteo-duca.webp', roles: ['deputy_data_owner'], primaryModelingRole: 'deputy_data_owner' },
 ];
 const POC_USER_IDS = new Set(POC_USERS.map((user) => user.id));
 
@@ -103,7 +108,7 @@ export class DemoIdentityService {
     }).subscribe(({ users, personas }) => {
       this.modelingAssignmentsAvailable.set(personas !== null);
       const source = users.length ? users : POC_USERS;
-      const available = source.map((user) => this.withModelingPersonas(user, personas ?? []));
+      const available = source.map((user) => this.withModelingPersonas({...user, organization: federalOrganizationLabel(user.organization), avatarUrl: user.avatarUrl || POC_USERS.find(item => item.id === user.id)?.avatarUrl || null}, personas ?? []));
       this.usersState.set(available);
       this.directoryResolved = true;
       const preferredUserId = this.pendingUserId ?? requestedUserId;
@@ -149,7 +154,7 @@ export class DemoIdentityService {
       ...user,
       roles: user.roles,
       department: assignment?.departmentCode ?? user.department ?? fallback?.department ?? null,
-      office: assignment?.organizationId ?? user.office ?? fallback?.office ?? null,
+      office: user.office ?? assignment?.primaryOrganizationId ?? assignment?.organizationId ?? fallback?.office ?? null,
       primaryModelingRole: roles[0] ?? user.primaryModelingRole ?? fallback?.primaryModelingRole ?? null,
       modelingRoles: roles.length ? roles : user.modelingRoles ?? (user.primaryModelingRole ? [user.primaryModelingRole] : fallback?.primaryModelingRole ? [fallback.primaryModelingRole] : []),
       modelingAssignments: assignments,

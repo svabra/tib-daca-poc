@@ -139,8 +139,10 @@ from .office_governance import (
     seed_rapid_prototyping_domain,
     seed_requested_steward_mandates,
 )
+from .organization_display import organization_display
 from .physical_csv_api import create_physical_csv_router
 from .physical_source_access_api import create_physical_source_access_router
+from .poc_portraits import seed_poc_portraits
 from .policy import (
     ActivePolicy,
     build_opa_bundle,
@@ -1268,9 +1270,18 @@ def _require_active_data_owner(session: Session, user_id: str) -> DemoUser:
     return user
 
 
+def _domain_creation_reviewers(session: Session, change: DomainChangeRequest, payload: dict) -> set[str]:
+    # The trusted fixture reactivates an existing domain; its retained office
+    # does not follow the employment of its named Data Owner. Public create
+    # requests cannot supply a target ID or an administrative scope.
+    target = session.get(Domain, change.target_domain_id) if change.id == DEFENCE_REQUEST_ID and change.target_domain_id else None
+    scope = domain_organization_ids(session, target) if target else None
+    return domain_creation_reviewers(session, payload.get("ownerUserId"), change.requester_user_id, organization_ids=scope)
+
+
 def _domain_request_reviewers(session: Session, change: DomainChangeRequest) -> set[str]:
     if change.operation == "create":
-        return domain_creation_reviewers(session, change.requested_payload.get("ownerUserId"), change.requester_user_id)
+        return _domain_creation_reviewers(session, change, change.requested_payload)
     target = session.get(Domain, change.target_domain_id) if change.target_domain_id else None
     if target:
         owners = domain_owners(session, target)
@@ -1333,7 +1344,8 @@ def _preferred_localization(localizations: list[Any], language: str = "de") -> A
 def _domain_response(session: Session, domain: Domain, actor: str | None = None) -> DomainResponse:
     from .domain_network import domain_scope
 
-    localizations = list(
+    snapshot = session.info.get("semantic_read")
+    localizations = snapshot.domain_labels[domain.id] if snapshot else list(
         session.scalars(
             select(DomainLocalization)
             .where(DomainLocalization.domain_id == domain.id)
@@ -1351,13 +1363,13 @@ def _domain_response(session: Session, domain: Domain, actor: str | None = None)
             "canTransferOwnership": can_transfer_domain(session, actor, domain),
             "preferredLabel": preferred.preferred_label if preferred else domain.urn,
             "localizations": localizations,
-            "productCount": session.scalar(
+            "productCount": snapshot.product_counts.get(domain.id, 0) if snapshot else session.scalar(
                 select(func.count())
                 .select_from(DataProductDomain)
                 .where(DataProductDomain.domain_id == domain.id)
             )
             or 0,
-            "termCount": session.scalar(
+            "termCount": snapshot.term_counts.get(domain.id, 0) if snapshot else session.scalar(
                 select(func.count())
                 .select_from(GlossaryTermDomain)
                 .where(GlossaryTermDomain.domain_id == domain.id)
@@ -1368,20 +1380,21 @@ def _domain_response(session: Session, domain: Domain, actor: str | None = None)
 
 
 def _term_response(session: Session, term: GlossaryTerm) -> GlossaryTermResponse:
+    snapshot = session.info.get("semantic_read")
     owner_id, deputy_id = term_owner_pair(session, term.id)
-    localizations = list(
+    localizations = snapshot.term_labels[term.id] if snapshot else list(
         session.scalars(
             select(GlossaryTermLocalization)
             .where(GlossaryTermLocalization.term_id == term.id)
             .order_by(GlossaryTermLocalization.language)
         )
     )
-    domain_ids = list(
+    domain_ids = snapshot.term_domains[term.id] if snapshot else list(
         session.scalars(
             select(GlossaryTermDomain.domain_id).where(GlossaryTermDomain.term_id == term.id)
         )
     )
-    relations = list(
+    relations = snapshot.term_relations[term.id] if snapshot else list(
         session.scalars(
             select(GlossaryTermRelation).where(GlossaryTermRelation.source_term_id == term.id)
         )
@@ -1390,7 +1403,7 @@ def _term_response(session: Session, term: GlossaryTerm) -> GlossaryTermResponse
     for relation in relations:
         target_label = relation.target_uri or "Verknüpfter Term"
         if relation.target_term_id is not None:
-            target_localizations = list(
+            target_localizations = snapshot.term_labels[relation.target_term_id] if snapshot else list(
                 session.scalars(
                     select(GlossaryTermLocalization)
                     .where(GlossaryTermLocalization.term_id == relation.target_term_id)
@@ -1502,6 +1515,15 @@ def data_product_response(
             )
         )
     payload = DataProductResponse.model_validate(product).model_dump(by_alias=True)
+    owner = session.get(DemoUser, product.owner_user_id) if product.owner_user_id else None
+    if owner:
+        metadata = dict(product.extra_metadata or {})
+        previous_owner = metadata.get("dataOwner")
+        metadata["dataOwner"] = {
+            **(previous_owner if isinstance(previous_owner, dict) else {}), "name": owner.display_name,
+            "organization": organization_display(session).user(owner), "avatarUrl": owner.avatar_url,
+        }
+        payload["metadata"] = metadata
     payload["domains"] = [
         _domain_reference(session, domain_by_id[domain_id])
         for domain_id in domain_ids
@@ -1535,7 +1557,7 @@ def data_product_summary(
         classification=product.classification,
         keywords=product.keywords,
         update_frequency=product.update_frequency,
-        metadata=product.extra_metadata,
+        metadata=detail.metadata,
         quality=DataProductQualitySummary(score=quality.score, medal=quality.medal),
         created_at=product.created_at,
         updated_at=product.updated_at,
@@ -1937,9 +1959,9 @@ def _accept_term_proposal(
     else:
         term = session.get(GlossaryTerm, proposal.target_term_id)
         if term is None:
-            raise HTTPException(409, "The target glossary term no longer exists")
+            raise HTTPException(409, "The target terminology term no longer exists")
         if term.lifecycle == "retired":
-            raise HTTPException(409, "The target glossary term is already retired")
+            raise HTTPException(409, "The target terminology term is already retired")
         term.revision += 1
         term.updated_at = utc_now()
     if proposal.operation == "retire":
@@ -2015,7 +2037,7 @@ def _accept_term_proposal(
         assignee=proposal.requester_user_id,
         product_id=proposal.source_product_id,
         term_proposal_id=proposal.id,
-        title="Glossartermvorschlag angenommen",
+        title="Terminologievorschlag angenommen",
         detail=attachment_message,
     )
     return term
@@ -2056,7 +2078,7 @@ def _mark_term_proposal_stale_for_retired_domains(
         task_type="glossary_term_decision",
         task_kind="information",
         assignee=proposal.requester_user_id,
-        title="Glossartermvorschlag muss neu eingereicht werden",
+        title="Terminologievorschlag muss neu eingereicht werden",
         detail=(
             f"{decision_comment} Nächster manueller Schritt: Prüfen Sie die aktiven "
             "Domainzuordnungen und reichen Sie einen neuen Vorschlag ein."
@@ -2386,14 +2408,29 @@ def create_router() -> APIRouter:
         )
 
     @router.get("/demo-users", response_model=list[DemoUserResponse], tags=["POC"])
-    def list_demo_users(session: SessionDep) -> list[DemoUser]:
-        return list(
+    def list_demo_users(session: SessionDep) -> list[DemoUserResponse]:
+        users = list(
             session.scalars(
                 select(DemoUser)
                 .where(DemoUser.active.is_(True), DemoUser.selectable.is_(True))
                 .order_by(DemoUser.display_name)
             )
         )
+        labels = organization_display(session)
+        from .office_governance import profile_mandates
+        mandates = profile_mandates(session, labels)
+        result = []
+        for user in users:
+            primary = labels.primary.get(user.id)
+            if user.id not in labels.membership_users:
+                primary = primary or labels.directory.get(user.id)
+            organization = labels.organizations.get(primary)
+            result.append(DemoUserResponse.model_validate(user).model_copy(update={
+                "organization": labels.user(user), "office": primary,
+                "department": organization.department_code if organization else None,
+                "organization_mandates": mandates.get(user.id, []),
+            }))
+        return result
 
     @router.get("/session", tags=["POC"])
     def read_local_session(request: Request, session: SessionDep) -> dict[str, str]:
@@ -2449,11 +2486,12 @@ def create_router() -> APIRouter:
         request: Request, session: SessionDep,
         x_daca_user: Annotated[str | None, Header(alias="X-DaCa-User")] = None,
     ) -> dict[str, str]:
-        allowed = {"language": {"de", "fr", "it", "en"}, "theme": {"light", "dark"}}
+        allowed = {"language": {"de", "fr", "it", "en", "rm"}, "theme": {"light", "dark"}}
         value = body.get("value")
         if value not in allowed[name]:
             raise HTTPException(422, "Invalid personal preference")
         user = personal_preference_user(session, request, x_daca_user)
+        user = session.scalar(select(DemoUser).where(DemoUser.id == user.id).with_for_update().execution_options(populate_existing=True))
         user.preferences = {**(user.preferences or {}), name: value}
         session.commit()
         return {"value": value}
@@ -2469,7 +2507,9 @@ def create_router() -> APIRouter:
         if not include_retired:
             statement = statement.where(Domain.lifecycle == "active")
         domains = list(session.scalars(statement.order_by(Domain.created_at)))
-        responses = [_domain_response(session, item, actor) for item in domains]
+        from .semantic_read import semantic_read
+        with semantic_read(session, domains=domains, actor=actor):
+            responses = [_domain_response(session, item, actor) for item in domains]
         if q and q.strip():
             needle = _normalized_label(q)
             responses = [
@@ -2737,7 +2777,7 @@ def create_router() -> APIRouter:
             if not all(payload.get(key) for key in ("ownerUserId", "deputyOwnerUserId", "localizations")):
                 raise HTTPException(422, "A new domain review requires its complete draft")
             _validate_domain_stewards(session, payload["ownerUserId"], payload["deputyOwnerUserId"])
-            if actor not in domain_creation_reviewers(session, payload["ownerUserId"], change.requester_user_id):
+            if actor not in _domain_creation_reviewers(session, change, payload):
                 raise HTTPException(403, "The reviewed owner must remain within your office ALDS scope")
         change.review_payload = payload
         change.revision += 1
@@ -2783,7 +2823,7 @@ def create_router() -> APIRouter:
         if body.decision == "reject":
             change.status = "rejected"
         elif change.operation == "create":
-            if actor not in domain_creation_reviewers(session, change.review_payload.get("ownerUserId"), change.requester_user_id):
+            if actor not in _domain_creation_reviewers(session, change, change.review_payload):
                 raise HTTPException(403, "The reviewed owner is outside your current office ALDS scope")
             fixture_target = (
                 session.scalar(
@@ -2866,7 +2906,7 @@ def create_router() -> APIRouter:
     def read_documentation_responsibilities(
         session: SessionDep,
         actor: ActorDep,
-        lang: Literal["de", "fr", "it", "en"] = "de",
+        lang: Literal["de", "fr", "it", "en", "rm"] = "de",
     ) -> dict[str, Any]:
         return catalog_responsibilities(session, actor, lang)
 
@@ -2874,7 +2914,7 @@ def create_router() -> APIRouter:
     def read_documentation_role_changes(
         session: SessionDep,
         actor: ActorDep,
-        lang: Literal["de", "fr", "it", "en"] = "de",
+        lang: Literal["de", "fr", "it", "en", "rm"] = "de",
         limit: Annotated[int, Query(ge=1, le=100)] = 50,
         before: Annotated[int | None, Query(ge=1)] = None,
     ) -> dict[str, Any]:
@@ -2885,27 +2925,27 @@ def create_router() -> APIRouter:
         term: str,
         session: SessionDep,
         actor: ActorDep,
-        lang: Literal["de", "fr", "it", "en"] = "de",
+        lang: Literal["de", "fr", "it", "en", "rm"] = "de",
     ) -> dict[str, Any]:
         del actor
         needle = term.strip().casefold()
         if not needle:
-            raise HTTPException(404, "Glossary term not found")
+            raise HTTPException(404, "Terminology term not found")
         matched_id = next((row.term_id for row in session.scalars(select(SiteGlossaryLocalization))
                            if row.preferred_label.casefold() == needle
                            or row.normalized_label.casefold() == needle), None)
         if matched_id is None:
-            raise HTTPException(404, "Glossary term not found")
+            raise HTTPException(404, "Terminology term not found")
         item = next((entry for entry in glossary_entries(session, lang) if entry["id"] == str(matched_id)), None)
         if item is None:
-            raise HTTPException(404, "Glossary term not found")
+            raise HTTPException(404, "Terminology term not found")
         return item
 
     @router.get("/documentation/glossary", tags=["documentation"])
     def list_documentation_glossary(
         session: SessionDep,
         actor: ActorDep,
-        lang: Literal["de", "fr", "it", "en"] = "de",
+        lang: Literal["de", "fr", "it", "en", "rm"] = "de",
         q: str = "",
     ) -> list[dict[str, Any]]:
         del actor
@@ -2916,12 +2956,12 @@ def create_router() -> APIRouter:
         term_id: uuid.UUID,
         session: SessionDep,
         actor: ActorDep,
-        lang: Literal["de", "fr", "it", "en"] = "de",
+        lang: Literal["de", "fr", "it", "en", "rm"] = "de",
     ) -> dict[str, Any]:
         del actor
         item = next((entry for entry in glossary_entries(session, lang) if entry["id"] == str(term_id)), None)
         if item is None:
-            raise HTTPException(404, "Glossary term not found")
+            raise HTTPException(404, "Terminology term not found")
         return item
 
     @router.get(
@@ -2948,10 +2988,10 @@ def create_router() -> APIRouter:
             statement = statement.join(GlossaryTermDomain).where(
                 GlossaryTermDomain.domain_id == domain_id
             )
-        responses = [
-            _term_response(session, item)
-            for item in session.scalars(statement.order_by(GlossaryTerm.created_at))
-        ]
+        from .semantic_read import semantic_read
+        terms = list(session.scalars(statement.order_by(GlossaryTerm.created_at)))
+        with semantic_read(session, terms=terms):
+            responses = [_term_response(session, item) for item in terms]
         if q and q.strip():
             needle = _normalized_label(q)
             responses = [
@@ -2973,7 +3013,7 @@ def create_router() -> APIRouter:
     ):
         term = session.scalar(select(GlossaryTerm).where(GlossaryTerm.id == term_id).with_for_update())
         if term is None:
-            raise HTTPException(404, "Glossary term not found")
+            raise HTTPException(404, "Terminology term not found")
         if not governs_term(session, actor, term_id):
             raise HTTPException(403, "Only the assigned term owner or deputy may retire this term")
         require_revision(if_match, term.revision)
@@ -3010,7 +3050,7 @@ def create_router() -> APIRouter:
     ) -> GlossaryTermResponse:
         term = session.get(GlossaryTerm, term_id)
         if term is None:
-            raise HTTPException(404, "Glossary term not found")
+            raise HTTPException(404, "Terminology term not found")
         response.headers["ETag"] = etag_for_revision(term.revision)
         return _term_response(session, term)
 
@@ -3029,7 +3069,7 @@ def create_router() -> APIRouter:
         if body.target_term_id:
             target = session.scalar(select(GlossaryTerm).where(GlossaryTerm.id == body.target_term_id).with_for_update())
             if target is None:
-                raise HTTPException(404, "Target glossary term not found")
+                raise HTTPException(404, "Target terminology term not found")
             if body.expected_target_revision is not None and target.revision != body.expected_target_revision:
                 raise HTTPException(409, "Der Begriff wurde zwischenzeitlich geändert. Der lokale Entwurf bleibt erhalten.")
             if target.lifecycle == "retired":
@@ -3149,12 +3189,12 @@ def create_router() -> APIRouter:
             .options(selectinload(GlossaryTermProposal.reviews))
         )
         if proposal is None:
-            raise HTTPException(404, "Glossary term proposal not found")
+            raise HTTPException(404, "Terminology term proposal not found")
         domain_ids = [review.domain_id for review in proposal.reviews]
         domains = list(session.scalars(select(Domain).where(Domain.id.in_(domain_ids))))
         authorized = any(governs_domain(session, actor, domain) for domain in domains) if proposal.operation == "create" else governs_term(session, actor, proposal.target_term_id)
         if proposal.requester_user_id != actor and not authorized:
-            raise HTTPException(404, "Glossary term proposal not found")
+            raise HTTPException(404, "Terminology term proposal not found")
         response.headers["ETag"] = etag_for_revision(proposal.revision)
         return _proposal_for_actor(session, proposal, actor)
 
@@ -3178,7 +3218,7 @@ def create_router() -> APIRouter:
             .with_for_update()
         )
         if proposal is None:
-            raise HTTPException(404, "Glossary term proposal not found")
+            raise HTTPException(404, "Terminology term proposal not found")
         if proposal.status not in {"submitted", "in_review"}:
             raise HTTPException(409, "Only an open proposal may be edited")
         require_revision(if_match, proposal.revision)
@@ -3288,7 +3328,7 @@ def create_router() -> APIRouter:
             .with_for_update()
         )
         if proposal is None:
-            raise HTTPException(404, "Glossary term proposal not found")
+            raise HTTPException(404, "Terminology term proposal not found")
         if proposal.status not in {"submitted", "in_review"}:
             raise HTTPException(409, "The proposal already has a final decision")
         require_revision(if_match, proposal.revision)
@@ -3331,7 +3371,7 @@ def create_router() -> APIRouter:
                 task_type="glossary_term_decision",
                 task_kind="information",
                 assignee=proposal.requester_user_id,
-                title="Glossary term proposal rejected",
+                title="Terminology term proposal rejected",
                 detail=body.comment.strip(),
                 term_proposal_id=proposal.id,
                 product_id=proposal.source_product_id,
@@ -3686,11 +3726,7 @@ def create_router() -> APIRouter:
                 office_code=item.office_code,
                 display_name=localized.label if localized else item.display_name,
                 organization_type=item.organization_type,
-                label=(
-                    f"{item.department_code} - {item.office_code}"
-                    if item.office_code
-                    else item.department_code
-                ),
+                label=organization_display(session).label(item.id),
                 source_id=item.source_id,
                 source_uri=item.source_uri,
             ))
@@ -3726,7 +3762,7 @@ def create_router() -> APIRouter:
         return AdministrativeOrganizationResponse(
             id=item.id, parent_id=item.parent_id, department_code=item.department_code,
             office_code=item.office_code, display_name=localized.label if localized else item.display_name,
-            organization_type=item.organization_type, label=item.office_code or item.department_code,
+            organization_type=item.organization_type, label=organization_display(session).label(item.id),
             source_id=item.source_id, source_uri=item.source_uri, breadcrumb=breadcrumb,
         )
 
@@ -3759,9 +3795,11 @@ def create_router() -> APIRouter:
                     IdentityDirectoryEntry.email.ilike(needle),
                 )
             )
-        return list(
-            session.scalars(statement.order_by(IdentityDirectoryEntry.display_name).limit(limit))
-        )
+        people = session.scalars(statement.order_by(IdentityDirectoryEntry.display_name).limit(limit))
+        labels = organization_display(session)
+        return [IdentityDirectoryEntryResponse.model_validate(person).model_copy(update={
+            "organization": labels.user(person) if person.source == "federal" else person.organization,
+        }) for person in people]
 
     @router.get(
         "/identity-directory/groups",
@@ -4958,7 +4996,7 @@ def create_router() -> APIRouter:
             if not term_domains.intersection(active_domain_ids):
                 raise HTTPException(
                     422,
-                    f"Glossary term {term.id} has no active domain shared with the product",
+                    f"Terminology term {term.id} has no active domain shared with the product",
                 )
         if "metadata" in changes:
             changes["extra_metadata"] = changes.pop("metadata")
@@ -6929,8 +6967,17 @@ def create_app(
             with resolved_session_factory() as session:
                 seed_catalog(session)
                 seed_modeling_catalog(session)
+                from .zeughaus_seed import seed_zeughaus_product
+                seed_zeughaus_product(session)
+                from .estv_sg_seed import seed_estv_sg_product
+                seed_estv_sg_product(session)
+                from .protected_buildings_seed import seed_protected_buildings_product
+                seed_protected_buildings_product(session)
+                from .building_demand_seed import seed_building_demand_product
+                seed_building_demand_product(session)
                 from .rohs_cps_seed import seed_rohs_cps_catalog
                 seed_rohs_cps_catalog(session)
+                seed_poc_portraits(session)
                 seed_requested_steward_mandates(session)
                 seed_rapid_prototyping_domain(session)
                 seed_site_glossary_terms(session)
@@ -6991,6 +7038,10 @@ def create_app(
     app.include_router(create_search_views_router())
     from .domain_network import create_domain_network_router
     app.include_router(create_domain_network_router())
+    from .organization_network import create_organization_network_router
+    app.include_router(create_organization_network_router())
+    from .recent_work import create_recent_work_router
+    app.include_router(create_recent_work_router())
     app.include_router(create_lineage_access_router())
 
     @app.get("/health/live", response_model=HealthResponse, tags=["health"])

@@ -56,7 +56,7 @@ import { GlossaryProposalFormComponent, GlossaryProposalFormValue } from '../dom
             <input formControlName="title" autocomplete="off">
             @if (form.controls.title.touched && form.controls.title.invalid) { <small>Enter a product title.</small> }
           </label>
-          <label class="metadata-field">Owner *<input formControlName="owner" autocomplete="organization"></label>
+          <label class="metadata-field">Data Owner *<input formControlName="owner" autocomplete="organization"></label>
           <fieldset class="metadata-field metadata-field-wide semantic-picker">
             <legend>Fachdomains</legend>
             <p>Domains sind fachliche Einordnungen und keine Organisationen. Ein Entwurf darf ohne Domain gespeichert werden; für vollständige Business-Metadaten ist mindestens eine nötig.</p>
@@ -65,7 +65,7 @@ import { GlossaryProposalFormComponent, GlossaryProposalFormValue } from '../dom
             @else { <div class="semantic-options">@for (domain of availableDomains(); track domain.id) { <label><input type="checkbox" [checked]="selectedDomainIds().includes(domain.id)" (change)="toggleDomain(domain.id)"><span><strong>{{ domain.preferredLabel }}</strong><small>{{ domain.definition }}</small></span></label> } @empty { <span>Keine aktiven Domains verfügbar.</span> }</div> }
           </fieldset>
           <fieldset class="metadata-field metadata-field-wide semantic-picker">
-            <legend>Glossarterme</legend>
+            <legend>Terminologie</legend>
             <p>Akzeptierte Begriffe werden anhand der gewählten Domains angeboten. Keywords bleiben davon unabhängig.</p>
             <div class="semantic-proposal-actions">
               <button class="daca-button is-secondary" type="button" [disabled]="!productReady() || !selectedDomainIds().length" (click)="openProposal()">Term vorschlagen</button>
@@ -75,7 +75,7 @@ import { GlossaryProposalFormComponent, GlossaryProposalFormValue } from '../dom
               } @else if (canAutoAttach()) {
                 <small>Akzeptierte Vorschläge können automatisch an dieses Produkt angehängt werden.</small>
               } @else {
-                <small>Sie dürfen einen Begriff vorschlagen. Automatisch anhängen dürfen nur Product Owner oder deren Stellvertretung.</small>
+                <small>Sie dürfen einen Begriff vorschlagen. Automatisch anhängen dürfen nur Data Owner oder deren Stellvertretung.</small>
               }
             </div>
             <label class="semantic-term-search">Akzeptierte Terme durchsuchen
@@ -190,7 +190,7 @@ import { GlossaryProposalFormComponent, GlossaryProposalFormValue } from '../dom
     </div>
 
     <dialog #termDialog class="daca-card term-dialog" aria-labelledby="metadata-term-dialog-title" (close)="resetProposal()">
-      <div class="daca-card-header"><div><p class="daca-eyebrow">Glossar-Governance</p><h2 id="metadata-term-dialog-title">Term vorschlagen</h2></div><button type="button" aria-label="Dialog schliessen" (click)="closeProposal()">×</button></div>
+      <div class="daca-card-header"><div><p class="daca-eyebrow">Terminologie-Governance</p><h2 id="metadata-term-dialog-title">Term vorschlagen</h2></div><button type="button" aria-label="Dialog schliessen" (click)="closeProposal()">×</button></div>
       <div class="daca-card-body">
         @if (proposalContext()) { <p class="term-proposal-context"><strong>Aus den Metadaten abgeleitet:</strong> {{ proposalContext() }}</p> }
         <daca-glossary-proposal-form
@@ -366,7 +366,7 @@ export class MetadataStudioComponent {
 
   loadSemantics(): void {
     this.semanticsLoading.set(true); this.semanticsError.set('');
-    this.api.loadDomains().subscribe({ next: (domains) => { this.availableDomains.set(domains.filter((domain) => domain.status === 'active')); this.api.loadGlossaryTerms().pipe(finalize(() => this.semanticsLoading.set(false))).subscribe({ next: (terms) => this.availableTerms.set(terms.filter((term) => term.status === 'active')), error: () => this.semanticsError.set('Glossarterme konnten nicht geladen werden.') }); }, error: () => { this.semanticsLoading.set(false); this.semanticsError.set('Domains konnten nicht geladen werden.'); } });
+    this.api.loadDomains().subscribe({ next: (domains) => { this.availableDomains.set(domains.filter((domain) => domain.status === 'active')); this.api.loadGlossaryTerms().pipe(finalize(() => this.semanticsLoading.set(false))).subscribe({ next: (terms) => this.availableTerms.set(terms.filter((term) => term.status === 'active')), error: () => this.semanticsError.set('Die Terminologie konnte nicht geladen werden.') }); }, error: () => { this.semanticsLoading.set(false); this.semanticsError.set('Domains konnten nicht geladen werden.'); } });
   }
 
   loadSuggestions(): void {
@@ -398,7 +398,7 @@ export class MetadataStudioComponent {
       next: () => {
         this.closeProposal();
         this.messageTone.set('info');
-        this.message.set('Der Termvorschlag wurde den Domain Owners zur Prüfung übermittelt.');
+        this.message.set('Der Termvorschlag wurde den Data Owners zur Prüfung übermittelt.');
       },
       error: (error) => {
         this.messageTone.set('error');

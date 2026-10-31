@@ -1,3 +1,4 @@
+import { catalogCopy } from '../../core/catalog-localization';
 import { afterRenderEffect, ChangeDetectionStrategy, Component, ElementRef, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { UserPreferencesService } from '../../core/user-preferences.service';
@@ -51,5 +52,5 @@ export class DocumentationStaticComponent {
     this.visibleArticleCount.set(count);
   });}
   private normalize(value:string):string{return value.normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase();}
-  tr(copy: Copy): string { return copy[({ de: 0, fr: 1, it: 2, en: 3 })[this.preferences.language()]]; }
+  tr(copy: Copy): string { return catalogCopy(copy, this.preferences.language()); }
 }

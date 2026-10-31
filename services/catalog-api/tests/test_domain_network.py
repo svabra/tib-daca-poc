@@ -81,6 +81,65 @@ def test_private_views_allow_readers_without_changing_shared_graph(client, sessi
         ] == [domain]
 
 
+def test_product_positions_are_private_authorized_and_preserve_hidden_anchors(client, session_factory):
+    seed(session_factory)
+    headers = {"X-DaCa-User": OWNER}
+    key = f"product:{identity('product:telemetry')}"
+    body = {"revision": 0, "configuration": {"schemaVersion": 1, "positions": {key: {"x": 480, "y": 360}}}}
+    saved = client.put("/api/v1/domain-network/view", headers=headers, json=body)
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["configuration"]["positions"][key] == {"x": 480, "y": 360}
+    assert client.get("/api/v1/domain-network/view", headers={"X-DaCa-User": DEPUTY}).json()["configuration"]["positions"] == {}
+    assert client.put("/api/v1/domain-network/view", headers=headers, json=body).status_code == 409
+    with session_factory() as session:
+        session.get(DataProduct, identity("product:telemetry")).discoverable = False
+        session.commit()
+    denied = client.put("/api/v1/domain-network/view", headers={"X-DaCa-User": "christian.spider"}, json=body)
+    assert denied.status_code == 422
+    unknown = copy.deepcopy(saved.json())
+    unknown["configuration"]["positions"]["product:00000000-0000-0000-0000-000000000000"] = {"x": 50, "y": 60}
+    assert client.put("/api/v1/domain-network/view", headers=headers, json=unknown).status_code == 422
+    with session_factory() as session:
+        session.get(DataProduct, identity("product:telemetry")).lifecycle = "retired"
+        session.commit()
+    # A retained, unchanged hidden/retired anchor must not prevent unrelated saves.
+    retained = saved.json()
+    retained["configuration"]["visibleKinds"] = []
+    assert client.put("/api/v1/domain-network/view", headers=headers, json=retained).status_code == 200
+    changed = copy.deepcopy(retained)
+    changed["revision"] = 2
+    changed["configuration"]["positions"][key]["x"] += 10
+    assert client.put("/api/v1/domain-network/view", headers=headers, json=changed).status_code == 422
+
+
+def test_group_positions_support_all_readable_layers_and_keep_scope_checks(client, session_factory):
+    seed(session_factory)
+    headers = {"X-DaCa-User": OWNER}
+    domain = str(identity("domain:telemetry"))
+    objects = client.get(f"/api/v1/domain-network/objects?domain_id={domain}", headers=headers).json()["items"]
+    selected = {kind: next(item for item in objects if item["kind"] == kind) for kind in ("product", "term", "logical", "physical")}
+    positions = {item["key"]: {"x": 420 + index * 260, "y": 300} for index, item in enumerate(selected.values())}
+    body = {"revision": 0, "configuration": {"schemaVersion": 1, "positions": positions}}
+    graph = client.get("/api/v1/semantic-graphs/domains", headers=headers).json()
+    saved = client.put("/api/v1/domain-network/view", headers=headers, json=body)
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["configuration"]["positions"] == positions
+    moved = saved.json()
+    for point in moved["configuration"]["positions"].values():
+        point["x"] += 40
+        point["y"] += 20
+    saved = client.put("/api/v1/domain-network/view", headers=headers, json=moved)
+    assert saved.status_code == 200, saved.text
+    assert client.get("/api/v1/semantic-graphs/domains", headers=headers).json() == graph
+    assert client.get("/api/v1/domain-network/view", headers={"X-DaCa-User": DEPUTY}).json()["configuration"]["positions"] == {}
+    # A foreign office cannot add or move physical-source anchors it cannot read.
+    foreign = {"revision": 0, "configuration": {"positions": {selected["physical"]["key"]: {"x": 40, "y": 60}}}}
+    assert client.put("/api/v1/domain-network/view", headers={"X-DaCa-User": "christian.spider"}, json=foreign).status_code == 422
+    unknown = saved.json()
+    unknown["configuration"]["positions"]["term:00000000-0000-0000-0000-000000000000"] = {"x": 50, "y": 60}
+    assert client.put("/api/v1/domain-network/view", headers=headers, json=unknown).status_code == 422
+
+
 def test_rohs_network_has_trusted_scope_owners_and_all_object_layers(client, session_factory):
     seed(session_factory)
     domain = str(identity("domain:telemetry"))

@@ -19,7 +19,7 @@ describe('representation picker',()=>{
   });
   it('blocks foreign scopes, ignores stale source responses and adds only on explicit action',()=>{
     const first=new Subject<PhysicalSnapshot>(),second=new Subject<PhysicalSnapshot>();
-    const base:PhysicalSource={id:'pg',revision:1,name:'PG demo',connectorType:'postgresql',systemName:'PG',databaseName:'demo',department:FALLBACK_LOGICAL_MODEL.department,office:FALLBACK_LOGICAL_MODEL.office,latestSnapshotId:'pg-snapshot',latestSnapshotSequence:1,latestSnapshot:null,catalogPath:'postgresql://demo/',ownerName:'Owner',updatedAt:''};
+    const base:PhysicalSource={id:'pg',revision:1,name:'PG demo',connectorType:'postgresql',systemName:'PG',databaseName:'demo',department:FALLBACK_LOGICAL_MODEL.department,office:FALLBACK_LOGICAL_MODEL.office,latestSnapshotId:'pg-snapshot',latestSnapshotSequence:1,latestSnapshot:null,catalogPath:'postgresql://demo/',ownerName:'Data Owner',updatedAt:''};
     const s3={...base,id:'s3',name:'S3 demo',connectorType:'s3' as const,latestSnapshotId:'s3-snapshot'};
     const foreign={...base,id:'foreign',office:'foreign'};
     TestBed.configureTestingModule({imports:[RepresentationPickerComponent],providers:[{provide:DataModelsApiService,useValue:{listPhysicalSources:()=>of([base,s3,foreign]),loadPhysicalSnapshot:(id:string)=>id==='pg-snapshot'?first:second}}]});
@@ -38,7 +38,7 @@ describe('representation picker',()=>{
     component.attach();expect(add).toHaveBeenCalledWith({snapshot,table:snapshot.tables[0]});
   });
   it('uses model-specific server permissions for inventories across organizations',()=>{
-    const inventory:PhysicalSource={id:'csv',revision:1,name:'Gebäude',connectorType:'csv',systemName:'Strukturinventar',databaseName:'SAP',department:'VBS',office:'armasuisse-immobilien',latestSnapshotId:'csv-snapshot',latestSnapshotSequence:1,latestSnapshot:null,catalogPath:'urn:daca:physical-source:csv',ownerName:'Owner',updatedAt:'',representationAttachable:true};
+    const inventory:PhysicalSource={id:'csv',revision:1,name:'Gebäude',connectorType:'csv',systemName:'Strukturinventar',databaseName:'SAP',department:'VBS',office:'armasuisse-immobilien',latestSnapshotId:'csv-snapshot',latestSnapshotSequence:1,latestSnapshot:null,catalogPath:'urn:daca:physical-source:csv',ownerName:'Data Owner',updatedAt:'',representationAttachable:true};
     const denied={...inventory,id:'denied',representationAttachable:false,representationDisabledReason:'Keine Modellierungsberechtigung für die Organisation dieser Quelle.'};
     const api={listPhysicalSources:vi.fn(()=>of([inventory,denied])),loadPhysicalSnapshot:vi.fn(()=>of({...FALLBACK_PHYSICAL_SNAPSHOT,id:'csv-snapshot',sourceType:'csv' as const}))};
     TestBed.configureTestingModule({imports:[RepresentationPickerComponent],providers:[{provide:DataModelsApiService,useValue:api}]});

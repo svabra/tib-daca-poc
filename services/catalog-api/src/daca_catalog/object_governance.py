@@ -25,6 +25,9 @@ def domain_owners(session, domain):
     if domain is None:
         return set()
     owners = {domain.owner_user_id, domain.deputy_owner_user_id}
+    if (snapshot := session.info.get("semantic_read")) and domain.id in snapshot.domain_ids:
+        owners.update(row.user_id for row in snapshot.roles if row.domain_id == domain.id and row.role in OWNER_ROLES)
+        return {actor for actor in owners if active_actor(session, actor)}
     owners.update(
         session.scalars(
             select(CatalogObjectResponsibility.user_id).where(
@@ -128,6 +131,10 @@ def may_create_domain(session, actor):
 
 
 def term_owner_pair(session, term_id):
+    if (snapshot := session.info.get("semantic_read")) and term_id in snapshot.term_ids:
+        rows = sorted((row for row in snapshot.roles if row.glossary_term_id == term_id), key=lambda row: (row.created_at, row.id))
+        roles = {row.role: row.user_id for row in rows if row.role in OWNER_ROLES}
+        return roles.get("data_owner"), roles.get("deputy_data_owner")
     rows = session.scalars(
         select(CatalogObjectResponsibility)
         .where(

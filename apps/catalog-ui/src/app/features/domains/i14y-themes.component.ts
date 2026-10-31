@@ -38,14 +38,14 @@ export function aggregateI14yThemes(concepts: readonly I14yConcept[]): I14yTheme
     <section class="daca-page-heading themes-heading">
       <div>
         <p class="daca-eyebrow">Fachliche Semantik</p>
-        <h1>Domäne und Terminology</h1>
+        <h1>Domäne und Terminologie</h1>
         <p>Themen werden schreibgeschützt aus den im lokalen I14Y-Cache vorkommenden Concept-Zuordnungen zusammengefasst.</p>
       </div>
     </section>
 
-    <nav class="semantic-tabs" aria-label="Domäne und Terminology">
+    <nav class="semantic-tabs" aria-label="Domäne und Terminologie">
       <a routerLink="/domains">Domänen</a>
-      <a routerLink="/domains/terminology">Terminology</a>
+      <a routerLink="/domains/terminology">Terminologie</a>
       <a routerLink="/domains/concepts">I14Y-Konzepte</a>
       <a routerLink="/domains/themes" class="is-active" aria-current="page">Themen <span>{{ themes().length }}</span></a>
       <a routerLink="/domains/governance">Governance</a>

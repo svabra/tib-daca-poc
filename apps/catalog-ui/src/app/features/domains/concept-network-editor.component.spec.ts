@@ -19,6 +19,17 @@ describe('ConceptNetworkEditorComponent', () => {
     beforeEach(() => { graph={revision:0,positions:{},relations:[],canEditLayout:true,canEditRelations:false};localStorage.clear(); sessionStorage.clear(); userId.set('editor');api.saveSemanticGraph.mockImplementation((_kind,value)=>{graph={...graph,revision:graph.revision+1,positions:value.positions,hiddenNodeIds:value.hiddenNodeIds,additionalNodeIds:value.additionalNodeIds};return of(structuredClone(graph));}); api.loadGlossaryTermProposals.mockReturnValue(of([])); api.createGlossaryTermProposal.mockReturnValue(of(proposal('a'))); vi.clearAllMocks(); TestBed.configureTestingModule({ imports: [ConceptNetworkEditorComponent], providers: [{provide:UserPreferencesService,useValue:{language:signal('de')}},provideRouter([]), { provide: CatalogApiService, useValue: api }, { provide: DemoIdentityService, useValue: { userId } }] }); });
     afterEach(() => { TestBed.resetTestingModule(); vi.restoreAllMocks(); localStorage.clear(); sessionStorage.clear(); });
     function render(domain = DOMAIN, terms = TERMS) { const fixture = TestBed.createComponent(ConceptNetworkEditorComponent); fixture.componentRef.setInput('domain', domain); fixture.componentRef.setInput('terms', terms); fixture.detectChanges(); return fixture; }
+    it('groups terms and domains as a layout draft without changing business proposals',async()=>{
+        const fixture=render(),component=fixture.componentInstance,original=component.positions();
+        const group=component.selection.items().filter(item=>item.id==='term:a'||item.id==='term:b');
+        const snapshot=component.selection.begin();component.selection.move(group.map(item=>({...item,x:item.x+40,y:item.y+30})));component.selection.finish();
+        expect(component.layoutDirty()).toBe(true);expect(component.dirtyCount()).toBe(0);
+        expect(component.positions()['term:a']).toEqual({x:group[0].x+40,y:group[0].y+30});
+        component.selection.cancel(snapshot);expect(component.positions()).toEqual(original);expect(component.layoutDirty()).toBe(false);
+        component.selection.begin();component.selection.move(group.map(item=>({...item,x:item.x+40,y:item.y+30})));component.selection.finish();await component.saveLayout();
+        expect(graph.positions['term:a']).toEqual({x:group[0].x+40,y:group[0].y+30});expect(component.dirtyCount()).toBe(0);
+        expect(api.createGlossaryTermProposal).not.toHaveBeenCalled();
+    });
     it('keeps local term drafts and foreign positions when filtering and arranging the visible scope',()=>{
         graph.positions={'term:a':{x:400,y:70},'term:b':{x:700,y:200}};
         const fixture=render(),component=fixture.componentInstance;

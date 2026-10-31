@@ -45,7 +45,7 @@ import {
         <span class="access-request-confirmation-icon" aria-hidden="true">✓</span>
         <p class="daca-eyebrow">Verlängerung eingereicht</p>
         <h2>Ihr Verlängerungsantrag ist eingegangen</h2>
-        <p>Die bestehende Freigabe bleibt bis zu ihrem bisherigen Enddatum wirksam. Das neue Enddatum gilt erst nach Owner-Entscheid, Vier-Augen-Freigabe und bestätigtem Deployment in OPA und PostgreSQL.</p>
+        <p>Die bestehende Freigabe bleibt bis zu ihrem bisherigen Enddatum wirksam. Das neue Enddatum gilt erst nach Data Owner-Entscheid, Vier-Augen-Freigabe und bestätigtem Deployment in OPA und PostgreSQL.</p>
         <dl>
           <div><dt>Antragsnummer</dt><dd>{{ receipt.requestNumber }}</dd></div>
           <div><dt>Datenprodukt</dt><dd>{{ product()?.title }}</dd></div>
@@ -126,7 +126,7 @@ import {
             <p class="daca-eyebrow">Prüfprozess</p>
             <h2>Was geschieht danach?</h2>
             <ol>
-              <li><strong>Owner-Prüfung</strong><span>Alt und Neu werden direkt verglichen.</span></li>
+              <li><strong>Data Owner-Prüfung</strong><span>Alt und Neu werden direkt verglichen.</span></li>
               <li><strong>Policy-Revision</strong><span>Der unveränderte Grant erhält das neue Enddatum.</span></li>
               <li><strong>Vier-Augen-Freigabe</strong><span>Die Kontrollperson prüft exakt diese Revision.</span></li>
               <li><strong>Doppel-Deployment</strong><span>OPA und PostgreSQL müssen dieselbe Revision bestätigen.</span></li>

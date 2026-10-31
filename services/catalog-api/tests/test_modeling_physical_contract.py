@@ -264,7 +264,7 @@ def test_identical_import_still_creates_a_new_hashed_snapshot(client, session_fa
     assert imported.status_code == 200, imported.text
     snapshot = imported.json()["snapshot"]
     assert snapshot["sequence"] == 2
-    assert snapshot["dataOwnerName"] == "Christian Spider"
+    assert snapshot["dataOwnerName"] == "Christiano Stadello"
     assert snapshot["catalogPath"] == "postgresql://logistics_db/"
     assert snapshot["predecessorSnapshotId"] == str(baseline_id)
     assert snapshot["fingerprint"] == baseline_fingerprint

@@ -1,3 +1,5 @@
+from .organization_display import organization_display
+
 """Shared presentation never changes glossary approval or catalog access policies."""
 
 import uuid
@@ -152,7 +154,7 @@ def create_semantic_graph_router():
             active = {f"domain:{domain.id}" for domain in session.scalars(select(Domain).where(Domain.lifecycle == "active")) if governs_domain(session, actor, domain)}
         deletable = sorted(nodes & active)
         organization, scope_domains, scope_terms = organization_objects(session, organization_id) if organization_id else (None, set(), set())
-        return {"organizationName": organization.display_name if organization else None, "scopeDomainIds": sorted(scope_domains), "scopeTermIds": sorted(scope_terms),
+        return {"organizationName": organization_display(session).label(organization.id) if organization else None, "scopeDomainIds": sorted(scope_domains), "scopeTermIds": sorted(scope_terms),
                 "revision": row.revision if row else 0,
                 "positions": {key: value for key, value in row.positions.items() if key in nodes} if row else {},
                 "relations": row.relations if row else [], "canEditLayout": can_layout,

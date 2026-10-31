@@ -36,7 +36,7 @@ class SearchViewConfiguration(StrictModel):
     schema_version: Literal[1] = 1
     query: str = Field(default="", max_length=200)
     mode: Literal["context", "focus"] = "context"
-    kind: Literal["all", "product", "logical", "structure", "field", "term", "domain", "source"] = "all"
+    kind: Literal["all", "product", "logical", "structure", "field", "term", "domain", "source", "organization"] = "all"
     organization: str = Field(default="all", min_length=1, max_length=200)
     domain: str = Field(default="all", min_length=1, max_length=200)
     status: Literal["all", "active"] = "all"

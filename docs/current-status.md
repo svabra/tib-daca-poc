@@ -1,5 +1,209 @@
 # Current status
 
+Shared canvas actions retain compact 32px desktop buttons and a 44px minimum target on viewports up to 700px as well as coarse-pointer devices. This keeps Mapping save/create actions and fullscreen exits usable in narrow desktop windows and mobile layouts.
+
+Lineage product cards use the normal theme surface even when selected, matching domain-network product cards. The footer displays the actual Data Owner instead of the catalog identifier, and the accessible card name includes Data Owner. Missing ownership remains explicitly unknown; catalog identity is still available in the shared summary and selected-object details.
+
+Data-highway packet flights now start and finish beneath the opaque source and target cards, instead of stopping at or before their visible borders. A shared 36-unit overlap covers the packet head, halo and 28-unit trail before the animation loops; smaller organization cards use an inset rectangle near their center. Lineage retains its routed visible path, while the data landscape retains exact subcurves of its ribbon. Three-second flight duration, direction, packet counts, reciprocal lanes, title clearance and saved layouts are preserved.
+
+Lineage & provenance now uses the same slim blue-white data-highway skin as the organization landscape: gradient ribbons extend under the cards, one tailed pulsing packet per declared relationship crosses the source-to-target flight, including covered ends, in three seconds, and reduced motion leaves a stationary packet. Dagre routing and parallel relationships are retained; solid/dashed center spines still distinguish verified/declared evidence. Lineage cards share the domain-network asset-card structure (240 x 95 pixels, left type stripe, small icon/caption, wrapped title and compact metadata). Known products and explicit canonical organization/model/physical/term/domain URNs use the central type colors; unresolved sources, transformations and consumer references retain their actual lineage role. Provenance events and owner-only access-log authorization are unchanged.
+
+The placement exclusion below the focused organization heading now follows the measured title, description and count block instead of a fixed 160-unit rectangle. The free strip immediately below the visible text is available for organization cards and domains, individual drag/keyboard moves, group movement and automatic placement. ResizeObserver tracks heading wrapping and fullscreen changes; the active language/focus identifies each measurement. Existing anchor origins, saved scopes and product relationships are preserved.
+
+Ribbon connections now use one continuous cubic beneath both organization cards, eliminating the joins visible with diagonally offset organizations. The packet flight is an exact subdivision of that whole curve, clipped to inset points beneath measured cards. The band is slimmer (12 SVG units, with a 14-unit edge and 18-unit soft glow); the accessible hit area, packet spacing and three-second transit are retained. The focused organization area has a pale-blue background. Decorative ribbons extend underneath organization cards with flat ends, while packet flights start and finish underneath the measured cards and title text stays clear. Each ribbon has a gentle blue-white-blue gradient, and packets carry a tapered 28-unit fading tail aligned to travel direction. These treatments also apply in fullscreen and reduced-motion mode; dark mode uses the existing theme surface for the gradient highlight. Organization-to-organization relationships now use the selected **Lichtband** data-highway treatment: a softly glowing, translucent blue ribbon, a fine center spine and smooth cubic bends. Bright circular packets with short fading tails follow the actual curve at uniform path speed, taking exactly three seconds end to end. Reciprocal streams share one ribbon with separate offset lanes, and each distinct consumed product still contributes one packet. Successive packet heads now use an 18% phase gap and aim for at least 32 world units of separation on short paths (capped at 45% of a cycle and by the number of products), giving halos and tails more room without changing the three-second transit. A curve clearance check falls back toward a straight spine when a bend would cross an unrelated card or title. Domain assignments remain thin and dashed. Existing catalog evidence, private anchors, tooltips, navigation and accessible counts are preserved; reduced motion displays stationary packets along the same curve.
+
+The data-landscape visibility controls sit in the upper arrangement toolbar, before fullscreen: **Orgs ohne DP-Beziehungen ausblenden** precedes the standard **Domänen** toggle. The relationship filter starts on (Domains remains off) and hides inner cards, satellites and overview peers only when both aggregated offered and consumed product counts are zero. Captions are compact/localized without terminal punctuation. The redundant unsaved-arrangement label and top rectangle-selection instruction are omitted; Save/Discard state and all selection interactions remain available. Producer-only and consumer-only organizations remain visible. The shared tooltip explains this rule, and organization/domain context menus expose the same checked option with keyboard navigation. The focused organization, breadcrumbs and independent domain layer remain available. This display-only filter neither reloads catalog data nor changes saved/draft anchors, permissions or product counts; switching it off restores hidden cards. Controls wrap on narrow screens and remain available in fullscreen.
+
+Canvas object cards share central type-color tokens: organizations navy, logical models orange, physical representations/declarations purple, terminology pink and data products mustard. The data landscape uses the semantic object-card style for organizations, with a type caption, organization name, and separately labelled offered/consumed product counts in DE/FR/IT/RM/EN. German card labels are abbreviated to **angebotene DP** and **konsumierende DP**; tooltips and accessible descriptions keep the full terminology. Light/dark themes retain the same identity colors. Organization cards keep readable widths and fit their content vertically with 6px top/bottom padding; dense layouts scroll instead of shrinking their content, and personal anchors, context actions, group movement and round data-landscape domains remain supported.
+
+The four editing canvases (data landscape, Mapping, domains and terminology) support a shared rectangle selection on blank space and group movement with stable relative positions. Shift/Ctrl adds/removes cards; Ctrl/Cmd+A selects visible objects, arrow keys move a group, and Escape cancels an active gesture or clears selection before fullscreen exits. Zoom/scroll, nested controls and layout permissions are respected. Changes use each canvas's existing explicit layout save/discard actions. Domain object layers now all support position anchors, including terms and logical/physical models, authorized through the same readable-object projection.
+
+Expert search displays the shared blue loading spinner with its localized status text while catalog or search-data reads are pending, including organization/domain deep links from the data landscape and subsequent physical-snapshot reads. Both search layouts expose the same busy state and defer the empty-result notice until loading finishes.
+
+Organization tooltips omit a description that repeats the office name, while retaining additional details. Data-flow points now cross a connection in 3 seconds, with the same speed for every product count and successive points still forming a visible train. The local Compose UI/API on localhost:8080 now include these changes; the external PoC rollout remains deferred. The organization-flow browser check enforces a 3000 ms transit and normal wall-clock playback on the running local application.
+
+Release 0.3.4 collects the changes prepared in the local 0.3.3 working version: the organization data landscape, reciprocal product flows, expert-search context actions, compact/movable canvases, Romansh/localized counts, recent work, updated personas and additive PoC fixtures. Lineage now shares the data-highway treatment and domain-network card styling, with normal product surfaces, visible Data Owner and packets disappearing under cards. The feature overlay and all managed version surfaces use 0.3.4; published 0.3.2 notes remain a separate archive entry. Commit/push is authorized, including the existing CI image-build/publication workflow. The external PoC/OpenShift rollout remains deferred; checked-in image pins do not apply a deployment.
+
+Release validation: 710 frontend tests, 34 isolated Catalog API regressions, 18 version/seed contracts and 18 OPA checks pass. All web/Python artifacts build, generated documentation is current, and the unchanged pre-commit hook enforces the complete browser regression before a release commit can be created.
+
+For reciprocal flows beside personal anchors, automatic placement first repairs a connected card overlapping a saved position, then minimizes relationship lengths. Saved anchors remain fixed; visible travelling points are checked against real card hit areas in the browser.
+
+Verteidigung and armasuisse now exchange two distinct synthetic catalog products: armasuisse supplies **Schützenswerte Gebäude – armasuisse** to Verteidigung; Verteidigung supplies **Gebäudenutzungsbedarf der Verteidigung** (`urn:daca:ch:verteidigung:building-use-demand`) to armasuisse. The demand product reuses Data Owner Lawrence Hill, deputy Hong An Captain, consumer Giuseppe Starwars and the Verteidigung domain. One point travels in each direction on the same connection, with a small lane offset for visibility. A separate additive marker includes the reverse fixture in the Catalog API image startup seed, including upgrades of already seeded PoC databases, without overwriting either product or creating access grants.
+
+Organization context menus in the data landscape offer **Alle Datenprodukte der Organisation anzeigen**. The action opens expert search with canonical `organization=<id>&kind=product`, without a name query or an active-only restriction. Existing centralized scope matching includes readable offered/consumed products and subordinate units; an organization without readable product references has a disabled action. Domains start hidden and can be enabled explicitly with the standard toggle or the assigned-domains context action; personal domain anchors are retained.
+
+The PoC catalog includes **Schützenswerte Gebäude – armasuisse** (`urn:daca:ch:armasuisse:protected-buildings`). Existing Data Owner Giuseppe Starwars and deputy Thomas Wikinger provide the synthetic product in Immobilienmanagement VBS; existing Christian Man in Verteidigung consumes it. This creates the directed armasuisse → Verteidigung organization connection and one travelling point. The additive seed is part of `daca-catalog-seed`, which the Catalog API Docker image runs after migrations and before serving on every rollout, including existing databases. Its one-time marker preserves later edits and retirement. Catalog consumption metadata creates no endpoint, access policy or live access receipt.
+
+The domain canvas keeps object-layer toggles and the filter/zoom toolbar directly adjacent: no bottom fieldset padding or top toolbar margin, tighter wrapped-row spacing and no empty hidden-domain placeholder. Existing 44px toggle-label targets and responsive wrapping remain.
+
+The domain canvas aligns its blue connection buttons exactly with the relationship endpoints at the card's 60px center line. Selecting an edge reuses these buttons for endpoint dragging/editing; the duplicate white SVG handles are removed. Product cards support pointer/touch dragging and arrow keys while retaining ordinary new-tab links. Their `product:<UUID>` anchors share the existing personal view Save / Discard / Auto-arrange flow, remain when the layer is hidden, and update dashed membership lines without changing metadata or shared relationships. Escape/pointer cancel restores a drag; a completed drag suppresses link navigation.
+
+The data landscape shows one strongly pulsing point per distinct consumed data product, with successive points travelling together from producer to consumer at a constant speed. Connections have no arrows; reciprocal exchange uses opposing lanes, and reduced motion retains static points. Shared tooltips explain the product count in DE/FR/IT/RM/EN, without claiming live requests or access receipts. A second synthetic ESTV product, **ESTV – Gemeindekennzahlen zur direkten Bundessteuer**, is consumed by existing St. Gallen personas: the ESTV → St. Gallen connection therefore carries exactly two points. The additive fixture preserves later edits and creates no new access policy or endpoint.
+
+Domain bubbles in the data landscape can be positioned with pointer/touch dragging or arrow keys, including fullscreen. Movement creates a personal draft, pauses drift while dragging and follows the existing explicit Save / Discard / Auto-arrange actions. Toggling the domain layer retains anchors; dropping a moved link does not open domain details. Normal clicks and context actions remain available.
+
+The data-landscape organization and domain context menus open the expert search with canonical `organization` or `domain` URL filters. Empty scopes have disabled menu actions. The expert search owns filtering, supports filter-only deep links, shows the domain selector directly, includes organization results, and loads every readable product page. Actor-readable object references use explicit office assignments, subordinate units and catalog consumption; display names never determine scoped membership. See [expert search](expert-search.md).
+
+The domain canvas omits the standalone relationship-type enumeration above the graph in every UI language.
+
+The catalog now offers Rumantsch Grischun (`rm`) in both language selectors and accepts it in per-user browser/profile preferences. Every central translation key has a Romansh entry with preserved parameters; the shell, settings, data landscape and recent work are localized too. Untranslated inline details retain English fallback; recorded business metadata and German-only legacy editors are not automatically translated. Data-landscape offered/consumed product counts and catalog relationships share locale cardinal singular/plural rules for DE/FR/IT/RM/EN, including domain tooltips and accessible labels. Canonical organization IDs, graph reads, layout drafts and count semantics remain unchanged. See [localization](localization.md).
+
+When an organization has no child offices, its explanatory notice appears below the graph, keeping long localized supply/consumption counts and domain bubbles clear.
+
+Organization, Mapping, domain and terminology canvases share compact action styling (32px desktop, 44px touch), wrapping action groups and a fixed, labelled fullscreen exit at the top right with an Escape hint. Domain automatic arrangement now sits next to save/discard, and terminology automatic arrangement sits next to shared-layout save/discard. Mapping retains its draft-save action; terminology business submissions remain separate from shared layout publication. Domain and terminology fullscreen use the same native/full-viewport fallback behavior as Mapping: Escape, explicit close, browser fullscreen changes and destruction restore page scrolling and focus. Nested menus/dialogs consume Escape before the canvas exits, and Tab focus stays inside the fullscreen canvas. A denied native entry or failed exit cannot leave the page scroll-locked. No save, permission, proposal or persistence semantics are changed.
+
+Automatic arrangement in the domain network now packs whole domain/object clusters using each pair of actual bounds and a 32px minimum gap. A radial seed is compacted inward and into free neighboring pockets, avoiding the previous global-largest-cluster spacing. The final content remains centered, including wide/fullscreen and mobile canvases. Auto-arrange fits the natural content afresh up to 100% zoom, so an earlier 42% zoom no longer prevents enlargement; manual zoom still supports 40-160%. Existing saved/manual positions change only after the user explicitly rearranges, and saving remains a separate action. Hidden positions and shared relationships are retained.
+
+In organization breadcrumbs, focused headings and inner cards, organization codes omit a repeated direct-parent prefix: BIT > BIT-PS > BIT-PS-CPS is displayed as BIT > PS > CPS, and ESTV-BI becomes BI under ESTV. Prefix detection uses the trusted parent relationship and canonical/localized parent codes. Standalone outside organizations, registry labels, IDs, search queries and saved positions retain their full identities.
+
+The organization context menu only offers Explore here when the selected organization differs from the current focus. Choosing it opens that organization and closes the menu. The no-op entry is omitted on the already-open organization title and focused canvas; other context actions remain available.
+
+The data-landscape actions use compact 32px desktop buttons (44px touch targets). Fullscreen is placed at the right of the arrangement toolbar below the heading. The inner placement field extends upward beside a narrower centered organization heading, with a reserved middle rectangle preventing automatic cards, domains and new drag positions from covering the title/description/counts. Existing saved positions retain their original anchor origin; new positions in the upper strip use office y values down to -120. The overview and satellite coordinate systems are unchanged.
+
+Within a focused organization, child organization cards with zero offered and zero consumed visible products use muted gray text and borders on the normal surface, including hover/focus and fullscreen. Either offering or consumption keeps the usual appearance. Muting never disables drilling down, tooltips or arranging cards. This visual rule uses the existing aggregated counts and changes no catalog records.
+
+The data landscape distinguishes **offering** from **consumption** for every organization, including the overview, focus header, satellites, fullscreen and accessible list. Compact cards show an upward arrow with the offered-product count and a downward arrow with the consumed-product count; a localized legend and the shared tooltip explain both. Offering remains the count of active, visible products assigned to the Data Owner's organization. Consumption counts distinct active, visible source products assigned through catalog consumers/shares, current published allow-policy recipients or active product lineage. Multiple people, grants, lineage edges and subordinate consumers do not multiply the same product within a subtree. Requests alone, inferred lineage alone, retired products and hidden products do not add consumption. Both counts can be nonzero, as for the cantons and ESTV. These are catalog relationships and valid grants, not statistics of actual data access. The existing directed producer-to-consumer connections and saved anchors remain intact; no persisted schema changes are introduced.
+
+The start page now shows **Meine letzten Arbeiten** under the search in the right sidebar. Each nonempty category contains at most three distinct products, models (logical and physical combined), domains or terminology entries, ordered by the current user’s last saved edit. Titles link to the current object and show its own edit timestamp; long titles use the shared tooltip. Browsing, ownership alone and personal canvas saves do not count. The independent read-only `/api/v1/me/recent-work` projection uses actor-bound mutation audit events, resolved proposal/mapping/import references and logical-version authorship. It rechecks current visibility, omits retired/deleted objects and returned/out-of-scope physical sources, deduplicates before limiting and never changes audit history or permissions. Empty categories are hidden; loading/retry/empty states do not block search or the canvas. Identity changes clear stale items and cancel requests; all four UI languages are supported.
+
+The data landscape now selects organization names, abbreviations and descriptions for the active UI language throughout titles, cards, breadcrumbs, menus, relation labels, tooltips and the accessible list. The API includes the existing registry localizations in one bulk read. Imported labels/short labels take precedence; read-only ASTRA fallbacks use the official OFROU (fr), USTRA (it) and FEDRO (en) names. Missing translated registry names fall back to the short code rather than a German long description; free directory proper names remain intact. Context groups and canton prefixes are localized too. Switching languages does not reload the network, leave the focused organization, reset drafts or change saved anchors, IDs, relationships or governance. Product searches continue using the canonical organization code.
+
+The data-landscape placement now optimizes organization-to-organization catalog relationships together with domain assignments. Deterministic slot exchanges and free-position refinement penalize long links, edge crossings and links through unrelated cards or the organization heading. Exterior cards remain in perimeter lanes; all personal saved anchors remain fixed, and automatic arrangement restores an optimized draft for the current level. Scope projection uses the same visible organization hierarchy as the displayed connections. No connections, ownership or saved-layout schema are changed. The data-landscape and domain canvases share context-menu styling, standard outline icons, grouped actions, compact standard action rows (34px, 44px on touch devices), keyboard focus/hover states and theme colors. Data-landscape menus measure available screen space and scroll internally when needed.
+
+The data landscape now groups domain bubbles near their assigned visible offices instead of scattering them independently. A shared hierarchy projection drives spatial grouping, dashed assignment lines and the small organization label: ROHS under PS/CPS projects to BIT in EFD, while Mehrwertsteuer projects to ESTV. Drilling down exposes the respective subunit; the shared tooltip shows the complete trusted organization path. Organization slots and domain slots are optimized with drift clearance; saved organization anchors remain fixed and nearby domains follow them. This is a display correction using existing trusted organizationIds, not a reassignment of domain ownership, governance or persisted data.
+
+Domains are hidden by default when the data landscape opens, including its overview and fullscreen. The existing shared identifier-mode toggle (native button, switch role, checked state and standard thumb) controls hiding/showing them; no custom switch styling or persisted preference is introduced.
+
+Relationships attached directly to the focused organization now end at its measured title perimeter with a small text clearance, instead of the empty center of its container. This applies to incoming/outgoing catalog relationships and domain assignments; visible child-organization endpoints retain their own cards. Measurements follow viewport/fullscreen size and language changes.
+
+The organization canvas draws organization-to-domain assignments as dashed lines whenever the domain layer is enabled, using trusted organization IDs. Each domain connects to the most specific visible assigned organization, avoiding duplicate ancestor lines. Measured card and bubble positions keep endpoints aligned after arranging, scrolling or switching fullscreen. Organization-to-organization relationship rendering is unchanged; a separate legend identifies domain assignments.
+
+The start-page search no longer displays the canton/ESTV search-tip sentence in any language.
+
+The start-page data landscape now offers **Vollbild**, **Anordnung speichern**, **Entwurf verwerfen** and **Automatisch anordnen**. Drag organization cards with mouse/touch or move focused cards with arrow keys (Shift for larger steps). A drag moves a card without drilling into it; click/Enter still drills down. Floating pauses during movement and resumes gently about the chosen anchor. Reset restores only the current level's deterministic starting positions and remains a draft until saved.
+
+Layouts are personal and saved to the current user's profile separately for the overview and each organization level. Inner offices and outside satellites retain independent anchors. Fullscreen uses the same draft and saved positions, with a contained scroll area, keyboard focus containment and Escape to exit/cancel. Switching levels keeps all draft edits; leaving the page warns about unsaved changes. Saves use optimistic revisions, keep drafts on failure/conflict and never alter organizations, relationships, product counts or governance. The domain layer uses the familiar toggle.
+
+Domains and terminology now default to their networks (`/domains`, `/domains/terminology`); explicit `?view=cards` opens cards and `?view=network` remains supported. Selecting cards writes `view=cards`; selecting the default network removes the parameter.
+
+Semantic reads no longer block the domain canvas on terminology or governance: each stream has independent readiness, loading tab counts display an ellipsis, and secondary failures leave the domain register usable. Identical pending domain reads are coalesced per actor/options without a completed-response cache. The embedded domain network reuses the parent's domains/change requests, and the organization term editor reuses its already loaded graph. Identity changes clear normalization data and reject late prior-actor responses.
+
+Backend domain/term lists use a request-local bulk snapshot for labels, counts, ownership, office memberships, organizations and mandates. Existing authority helpers retain their semantics; the snapshot is removed in `finally` before any later operation. On the local 78-domain fixture, the register projection fell from **1,101 SQL statements to 10**, including the initial domain query. Tests compare batched and individual responses for multiple actors and bound SQL counts; no persisted model, policy, API response contract or access rules change.
+
+The domain-network canvas now groups **Nur amtseigene anzeigen** and **Stillgelegte Domänen anzeigen** side by side immediately above the canvas. Zoom and **Automatisch anordnen** align to the right on the same toolbar; controls wrap in that order on narrow screens. The own-office filter is projected from the existing semantics page, so its URL-based scope, loading/error handling and disabled state remain authoritative in fullscreen too. These filters and all four object layers now use the existing identifier-mode switch design (rounded track/thumb), with native buttons, `role="switch"`, accessible labels and `aria-checked`. Card/terminology views reuse the same office toggle. No profile, persistence structure or permission changes are involved.
+
+The domain network now arranges domains and their enabled object clusters radially about a common center. It replaces the left-aligned hierarchy/column fallback even for disconnected domains. Whole cluster bounds reserve room for products, terms, logical models and physical structures; a radial seed and compact packing keep clusters apart using their individual sizes. The automatic layout centers its complete bounds in the actual viewport, including wide/fullscreen views, and centers the scroll position when the graph is larger. Existing manual positions remain until **Automatisch anordnen** is selected; this resets only visible domain positions, remains a personal draft and requires explicit save. Hidden positions and shared relationships are retained.
+
+Connected organizations outside the focused area now use normal ink, a light surface and a blue border. Unconnected satellites remain gray. Connections in either direction, including subordinate units, count; individual canton cards show a small localized “Kanton” prefix.
+
+The organization graph now includes current published allow-policy recipients resolved through trusted directory identities. This restores **ESTV → Kanton St. Gallen** from the existing legacy organization principal. Relationships are catalog context, not access receipts or proof of deployed or executed access. Requests alone and unknown identities do not create relationships; hidden products remain excluded. Multiple sources for the same product/organization pair count once.
+
+The additive PoC fixture **Zeughäuser Kanton St. Gallen** (`urn:daca:ch:sg:zeughaeuser`) records **Kanton St. Gallen → VBS armasuisse**. It reuses Beat Stalder as Data Owner, Sarah Brunner as deputy and Giuseppe Starwars as the armasuisse consumer. These personas already hold the required roles. The example contains only synthetic metadata; no endpoint or access policy is published. A one-time marker preserves later edits and retirement.
+
+The welcome introduction now opens with “Entdecken, beschreiben, schützen” and explicitly
+includes consumer usage logging alongside metadata, interfaces, provenance and access rules.
+It also explains reuse, clear responsibilities and understandable relationships across
+organizations, followed by the call to improve administrative efficiency, security and
+reliability. German, French, Italian and English copy are aligned.
+
+
+The start-page organization canvas now has a **Gesamtübersicht** above the department level.
+It shows departments, the Federal Chancellery, canton/bank/public-directory groups and public
+organizations such as SBB, Post and the ETH area as freely floating peer cards across the full
+canvas. It has no central organization or enclosing department frame. The default entry remains
+the current user's own area. The overview breadcrumb is always available; **Eigener Bereich**
+returns to the user's starting area. Click cards to drill into departments or context groups.
+`/?organization=all` opens the overview directly, including for users without a home assignment.
+Optional domains remain round bubbles. Catalog relations project to the visible ancestor cards;
+relationships within the same overview card do not create a self-thread. Counts, visibility,
+authorization and directory membership still come from the existing read-only API. No backend,
+persistence or permission change is involved.
+
+
+The Neuchâtel welcome motif now uses a bright daytime photograph with the castle, collegiate church, lake and green foliage. The former yellow sunrise horizon is replaced. New `swiss-neuchatel-summer-daylight-*` URLs provide responsive 960/1600 px AVIF/WebP images and avoid stale cached copies; theme rotation and welcome layout are unchanged. Source and attribution are recorded in `docs/image-credits.md`.
+
+
+Journey 08's trusted repeatable fixture reactivates the existing Verteidigung domain in its
+retained office scope. Its ALDS review therefore remains with Christian Man, independently of
+Sibilla's GS-VBS employment. This exception is limited to the stable, server-managed fixture
+request; public new-domain requests still use the proposed owner's current primary office.
+
+
+The confirmed PoC personas use their actual home organizations independently of scoped object duties:
+Sibilla Di Ciesa is in GS-VBS (`vbs-gs`) and holds the VBS Local Data Steward Department (LDSD)
+mandate. Christiano Stadello (`christian.spider`, stable ID retained) belongs to armasuisse and
+holds its Amt Local Data Steward (ALDS) mandate. Thomas Wikinger is the armasuisse Local Data
+Steward (LDS), represented by its scoped `data_steward` modeling assignment. Thomas Kriegli and
+Joel Ruod belong to EFD / ESTV / BI (Business Intelligence, `efd-estv-bi`). Thomas owns the new
+**Data Analytics** domain, with Joel as its PoC deputy. The separate **Data Analytics Rapid
+Prototyping** domain keeps Joel as Data Owner and Thomas as deputy.
+
+The one-time `poc-persona-governance-scopes-2026-10-31-v1` correction updates current names,
+contacts, directory entries and primary memberships. Stable IDs, portraits, product ownership,
+control people, existing object duties and historical evidence remain intact. The existing
+Verteidigung and Personal domains retain explicit `vbs-verteidigung` scope even though their
+responsible people have different home offices. The profile separately shows current ALDS/LDSD
+mandates and scoped modeling assignments. New domains require their own office's ALDS approval;
+Journey 08 explains creation under Lawrence Hill in Verteidigung followed by an evidenced
+handover to Sibilla when a fresh exercise is needed. Apply an existing-runtime correction with
+`docker compose exec -T catalog-api uv run --no-sync python -m daca_catalog.poc_identity_updates`.
+Later operator changes, revocations and domain retirement are preserved.
+
+
+Fausto Marzo belongs to **EFD BIT PS** (`efd-bit-ps`), without CPS. Fresh fixtures and the
+browser fallback use PS. The scoped `poc-fausto-ps-organization-v1` update corrects the existing
+user label, directory organization and primary membership in place; it creates no modeling role
+and preserves his portrait, identity and control-person assignments. Apply existing-runtime
+corrections with `python -m daca_catalog.poc_identity_updates` inside the catalog-api container.
+
+Fausto Marzo now has a synthetic local profile portrait at `/assets/data-owners/fausto-marzo.webp`.
+The scoped portrait backfill upgrades only his old FM initials placeholder or a missing photo,
+preserving custom photos and all roles/assignments. Source prompts and export details are
+recorded in `apps/catalog-ui/public/assets/data-owners/portraits.provenance.json`.
+
+The existing Sibilla persona is now displayed as **Sibilla Di Ciesa** in profiles, selectors,
+guidance and current responsibility projections. Its stable `sibilla.micheli` ID and assignments
+are retained. A separate scoped, marker-protected update now also corrects current home organizations and contacts;
+immutable historical snapshots and audit evidence are preserved.
+
+Enabled domains appear as round bubbles among the floating organizational rectangles. Both
+types share collision-separated placement; domain bubbles retain their detail links, shared
+tooltips and offer counts. The layer can be switched off again.
+
+The welcome section retains its original typography, spacing and size above the explorer.
+The explorer is titled **Datenraum der Schweizer Verwaltung und der bundesnahen Betriebe**.
+Dismissal, shared tooltips, Settings / Home page and floating organization rectangles remain available.
+
+The welcome close control uses the shared catalog tooltip and explains restoration under
+Settings / Home page. This dedicated settings section replaces the former Appearance placement.
+Organization containers/cards are rounded rectangles; offices are scattered freely with spacing
+and drift calmly, just like the outer context cards. Reduced motion stops both layers.
+
+The [start-page organization canvas](organization-explorer.md) replaces the large left-hand hero
+content with a trusted organization hierarchy and keeps search at the right. It supports department /
+office / unit drill-down, contextual satellites, quiet reduced-motion-aware animation, offer counts,
+hover details, grouped keyboard context actions, and optional domains. Existing Neuchatel/ESTV catalog
+usage evidence yields a thin thread. The welcome introduction is independently dismissible after
+confirmation, browser-local per person, and restorable under Settings / Home page. One PoC badge
+and the current V, armasuisse, ASTRA, ESTV and BIT credit replace the duplicated wording.
+
+UI wording now consistently names the role **Data Owner** in all four languages, including
+profiles, product overviews, search filters, domain handovers, model reviews and guidance.
+German business-term headings use **Terminologie** and individual entries use
+**Terminologiebegriff**. Task copy from older stored fixtures is normalized for display;
+stored task evidence and catalog identifiers are preserved.
+
+Fausto Marzo is the independent Publication Approver/control person for all Marcello Hebeisa
+products, with the same default for new products. The scoped CPS operator seed backfills existing
+products once, records revisioned audit evidence and refuses changes during active approvals.
+Later editorial assignments and revoked reviewer roles remain intact on rerun. Fausto is selectable
+with an individual synthetic WebP portrait, like the other 25 PoC personas.
+Existing installations receive missing synthetic portraits without replacing an existing photo.
+User/profile, product owner, responsibility and organization-selection projections use the
+federal `Department Office Unit` path; CPS now appears as `EFD BIT PS CPS`, not a dash-separated
+organization code. Cantonal/municipal labels retain their names. The API display projection
+does not rewrite product-owner policy attributes or any organizational membership/grant.
+
 Release **0.3.2** synchronizes the UIs, API/runtime packages, PWA metadata, lockfiles, focused
 OpenAPI documents and OpenShift image pins. The current release notes cover all changes since
 0.2.1: domain exploration and ROHS CPS fixtures, private search Views, physical-first Mapping,
@@ -93,7 +297,7 @@ Verified by 579 frontend tests, seven isolated PostgreSQL API tests and the two-
 `personal-search-views` Edge flow, including immutable delivery after source deletion, independent
 adoption, persisted filter-only searches, confirmed deletion and mobile dialogs.
 
-Domains and terms now default to the own-office filter. In card views its checkbox sits next to
+Domains and terms now default to the own-office filter. In card views its toggle sits next to
 the search input and below it on narrow screens; network views keep it below their view switch.
 `ownOffice=0` preserves an explicit All choice across views, semantic tabs and refreshes, while
 fresh links default to scoped results. Shared tooltip, loading/error handling and trusted office
@@ -227,7 +431,7 @@ Existing-to-existing regression models are isolated per run and reuse only the t
 organization/owner/publisher context. Repeated gates no longer append hundreds of historical
 snapshot links to the shared organization demo model; existing demo records remain intact.
 
-Domains and terminology provide an optional **Nur amtseigene anzeigen** checkbox in both
+Domains and terminology provide an optional **Nur amtseigene anzeigen** toggle in both
 card and network views. `ownOffice=1` retains it across view and domain/terminology tab changes.
 The existing organization semantic-graph read supplies independent domain/term scope IDs from
 trusted object responsibilities (office plus subordinate units); explicit object scope takes
@@ -352,7 +556,7 @@ Verified with the six relevant component tests, the production UI build and the 
 
 Domain navigation now mirrors Terminology: one **Domänen** section with **Kacheln** and
 **Domänennetz** buttons, instead of a separate top-level network tab. The embedded graph keeps
-its editor, save/discard behavior and navigation guard. `/domains?view=network` is canonical;
+its editor, save/discard behavior and navigation guard. `/domains` is the default network entry; `?view=network` remains supported;
 legacy `/domains/network` redirects preserve other query parameters.
 Verified with 21 relevant component tests, the production UI build and read-only browser flows
 for the domain submenu/dirty-view cancellation and the existing organization term network.
@@ -754,8 +958,9 @@ It sits beside the footer text on desktop and below it on small screens, without
 content. The version, `Co-Designed by V, armasuisse, ASTRA, ESTV und BIT` credit and feature-list button
 remain available. The redundant current-version status is removed; an available PWA update still
 shows its ready status, reload action and confirmation dialog.
-Co-designers are credited once in the version area. The catalog footer description omits its
-duplicate co-design sentence in DE/FR/IT/EN.
+Within each footer, co-designers are credited once in the version area. The catalog footer
+description omits its duplicate credit in DE/FR/IT/EN. The optional welcome introduction now
+uses the same current participant list.
 Verified with seven version/update component tests and both production UI builds. Read-only
 catalog browser checks cover 1440px and 390px widths in light/dark themes, footer placement,
 horizontal overflow, feature-popup opening and focus return. No commit was created.
@@ -904,13 +1109,12 @@ The header name is the sole entry to the profile and has no text underline. Sign
 that page, not in the header. Without a local session, every DaCa route first shows the
 demo-person picker; after sign-out the picker returns.
 
-Christian Spider and Christian Man now hold additional Data Steward assignments for
+Christiano Stadello and Christian Man now hold additional Data Steward assignments for
 `VBS / armasuisse Immobilien`. They can create and derive VIBDBU logical drafts and edit mappings;
-the scoped role also permits structural metadata management. Their primary Verteidigung
-memberships stay intact. Other Verteidigung users remain read-only for this source, and
+the scoped role also permits structural metadata management. Their primary memberships are armasuisse and Verteidigung respectively. Other Verteidigung users remain read-only for this source, and
 publication still requires the model's named owner or delegated deputy.
-The six Verteidigung modeling personas have explicit primary organization memberships, which
-keeps their home organization accurate when an additional modeling scope is assigned.
+The original modeling personas have explicit primary organization memberships; Sibilla belongs
+to GS-VBS and Christiano to armasuisse, independently of their additional modeling scopes.
 
 ## DAAIF reference journey
 

@@ -29,7 +29,7 @@ import { TrustGrant } from '../../core/control-plane.models';
                 <td><div class="trust-direction"><strong>{{ api.catalogName(grant.providerId) }}</strong><span>provides to ↓</span><strong>{{ api.catalogName(grant.consumerId) }}</strong></div></td>
                 <td><daca-status-badge [tone]="stateTone(grant.state)">{{ grant.state }}</daca-status-badge></td>
                 <td><div class="scope-tags">@for (scope of grant.resourceTypes; track scope) { <span [class.is-policy]="scope === 'policies'">{{ scope }}</span> }</div></td>
-                <td><small>{{ grant.ownerFilter ? 'owner = ' + grant.ownerFilter : grant.domainFilter ? 'domain = ' + grant.domainFilter : grant.productFilter ? 'product = ' + grant.productFilter : 'No additional filter' }}</small></td>
+                <td><small>{{ grant.ownerFilter ? 'Data Owner = ' + grant.ownerFilter : grant.domainFilter ? 'domain = ' + grant.domainFilter : grant.productFilter ? 'product = ' + grant.productFilter : 'No additional filter' }}</small></td>
                 <td><small>{{ grant.validFrom | date: 'dd MMM yyyy' }}<br>to {{ grant.validUntil | date: 'dd MMM yyyy' }}</small></td>
               </tr>
             }

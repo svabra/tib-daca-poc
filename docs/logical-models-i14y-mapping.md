@@ -1,5 +1,40 @@
 # Logical models, I14Y concepts, physical models, and mappings
 
+Shared canvas actions retain compact 32px desktop buttons and a 44px minimum target on viewports up to 700px as well as coarse-pointer devices. This keeps Mapping save/create actions and fullscreen exits usable in narrow desktop windows and mobile layouts.
+
+Mapping canvas cards identify logical models with the shared orange type stripe and physical representations/declarations with the shared purple stripe. The same tokens are used for model cards embedded in domain canvases; organizations use navy, terms pink and products mustard throughout the corresponding diagrams. Existing field lists, connection handles, row-status colors and permission/save behavior remain intact. Primary model headers retain top stripes and the shared 2px card corners; the layout measurement still derives actual endpoint geometry after rendering.
+
+Mapping model cards share rectangle selection with the data landscape, domain and terminology editors. Drag blank canvas space to enclose cards, then drag a selected card or use arrows to move them together. Shift/Ctrl adds/removes selection and Ctrl/Cmd+A selects displayed cards. Group deltas preserve relative positions; Escape restores an active gesture or clears selection before fullscreen exit. Preview representations and read-only layouts cannot be moved. Field/column buttons, connection ports and context menus retain their behavior. Group positions use the existing `MappingDraftFacade.canvasNodePositions` draft and explicit workspace save; no mapping, model or publication metadata is changed. Selection is transient and resets when the actor/model scope changes.
+
+Organization, Mapping, domain and terminology canvases share compact action styling (32px desktop, 44px touch), wrapping action groups and a fixed, labelled fullscreen exit at the top right with an Escape hint. Domain automatic arrangement now sits next to save/discard, and terminology automatic arrangement sits next to shared-layout save/discard. Mapping retains its draft-save action; terminology business submissions remain separate from shared layout publication. Domain and terminology fullscreen use the same native/full-viewport fallback behavior as Mapping: Escape, explicit close, browser fullscreen changes and destruction restore page scrolling and focus. Nested menus/dialogs consume Escape before the canvas exits, and Tab focus stays inside the fullscreen canvas. A denied native entry or failed exit cannot leave the page scroll-locked. No save, permission, proposal or persistence semantics are changed.
+
+The start-page **Meine letzten Arbeiten** sidebar is a saved-edit projection, separate from Mapping’s visited-workspace history. Its Models category merges logical models and currently readable physical sources into at most three entries, deduplicated by kind and root ID. It uses authenticated actor mutation audits and logical-version author/editor fields, never object ownership or workspace visits as evidence of an edit. No model, mapping or persistence schema changes are introduced.
+
+The confirmed PoC personas use their actual home organizations independently of scoped object duties:
+Sibilla Di Ciesa is in GS-VBS (`vbs-gs`) and holds the VBS Local Data Steward Department (LDSD)
+mandate. Christiano Stadello (`christian.spider`, stable ID retained) belongs to armasuisse and
+holds its Amt Local Data Steward (ALDS) mandate. Thomas Wikinger is the armasuisse Local Data
+Steward (LDS), represented by its scoped `data_steward` modeling assignment. Thomas Kriegli and
+Joel Ruod belong to EFD / ESTV / BI (Business Intelligence, `efd-estv-bi`). Thomas owns the new
+**Data Analytics** domain, with Joel as its PoC deputy. The separate **Data Analytics Rapid
+Prototyping** domain keeps Joel as Data Owner and Thomas as deputy.
+
+The one-time `poc-persona-governance-scopes-2026-10-31-v1` correction updates current names,
+contacts, directory entries and primary memberships. Stable IDs, portraits, product ownership,
+control people, existing object duties and historical evidence remain intact. The existing
+Verteidigung and Personal domains retain explicit `vbs-verteidigung` scope even though their
+responsible people have different home offices. The profile separately shows current ALDS/LDSD
+mandates and scoped modeling assignments. New domains require their own office's ALDS approval;
+Journey 08 explains creation under Lawrence Hill in Verteidigung followed by an evidenced
+handover to Sibilla when a fresh exercise is needed. Apply an existing-runtime correction with
+`docker compose exec -T catalog-api uv run --no-sync python -m daca_catalog.poc_identity_updates`.
+Later operator changes, revocations and domain retirement are preserved.
+
+
+UI role labels and model-review help consistently use **Data Owner** in all four languages,
+including the reviewing domain responsibility and deputy. German business-vocabulary labels
+use **Terminologie**. See [UI vocabulary](domains-and-glossary.md#ui-vocabulary).
+
 ## Remove an explicit physical domain membership
 
 The common representation/declaration menu offers **Domänenzuordnung entfernen** whenever the
@@ -799,7 +834,7 @@ The PoC guide separates model entry from physical derivation. Journey 10 capture
 model manually with no physical snapshot or mappings, then takes it through domain review.
 Journey 11 uses `daca_sample.public.VIBDBU` to create one technical draft and 47 direct mappings
 against a pinned snapshot; fachliche Merkmale remain an explicit editing step. Christian Man and
-Christian Spider have scoped Data Steward assignments for that source. Repeating a derivation of
+Christiano Stadello have scoped Data Steward assignments for that source. Repeating a derivation of
 the same table and snapshot is idempotent.
 
 Modelling authorization is scoped to explicit VBS organizations and does not change legacy
@@ -807,8 +842,8 @@ data-product permissions. The base personnel scenarios use `VBS / Verteidigung`.
 
 | Persona | Modelling role | Scenario |
 |---|---|---|
-| Christian Spider | Data Owner | Owner of the logical-first personnel model |
-| Sibilla Micheli | Deputy Data Owner | Visible personnel-model deputy |
+| Christiano Stadello | Data Owner | Owner of the logical-first personnel model |
+| Sibilla Di Ciesa | Deputy Data Owner | Visible personnel-model deputy |
 | Cinthya Thor | Data Steward | Logical-first editing and existing-to-existing mapping |
 | Lawrence Hill | Data Owner | Owner of the vehicle-inventory model |
 | Hong An Captain | Deputy Data Owner | Visible vehicle-model deputy |
@@ -845,10 +880,10 @@ authoritative server-side source for the primary owner and visible deputy. Savin
 creates a task; explicit submission creates exactly one immutable review snapshot and one task for
 the primary owner. The deputy has no decision right.
 
-Christian Spider and Christian Man additionally hold active Data Steward assignments for
+Christiano Stadello and Christian Man additionally hold active Data Steward assignments for
 `VBS / armasuisse Immobilien`. These scoped assignments allow them to create and derive VIBDBU
-logical drafts, edit their mappings, and manage structural metadata there. Their primary
-Verteidigung membership and roles remain intact. Publication still requires the model's named
+logical drafts, edit their mappings, and manage structural metadata there. Their home organizations are armasuisse and Verteidigung respectively; their separately scoped
+modeling roles remain intact. Publication still requires the model's named
 Data Owner or delegated deputy. `/profile` displays the persisted assignments and maps roles to
 actions. A modeling role in parent armasuisse covers its descendant Immobilien unit.
 The profile is opened from the header name rather than the main navigation. Its sign-out action
@@ -1011,7 +1046,7 @@ both PostgreSQL persistence models independent.
 
 ## External DAAIF user step
 
-DAAIF has a separate repository and no user-seeding API.  Check or apply Christian Spider's four
+DAAIF has a separate repository and no user-seeding API.  Check or apply Christiano Stadello's four
 known UI/backend allow-list entries explicitly:
 
 ```powershell

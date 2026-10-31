@@ -1,3 +1,4 @@
+import { organizationScopeLabel } from '../../core/organization-label';
 import { afterNextRender, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, Injector, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -27,7 +28,7 @@ import { PhysicalSource } from './data-models.models';
       <p>{{ i18n.t('adaJourneyResetExplanation') }}</p>
       <label>{{ i18n.t('adaJourneyOrganization') }}<select [ngModel]="scopeId()" (ngModelChange)="selectScope($event)" [disabled]="busy()">
         <option value="" disabled>{{ i18n.t('adaJourneyChooseOrganization') }}</option>
-        @for(scope of availableScopes();track scope.id){<option [value]="scope.id">{{ scope.department }} · {{ scope.label }}</option>}
+        @for(scope of availableScopes();track scope.id){<option [value]="scope.id">{{ scopeLabel(scope.department, scope.label) }}</option>}
       </select></label>
       @if(loading()){<p role="status">{{ i18n.t('adaJourneyChecking') }}</p>}
       @else if(source();as source){<p class="reset-target"><strong>{{ source.name }}</strong><br>{{ i18n.t('adaJourneyResetConsequences') }}</p>}
@@ -46,6 +47,7 @@ import { PhysicalSource } from './data-models.models';
 export class PhysicalImportJourneyComponent {
   private static nextId = 0;
   readonly instanceId = PhysicalImportJourneyComponent.nextId++;
+  readonly scopeLabel = organizationScopeLabel;
   readonly scopes = input<readonly {id: string; department: string; label: string}[] | null>(null);
   readonly reset = output<{organizationId: string}>();
   readonly identity = inject(DemoIdentityService);

@@ -1,0 +1,125 @@
+<section class="organization-explorer" [class.is-fullscreen]="fullscreen()" [attr.role]="fullscreen() ? 'dialog' : null" [attr.aria-modal]="fullscreen() ? 'true' : null" aria-labelledby="organization-explorer-title" #explorer>
+  <header class="org-heading">
+    <div><p class="daca-eyebrow">{{ tr(['Ihr Datenraum', 'Votre espace de données', 'Il vostro spazio dati', 'Your data landscape']) }}</p><h2 id="organization-explorer-title">{{ tr(['Datenraum der Schweizer Verwaltung und der bundesnahen Betriebe', 'Espace de données de l’administration suisse et des entreprises proches de la Confédération', 'Spazio dati dell’amministrazione svizzera e delle imprese vicine alla Confederazione', 'Data landscape of the Swiss administration and federally affiliated enterprises']) }}</h2></div>
+  </header>
+  <div class="org-layout-toolbar daca-canvas-actions" [attr.aria-busy]="saving()">
+    <button type="button" class="daca-button org-save-layout" [disabled]="!canArrange() || !dirty()" (click)="saveLayout()">{{ saving() ? tr(['Wird gespeichert …', 'Enregistrement…', 'Salvataggio…', 'Saving…']) : tr(['Anordnung speichern', 'Enregistrer la disposition', 'Salva disposizione', 'Save layout']) }}</button>
+    <button type="button" class="daca-button is-secondary org-discard-layout" [disabled]="saving() || !dirty()" (click)="discardLayout()">{{ tr(['Entwurf verwerfen', 'Abandonner le brouillon', 'Scarta bozza', 'Discard draft']) }}</button>
+    <button type="button" class="daca-button is-secondary org-auto-layout" [disabled]="!canArrange()" (click)="autoLayout()" [dacaTooltip]="tr(['Ausgangsanordnung dieser Ebene wiederherstellen. Mit Anordnung speichern übernehmen.', 'Rétablir la disposition initiale de ce niveau, puis enregistrer.', 'Ripristina la disposizione iniziale di questo livello, poi salva.', 'Restore this level’s original layout, then save to keep it.'])">{{ tr(['Automatisch anordnen', 'Disposition automatique', 'Disponi automaticamente', 'Arrange automatically']) }}</button>
+      <div class="org-view-filters" role="group" [attr.aria-label]="viewOptionsLabel()">
+        <label class="org-relationship-filter" [dacaTooltip]="hideUnrelatedHint()"><button type="button" data-hide-unrelated-switch class="identifier-mode-switch" role="switch" [attr.aria-label]="hideUnrelatedLabel()" [attr.aria-description]="hideUnrelatedHint()" [attr.aria-checked]="hideUnrelatedOrganizations()" (click)="setHideUnrelatedOrganizations(!hideUnrelatedOrganizations())"><span class="identifier-mode-switch-thumb" aria-hidden="true"></span></button>{{hideUnrelatedLabel()}}</label>
+        <label class="org-layer"><button type="button" class="identifier-mode-switch" role="switch" [attr.aria-label]="tr(['Domänen', 'Domaines', 'Domini', 'Domains'])" [attr.aria-checked]="showDomains()" (click)="showDomains.set(!showDomains())"><span class="identifier-mode-switch-thumb" aria-hidden="true"></span></button>{{ tr(['Domänen', 'Domaines', 'Domini', 'Domains']) }}</label>
+      </div>
+    <button type="button" class="daca-button is-secondary org-fullscreen canvas-fullscreen-toggle" [attr.aria-label]="fullscreen() ? tr(['Vollbild verlassen', 'Quitter le plein écran', 'Esci dallo schermo intero', 'Exit fullscreen']) : tr(['Vollbild öffnen', 'Ouvrir en plein écran', 'Apri a schermo intero', 'Open fullscreen'])" (click)="toggleFullscreen($event)"><span aria-hidden="true">⛶</span>{{ fullscreen() ? tr(['Vollbild verlassen', 'Quitter le plein écran', 'Esci dallo schermo intero', 'Exit fullscreen']) : tr(['Vollbild', 'Plein écran', 'Schermo intero', 'Fullscreen']) }}@if(fullscreen()){<kbd>Esc</kbd>}</button>
+    @if(viewLoading()){<span class="org-layout-status" role="status">{{tr(['Anordnung wird geladen …', 'Chargement de la disposition…', 'Caricamento disposizione…', 'Loading layout…'])}}</span>}
+  </div>
+  @if(layoutError()){<div class="org-layout-message daca-alert is-error" role="alert">{{layoutError()}} <button class="daca-button is-secondary" type="button" [disabled]="saving()" (click)="reloadView()">{{tr(['Gespeicherte Anordnung laden', 'Charger la disposition enregistrée', 'Carica disposizione salvata', 'Load saved layout'])}}</button></div>}
+  @if(notice()){<p class="org-layout-message daca-alert" role="status">{{notice()}}</p>}
+  @if (loading()) {
+    <div class="org-state" role="status"><span class="small-spinner" aria-hidden="true"></span>{{ tr(['Datenraum wird geladen …', 'Chargement de l’espace de données…', 'Caricamento dello spazio dati…', 'Loading data landscape…']) }}</div>
+  } @else if (failed()) {
+    <div class="org-state" role="alert"><p>{{ tr(['Der Datenraum ist derzeit nicht verfügbar.', 'L’espace de données est indisponible.', 'Lo spazio dati non è disponibile.', 'The data landscape is unavailable.']) }}</p><button class="daca-button is-secondary" (click)="load()">{{ tr(['Erneut versuchen', 'Réessayer', 'Riprova', 'Retry']) }}</button></div>
+  } @else {
+    <div class="org-navigation-row">
+    <nav class="org-breadcrumb" [attr.aria-label]="tr(['Organisationsebene', 'Niveau organisationnel', 'Livello organizzativo', 'Organization level'])">
+      <button type="button" class="org-home" (click)="overview()" [attr.aria-current]="!focus() ? 'location' : null" [dacaTooltip]="tr(['Alle Departemente und öffentlichen Organisationen anzeigen', 'Afficher tous les départements et organismes publics', 'Mostra tutti i dipartimenti e gli enti pubblici', 'Show all departments and public organizations'])">⌂ {{ tr(['Gesamtübersicht', 'Vue d’ensemble', 'Panoramica', 'Overview']) }}</button>
+      @for (node of breadcrumbs(); track node.id) { <span aria-hidden="true">›</span><button type="button" (click)="enter(node)" [attr.aria-current]="node.id === focusId() ? 'location' : null">{{ organizationCode(node) }}</button> }
+      @if (data()?.homeId && focusId() !== data()?.homeId) { <button type="button" class="org-own-home" (click)="home()">{{ tr(['Eigener Bereich', 'Mon périmètre', 'Il mio ambito', 'My area']) }}</button> }
+    </nav>
+
+    </div>
+    <div class="org-viewport">
+      <div class="org-stage" [dacaCanvasSelection]="selection" [class.is-overview]="!focus()" [style.width.px]="fullscreen() ? fullscreenStageWidth() : null" #stage tabindex="0" role="group" [attr.aria-label]="tr(['Organisationscanvas; Rechtsklick oder Umschalt F10 für Aktionen', 'Canvas des organisations ; clic droit ou Maj F10 pour les actions', 'Canvas organizzazioni; tasto destro o Maiusc F10 per azioni', 'Organization canvas; right-click or Shift F10 for actions'])" (contextmenu)="focus() && openMenu($event, focus()!)" (keydown.shift.f10)="focus() && openMenu($event, focus()!)">
+        <svg class="org-geometry" viewBox="0 0 960 650" role="group" [attr.aria-label]="tr(['Katalogbeziehungen', 'Relations de catalogue', 'Relazioni di catalogo', 'Catalog relationships'])">
+          <defs>
+            <linearGradient [attr.id]="packetTailId" gradientUnits="userSpaceOnUse" x1="-28" y1="0" x2="-2" y2="0"><stop offset="0" stop-color="#eaf8ff" stop-opacity="0"/><stop offset=".35" stop-color="#83d1ff" stop-opacity=".25"/><stop offset="1" stop-color="#168cff" stop-opacity=".95"/></linearGradient>
+            @for(thread of threads(); track thread.id){@if(thread.drawHighway){
+              <linearGradient [attr.id]="packetTailId+'-band-'+thread.id" gradientUnits="userSpaceOnUse" [attr.x1]="thread.from.x" [attr.y1]="thread.from.y" [attr.x2]="thread.to.x" [attr.y2]="thread.to.y"><stop class="org-highway-blue-stop daca-highway-blue-stop" offset="0"/><stop class="org-highway-white-stop daca-highway-white-stop" offset=".48"/><stop class="org-highway-blue-stop daca-highway-blue-stop" offset="1"/></linearGradient>
+            }}
+          </defs>
+          @if (focus()) { <rect class="org-bubble-halo" aria-hidden="true" x="170" y="94" width="620" height="474" rx="26" />
+          <rect class="org-bubble" aria-hidden="true" x="180" y="104" width="600" height="454" rx="18" /> }
+          @for (thread of threads(); track thread.id) {
+            <g class="org-connection" [class.is-inferred]="thread.inferred" [attr.data-source-id]="thread.sourceId" [attr.data-target-id]="thread.targetId">
+              @if(thread.drawHighway){
+                <path class="org-highway-glow daca-highway-glow" aria-hidden="true" [attr.d]="thread.ribbonPath"/>
+                <path class="org-highway-edge daca-highway-edge" aria-hidden="true" [attr.d]="thread.ribbonPath"/>
+                <path class="org-highway-band daca-highway-band" aria-hidden="true" [attr.d]="thread.ribbonPath" [attr.stroke]="'url(#'+packetTailId+'-band-'+thread.id+')'"/>
+                <path class="org-thread daca-highway-spine" [class.is-inferred]="thread.inferred" aria-hidden="true" [attr.d]="thread.ribbonPath"/>
+              }
+              <g aria-hidden="true" class="org-flow" [attr.transform]="'translate('+thread.offset.x+' '+thread.offset.y+')'" [style.--flow-path]="thread.motionPath" [style.--flow-from-x]="(thread.from.x + thread.offset.x) + 'px'" [style.--flow-from-y]="(thread.from.y + thread.offset.y) + 'px'" [style.--flow-to-x]="(thread.to.x + thread.offset.x) + 'px'" [style.--flow-to-y]="(thread.to.y + thread.offset.y) + 'px'" [style.--flow-duration]="thread.flow.duration">
+                @for (particle of thread.flow.particles; track particle.id) {
+                  <g class="org-packet daca-highway-packet" [style.animation-delay]="particle.delay" [style.--flow-rest]="particle.rest*100+'%'">
+                    <path class="org-packet-tail daca-highway-tail" d="M -28 0 Q -12 -4 -2 -2.8 L -2 2.8 Q -12 4 -28 0 Z" [attr.fill]="'url(#'+packetTailId+')'"/>
+                    <circle class="org-packet-halo daca-highway-halo" r="5.5" [style.animation-delay]="particle.pulseDelay" />
+                    <circle class="org-packet-core daca-highway-core" r="3.5" [style.animation-delay]="particle.pulseDelay" />
+                  </g>
+                }
+              </g>
+              <path class="org-thread-hit" tabindex="0" role="img" [attr.aria-label]="thread.label" [dacaTooltip]="thread.label" [attr.d]="thread.path" [attr.transform]="'translate('+thread.offset.x+' '+thread.offset.y+')'"/>
+            </g>
+          }
+          @for (thread of domainThreads(); track thread.id) { <line class="org-domain-thread" aria-hidden="true" [attr.data-source-id]="thread.sourceId" [attr.data-domain-id]="thread.domainId" [attr.x1]="thread.from.x" [attr.y1]="thread.from.y" [attr.x2]="thread.to.x" [attr.y2]="thread.to.y"><title>{{ thread.label }}</title></line> }
+        </svg>
+        @for (satellite of satellites(); track satellite.node.id) {
+          <button type="button" class="org-satellite daca-canvas-card" data-canvas-kind="organization" [class.is-connected]="satellite.connected" [attr.data-organization-id]="satellite.node.id" [attr.data-canvas-object]="satellite.node.id" [style.left.%]="satellite.x / 9.6" [style.top.%]="satellite.y / 6.5" [style.animation-delay]="satellite.delay" [style.animation-duration]="satellite.duration" [dacaTooltip]="organizationTooltip(satellite.node)" (click)="cardClick($event, satellite.node)" [class.is-dragging]="draggingId() === satellite.node.id" (pointerdown)="startDrag($event, satellite.node.id, 'satellites', satellite, organizationCard.width, organizationCard.height)" (keydown)="cardKey($event, satellite.node.id, 'satellites', satellite, organizationCard.width, organizationCard.height)" aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown" aria-describedby="organization-canvas-instructions" (contextmenu)="openMenu($event, satellite.node)" (keydown.shift.f10)="openMenu($event, satellite.node)" [attr.aria-label]="satellite.node.label + ' · ' + productCountsLabel(satellite.node)">
+            <daca-organization-card-content [name]="satellite.node.code" [canton]="isCanton(satellite.node)" [offered]="satellite.node.productCount" [consumed]="satellite.node.consumedProductCount"/>
+          </button>
+        }
+        @if (focus()) { <div class="org-core">
+          <button class="org-focus" type="button" [dacaTooltip]="organizationTooltip(focus())" (contextmenu)="focus() && openMenu($event, focus()!)" (keydown.shift.f10)="focus() && openMenu($event, focus()!)">
+            <span class="org-focus-title">@if (isCanton(focus())) { <span class="org-canton-prefix">{{ tr(['Kanton', 'Canton', 'Cantone', 'Canton']) }}</span> }{{ organizationCode(focus()) || tr(['Datenraum', 'Espace de données', 'Spazio dati', 'Data landscape']) }}</span><strong>{{ focus()?.label ?? tr(['Ihr Departement ist noch nicht zugeordnet', 'Aucun département attribué', 'Nessun dipartimento assegnato', 'No department assigned yet']) }}</strong><small class="org-focus-counts">{{ productCountsLabel(focus()) }}</small>
+          </button>
+        </div>
+        }
+        <div class="org-office-field" [class.is-overview]="!focus()" [style.left.%]="officeField().x / 9.6" [style.top.%]="officeField().y / 6.5" [style.width.%]="officeField().width / 9.6" [style.height.%]="officeField().height / 6.5" (scroll)="measureChildren()">
+          @for (office of offices(); track office.node.id) {
+            <button type="button" class="org-office daca-canvas-card" data-canvas-kind="organization" [class.org-overview-card]="!focus()" [class.is-empty]="!!focus() && office.node.productCount === 0 && office.node.consumedProductCount === 0" [attr.data-organization-id]="office.node.id" [attr.data-canvas-object]="office.node.id" [attr.aria-label]="office.node.label + ' · ' + productCountsLabel(office.node)" [class.is-own]="!!focus() && isOwn(office.node)" [style.left.%]="office.x / officeField().width * 100" [style.top.%]="office.y / officeField().height * 100" [style.width.%]="office.width / officeField().width * 100" [style.animation-delay]="office.delay" [style.animation-duration]="office.duration" [dacaTooltip]="organizationTooltip(office.node)" (click)="cardClick($event, office.node)" [class.is-dragging]="draggingId() === office.node.id" (pointerdown)="startDrag($event, office.node.id, 'offices', office, office.width, office.height)" (keydown)="cardKey($event, office.node.id, 'offices', office, office.width, office.height)" aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown" aria-describedby="organization-canvas-instructions" (contextmenu)="openMenu($event, office.node)" (keydown.shift.f10)="openMenu($event, office.node)">
+              <daca-organization-card-content [name]="organizationCode(office.node)" [canton]="isCanton(office.node)" [offered]="office.node.productCount" [consumed]="office.node.consumedProductCount"/>
+            </button>
+          }
+          @if (showDomains()) {
+            <div class="org-domains">
+              @for (bubble of domainBubbles(); track bubble.domain.id) {
+                <a class="org-domain-bubble" [attr.data-domain-id]="bubble.domain.id" [attr.data-canvas-object]="bubble.id" [routerLink]="['/domains', bubble.domain.id]" target="_blank" rel="noopener" draggable="false" (dragstart)="$event.preventDefault()" (click)="domainClick($event)" [class.is-dragging]="draggingId() === bubble.id" (pointerdown)="startDrag($event, bubble.id, 'offices', bubble, bubble.width, bubble.height)" (keydown)="cardKey($event, bubble.id, 'offices', bubble, bubble.width, bubble.height)" aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown" aria-describedby="organization-canvas-instructions" [dacaTooltip]="domainTooltip(bubble.domain)" (contextmenu)="openDomainMenu($event, bubble.domain)" (keydown.shift.f10)="openDomainMenu($event, bubble.domain)" [style.left.%]="bubble.x / officeField().width * 100" [style.top.%]="bubble.y / officeField().height * 100" [style.width.%]="bubble.width / officeField().width * 100" [style.animation-delay]="bubble.delay" [style.animation-duration]="bubble.duration">
+                  <span>{{ tr(['Domäne', 'Domaine', 'Dominio', 'Domain']) }}</span><strong>{{ bubble.domain.label }}</strong><small class="org-domain-assignment" [attr.aria-label]="bubble.organizationLabel + ' · ' + offeredProductsLabel(bubble.domain.productCount)">{{ bubble.organizationLabel }} · {{ bubble.domain.productCount }}</small>
+                </a>
+              } @empty { <p>{{ tr(['Keine zugeordneten Domänen.', 'Aucun domaine attribué.', 'Nessun dominio assegnato.', 'No assigned domains.']) }}</p> }
+            </div>
+          }
+        </div>
+      </div>
+      @if (menu(); as context) {
+        <div class="org-context-menu daca-canvas-context-menu" role="menu" [style.left.px]="context.x" [style.top.px]="context.y" [style.max-height.px]="context.maxHeight" (click)="$event.stopPropagation()" (keydown)="menuKeys($event)" (focusout)="leaveMenu($event)" [attr.aria-label]="context.node?.label ?? context.domain?.label">
+          @if (context.node; as node) {
+          <span class="org-menu-caption menu-caption">{{ node.id === focusId() || node.parentId === focusId() ? organizationCode(node) : node.code }}</span>
+          @if (node.id !== focusId()) { <button type="button" role="menuitem" (click)="enter(node)"><daca-search-icon name="hierarchy"/><span>{{ tr(['Hier eintauchen', 'Explorer ici', 'Esplora qui', 'Explore here']) }}</span></button> }
+          <a role="menuitem" routerLink="/" [queryParams]="view(node)" target="_blank" rel="noopener" (click)="closeMenu()"><daca-search-icon name="hierarchy"/><span>{{ tr(['Ansicht in neuem Tab', 'Vue dans un nouvel onglet', 'Vista in nuova scheda', 'Open view in new tab']) }}</span><daca-search-icon name="external-link"/></a>
+          <hr>
+          @if (hasObjects(node)) { <a role="menuitem" data-organization-object-search routerLink="/search" [queryParams]="objectSearch(node)" target="_blank" rel="noopener" (click)="closeMenu()"><daca-search-icon name="search"/><span>{{ tr(['Objekte dieser Organisation anzeigen', 'Afficher les objets de cette organisation', 'Mostra gli oggetti di questa organizzazione', 'Show objects of this organization']) }}</span><daca-search-icon name="external-link"/></a> }
+          @else { <button type="button" role="menuitem" data-organization-object-search disabled><daca-search-icon name="search"/><span>{{ tr(['Objekte dieser Organisation anzeigen', 'Afficher les objets de cette organisation', 'Mostra gli oggetti di questa organizzazione', 'Show objects of this organization']) }}</span></button> }
+          @if (hasProducts(node)) { <a role="menuitem" data-organization-product-search routerLink="/search" [queryParams]="search(node)" target="_blank" rel="noopener" (click)="closeMenu()"><daca-search-icon name="box"/><span>{{ tr(['Alle Datenprodukte der Organisation anzeigen', 'Afficher tous les produits de données de l’organisation', 'Mostra tutti i prodotti di dati dell’organizzazione', 'Show all data products of this organization']) }}</span><daca-search-icon name="external-link"/></a> }
+          @else { <button type="button" role="menuitem" data-organization-product-search disabled><daca-search-icon name="box"/><span>{{ tr(['Alle Datenprodukte der Organisation anzeigen', 'Afficher tous les produits de données de l’organisation', 'Mostra tutti i prodotti di dati dell’organizzazione', 'Show all data products of this organization']) }}</span></button> }
+          <button type="button" role="menuitem" (click)="enter(node); showDomains.set(true)"><daca-search-icon name="category"/><span>{{ tr(['Zugeordnete Domänen', 'Domaines attribués', 'Domini assegnati', 'Assigned domains']) }}</span></button>
+          <hr><button type="button" role="menuitem" (click)="showDomains.set(!showDomains()); closeMenu()"><daca-search-icon name="eye"/><span>{{ showDomains() ? tr(['Domänen ausblenden', 'Masquer les domaines', 'Nascondi domini', 'Hide domains']) : tr(['Domänen zuschalten', 'Afficher les domaines', 'Mostra domini', 'Show domains']) }}</span></button>
+          <button type="button" role="menuitem" (click)="home()"><daca-search-icon name="user"/><span>{{ tr(['Zum eigenen Departement', 'Vers mon département', 'Al mio dipartimento', 'Back to my department']) }}</span></button>
+          <button type="button" role="menuitem" (click)="overview()"><daca-search-icon name="category"/><span>{{ tr(['Zur Gesamtübersicht', 'Vers la vue d’ensemble', 'Alla panoramica', 'Back to overview']) }}</span></button>
+          }
+          @if (context.domain; as domain) {
+            <span class="org-menu-caption menu-caption">{{domain.label}}</span>
+            <a role="menuitem" [routerLink]="['/domains',domain.id]" target="_blank" rel="noopener" (click)="closeMenu()"><daca-search-icon name="category"/><span>{{tr(['Domäne öffnen','Ouvrir le domaine','Apri il dominio','Open domain'])}}</span><daca-search-icon name="external-link"/></a>
+            <hr>
+            @if (hasObjects(domain)) { <a role="menuitem" data-domain-object-search routerLink="/search" [queryParams]="domainObjectSearch(domain)" target="_blank" rel="noopener" (click)="closeMenu()"><daca-search-icon name="search"/><span>{{tr(['Objekte dieser Domäne anzeigen','Afficher les objets de ce domaine','Mostra gli oggetti di questo dominio','Show objects of this domain'])}}</span><daca-search-icon name="external-link"/></a> }
+            @else { <button type="button" role="menuitem" data-domain-object-search disabled><daca-search-icon name="search"/><span>{{tr(['Objekte dieser Domäne anzeigen','Afficher les objets de ce domaine','Mostra gli oggetti di questo dominio','Show objects of this domain'])}}</span></button> }
+          }
+          <hr>
+          <button type="button" role="menuitemcheckbox" data-hide-unrelated-option [attr.aria-checked]="hideUnrelatedOrganizations()" [dacaTooltip]="hideUnrelatedHint()" (click)="setHideUnrelatedOrganizations(!hideUnrelatedOrganizations())"><daca-search-icon name="eye"/><span>{{hideUnrelatedLabel()}}</span><b aria-hidden="true">{{hideUnrelatedOrganizations()?'✓':''}}</b></button>
+        </div>
+      }
+    </div>
+    @if (!offices().length) { <p class="org-no-children" role="status">{{ hideUnrelatedOrganizations()?noRelatedOrganizationsLabel():tr(['Keine weiteren Untereinheiten im Katalog erfasst.', 'Aucune autre unité dans le catalogue.', 'Nessun’altra unità nel catalogo.', 'No further units recorded in the catalog.']) }}</p> }
+    <footer class="org-legend"><span><i></i>{{ tr(['Aktueller Bereich', 'Périmètre actuel', 'Ambito attuale', 'Current scope']) }}</span><span><i class="is-connected"></i>{{ tr(['Verbundene Organisationen', 'Organisations liées', 'Organizzazioni collegate', 'Connected organizations']) }}</span><span><i class="is-gray"></i>{{ tr(['Weitere Organisationen', 'Autres organisations', 'Altre organizzazioni', 'Other organizations']) }}</span><span class="org-thread-key">⎯ {{ tr(['Katalogbeziehung', 'Relation de catalogue', 'Relazione di catalogo', 'Catalog relationship']) }}</span>@if(showDomains()){<span><i class="is-domain-link"></i>{{tr(['Domänenzuordnung', 'Affectation de domaine', 'Assegnazione del dominio', 'Domain assignment'])}}</span>}<small id="organization-canvas-instructions">{{ tr(['Klicken zum Eintauchen · Ziehen oder Pfeiltasten zum Anordnen · Rechtsklick für Aktionen', 'Cliquer pour explorer · déplacer avec la souris ou les flèches · clic droit pour les actions', 'Clic per esplorare · trascina o usa le frecce per disporre · tasto destro per azioni', 'Click to explore · drag or use arrow keys to arrange · right-click for actions']) }}</small></footer>
+    <p class="org-count-legend">↑ {{ tr(['Angebot (Datenprodukte)', 'Offre (produits de données)', 'Offerta (prodotti dati)', 'Supply (data products)']) }} · ↓ {{ tr(['Konsumation (Datenprodukte)', 'Consommation (produits de données)', 'Consumo (prodotti dati)', 'Consumption (data products)']) }}</p>
+    <details class="org-accessible-list"><summary>{{ tr(['Organisationen als Liste', 'Organisations en liste', 'Organizzazioni come elenco', 'Organizations as a list']) }}</summary><ul>@for (node of children(); track node.id) { <li><button type="button" (click)="enter(node)">{{ node.label }} · {{ productCountsLabel(node) }}</button></li> }@for (satellite of satellites(); track satellite.node.id) { <li><button type="button" (click)="enter(satellite.node)">{{ satellite.node.label }} · {{ productCountsLabel(satellite.node) }}</button></li> }</ul></details>
+  }
+</section>

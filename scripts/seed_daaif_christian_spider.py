@@ -1,4 +1,4 @@
-"""Idempotently add the DaCa modelling persona Christian Spider to a DAAIF checkout.
+"""Idempotently add the DaCa modelling persona Christiano Stadello to a DAAIF checkout.
 
 DAAIF is intentionally not modelled as part of DaCa.  This helper updates the four
 allow-lists used by the neighbouring PoC and refuses to write when their expected
@@ -38,9 +38,9 @@ PATCHES = (
         "export const DAAIF_DEMO_USERS = Object.freeze([\n",
         """  Object.freeze({
     id: "christian.spider",
-    displayName: "Christian Spider",
+    displayName: "Christiano Stadello",
     organization: "VBS / Verteidigung",
-    email: "christian.spider@vtg.admin.ch",
+    email: "christiano.stadello@ar.admin.ch",
     role: "Data Owner",
     avatarUrl: "",
   }),
@@ -56,15 +56,15 @@ PATCHES = (
         "DEMO_USER_ALIASES = {\n",
         """    "christian spider": "christian.spider",
     "christian.spider": "christian.spider",
-    "christian.spider@vtg.admin.ch": "christian.spider",
+    "christiano.stadello@ar.admin.ch": "christian.spider",
 """,
     ),
     TextPatch(
         "bdw/bit_data_workbench/static/js/data-products-controller.js",
         "  const demoUsers = {\n",
         """    "christian.spider": {
-      displayName: "Christian Spider",
-      email: "christian.spider@vtg.admin.ch",
+      displayName: "Christiano Stadello",
+      email: "christiano.stadello@ar.admin.ch",
     },
 """,
     ),
@@ -89,7 +89,7 @@ def run(repo: Path, *, apply: bool) -> int:
     changes = planned_changes(repo.resolve())
     pending = [path for path, _text, changed in changes if changed]
     if not pending:
-        print("Christian Spider is already configured in all DAAIF allow-lists.")
+        print("Christiano Stadello is already configured in all DAAIF allow-lists.")
         return 0
     if not apply:
         for path in pending:

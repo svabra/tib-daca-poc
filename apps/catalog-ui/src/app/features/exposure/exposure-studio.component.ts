@@ -70,7 +70,7 @@ const [JOURNEY_START_DATE, JOURNEY_END_DATE] = journeyDateRange();
       <div class="exposure-product-copy">
         <span>Ausgewähltes Datenprodukt</span>
         <h2 id="exposure-product-title">{{ product().title }}</h2>
-        <small>Eigentümerin: {{ product().owner }} · <span class="daca-code">{{ product().globalId }}</span></small>
+        <small>Data Owner: {{ product().owner }} · <span class="daca-code">{{ product().globalId }}</span></small>
       </div>
       <daca-status-badge tone="red">Eingeschränkt</daca-status-badge>
       <a [routerLink]="['/products', product().id, 'metadata']">Metadaten ansehen</a>

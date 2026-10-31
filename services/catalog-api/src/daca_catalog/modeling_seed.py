@@ -76,8 +76,8 @@ REAL_ESTATE_ORGANIZATION_ID = "vbs-armasuisse-immobilien"
 ARMASUISSE_ORGANIZATION_ID = "vbs-armasuisse"
 REAL_ESTATE_DOMAIN_ID = stable_uuid("domain:immobilienmanagement-vbs")
 _PEOPLE = (
-    ("christian.spider", "Christian Spider", "christian.spider@vtg.admin.ch", ("data_consumer",)),
-    ("sibilla.micheli", "Sibilla Micheli", "sibilla.micheli@vbs.admin.ch", ("data_consumer",)),
+    ("christian.spider", "Christiano Stadello", "christiano.stadello@ar.admin.ch", ("data_consumer",)),
+    ("sibilla.micheli", "Sibilla Di Ciesa", "sibilla.di.ciesa@vbs.admin.ch", ("data_consumer",)),
     ("cinthya.thor", "Cinthya Thor", "cinthya.thor@vtg.admin.ch", ("data_consumer",)),
     ("lawrence.hill", "Lawrence Hill", "lawrence.hill@vtg.admin.ch", ("data_consumer",)),
     ("hong.an.captain", "Hong An Captain", "hong-an.captain@vtg.admin.ch", ("data_consumer",)),
@@ -148,8 +148,8 @@ def _seed_real_estate_journey(session: Session) -> None:
                 organization_id=REAL_ESTATE_ORGANIZATION_ID, role=role,
                 delegated_owner_user_id=delegated_owner, active=True, created_at=_NOW,
             ))
-    # Verteidigung's two modeling editors collaborate on the VIBDBU example.
-    # Their primary membership stays in Verteidigung; this is an additional,
+    # Christiano (armasuisse ALDS) and Christian Man (Verteidigung ALDS)
+    # collaborate on VIBDBU. This is an additional,
     # explicitly scoped modeling assignment for armasuisse Immobilien.
     for user_id in ("christian.spider", "christian.man"):
         role_id = stable_uuid(f"role:{REAL_ESTATE_ORGANIZATION_ID}:{user_id}:data_steward")
@@ -250,7 +250,7 @@ def _seed_people_and_roles(session: Session) -> None:
             user = DemoUser(
                 id=user_id,
                 display_name=display_name,
-                organization="Verteidigung",
+                organization={"christian.spider": "VBS armasuisse", "sibilla.micheli": "VBS GS-VBS"}.get(user_id, "Verteidigung"),
                 email=email,
                 phone=None,
                 avatar_url=None,
@@ -268,7 +268,8 @@ def _seed_people_and_roles(session: Session) -> None:
         membership_id = stable_uuid(f"federal-membership:{user_id}:{MODELING_ORGANIZATION_ID}")
         if session.get(FederalPersonMembership, membership_id) is None:
             session.add(FederalPersonMembership(
-                id=membership_id, user_id=user_id, organization_id=MODELING_ORGANIZATION_ID,
+                id=membership_id, user_id=user_id,
+                organization_id={"christian.spider": ARMASUISSE_ORGANIZATION_ID, "sibilla.micheli": "vbs-gs"}.get(user_id, MODELING_ORGANIZATION_ID),
                 is_primary=True, valid_from=date(2026, 1, 1), created_at=_NOW,
             ))
     session.flush()
@@ -761,6 +762,8 @@ def seed_modeling_catalog(session: Session) -> None:
     """Seed six VBS personas, real I14Y references, and three modeling scenarios."""
     _seed_federal_hierarchy(session)
     _seed_people_and_roles(session)
+    from .poc_identity_updates import seed_poc_identity_names
+    seed_poc_identity_names(session)
     _seed_armasuisse_personas(session)
     _seed_real_estate_journey(session)
     _seed_personnel_domain(session)
@@ -777,6 +780,10 @@ def seed_modeling_catalog(session: Session) -> None:
     for term_id in session.scalars(select(GlossaryTerm.id)):
         ensure_term_owners(session, term_id)
     _retire_duplicate_source_instances(session)
+    from .office_governance import seed_data_analytics_domain
+    from .poc_identity_updates import seed_requested_persona_scopes
+    seed_requested_persona_scopes(session)
+    seed_data_analytics_domain(session)
     if session.get(SeedMarker, MODELING_SEED_NAME) is None:
         session.add(SeedMarker(name=MODELING_SEED_NAME, applied_at=_NOW))
     session.commit()

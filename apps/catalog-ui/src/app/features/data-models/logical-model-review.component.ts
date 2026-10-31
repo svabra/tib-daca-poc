@@ -25,7 +25,7 @@ import { LogicalModel, LogicalModelReview } from './data-models.models';
     @if(review();as current){
       <section class="daca-card review-summary">
         <header><div><p class="daca-eyebrow">Review-Snapshot</p><h2>{{ current.reviewSnapshot.title.de }}</h2></div><daca-status-badge [tone]="current.status==='pending'?'orange':current.status==='accepted'?'green':'neutral'">{{ statusLabel(current.status) }}</daca-status-badge></header>
-        <dl><div><dt>Domäne</dt><dd>{{ current.reviewSnapshot.dataDomain.displayName }}</dd></div><div><dt>Owner bei Einreichung</dt><dd>{{ userName(current.reviewerUserId) }}</dd></div><div><dt>Eingereicht durch</dt><dd>{{ userName(current.submitterUserId) }}</dd></div><div><dt>Eingereicht</dt><dd>{{ current.createdAt | date:'dd.MM.yyyy, HH:mm' }}</dd></div><div><dt>Version</dt><dd>{{ current.reviewSnapshot.revision }}</dd></div><div><dt>Identifier</dt><dd>{{ current.reviewSnapshot.identifiers.join(', ') }}</dd></div></dl>
+        <dl><div><dt>Domäne</dt><dd>{{ current.reviewSnapshot.dataDomain.displayName }}</dd></div><div><dt>Data Owner bei Einreichung</dt><dd>{{ userName(current.reviewerUserId) }}</dd></div><div><dt>Eingereicht durch</dt><dd>{{ userName(current.submitterUserId) }}</dd></div><div><dt>Eingereicht</dt><dd>{{ current.createdAt | date:'dd.MM.yyyy, HH:mm' }}</dd></div><div><dt>Version</dt><dd>{{ current.reviewSnapshot.revision }}</dd></div><div><dt>Identifier</dt><dd>{{ current.reviewSnapshot.identifiers.join(', ') }}</dd></div></dl>
         <p>{{ current.reviewSnapshot.description.de }}</p>
       </section>
 

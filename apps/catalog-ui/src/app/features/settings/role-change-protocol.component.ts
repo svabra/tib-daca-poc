@@ -1,3 +1,4 @@
+import { catalogCopy } from '../../core/catalog-localization';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DocumentationApiService, RoleChangeEvent } from '../../core/documentation-api.service';
@@ -65,7 +66,7 @@ export class RoleChangeProtocolComponent {
   constructor() {
     effect(() => { this.preferences.language(); this.reload(); });
   }
-  tr(copy: Copy): string { return copy[({ de: 0, fr: 1, it: 2, en: 3 })[this.preferences.language()]]; }
+  tr(copy: Copy): string { return catalogCopy(copy, this.preferences.language()); }
   inputValue(event: Event): string { return (event.target as HTMLInputElement).value; }
   reload(): void {
     this.loading.set(true); this.error.set(''); this.entries.set([]); this.nextBefore.set(null);

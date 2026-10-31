@@ -713,6 +713,7 @@ export class DataModelsApiService {
       description: localized('description'),
       identifiers: stringArray(root['identifiers']),
       identifierMode: textValue(root['identifierMode']) === 'organization_derived' ? 'organization_derived' : 'manual',
+      organizationLabel: textValue(root['organizationLabel'] ?? version['organizationLabel']),
       department: textValue(root['departmentCode'], 'VBS'),
       office: textValue(root['organizationUnitId'] ?? root['organizationId'], 'vbs-verteidigung'),
       dataDomain: namedReference(root['dataDomain'], textValue(root['dataDomainId']), textValue(root['dataDomainLabel'], textValue(root['dataDomainId'], 'Keine Domäne zugeordnet'))),

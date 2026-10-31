@@ -1,5 +1,26 @@
 # Objektverantwortung und organisatorische Mandate
 
+The confirmed PoC personas use their actual home organizations independently of scoped object duties:
+Sibilla Di Ciesa is in GS-VBS (`vbs-gs`) and holds the VBS Local Data Steward Department (LDSD)
+mandate. Christiano Stadello (`christian.spider`, stable ID retained) belongs to armasuisse and
+holds its Amt Local Data Steward (ALDS) mandate. Thomas Wikinger is the armasuisse Local Data
+Steward (LDS), represented by its scoped `data_steward` modeling assignment. Thomas Kriegli and
+Joel Ruod belong to EFD / ESTV / BI (Business Intelligence, `efd-estv-bi`). Thomas owns the new
+**Data Analytics** domain, with Joel as its PoC deputy. The separate **Data Analytics Rapid
+Prototyping** domain keeps Joel as Data Owner and Thomas as deputy.
+
+The one-time `poc-persona-governance-scopes-2026-10-31-v1` correction updates current names,
+contacts, directory entries and primary memberships. Stable IDs, portraits, product ownership,
+control people, existing object duties and historical evidence remain intact. The existing
+Verteidigung and Personal domains retain explicit `vbs-verteidigung` scope even though their
+responsible people have different home offices. The profile separately shows current ALDS/LDSD
+mandates and scoped modeling assignments. New domains require their own office's ALDS approval;
+Journey 08 explains creation under Lawrence Hill in Verteidigung followed by an evidenced
+handover to Sibilla when a fresh exercise is needed. Apply an existing-runtime correction with
+`docker compose exec -T catalog-api uv run --no-sync python -m daca_catalog.poc_identity_updates`.
+Later operator changes, revocations and domain retirement are preserved.
+
+
 ## Neue Domänen freigeben
 
 Neue Domänen werden vorläufig als persönliche Vorschlagskarten erfasst. Freigeben darf nur der
@@ -18,13 +39,15 @@ ALDS und stellvertretender ALDS sind davon getrennte Amtsmandate, keine Objektro
 
 | Person | Mandat / Verantwortung | Bereich |
 |---|---|---|
-| Sibilla Micheli | LDSD | Eidgenössisches Departement für Verteidigung, Bevölkerungsschutz und Sport |
-| Christian Spider | ALDS | Bundesamt für Rüstung armasuisse, einschliesslich untergeordneter Einheiten |
+| Sibilla Di Ciesa | LDSD | Eidgenössisches Departement für Verteidigung, Bevölkerungsschutz und Sport |
+| Christiano Stadello | ALDS | Bundesamt für Rüstung armasuisse, einschliesslich untergeordneter Einheiten |
 | Christian Man | ALDS | Verteidigung |
 | Thomas Kriegli | ALDS | Eidgenössische Steuerverwaltung |
 | Joel Ruod | Stellvertretender ALDS | Eidgenössische Steuerverwaltung |
 | Joel Ruod | Data Owner | Domäne «Data Analytics Rapid Prototyping» |
 | Thomas Kriegli | Stellvertretender Data Owner | Domäne «Data Analytics Rapid Prototyping» |
+| Thomas Kriegli | Data Owner | Domäne «Data Analytics», EFD ESTV BI |
+| Thomas Wikinger | LDS / Data Steward | armasuisse |
 
 Migration `0044_office_alds_mandates` speichert diese Organisationsmandate mit Revision,
 Aktivstatus, benannter Stellvertretung, erfassender Stelle und Entscheidreferenz. Domänen-

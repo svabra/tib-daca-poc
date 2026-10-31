@@ -1,5 +1,83 @@
 # Domains and business glossary
 
+Domain-network asset cards and lineage now share `daca-canvas-object` in the design system: the same left type stripe, icon/caption, title, metadata typography and compact padding. Domain placement, links, object-layer toggles and editing permissions remain unchanged.
+
+
+Object cards use the shared canvas type palette: organization navy, logical model orange, physical representation/declaration purple, terminology pink and data product mustard. Domain cards retain their domain color. Existing primary cards keep top type stripes; attached catalog-object cards keep left stripes, with 2px corners, ordinary theme surfaces and shared shadows. The data-landscape organization cards follow the same attached-object styling. `data-canvas-kind` exposes semantic identity and the design-system tokens provide corresponding light/dark colors without changing status or permission meanings. No relation, proposal or persisted metadata is changed by this presentation update.
+
+Domain and terminology editors use the shared `CanvasSelectionDirective`: enclose whole cards by dragging a rectangle on blank space, then move the marked group with one card or arrow keys. Shift/Ctrl toggles/adds selection and Ctrl/Cmd+A selects displayed cards. Escape cancels in-progress movement atomically, then clears selection, then allows fullscreen exit. Coordinates account for zoom and viewport scrolling; a common bounded delta preserves spacing and pins untouched automatic cards. Selection is transient and scope-local. Blue ports and nested controls keep their existing connection/edit actions.
+
+The domain editor can position all object layers (products, terms and logical/physical models), individually or in mixed groups, using their existing `kind:<UUID>` keys. Personal Save/Discard/Auto-arrange preserves hidden anchors and never publishes shared relationships. New/changed non-domain anchors must match the current actor-readable domain-object projection; unchanged anchors can be retained after access loss or retirement. Terminology uses its existing shared-layout permission and save flow; layout movements do not create business proposals. Mapping and the data landscape retain their respective shared and private layout save semantics.
+
+Validation: shared gesture tests cover zoom/scroll, rectangle direction, common-delta bounds, modifier selection, cancellation, read-only layouts and control/link isolation. Adapter tests cover all four editors and their existing save/draft behavior. API tests save mixed object kinds and reject unknown/inaccessible references. The `canvas-selection` Edge flow selects the four vehicle terms with a real rectangle, checks Ctrl-click without opening tabs, and moves groups on all four fullscreen canvases. These browser test drafts are discarded without layout writes. Native browser fullscreen can consume physical Escape and exit immediately; application-delivered Escape clears the selection first.
+
+The domain canvas keeps object-layer toggles and the filter/zoom toolbar directly adjacent: no bottom fieldset padding or top toolbar margin, tighter wrapped-row spacing and no empty hidden-domain placeholder. Existing 44px toggle-label targets and responsive wrapping remain.
+
+The domain canvas aligns its blue connection buttons exactly with the relationship endpoints at the card's 60px center line. Selecting an edge reuses these buttons for endpoint dragging/editing; the duplicate white SVG handles are removed. Product cards support pointer/touch dragging and arrow keys while retaining ordinary new-tab links. Their `product:<UUID>` anchors share the existing personal view Save / Discard / Auto-arrange flow, remain when the layer is hidden, and update dashed membership lines without changing metadata or shared relationships. Escape/pointer cancel restores a drag; a completed drag suppresses link navigation.
+
+The domain canvas omits the standalone relationship-type enumeration above the graph in every UI language.
+
+The catalog language picker now includes Rumantsch Grischun (`rm`). Central UI text and data-landscape actions/counts are localized; recorded object names and legacy editor copy retain their documented fallback. Organization supply/consumption, domain tooltips and accessible labels share locale-aware cardinal forms. See [localization](localization.md) for coverage, fallback and persistence semantics.
+
+
+Fullscreen/header verification covers organization, Mapping, domain and terminology canvases at 1440px and 390px. The `canvas-controls` browser flow checks compact action sizes, a visible fixed exit after scrolling, Escape, the close button and restoration of page scrolling. Unit coverage includes rejected native entry/exit, browser fullscreen changes, destruction, a late native-entry race, Escape priority over menus, preserved drafts and keyboard focus wrapping including text-alternative summaries. Screenshots are local ignored artifacts under `output/ui-regression/canvas-controls-unified/`.
+
+Organization, Mapping, domain and terminology canvases share compact action styling (32px desktop, 44px touch), wrapping action groups and a fixed, labelled fullscreen exit at the top right with an Escape hint. Domain automatic arrangement now sits next to save/discard, and terminology automatic arrangement sits next to shared-layout save/discard. Mapping retains its draft-save action; terminology business submissions remain separate from shared layout publication. Domain and terminology fullscreen use the same native/full-viewport fallback behavior as Mapping: Escape, explicit close, browser fullscreen changes and destruction restore page scrolling and focus. Nested menus/dialogs consume Escape before the canvas exits, and Tab focus stays inside the fullscreen canvas. A denied native entry or failed exit cannot leave the page scroll-locked. No save, permission, proposal or persistence semantics are changed.
+
+Automatic arrangement in the domain network now packs whole domain/object clusters using each pair of actual bounds and a 32px minimum gap. A radial seed is compacted inward and into free neighboring pockets, avoiding the previous global-largest-cluster spacing. The final content remains centered, including wide/fullscreen and mobile canvases. Auto-arrange fits the natural content afresh up to 100% zoom, so an earlier 42% zoom no longer prevents enlargement; manual zoom still supports 40-160%. Existing saved/manual positions change only after the user explicitly rearranges, and saving remains a separate action. Hidden positions and shared relationships are retained.
+
+Validation: 27 focused layout/component tests pass, covering centered non-overlapping groups through 50 domains, tight mixed-size clusters and zoom recovery. The `domain-radial-layout` browser flow passes at 1440px, 3840px fullscreen and 390px, including an initial zoom-out, unchanged saved preferences/shared links and centered complete content. A controlled six-group fixture reduces the natural canvas from 1508 x 1367 to 1100 x 777 pixels (about 59% less area). Local screenshots are under ignored `output/ui-regression/domain-network-compact/`.
+
+Start-page recent terminology work opens the exact catalog term with `termId`, `ownOffice=0` and `view=cards`. The explicit term ID narrows the visible register list to that object; typing a new search clears that focus. Saved edits and resolved proposals are read from existing audit history, with at most three distinct terminology entries for the current actor.
+
+The domain-network context menu now shares its visual rules with the start-page data landscape through `shared/canvas-context-menu.css`: outline icons, grouped actions, consistent row spacing, focus/hover states and theme colors. Existing domain actions and permissions are unchanged.
+
+Domains and terminology now default to their networks (`/domains`, `/domains/terminology`); explicit `?view=cards` opens cards and `?view=network` remains supported. Selecting cards writes `view=cards`; selecting the default network removes the parameter.
+
+Semantic reads no longer block the domain canvas on terminology or governance: each stream has independent readiness, loading tab counts display an ellipsis, and secondary failures leave the domain register usable. Identical pending domain reads are coalesced per actor/options without a completed-response cache. The embedded domain network reuses the parent's domains/change requests, and the organization term editor reuses its already loaded graph. Identity changes clear normalization data and reject late prior-actor responses.
+
+Backend domain/term lists use a request-local bulk snapshot for labels, counts, ownership, office memberships, organizations and mandates. Existing authority helpers retain their semantics; the snapshot is removed in `finally` before any later operation. On the local 78-domain fixture, the register projection fell from **1,101 SQL statements to 10**, including the initial domain query. Tests compare batched and individual responses for multiple actors and bound SQL counts; no persisted model, policy, API response contract or access rules change.
+
+The domain-network canvas now groups **Nur amtseigene anzeigen** and **Stillgelegte Domänen anzeigen** side by side immediately above the canvas. Zoom and **Automatisch anordnen** align to the right on the same toolbar; controls wrap in that order on narrow screens. The own-office filter is projected from the existing semantics page, so its URL-based scope, loading/error handling and disabled state remain authoritative in fullscreen too. These filters and all four object layers now use the existing identifier-mode switch design (rounded track/thumb), with native buttons, `role="switch"`, accessible labels and `aria-checked`. Card/terminology views reuse the same office toggle. No profile, persistence structure or permission changes are involved.
+
+The domain network now arranges domains and their enabled object clusters radially about a common center. It replaces the left-aligned hierarchy/column fallback even for disconnected domains. Whole cluster bounds reserve room for products, terms, logical models and physical structures; a radial seed and compact packing keep clusters apart using their individual sizes. The automatic layout centers its complete bounds in the actual viewport, including wide/fullscreen views, and centers the scroll position when the graph is larger. The automatic action fits the content afresh between 40% and 100% zoom; zoom controls stay within 40–160%. Existing manual positions remain until **Automatisch anordnen** is selected; this resets only visible domain positions, remains a personal draft and requires explicit save. Hidden positions and shared relationships are retained.
+
+Journey 08's trusted repeatable fixture reactivates the existing Verteidigung domain in its
+retained office scope. Its ALDS review therefore remains with Christian Man, independently of
+Sibilla's GS-VBS employment. This exception is limited to the stable, server-managed fixture
+request; public new-domain requests still use the proposed owner's current primary office.
+
+
+The confirmed PoC personas use their actual home organizations independently of scoped object duties:
+Sibilla Di Ciesa is in GS-VBS (`vbs-gs`) and holds the VBS Local Data Steward Department (LDSD)
+mandate. Christiano Stadello (`christian.spider`, stable ID retained) belongs to armasuisse and
+holds its Amt Local Data Steward (ALDS) mandate. Thomas Wikinger is the armasuisse Local Data
+Steward (LDS), represented by its scoped `data_steward` modeling assignment. Thomas Kriegli and
+Joel Ruod belong to EFD / ESTV / BI (Business Intelligence, `efd-estv-bi`). Thomas owns the new
+**Data Analytics** domain, with Joel as its PoC deputy. The separate **Data Analytics Rapid
+Prototyping** domain keeps Joel as Data Owner and Thomas as deputy.
+
+The one-time `poc-persona-governance-scopes-2026-10-31-v1` correction updates current names,
+contacts, directory entries and primary memberships. Stable IDs, portraits, product ownership,
+control people, existing object duties and historical evidence remain intact. The existing
+Verteidigung and Personal domains retain explicit `vbs-verteidigung` scope even though their
+responsible people have different home offices. The profile separately shows current ALDS/LDSD
+mandates and scoped modeling assignments. New domains require their own office's ALDS approval;
+Journey 08 explains creation under Lawrence Hill in Verteidigung followed by an evidenced
+handover to Sibilla when a fresh exercise is needed. Apply an existing-runtime correction with
+`docker compose exec -T catalog-api uv run --no-sync python -m daca_catalog.poc_identity_updates`.
+Later operator changes, revocations and domain retirement are preserved.
+
+
+## UI vocabulary
+
+The role is always **Data Owner** in German, French, Italian and English. This also applies
+to domain/product responsibilities, deputies, search filters, help and review messages.
+German business-vocabulary collections are labelled **Terminologie**, individual entries
+**Terminologiebegriff**; French, Italian and English use Terminologie, Terminologia and
+Terminology. Existing routes, API field names and catalog data remain stable. The separate
+DaCa application glossary documents application concepts and roles.
+
 ## Personal domain-network exploration
 
 Every active user can use **Domäne suchen und einfügen …** on the canvas or a domain-card
@@ -59,6 +137,15 @@ system glossary with `docker compose exec catalog-api uv run python -m daca_cata
 Do not rerun the full catalog seed to install this fixture.
 **Marcello Hebeisa** is Data Owner and **Matteo Duca** is deputy; both are selectable PoC personas
 with active primary unit memberships and narrowly scoped modeling/object responsibilities.
+**Fausto Marzo** is the selectable independent Publication Approver in the parent PS unit
+(**EFD BIT PS**, without CPS),
+and the control person for every data product owned by Marcello, including new products.
+The separate `rohs-cps-control-person-fausto-v1` marker applies this assignment once to existing
+products, increments product revisions and appends control-person audit evidence. Run the same
+scoped CPS operator command above to backfill an existing installation. Active SLA/governance
+approvals block reassignment atomically; finish them before retrying. Reruns preserve later
+control-person edits and role revocations. No deputy or modeling responsibility is granted to Fausto.
+If his reviewer role is unavailable, new Marcello products receive no fallback reviewer.
 The PS/CPS descendants are explicitly PoC units below the official BIT office. They use the
 existing `affiliated` registry category (no claim to be additional federal offices); nearest-office
 resolution remains **BIT**. Addresses use `example.invalid`.
@@ -138,12 +225,12 @@ tests and browser fixture helpers use the actual request/ALDS workflow.
 ## Own-office display filter
 
 **Nur amtseigene anzeigen** is enabled by default for domains and terms. On card views the
-checkbox sits immediately to the right of the search field, aligned with the input; on narrow
+toggle sits immediately to the right of the search field, aligned with the input; on narrow
 screens it stacks below. In network views it remains directly below the view switch. It applies
 to cards and networks and combines with the existing card search. The URL carries `ownOffice=1`
 when active and explicitly `ownOffice=0` when disabled, preserving either choice across view
 changes, refreshes and the two semantic tabs. A fresh URL without this parameter starts enabled.
-The checkbox uses the shared
+The toggle uses the shared
 catalog tooltip on hover or keyboard focus to explain the selected office and its subordinate
 units. Labels, tooltip, loading and failure messages support DE/FR/IT/EN.
 
@@ -240,7 +327,7 @@ history takes precedence, including expired records; fallback cannot resurrect t
 
 The **Domänen** section offers **Kacheln / Domänennetz**, using the same secondary-button
 pattern as Terminology's **Kacheln / Termnetz**. The network is no longer a separate primary
-section tab. `/domains` opens cards; `/domains?view=network` embeds the existing domain editor
+section tab. `/domains` opens the network; `?view=cards` explicitly opens cards; `/domains?view=network` embeds the existing domain editor
 under the shared page heading and navigation, without a duplicate title or back link.
 `/domains/network` redirects to that view while retaining query parameters. The detail-page
 network link uses the canonical address. Switching to cards or another section checks the
@@ -252,9 +339,8 @@ View labels are available in DE/FR/IT/EN.
 The terminology page has **Kacheln** and **Termnetz** views. The latter is directly addressable
 as `/domains/terminology?view=network`; it reuses the domain-detail graph editor rather than
 replacing those existing graphs. An organization selector initially follows the identity's
-current modeling area. In the current directory, Christian Spider's first modeling area is
-armasuisse Immobilien and Sibilla Micheli's is Verteidigung; the view does not change their
-primary memberships or role assignments. Other organizations can be selected for exploration.
+current home organization: armasuisse for Christiano Stadello and GS-VBS for Sibilla Di Ciesa.
+The view does not change their memberships or separately scoped role assignments. Other organizations can be selected for exploration.
 While no manual choice exists, a resolved modeling organization replaces a provisional value
 for the same person. A manual choice survives subsequent directory updates; changing identity
 restores the new person's default. Read failures with connection status 0 or gateway statuses
@@ -616,7 +702,7 @@ deputies. Interactive FastAPI documentation is available at `/docs` in a running
 
 ## Demonstration journeys
 
-Journey 08 starts with Sandro Wenger's request for the `Verteidigung` domain. Sibilla Micheli
+Journey 08 starts with Sandro Wenger's request for the `Verteidigung` domain. Sibilla Di Ciesa
 reviews and approves the request as the domain's Data Owner, after which Sandro assigns both
 `Verteidigung` and `Mobilität & Logistik` to the synthetic vehicle-fleet product. Journey 09 starts
 from that product and refines the accepted bilingual `Gepanzertes Fahrzeug` / `Armoured vehicle`

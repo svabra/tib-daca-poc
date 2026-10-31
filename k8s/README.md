@@ -100,6 +100,25 @@ external; its reverse proxy serves Catalog API, Swagger/OpenAPI and sample-produ
 
 ## Verification and rollback
 
+The same image seed additionally provisions `urn:daca:ch:verteidigung:building-use-demand`
+(**Gebäudenutzungsbedarf der Verteidigung**) using a separate upgrade marker. Verteidigung
+provides this product to armasuisse, complementing the armasuisse building inventory consumed
+by Verteidigung. After deploying an image with both fixtures, verify one travelling point
+in each direction on the same organization connection. The reverse fixture is added even if
+the protected-building inventory was seeded by an earlier image; subsequent edits remain.
+
+The Catalog API image runs migrations followed by `daca-catalog-seed` before starting the API;
+the Deployment does not override that image command. The seed includes the additive
+`poc-armasuisse-verteidigung-protected-buildings-v1` fixture on fresh and existing databases.
+After rolling out an image built from this change, verify product
+`urn:daca:ch:armasuisse:protected-buildings` (**Schützenswerte Gebäude – armasuisse**):
+Giuseppe Starwars is Data Owner, Thomas Wikinger is deputy and Christian Man in Verteidigung
+is the catalog consumer. The VBS landscape must show an armasuisse → Verteidigung connection,
+with one offered product at armasuisse and one consumed product at Verteidigung for this example.
+The one-time marker preserves subsequent edits/retirement; do not reset the database to add it.
+No endpoint, published policy or real access event is created. The isolated API test exercises
+the same `daca-catalog-seed` entrypoint twice before the CI image-publication stage.
+
 Release **0.2.0** pins all three first-party Deployments to the immutable `0.2.0` images.
 Wait for the GitHub image-publication workflow to succeed before applying those pins. The
 Catalog API startup applies migrations through `0044_office_alds_mandates` before seeding and

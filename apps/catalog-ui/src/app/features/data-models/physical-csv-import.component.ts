@@ -1,3 +1,4 @@
+import { organizationScopeLabel } from '../../core/organization-label';
 import { afterNextRender, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, Injector, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -33,6 +34,7 @@ export class PhysicalCsvImportComponent {
   readonly dragging = signal(false);
   readonly saving = signal(false);
   readonly error = signal('');
+  readonly scopeLabel = organizationScopeLabel;
   readonly scopes = computed(() => {
     const user = this.identity.user();
     const assignments = user.modelingAssignments ?? [];

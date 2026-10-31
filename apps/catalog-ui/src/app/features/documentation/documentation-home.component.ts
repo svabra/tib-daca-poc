@@ -1,3 +1,4 @@
+import { catalogCopy } from '../../core/catalog-localization';
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { UserPreferencesService } from '../../core/user-preferences.service';
@@ -24,5 +25,5 @@ type Copy = readonly [string, string, string, string];
 })
 export class DocumentationHomeComponent {
   private readonly preferences = inject(UserPreferencesService);
-  tr(copy: Copy): string { return copy[({ de: 0, fr: 1, it: 2, en: 3 })[this.preferences.language()]]; }
+  tr(copy: Copy): string { return catalogCopy(copy, this.preferences.language()); }
 }

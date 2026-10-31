@@ -56,4 +56,27 @@ describe('UserPreferencesService', () => {
     expect(service.language()).toBe('de');
     expect(service.pending()).toBeNull();
   });
+
+  it('saves and restores Romansh from the profile and the per-user browser override', () => {
+    const service = TestBed.inject(UserPreferencesService), http = TestBed.inject(HttpTestingController);
+    service.restore('christian.spider');
+    http.expectOne('/api/v1/me/preferences/language').flush({ value:'de' });
+    http.expectOne('/api/v1/me/preferences/theme').flush({ value:'light' });
+    service.requestLanguage('rm');
+    expect(document.documentElement.lang).toBe('rm');
+    service.savePending('profile');
+    const save=http.expectOne('/api/v1/me/preferences/language');
+    expect(save.request.body).toEqual({value:'rm'}); save.flush({value:'rm'});
+    service.reset(); service.restore('christian.spider');
+    http.expectOne('/api/v1/me/preferences/language').flush({value:'rm'});
+    http.expectOne('/api/v1/me/preferences/theme').flush({value:'light'});
+    expect(service.language()).toBe('rm');
+    service.requestLanguage('de'); service.savePending('device');
+    service.requestLanguage('rm'); service.savePending('device');
+    service.reset(); service.restore('christian.spider');
+    http.expectNone('/api/v1/me/preferences/language');
+    http.expectOne('/api/v1/me/preferences/theme').flush({value:'light'});
+    expect(service.language()).toBe('rm');
+    expect(document.documentElement.lang).toBe('rm');
+  });
 });

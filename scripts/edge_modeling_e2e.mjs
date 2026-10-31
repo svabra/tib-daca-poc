@@ -56,7 +56,8 @@ class CdpClient {
           (this.deferredLogicalReads??=[]).push({requestId:message.params.requestId,sessionId:message.sessionId});return;
         }
         if(this.mockReadResponses){
-          const response=this.mockReadResponses.get(new URL(message.params.request.url).pathname);
+          const fixture=this.mockReadResponses.get(new URL(message.params.request.url).pathname);
+          const response=typeof fixture==='function'?fixture(message.params.request):fixture;
           const command=response?this.call('Fetch.fulfillRequest',{requestId:message.params.requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'application/json'}],body:Buffer.from(JSON.stringify(response)).toString('base64')},message.sessionId):this.call('Fetch.continueRequest',{requestId:message.params.requestId},message.sessionId);
           void command.catch(error=>{this.interceptionError=error.message;});return;
         }
@@ -67,6 +68,7 @@ class CdpClient {
       }
       if(message.method==='Page.javascriptDialogOpening'){
         this.dialogs.set(message.sessionId,message.params.type);
+        if(['canvas-selection','canvas-card-styles'].includes(args.get('--flow'))&&message.params.type==='beforeunload')void this.call('Page.handleJavaScriptDialog',{accept:true},message.sessionId).catch(()=>{});
         if(args.get('--trace'))console.log('Native browser dialog:',message.params.type);
       }
       if(message.method==='Page.javascriptDialogClosed')this.dialogs.delete(message.sessionId);
@@ -118,6 +120,8 @@ const edge = spawn(edgePath, [
   '--headless=new',
   '--disable-gpu',
   '--disable-default-apps',
+  // Keep machine-installed extensions out of the isolated application regression.
+  '--disable-extensions',
   '--disable-background-timer-throttling',
   '--disable-renderer-backgrounding',
   '--disable-backgrounding-occluded-windows',
@@ -192,7 +196,7 @@ async function captureScreenshot(filename) {
   const targetDirectory = path.resolve(screenshotDirectory);
   await mkdir(targetDirectory, { recursive: true });
   const result = await cdp.call('Page.captureScreenshot', {
-    format: 'png',
+    format: filename.endsWith('.webp') ? 'webp' : 'png',
     fromSurface: true,
     captureBeyondViewport: false,
   }, sessionId);
@@ -211,7 +215,7 @@ async function capturePageSegmentScreenshot(selector, filename, width = 1440, he
   })()`);
   invariant(rect, `Screenshot target ${selector} was unavailable`);
   const result = await cdp.call('Page.captureScreenshot', {
-    format: 'png',
+    format: filename.endsWith('.webp') ? 'webp' : 'png',
     fromSurface: true,
     captureBeyondViewport: true,
     clip: { ...rect, scale: 1 },
@@ -283,6 +287,11 @@ async function navigate(route, actor, width = 1440, height = 900) {
   if (actor) await waitFor(`(async () => {const response=await fetch('/api/v1/session');return response.ok&&(await response.json()).userId===${JSON.stringify(actor)}&&localStorage.getItem('daca-demo-user')===${JSON.stringify(actor)};})()`, 'local preview sign-in did not finish for the requested actor');
   await evaluate("document.fonts?.ready ?? Promise.resolve()");
   await settleFrames();
+  // Inventory/layout flows intentionally include empty organizations. The live
+  // default and its toolbar controls are covered by organization-view-options.
+  if(['organization-explorer','organization-layout','organization-domain-layout','organization-heading-space','organization-object-search','organization-localization','canvas-selection','canvas-controls'].includes(args.get('--flow'))){
+    await evaluate("document.querySelector('[data-hide-unrelated-switch][aria-checked=\"true\"]')?.click()");await settleFrames();
+  }
 }
 
 async function api(actor, route, { method = 'GET', etag = null, body = undefined } = {}) {
@@ -709,7 +718,7 @@ async function logicalFirstFlow() {
     '.field-list textarea[formcontrolname="shortDescription"]': 'Stabiler synthetischer Identifikator.',
   });
   await waitFor(
-    "document.querySelector('.review-owner-info')?.textContent.includes('Christian Spider') && document.querySelector('.review-owner-info')?.textContent.includes('Sibilla Micheli')",
+    "document.querySelector('.review-owner-info')?.textContent.includes('Christiano Stadello') && document.querySelector('.review-owner-info')?.textContent.includes('Sibilla Di Ciesa')",
     'domain-bound primary owner and deputy were not rendered',
   );
   const businessObjectsSelected = await evaluate(`(() => {
@@ -1654,13 +1663,20 @@ async function approveTestDomainRequest(request, reviewer='christian.man') {
 }
 
 async function createApprovedTestDomain(actor,payload) {
-  const request=expectStatus(await api(actor,'/api/v1/domain-change-requests',{method:'POST',body:{operation:'create',payload}}),201,'submit only synthetic domain').body;
-  return approveTestDomainRequest(request);
+  // Sibilla's home is GS-VBS. Exercise the evidenced VBS handover instead of
+  // pretending that Verteidigung's ALDS can approve a new GS-VBS domain.
+  const handedOver = payload.ownerUserId === 'sibilla.micheli';
+  const creationPayload = handedOver ? {...payload,ownerUserId:'lawrence.hill',deputyOwnerUserId:'hong.an.captain'} : payload;
+  const request=expectStatus(await api(actor,'/api/v1/domain-change-requests',{method:'POST',body:{operation:'create',payload:creationPayload}}),201,'submit only synthetic domain').body;
+  const domain=await approveTestDomainRequest(request);
+  if(!handedOver)return domain;
+  return expectStatus(await api('sibilla.micheli',`/api/v1/domains/${domain.id}/transfer`,{method:'POST',etag:`"${domain.revision}"`,body:{ownerUserId:payload.ownerUserId,deputyOwnerUserId:payload.deputyOwnerUserId,reason:'Synthetic VBS domain handed over to the GS-VBS LDSD.'}}),200,'transfer synthetic domain within VBS').body;
 }
 
 async function semanticGestureFlow() {
-  await navigate('/domains','christian.man');
+  await navigate('/domains?view=cards','christian.man');
   const suffix=Date.now(),domains=[],globalPath='/api/v1/semantic-graphs/domains';
+  const viewPath='/api/v1/domain-network/view',personalBaseline=expectStatus(await api('sibilla.micheli',viewPath),200,'read gesture personal view baseline').body;
   const baseline=expectStatus(await api('sibilla.micheli',globalPath),200,'read gesture graph baseline').body;let lastWritten=null;
   const approve=async proposal=>{let result=proposal;for(const review of proposal.reviews)result=expectStatus(await api(review.ownerUserId,`/api/v1/glossary/term-proposals/${proposal.id}/reviews/${review.domainId}/decision`,{method:'POST',etag:`"${proposal.revision}"`,body:{decision:'approve',comment:'Synthetische Gestenprüfung.'}}),200,'approve only synthetic gesture term').body;return result;};
   const createTerm=async(domainId,label)=>{const proposal=expectStatus(await api('christian.man','/api/v1/glossary/term-proposals',{method:'POST',body:{operation:'create',payload:{domainIds:[domainId],localizations:[{language:'de',preferredLabel:label,definition:'Synthetic gesture term.'}],relations:[]}}}),201,'create only synthetic gesture term').body;return(await approve(proposal)).targetTermId;};
@@ -1679,6 +1695,8 @@ async function semanticGestureFlow() {
   }
   try {
     for(const label of ['A','B'])domains.push(await createApprovedTestDomain('sibilla.micheli',{ownerUserId:'sibilla.micheli',deputyOwnerUserId:'sandro.wenger',localizations:[{language:'de',preferredLabel:`Gesture ${label} ${suffix}`,definition:'Synthetic gesture domain.'}]}));
+    const catalogDomains=expectStatus(await api('sibilla.micheli','/api/v1/domains'),200,'read gesture visibility scope').body;
+    expectStatus(await api('sibilla.micheli',viewPath,{method:'PUT',body:{revision:personalBaseline.revision,configuration:{schemaVersion:1,positions:{},addedDomainIds:[],hiddenDomainIds:catalogDomains.filter(domain=>!domains.some(owned=>owned.id===domain.id)).map(domain=>domain.id),visibleKinds:[]}}}),200,'isolate only gesture cards in the private view');
     const [domainA,domainB]=domains,a=await createTerm(domainA.id,`Ausgang ${suffix}`),b=await createTerm(domainB.id,`Referenz ${suffix}`),route=`/domains/${domainA.id}`;
     await navigate(route,'christian.man');await waitFor("document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'",'gesture term graph did not load');
     await evaluate("document.querySelector('.network-editor').requestFullscreen=undefined;document.querySelector('.network-editor .fullscreen-toggle').click()");
@@ -1716,8 +1734,9 @@ async function semanticGestureFlow() {
     await evaluate('window.confirm=()=>false');await evaluate(`document.querySelector('[data-term-id="${newTerm}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);await clickText('.concept-context-menu button','Im Katalog löschen');invariant(expectStatus(await api('sibilla.micheli',`/api/v1/glossary/terms/${newTerm}`),200,'read canceled term deletion').body.lifecycle==='active','canceled deletion changed the term');
     await evaluate('window.confirm=()=>true');await evaluate(`document.querySelector('[data-term-id="${newTerm}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);await clickText('.concept-context-menu button','Im Katalog löschen');await waitFor(`!document.querySelector('[data-term-id="${newTerm}"]')`,'confirmed term deletion left an active card');
     invariant(expectStatus(await api('sibilla.micheli',`/api/v1/glossary/terms/${newTerm}`),200,'read retired term history').body.lifecycle==='retired','term deletion did not preserve retirement history');
-    await navigate('/domains/network','sibilla.micheli');await waitFor(`document.querySelector('[data-domain-id="${domainA.id}"]')!==null`,'domain gesture canvas missing');await evaluate("document.querySelector('.domain-network .canvas-tools button:last-child').click()");
+    await navigate('/domains/network?ownOffice=0','sibilla.micheli');await waitFor(`document.querySelector('[data-domain-id="${domainA.id}"]')!==null`,'domain gesture canvas missing');await evaluate("document.querySelector('.domain-network .canvas-tools button:last-child').click()");
     // A held drop onto a domain draws the default relation immediately, without persisting it.
+    const initialDomainEdgeCount=await evaluate("document.querySelectorAll('.domain-network [data-domain-link]').length");
     await evaluate(`document.querySelector('[data-domain-id="${domainA.id}"] p').scrollIntoView({block:'center',inline:'nearest',behavior:'instant'})`);
     await settleFrames();
     const heldPoints=await evaluate(`(() => {const source=document.querySelector('[data-domain-id="${domainA.id}"] p'),target=document.querySelector('[data-domain-id="${domainB.id}"] p');const a=source.getBoundingClientRect(),b=target.getBoundingClientRect();return{from:{x:a.left+a.width/2,y:a.top+4},to:{x:b.left+b.width/2,y:b.top+4}};})()`);
@@ -1730,20 +1749,21 @@ async function semanticGestureFlow() {
     await waitFor("document.querySelector('.domain-network .hold-line')!==null",'domain hold did not activate');
     await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...heldPoints.to,buttons:1},sessionId);
     await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...heldPoints.to,button:'left',buttons:0,clickCount:1},sessionId);
-    await waitFor("document.querySelector('[data-domain-link]')!==null&&!document.querySelector('.domain-network .relation-dialog')",'domain drop did not draw an immediate draft link');
+    await waitFor(`document.querySelectorAll('.domain-network [data-domain-link]').length===${initialDomainEdgeCount+1}&&!document.querySelector('.domain-network .relation-dialog')`,'domain drop did not draw an immediate draft link');
     invariant(expectStatus(await api('sibilla.micheli',globalPath),200,'read unsaved held domain connection').body.relations.every(link=>link.sourceId!==domainA.id),'held connection saved automatically');
-    await evaluate("document.querySelector('[data-domain-link]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))");
+    await evaluate("[...document.querySelectorAll('.domain-network [data-domain-link]')].at(-1).dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))");
     invariant(await evaluate("getComputedStyle(document.querySelector('.concept-context-menu [role=menuitem]')).fontSize==='14px'"),'domain context menu is not using the shared compact font');
     await clickText('.concept-context-menu button','Verbindung l\u00f6schen');
     await holdToBlank(`[data-domain-id="${domainA.id}"] p`,'.domain-network');await clickText('.canvas-drop-menu button','Domäne suchen');await waitFor("document.querySelector('.object-browser-backdrop input')!==null",'domain selection modal missing');
     await setControls({'.object-browser-backdrop input':domainB.preferredLabel});await waitFor(`[...document.querySelectorAll('.object-browser-backdrop .object-result')].some(button=>button.textContent.includes(${JSON.stringify(domainB.preferredLabel)}))`,'domain target search result missing');await clickText('.object-browser-backdrop .object-result',domainB.preferredLabel);await waitFor("document.querySelector('.relation-dialog')!==null",'domain search did not prepare a relation');await clickText('.relation-dialog button','Entwurf übernehmen');await clickText('.draft-actions button','Netz speichern');await waitFor("document.querySelector('.domain-network .draft-actions button')?.disabled&&document.querySelector('.domain-network .draft-actions button')?.textContent.trim()==='Netz speichern'",'domain selection relation did not save');lastWritten=expectStatus(await api('sibilla.micheli',globalPath),200,'read selected domain relation').body;
     await holdToBlank(`[data-domain-id="${domainA.id}"] p`,'.domain-network');await clickText('.canvas-drop-menu button','Neue Domäne erstellen');await waitFor("document.querySelector('.create-backdrop input[name=label]')!==null",'domain creation modal missing');
-    await setControls({'.create-backdrop input[name=label]':`Erstellt ${suffix}`,'.create-backdrop textarea[name=definition]':'Synthetic created domain.','.create-backdrop select[name=owner]':'sibilla.micheli','.create-backdrop select[name=deputy]':'sandro.wenger'});await clickText('.create-backdrop button','ALDS-Freigabe');
+    await setControls({'.create-backdrop input[name=label]':`Erstellt ${suffix}`,'.create-backdrop textarea[name=definition]':'Synthetic created domain.','.create-backdrop select[name=owner]':'lawrence.hill','.create-backdrop select[name=deputy]':'hong.an.captain'});await clickText('.create-backdrop button','ALDS-Freigabe');
     await waitFor("document.querySelector('.domain-network .is-pending')",'new domain did not remain a personal proposal');
     const pending=expectStatus(await api('sibilla.micheli','/api/v1/domain-change-requests'),200,'read synthetic domain request').body.find(item=>item.status==='submitted'&&item.reviewPayload.localizations.some(label=>label.preferredLabel===`Erstellt ${suffix}`));
     invariant(pending,'domain modal did not submit its proposal');
-    const createdDomain=await approveTestDomainRequest(pending);domains.push(createdDomain);
-    await navigate('/domains/network','sibilla.micheli');
+    const approvedDomain=await approveTestDomainRequest(pending);
+    const createdDomain=expectStatus(await api('sibilla.micheli',`/api/v1/domains/${approvedDomain.id}/transfer`,{method:'POST',etag:`"${approvedDomain.revision}"`,body:{ownerUserId:'sibilla.micheli',deputyOwnerUserId:'sandro.wenger',reason:'Synthetic domain handed over to the VBS LDSD.'}}),200,'handover synthetic canvas domain').body;domains.push(createdDomain);
+    await navigate('/domains/network?ownOffice=0','sibilla.micheli');
     await waitFor(`document.querySelector('[data-domain-id="${createdDomain.id}"]')`,'approved domain did not enter the canvas');
     await evaluate(`document.querySelector('[data-domain-id="${domainA.id}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);
     await clickText('.concept-context-menu button','Neue Domänenbeziehung');
@@ -1763,11 +1783,13 @@ async function semanticGestureFlow() {
     invariant(await evaluate(`(() => {const neighbors=[...document.querySelectorAll('.graph-node.is-domain')].filter(node=>node.dataset.nodeId!=='domain:${domainA.id}'),cards=[...document.querySelectorAll('.graph-node')];return neighbors.every(node=>cards.every(other=>{if(node===other)return true;const a=node.getBoundingClientRect(),b=other.getBoundingClientRect();return a.right<=b.left||b.right<=a.left||a.bottom<=b.top||b.bottom<=a.top;}));})()`),'new neighboring domain cards overlap existing cards');
     await capturePageSegmentScreenshot('.network-editor','concept-linked-domains.png');
     await clickText('.canvas-options button','Direkt verbundene');await waitFor("document.querySelectorAll('.graph-node.is-domain').length===1",'neighbor domains did not hide');
-    await navigate('/domains/network','sibilla.micheli');await waitFor(`document.querySelector('[data-domain-id="${createdDomain.id}"]')!==null`,'domain canvas did not reload');
+    await navigate('/domains/network?ownOffice=0','sibilla.micheli');await waitFor(`document.querySelector('[data-domain-id="${createdDomain.id}"]')!==null`,'domain canvas did not reload');
     await evaluate('window.confirm=()=>false');await evaluate(`document.querySelector('[data-domain-id="${createdDomain.id}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);await clickText('.concept-context-menu button','Domäne im Katalog stilllegen');invariant(expectStatus(await api('sibilla.micheli',`/api/v1/domains/${createdDomain.id}`),200,'read canceled domain deletion').body.lifecycle==='active','canceled domain deletion changed the catalog');
     await evaluate('window.confirm=()=>true');await evaluate(`document.querySelector('[data-domain-id="${createdDomain.id}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);await clickText('.concept-context-menu button','Domäne im Katalog stilllegen');await waitFor(`!document.querySelector('[data-domain-id="${createdDomain.id}"]')`,'confirmed domain deletion left an active card');
     console.log('PASS canvas gestures: held red point, create/search modals, reference membership, hide/restore, line actions and confirmed catalog deletion');
   } finally {
+    const personalCurrent=expectStatus(await api('sibilla.micheli',viewPath),200,'read gesture personal view cleanup').body;
+    expectStatus(await api('sibilla.micheli',viewPath,{method:'PUT',body:{revision:personalCurrent.revision,configuration:personalBaseline.configuration}}),200,'restore gesture personal view');
     if(lastWritten){const current=expectStatus(await api('sibilla.micheli',globalPath),200,'read gesture graph cleanup').body,positions={...current.positions},owned=new Set(domains.map(domain=>domain.id));for(const [key,value]of Object.entries(lastWritten.positions))if(JSON.stringify(current.positions[key])===JSON.stringify(value)){if(key in baseline.positions)positions[key]=baseline.positions[key];else delete positions[key];}for(const id of owned)delete positions[`domain:${id}`];expectStatus(await api('sibilla.micheli',globalPath,{method:'PUT',body:{revision:current.revision,positions,hiddenNodeIds:(current.hiddenNodeIds??[]).filter(key=>!owned.has(key.slice(7))),relations:current.relations.filter(link=>!owned.has(link.sourceId)&&!owned.has(link.targetId))}}),200,'remove only gesture graph fixtures');}
     for(const domain of domains){const current=expectStatus(await api('sibilla.micheli',`/api/v1/domains/${domain.id}`),200,'read gesture domain for cleanup').body;if(current.lifecycle==='active')expectStatus(await api('sibilla.micheli',`/api/v1/domains/${domain.id}/retire`,{method:'POST',etag:`"${current.revision}"`,body:{}}),200,'retire only gesture domain fixtures');}
   }
@@ -1777,7 +1799,7 @@ async function semanticGestureFlow() {
 // Read-only against the live preview: opens menus and stages/discards layout only.
 // Existing relationships are changed only in a local draft, then discarded.
 async function domainRelationTypesFlow(){
-  const actor='sibilla.micheli';await navigate('/domains/network',actor,1440,1000);
+  const actor='sibilla.micheli';await navigate('/domains/network?ownOffice=0',actor,1440,1000);
   await waitFor("location.pathname==='/domains'&&new URLSearchParams(location.search).get('view')==='network'&&document.querySelector('.domain-network .graph-canvas')",'legacy network link did not open the embedded domain view');
   invariant(await evaluate("document.querySelectorAll('h1').length===1&&!document.querySelector('.semantic-tabs a[href=\"/domains/network\"]')&&new URL(document.querySelector('.semantic-tabs [aria-current=page]')?.href??location.href).pathname==='/domains'"),'domain network still has a separate tab or duplicate page heading');
   await clickText('.domain-view-switch button','Kacheln');
@@ -1820,13 +1842,13 @@ async function domainRelationTypesFlow(){
 }
 
 async function domainTransferFlow(){
-  await navigate('/domains','sibilla.micheli');
+  await navigate('/domains?view=cards','sibilla.micheli');
   const domains=expectStatus(await api('sibilla.micheli','/api/v1/domains'),200,'read transfer domains').body;
   const defence=domains.find(item=>item.preferredLabel==='Verteidigung'),estate=domains.find(item=>item.preferredLabel==='Immobilienmanagement VBS');
   invariant(defence&&estate,'domain handover preview requires the existing domains');
   let mocked=false;
   for(const [actor,domain,allowed,width] of [['sibilla.micheli',estate,true,1440],['christian.spider',estate,true,1440],['christian.man',defence,true,390],['sandro.wenger',defence,true,1440],['thomas.kriegli',defence,false,1440],['christian.spider',defence,false,1440]]){
-    await navigate('/domains?ownOffice=0',actor,width,900);
+    await navigate('/domains?ownOffice=0&view=cards',actor,width,900);
     const baseline=expectStatus(await api(actor,'/api/v1/domains/'+domain.id),200,'read handover baseline').body;
     invariant(baseline.canTransferOwnership===allowed,'server handover rights are incorrect');
     const card=`.domain-card[data-domain-id="${domain.id}"]`;
@@ -1869,7 +1891,7 @@ async function domainTransferFlow(){
 }
 
 async function domainMetadataFlow(){
-  await navigate('/domains','sibilla.micheli');
+  await navigate('/domains?view=cards','sibilla.micheli');
   const domains=expectStatus(await api('sibilla.micheli','/api/v1/domains'),200,'read domains for metadata preview').body;
   const defence=domains.find(domain=>domain.preferredLabel==='Verteidigung'),vat=domains.find(domain=>domain.preferredLabel==='Mehrwertsteuer'),estate=domains.find(domain=>domain.preferredLabel==='Immobilienmanagement VBS'),rapid=domains.find(domain=>domain.preferredLabel==='Data Analytics Rapid Prototyping');
   invariant(defence&&vat&&estate&&rapid,'confirmed domain metadata fixtures are missing');
@@ -1904,24 +1926,24 @@ async function semanticOwnOfficeFlow(){
     const scope=expectStatus(await api(actor,'/api/v1/semantic-graphs/organizations/'+office),200,'read own office scope').body;
     const domainGraph=expectStatus(await api(actor,'/api/v1/semantic-graphs/domains'),200,'read shared domains graph').body;
     for(const [route,kind,allowed] of [['/domains/terminology','term',scope.scopeTermIds],['/domains','domain',scope.scopeDomainIds]]){
-      await navigate(route,actor,1440,1000);
-      await waitFor("document.querySelector('.office-filter input')?.checked&&!document.querySelector('.office-filter .small-spinner')",'own-office filter is not active by default');
-      invariant(await evaluate("(()=>{const search=document.querySelector('.semantic-search input').getBoundingClientRect(),filter=document.querySelector('.office-filter label').getBoundingClientRect();return filter.left>=search.right&&Math.abs(filter.top-search.top)<8;})()"),'Office checkbox is not next to its search field');
-      await navigate(route+'?ownOffice=0',actor,1440,1000);
+      await navigate(route+'?view=cards',actor,1440,1000);
+      await waitFor("document.querySelector('.office-filter [role=switch]')?.getAttribute('aria-checked')==='true'&&!document.querySelector('.office-filter .small-spinner')",'own-office filter is not active by default');
+      invariant(await evaluate("(()=>{const search=document.querySelector('.semantic-search input').getBoundingClientRect(),filter=document.querySelector('.office-filter label').getBoundingClientRect();return filter.left>=search.right&&Math.abs(filter.top-search.top)<8;})()"),'Office toggle is not next to its search field');
+      await navigate(route+'?ownOffice=0&view=cards',actor,1440,1000);
       const baseline=await evaluate("[...document.querySelectorAll('.semantic-grid>article')].map(card=>card.dataset.domainId??card.dataset.termId).sort()");
-      await evaluate("document.querySelector('.office-filter input').click()");
+      await evaluate("document.querySelector('.office-filter [role=switch]').click()");
       const expected=baseline.filter(id=>allowed.includes(id)).sort();
       await waitFor(`location.search.includes('ownOffice=1')&&!document.querySelector('.office-filter .small-spinner')&&[...document.querySelectorAll('.semantic-grid>article')].map(card=>card.dataset.domainId??card.dataset.termId).sort().join(',')===${JSON.stringify(expected.join(','))}`,'own-office cards did not match server object scope');
       invariant(expected.length<baseline.length,'own-office fixture does not distinguish a foreign office');
-      await evaluate("document.querySelector('.office-filter input').blur();document.querySelector('.office-filter').scrollIntoView({block:'center',behavior:'instant'})");await settleFrames();
+      await evaluate("document.querySelector('.office-filter [role=switch]').blur();document.querySelector('.office-filter').scrollIntoView({block:'center',behavior:'instant'})");await settleFrames();
       await evaluate("window.officeScrollTime=Date.now();window.addEventListener('scroll',()=>window.officeScrollTime=Date.now(),true)");
       await waitFor('Date.now()-window.officeScrollTime>400','page did not stop scrolling');
-      await evaluate("document.querySelector('.office-filter input').focus({preventScroll:true})");await settleFrames();
+      await evaluate("document.querySelector('.office-filter [role=switch]').focus({preventScroll:true})");await settleFrames();
       await waitFor("document.querySelector('[role=tooltip]')!==null",'office filter tooltip did not open on keyboard focus');
       await captureScreenshot(`own-office-${actor}-${kind}-cards.png`);
-      await evaluate("document.querySelector('.office-filter input').blur()");
+      await evaluate("document.querySelector('.office-filter [role=switch]').blur()");
       await setViewport(390,844);await settleFrames();
-      invariant(await evaluate("(()=>{const search=document.querySelector('.semantic-search input').getBoundingClientRect(),filter=document.querySelector('.office-filter label').getBoundingClientRect();return filter.top>=search.bottom&&filter.right<=innerWidth;})()"),'Mobile checkbox does not stack below search');
+      invariant(await evaluate("(()=>{const search=document.querySelector('.semantic-search input').getBoundingClientRect(),filter=document.querySelector('.office-filter label').getBoundingClientRect();return filter.top>=search.bottom&&filter.right<=innerWidth;})()"),'Mobile toggle does not stack below search');
       await evaluate("document.querySelector('.semantic-filter-row').scrollIntoView({block:'center',behavior:'instant'})");
       await captureScreenshot(`own-office-${actor}-${kind}-mobile-search.png`);
       await setViewport(1440,1000);
@@ -1937,7 +1959,7 @@ async function semanticOwnOfficeFlow(){
       await evaluate("document.querySelector('.office-filter').scrollIntoView({block:'start'})");
       await captureScreenshot(`own-office-${actor}-${kind}-mobile.png`);
       await setViewport(1440,1000);
-      await evaluate("document.querySelector('.office-filter input').click()");
+      await evaluate("document.querySelector('.office-filter [role=switch]').click()");
       await waitFor("location.search.includes('ownOffice=0')",'clearing own-office filter did not update the URL');
       if(kind==='term')invariant(await evaluate("!!document.querySelector('.organization-choice')"),'organization selector did not return');
       await clickText('.term-view-switch button','Kacheln');
@@ -1949,7 +1971,7 @@ async function semanticOwnOfficeFlow(){
     invariant(JSON.stringify(expectStatus(await api(actor,'/api/v1/semantic-graphs/organizations/'+office),200,'verify office graph unchanged').body)===JSON.stringify(scope),'filtering changed the office graph');
     await navigate('/domains?ownOffice=1',actor);
     await evaluate("document.querySelector('.semantic-tabs a[href^=\"/domains/terminology\"]').click()");
-    await waitFor("location.pathname==='/domains/terminology'&&document.querySelector('.office-filter input')?.checked",'own-office filter was lost between semantic tabs');
+    await waitFor("location.pathname==='/domains/terminology'&&document.querySelector('.office-filter [role=switch]')?.getAttribute('aria-checked')==='true'",'own-office filter was lost between semantic tabs');
   }
   console.log('PASS own-office filter: trusted independent scopes, both identities, cards/networks, tooltip, mobile, clearing, tab/URL retention, no graph writes');
 }
@@ -1957,7 +1979,7 @@ async function semanticOwnOfficeFlow(){
 async function semanticOwnerSearchFlow(){
   const normalize=value=>value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('de-CH');
   for(const route of ['/domains','/domains/terminology']){
-    await navigate(route,'sibilla.micheli');
+    await navigate(route+'?ownOffice=0&view=cards','sibilla.micheli');
     const baseline=await evaluate("[...document.querySelectorAll('.semantic-grid>article')].map(card=>({id:card.dataset.domainId??card.dataset.termId,owners:[...card.querySelectorAll('dl>div')].filter(row=>['Data Owner','Stellvertretung'].includes(row.querySelector('dt')?.textContent)).map(row=>row.querySelector('dd').textContent.split(' · ')[0].trim())}))");
     invariant(baseline.length&&baseline[0].owners.length===2,'owner search requires visible owner and deputy fixtures');
     for(const person of baseline[0].owners){
@@ -1999,7 +2021,7 @@ async function organizationTermNetworkFlow(){
       await waitFor("document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'&&document.querySelector('.scope-description')?.textContent.includes('armasuisse')",'organization switch retained stale cards');
     }
   }
-  await navigate('/domains/terminology','sibilla.micheli');
+  await navigate('/domains/terminology?view=cards','sibilla.micheli');
   await waitFor("document.querySelector('.term-card .term-actions-trigger')!==null",'term card overflow trigger missing');
   invariant(await evaluate("[...document.querySelectorAll('.term-card')].every(card=>card.querySelectorAll('button').length===1)"),'term cards still expose separate action buttons');
   const card=await evaluate("document.querySelector('.term-card').dataset.termId"),selector=`.term-card[data-term-id="${card}"]`;
@@ -2019,7 +2041,7 @@ async function organizationTermNetworkFlow(){
 
 async function domainConnectionGestureFlow() {
   const actor='sibilla.micheli',graphPath='/api/v1/semantic-graphs/domains';
-  await navigate('/domains/network',actor);
+  await navigate('/domains/network?ownOffice=0',actor);
   const baseline=expectStatus(await api(actor,graphPath),200,'read gesture baseline').body;
   const sources=baseline.relationSourceNodeIds??[];
   const domains=expectStatus(await api(actor,'/api/v1/domains'),200,'read gesture domains').body;
@@ -2034,7 +2056,7 @@ async function domainConnectionGestureFlow() {
       await setViewport(width,height);
       await evaluate("document.querySelector('.domain-network .canvas-tools button:last-child').click()");
       // The overview's local automatic arrangement is discardable like every card move.
-      await clickText('.domain-network .graph-controls button','Automatisch anordnen');
+      await clickText('.domain-network .draft-actions button','Automatisch anordnen');
       if(width<500)for(let i=0;i<2;i++)await clickText('.domain-network .graph-controls button','\u2212');
       await settleFrames();
       const points=await evaluate(`(()=>{const a=document.querySelector('${sourceCard} ${startPart}').getBoundingClientRect(),b=document.querySelector('${targetCard} ${endPart}').getBoundingClientRect();return{from:{x:a.left+a.width/2,y:a.top+4},to:{x:b.left+b.width/2,y:b.top+4},style:document.querySelector('${sourceCard}').style.cssText,ports:document.querySelectorAll('.domain-network .ontology-port').length};})()`);
@@ -2083,9 +2105,71 @@ async function domainConnectionGestureFlow() {
   console.log('PASS held domain connections: hand jitter, description/header targets, desktop/mobile, red preview, connected blue endpoints, discard; no graph writes');
 }
 
+async function domainProductLayoutFlow() {
+  const actor='kassandra.valdata',path='/api/v1/domain-network/view',graphPath='/api/v1/semantic-graphs/domains';
+  await navigate('/',actor,1440,1100);
+  const baseline=expectStatus(await api(actor,path),200,'read product layout baseline').body;
+  const shared=expectStatus(await api(actor,graphPath),200,'read product layout shared baseline').body;
+  const domains=expectStatus(await api(actor,'/api/v1/domains'),200,'read product layout domains').body;
+  const a=domains.find(domain=>domain.preferredLabel==='Mobilität & Logistik'),b=domains.find(domain=>domain.preferredLabel==='Mehrwertsteuer');
+  invariant(a&&b,'product layout domains missing');
+  try {
+    expectStatus(await api(actor,path,{method:'PUT',body:{revision:baseline.revision,configuration:{schemaVersion:1,addedDomainIds:[],hiddenDomainIds:domains.filter(domain=>domain.id!==a.id&&domain.id!==b.id).map(domain=>domain.id),positions:{['domain:'+a.id]:{x:100,y:100},['domain:'+b.id]:{x:530,y:270}},visibleKinds:['product']}}}),200,'prepare personal product layout');
+    // A local read-only edge fixture exercises both ports without changing shared relationships.
+    cdp.mockReadResponses=new Map([[graphPath,{...shared,canEditRelations:true,relationSourceNodeIds:['domain:'+a.id],relations:[{sourceId:a.id,targetId:b.id,relationType:'related'}]}]]);
+    await cdp.call('Fetch.enable',{patterns:[{urlPattern:'*/api/v1/semantic-graphs/domains'}]},sessionId);
+    await navigate('/domains?view=network&ownOffice=0',actor,1440,1100);
+    await waitFor("document.querySelector('.domain-network .domain-asset.is-product')&&document.querySelectorAll('.domain-network .ontology-port').length===2",'domain ports/products did not load');
+    await evaluate("document.querySelector('.domain-network .relationship-hit').dispatchEvent(new MouseEvent('click',{bubbles:true}))");
+    for(let zoom=0;zoom<3;zoom++){
+      await settleFrames();
+      const offsets=await evaluate(`(()=>{const path=document.querySelector('.domain-network .relationship-line'),m=path.getScreenCTM(),length=path.getTotalLength();return [['${a.id}',0],['${b.id}',length]].map(([id,at])=>{const p=path.getPointAtLength(at).matrixTransform(m),r=document.querySelector('[data-domain-id="'+id+'"] .ontology-port').getBoundingClientRect();return Math.hypot(p.x-r.left-r.width/2,p.y-r.top-r.height/2);});})()`);
+      invariant(offsets.every(offset=>offset<2),`blue ports drift from line endpoints at zoom ${zoom}: ${offsets}`);
+      invariant(await evaluate("!document.querySelector('.domain-network .edge-handles')"),'duplicate white endpoint handle remains');
+      if(zoom<2)await evaluate("document.querySelector('.domain-network .graph-controls button:last-child').click()");
+    }
+    await evaluate("document.querySelector('.domain-network .fullscreen-toggle').click()");
+    await waitFor("document.querySelector('.domain-network.is-fullscreen')",'product fullscreen did not open');
+    const selector=await evaluate("'.domain-asset[data-asset-key=\"'+document.querySelector('.domain-asset.is-product').dataset.assetKey+'\"]'");
+    await evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center',inline:'center',behavior:'instant'})`);await settleFrames();
+    const before=await evaluate(`(()=>{const asset=document.querySelector(${JSON.stringify(selector)}),r=asset.getBoundingClientRect();return{key:asset.dataset.assetKey,x:r.left+r.width/2,y:r.top+r.height/2,left:parseFloat(asset.style.left),top:parseFloat(asset.style.top),path:document.querySelector('.asset-edges path').getAttribute('d')};})()`);
+    const targets=(await cdp.call('Target.getTargets')).targetInfos.filter(target=>target.type==='page').length;
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:before.x,y:before.y},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',x:before.x,y:before.y,button:'left',buttons:1,clickCount:1},sessionId);
+    for(let step=1;step<=4;step++)await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:before.x+60*step/4,y:before.y+36*step/4,buttons:1},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',x:before.x+60,y:before.y+36,button:'left',buttons:0,clickCount:1},sessionId);
+    await waitFor("!document.querySelector('.domain-network .draft-actions button').disabled",'product drag did not create a draft');
+    invariant(await evaluate(`parseFloat(document.querySelector(${JSON.stringify(selector)}).style.left)>${before.left+30}&&document.querySelector('.asset-edges path').getAttribute('d')!==${JSON.stringify(before.path)}`),'product/assignment line did not move');
+    invariant((await cdp.call('Target.getTargets')).targetInfos.filter(target=>target.type==='page').length===targets,'dragging a product opened its link');
+    await clickText('.domain-network .draft-actions button','Netz speichern');
+    await waitFor("document.querySelector('.domain-network .draft-actions button').disabled&&document.querySelector('.domain-network .draft-actions button').textContent.trim()==='Netz speichern'",'product anchor did not save');
+    const saved=expectStatus(await api(actor,path),200,'read saved product anchor').body;
+    invariant(saved.configuration.positions[before.key]?.x>before.left,'saved view lacks product anchor');
+    await capturePageSegmentScreenshot('.domain-network','domain-product-moved-fullscreen.png',1440,1100);
+    await pressKey('Escape','Escape',27);
+    await navigate('/domains?view=network&ownOffice=0',actor,1440,1100);
+    await waitFor(`parseFloat(document.querySelector(${JSON.stringify(selector)})?.style.left)===${saved.configuration.positions[before.key].x}`,'product anchor did not survive reload');
+    await evaluate(`document.querySelector(${JSON.stringify(selector)}).focus()`);await pressKey('ArrowRight','ArrowRight',39);
+    await clickText('.domain-network .draft-actions button','Entwurf verwerfen');
+    invariant(await evaluate(`parseFloat(document.querySelector(${JSON.stringify(selector)}).style.left)===${saved.configuration.positions[before.key].x}`),'discard did not restore product anchor');
+    await clickText('.domain-network .draft-actions button','Automatisch anordnen');
+    invariant(JSON.stringify(expectStatus(await api(actor,path),200,'verify automatic arrangement draft').body)===JSON.stringify(saved),'automatic arrangement saved unexpectedly');
+    await clickText('.domain-network .draft-actions button','Netz speichern');await waitFor("document.querySelector('.domain-network .draft-actions button').disabled&&document.querySelector('.domain-network .draft-actions button').textContent.trim()==='Netz speichern'",'reset did not save');
+    invariant(!expectStatus(await api(actor,path),200,'read reset product position').body.configuration.positions[before.key],'automatic arrangement retained visible manual product anchor');
+    await cdp.call('Fetch.disable',{},sessionId);cdp.mockReadResponses=null;
+    invariant(JSON.stringify(expectStatus(await api(actor,graphPath),200,'verify shared graph unchanged').body)===JSON.stringify(shared),'product placement changed shared relationships');
+    invariant(cdp.runtimeExceptions.length===0,`product placement errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+    console.log('PASS domain-product-layout: aligned single blue ports across zoom levels, selected endpoints, real product drag, no link navigation, updated lines, fullscreen, save/reload, keyboard/discard and automatic reset');
+  } finally {
+    await cdp.call('Fetch.disable',{},sessionId);cdp.mockReadResponses=null;
+    const current=expectStatus(await api(actor,path),200,'read product layout cleanup').body;
+    expectStatus(await api(actor,path,{method:'PUT',body:{revision:current.revision,configuration:baseline.configuration}}),200,'restore personal product layout baseline');
+  }
+}
+
 async function domainCardActionsFlow() {
   // This flow reads existing catalog metadata and opens/cancels dialogs only.
-  const actor='sibilla.micheli';await navigate('/domains?ownOffice=0',actor);
+  const actor='sibilla.micheli';await navigate('/domains?ownOffice=0&view=cards',actor);
   const domains=expectStatus(await api(actor,'/api/v1/domains'),200,'read domains for card checks').body;
   const owned=domains.filter(domain=>domain.ownerUserId===actor||domain.deputyOwnerUserId===actor);
   const domain=owned.find(domain=>domain.preferredLabel==='Verteidigung')??owned[0];invariant(domain,'card preview needs an existing owned domain');
@@ -2110,11 +2194,11 @@ async function domainCardActionsFlow() {
   const point=await evaluate(`(()=>{const header=document.querySelector('${card} .domain-card-heading');header.scrollIntoView({block:'center',behavior:'instant'});const r=header.getBoundingClientRect();return{x:r.left+8,y:r.top+8};})()`);
   await settleFrames();await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',buttons:1,clickCount:1},sessionId);await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',buttons:0,clickCount:1},sessionId);
   await waitFor(`location.pathname==='/domains/${domain.id}'&&document.querySelector('daca-domain-detail h1')!==null`,'clicking the heading padding did not open the domain');
-  await navigate('/domains?ownOffice=0',actor);await waitFor(`document.querySelector('${card} .domain-card-heading')!==null`,'heading link did not reload');
+  await navigate('/domains?ownOffice=0&view=cards',actor);await waitFor(`document.querySelector('${card} .domain-card-heading')!==null`,'heading link did not reload');
   await evaluate(`document.querySelector('${card} .domain-card-heading').focus()`);await pressKey('Enter','Enter',13);
   await waitFor(`location.pathname==='/domains/${domain.id}'`,'domain heading cannot be opened with Enter');
   const otherActor=['kassandra.valdata','noemie.rochat','christian.man'].find(id=>![domain.ownerUserId,domain.deputyOwnerUserId].includes(id));
-  await navigate('/domains?ownOffice=0',otherActor);await waitFor(`document.querySelector('${card} .domain-actions-trigger')!==null`,'other-owner card did not load');
+  await navigate('/domains?ownOffice=0&view=cards',otherActor);await waitFor(`document.querySelector('${card} .domain-actions-trigger')!==null`,'other-owner card did not load');
   await clickText(card+' .domain-actions-trigger','');
   invariant(await evaluate(`!document.querySelector('${card} [data-domain-action=edit]')&&!document.querySelector('${card} [data-domain-action=retire]')&&document.querySelector('${card} [role=menuitem][href]')!==null`),'domain menu changed object permission visibility');
   console.log('PASS domain cards: one action trigger, existing menu actions, edit dialog, Escape focus, mobile fit, padded header click, Enter and object permissions; no object writes');
@@ -2125,7 +2209,7 @@ async function governanceInformationFlow() {
   invariant(await evaluate("document.querySelector('a[href=\"/documentation/static#rollen-zustaendigkeiten\"]')!==null"),'Information role reference is missing');
   await navigate('/documentation/static','christian.man');
   await waitFor("document.querySelectorAll('daca-governance-information tbody tr').length===19",'RACI reference is incomplete');
-  invariant(await evaluate("!document.querySelector('#rollen-zustaendigkeiten').textContent.match(/\\b(?:VBS|SLDS)\\b/)"),'source reference includes an unwanted department abbreviation or nonexistent role');
+  invariant(await evaluate("!document.querySelector('#rollen-zustaendigkeiten thead').textContent.match(/\\b(?:VBS|SLDS)\\b/)"),'source reference includes an unwanted department abbreviation or nonexistent role');
   await setControls({'#documentation-text-search':'datendomanen'});
   await waitFor("document.querySelectorAll('.documentation-articles>article:not([hidden])').length===1&&!document.querySelector('#rollen-zustaendigkeiten').hidden",'documentation content search did not find normalized matrix text');
   await capturePageSegmentScreenshot('#rollen-zustaendigkeiten','information-roles.png',1440,1000);
@@ -2135,6 +2219,292 @@ async function governanceInformationFlow() {
   await evaluate("document.querySelector('.documentation-search button').click()");
   await waitFor("document.querySelectorAll('.documentation-articles>article:not([hidden])').length===5",'documentation search reset did not restore articles');
   console.log('PASS Information: object roles, LDS/ALDS reference, complete 19-row RACI, normalized text search, empty results and reset');
+}
+
+async function semanticPerformanceFlow() {
+  const actor='kassandra.valdata';
+  await navigate('/',actor);
+  cdp.deferReadPaths=new Set(['/api/v1/glossary/terms','/api/v1/domain-change-requests','/api/v1/glossary/term-proposals']);cdp.deferredGenericReads=[];
+  await cdp.call('Fetch.enable',{patterns:[{urlPattern:'*/api/v1/*',requestStage:'Request'}]},sessionId);
+  try {
+    await navigate('/domains',actor,1440,1100);
+    await waitFor("document.querySelectorAll('.domain-network [data-domain-id]').length>0",'domain network waited for unrelated reads');
+    invariant(cdp.deferredGenericReads.length>=3,'background-read fixture did not pause terminology/governance');
+    invariant(await evaluate("performance.getEntriesByType('resource').filter(entry=>new URL(entry.name).pathname==='/api/v1/domains').length===1"),'domains loaded more than once');
+    await capturePageSegmentScreenshot('.domain-network','domains-ready-background-paused.png',1440,1100);
+  } finally {
+    cdp.deferReadPaths.clear();
+    for(const request of cdp.deferredGenericReads)await cdp.call('Fetch.continueRequest',{requestId:request.requestId},request.sessionId);
+    await cdp.call('Fetch.disable',{},sessionId);delete cdp.deferReadPaths;cdp.deferredGenericReads=[];
+  }
+  for(const route of ['/domains','/domains/terminology']) {
+    await navigate(route,actor,1440,1100);
+    await waitFor(route==='/domains'?"document.querySelectorAll('.domain-network [data-domain-id]').length>0":"document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'",'default semantic network missing');
+    const requests=await evaluate("performance.getEntriesByType('resource').filter(entry=>new URL(entry.name).pathname==='/api/v1/domains').map(entry=>({duration:Math.round(entry.duration)}))");
+    invariant(requests.length===1,'semantic entry repeated the domain register read: '+route);
+    console.log('CHECK semantic performance',route,JSON.stringify(requests));
+    await capturePageSegmentScreenshot(route==='/domains'?'.domain-network':'.network-editor',route==='/domains'?'default-domain-network.png':'default-terminology-network.png',1440,1100);
+    await clickText('.term-view-switch button','Kacheln');
+    await waitFor("new URLSearchParams(location.search).get('view')==='cards'&&document.querySelector('.semantic-grid')",'explicit card view was not retained');
+  }
+  invariant(cdp.runtimeExceptions.length===0,`Semantic default errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+  console.log('PASS semantic-performance: one register request per entry, domains render with terminology/governance paused, both networks default, explicit cards retained');
+}
+
+async function organizationViewOptionsFlow() {
+  const actor='kassandra.valdata';
+  await navigate('/?organization=efd',actor,1440,1100);
+  await waitFor('document.querySelector("[data-hide-unrelated-switch]")&&document.querySelectorAll("[data-organization-id]").length>5','organization view controls missing');
+  invariant(await evaluate(`(()=>{const switches=[...document.querySelectorAll('.org-layout-toolbar [role="switch"]')];return !document.querySelector('.org-navigation-row [role="switch"],daca-organization-canvas daca-canvas-selection-hint')&&switches.length===2&&switches[0].hasAttribute('data-hide-unrelated-switch')&&switches[0].getAttribute('aria-checked')==='true'&&switches[0].getAttribute('aria-label')==='Orgs ohne DP-Beziehungen ausblenden'&&switches[1].closest('.org-layer')&&switches[1].getAttribute('aria-checked')==='false'&&!document.querySelector('.organization-explorer').textContent.includes('Ungespeicherte Anordnung');})()`),'toolbar toggle order/defaults or removed text incorrect');
+  invariant(await evaluate("[...document.querySelectorAll('.org-office,.org-satellite')].every(card=>[...card.querySelectorAll('dd')].some(count=>Number(count.textContent)>0))"),'empty organizations are visible by default');
+  await capturePageSegmentScreenshot('.organization-explorer','organization-default-compact-toolbar.png',1440,1100);
+  await evaluate("document.querySelector('[data-hide-unrelated-switch]').click()");await settleFrames();
+  const before=await evaluate(`(()=>[...document.querySelectorAll('.org-office,.org-satellite')].map(card=>({id:card.dataset.organizationId,counts:[...card.querySelectorAll('dd')].map(item=>Number(item.textContent))})))()`);
+  invariant(before.some(card=>card.counts.every(count=>count===0)),'no empty organizations available to test filter');
+  invariant(before.some(card=>card.counts[0]>0&&card.counts[1]===0),'producer-only organization missing');
+  invariant(await evaluate(`(()=>{const switches=[...document.querySelectorAll('.org-layout-toolbar [role="switch"]')];return switches.every(item=>item.getAttribute('aria-checked')==='false');})()`),'explicitly showing all organizations did not update the toggle');
+  await evaluate("document.querySelector('[data-hide-unrelated-switch]').focus()");
+  await waitFor("document.querySelector('.daca-glossary-tooltip.is-visible')?.textContent.includes('weder Datenprodukte bereitstellen noch Datenprodukte konsumieren')",'shared filter tooltip missing');
+  await pressKey(' ','Space',32);await settleFrames();
+  const visible=await evaluate("[...document.querySelectorAll('.org-office,.org-satellite')].map(card=>card.dataset.organizationId)");
+  const expected=before.filter(card=>card.counts.some(count=>count>0)).map(card=>card.id);
+  invariant(JSON.stringify([...visible].sort())===JSON.stringify([...expected].sort()),'filter removed active organizations or retained empty ones');
+  invariant(await evaluate("document.querySelector('.org-focus-title').textContent.trim()==='EFD'&&document.querySelector('.org-layout-toolbar button').disabled"),'filter changed focused organization or dirtied saved layout');
+  await capturePageSegmentScreenshot('.organization-explorer','organization-filter-enabled.png',1440,1100);
+  await evaluate("document.querySelector('.org-focus').focus();document.querySelector('.org-focus').dispatchEvent(new KeyboardEvent('keydown',{key:'F10',shiftKey:true,bubbles:true,cancelable:true}))");await settleFrames();
+  await pressKey('End','End',35);
+  invariant(await evaluate("document.activeElement.matches('[data-hide-unrelated-option][aria-checked=\"true\"]')"),'menu keyboard navigation does not reach checked visibility option');
+  await capturePageSegmentScreenshot('.organization-explorer','organization-filter-context-menu.png',1440,1100);
+  await pressKey('Enter','Enter',13);await settleFrames();
+  invariant(await evaluate(`document.querySelectorAll('.org-office,.org-satellite').length===${before.length}&&document.querySelector('[data-hide-unrelated-switch]').getAttribute('aria-checked')==='false'`),'context menu did not restore all organizations');
+  await evaluate("document.querySelector('.org-layer [role=switch]').click();document.querySelector('[data-hide-unrelated-switch]').click()");await settleFrames();
+  await waitFor("document.querySelector('.org-domain-bubble')",'organization filter removed domain layer');
+  await evaluate("document.querySelector('.org-domain-bubble').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}))");await settleFrames();
+  invariant(await evaluate("!!document.querySelector('[data-hide-unrelated-option][aria-checked=\"true\"]')"),'domain menu lacks shared visibility option');
+  await pressKey('Escape','Escape',27);await settleFrames();
+  await evaluate("document.querySelector('.org-fullscreen').click()");await settleFrames();
+  invariant(await evaluate("!!document.querySelector('.organization-explorer.is-fullscreen .org-layout-toolbar [data-hide-unrelated-switch][aria-checked=\"true\"]')"),'fullscreen lost visibility control/state');
+  await captureScreenshot('organization-filter-fullscreen.png');
+  await evaluate("document.querySelector('.org-fullscreen').click()");await settleFrames();
+  await setViewport(390,844);await settleFrames();
+  invariant(await evaluate('document.documentElement.scrollWidth<=innerWidth+2'),'organization filters overflow mobile page');
+  invariant(await evaluate(`(()=>{const switches=[...document.querySelectorAll('.org-view-filters [role=switch]')];return switches.every(item=>{const rect=item.getBoundingClientRect();return rect.left>=0&&rect.right<=innerWidth;});})()`),'mobile filter controls clipped');
+  await capturePageSegmentScreenshot('.org-layout-toolbar','organization-filter-mobile.png',390,844);
+  invariant(cdp.runtimeExceptions.length===0,'organization filter caused browser errors: '+JSON.stringify(cdp.runtimeExceptions));
+  console.log('PASS organization-view-options: supply/consumption filter, shared tooltip, keyboard organization/domain context menus, unchanged saved view, fullscreen and mobile');
+}
+
+async function canvasCardStylesFlow() {
+  const actor='marcello.hebeisa';
+  await navigate('/',actor,1440,1100);
+  const domains=expectStatus(await api(actor,'/api/v1/domains'),200,'read card-style domains').body;
+  const rohs=domains.filter(domain=>domain.preferredLabel.startsWith('ROHS'));
+  invariant(rohs.length>=2,'ROHS card-style fixtures missing');
+  const view=expectStatus(await api(actor,'/api/v1/domain-network/view'),200,'read card-style view').body;
+  cdp.mockReadResponses=new Map([['/api/v1/domain-network/view',{...view,revision:Math.max(1,view.revision),configuration:{schemaVersion:1,addedDomainIds:rohs.map(domain=>domain.id),hiddenDomainIds:domains.filter(domain=>!rohs.includes(domain)).map(domain=>domain.id),positions:{},visibleKinds:['product','term','logical','physical']}}]]);
+  await cdp.call('Fetch.enable',{patterns:[{urlPattern:'*/api/v1/domain-network/view'}]},sessionId);
+  const check=async(selector,token,side='borderLeftColor')=>{
+    await waitFor(`document.querySelector(${JSON.stringify(selector)})`,'typed card missing: '+selector);
+    const color=await evaluate(`(()=>{const card=document.querySelector(${JSON.stringify(selector)}),probe=document.createElement('i');probe.style.color='var('+${JSON.stringify(token)}+')';document.body.append(probe);const actual=getComputedStyle(card)[${JSON.stringify(side)}],expected=getComputedStyle(probe).color;probe.remove();return{actual,expected};})()`);
+    invariant(color.actual===color.expected,'wrong canvas type stripe: '+selector+' '+JSON.stringify(color));
+  };
+  const cardMetrics=selector=>evaluate(`(()=>{const card=document.querySelector(${JSON.stringify(selector)}),style=getComputedStyle(card),type=getComputedStyle(card.querySelector('.canvas-object-type')),title=getComputedStyle(card.querySelector('.canvas-object-title')),detail=getComputedStyle(card.querySelector('.canvas-object-detail'));return{width:card.offsetWidth,height:card.offsetHeight,padding:style.padding,border:style.borderLeftWidth,radius:style.borderRadius,background:style.backgroundColor,typeFont:type.fontSize,typeColor:type.color,titleFont:title.fontSize,titleWeight:title.fontWeight,titleLineHeight:title.lineHeight,detailFont:detail.fontSize};})()`);
+  try{
+    await navigate('/domains?view=network&ownOffice=0',actor,1440,1100);
+    const domainCardMetrics=await cardMetrics('.domain-asset.is-product');
+    for(const kind of ['product','term','logical','physical'])await check(`.domain-asset[data-canvas-kind="${kind}"]`,'--daca-canvas-'+kind);
+    await capturePageSegmentScreenshot('.domain-network','canvas-type-colors-domains.png',1440,1100);
+    await navigate('/domains/terminology?view=network','kassandra.valdata',1440,1100);
+    await check('.network-editor .graph-node.is-term','--daca-canvas-term','borderTopColor');
+    await capturePageSegmentScreenshot('.network-editor','canvas-type-colors-terms.png',1440,1100);
+    await navigate('/models/83cb48b4-32b4-5bc9-b613-1036c3cb2e77/mappings','christian.man',1440,1100);
+    await clickText('.mapping-toolbar nav button','Graph');
+    await check('.logical-node[data-canvas-kind] > header','--daca-canvas-logical','borderTopColor');
+    await check('.physical-representation > header','--daca-canvas-physical','borderTopColor');
+    await capturePageSegmentScreenshot('.mapping-shell','canvas-type-colors-models.png',1440,1100);
+    await navigate('/products/11111111-1111-4111-8111-111111111111/lineage','kassandra.valdata',1440,1100);
+    await check('.lineage-node.is-product','--daca-canvas-product');
+    const lineageCardMetrics=await cardMetrics('.lineage-node.is-product');
+    invariant(JSON.stringify(lineageCardMetrics)===JSON.stringify(domainCardMetrics),'Lineage typography/spacing differs from domain asset cards: '+JSON.stringify({domainCardMetrics,lineageCardMetrics}));
+    await capturePageSegmentScreenshot('.lineage-canvas-card','canvas-type-colors-lineage.png',1440,1100);
+    for(const language of ['de','fr','it','rm','en']){
+      await navigate('/?organization=efd','kassandra.valdata',1440,1100);
+      await evaluate(`localStorage.setItem('daca.preference.kassandra.valdata.language',${JSON.stringify(language)})`);
+      await navigate('/?organization=efd','kassandra.valdata',1440,1100);
+      await waitFor("document.querySelector('.org-office daca-organization-card-content')",'organization card did not render');
+      await check('.org-office','--daca-canvas-organization');await check('.org-satellite','--daca-canvas-organization');
+      const cards=await evaluate(`(()=>[...document.querySelectorAll('.org-office,.org-satellite')].map(card=>{const content=card.querySelector('daca-organization-card-content'),counts=[...card.querySelectorAll('dd')],rect=card.getBoundingClientRect();return{id:card.dataset.organizationId,count:counts.map(item=>Number(item.textContent)),labels:[...card.querySelectorAll('dt')].map(item=>item.textContent),radius:getComputedStyle(card).borderRadius,inset:rect.height-content.getBoundingClientRect().height,fits:content.getBoundingClientRect().height<=rect.height-10&&content.scrollWidth<=content.clientWidth+1};}))()`);
+      invariant(cards.every(card=>card.count.length===2&&card.labels.every(Boolean)&&card.radius==='2px'&&card.fits&&card.inset>=12&&card.inset<=16),'organization content does not fit in '+language+': '+JSON.stringify(cards));
+      const network=expectStatus(await api('kassandra.valdata','/api/v1/organization-network'),200,'read displayed organization counts').body;
+      invariant(cards.every(card=>{const node=network.nodes.find(node=>node.id===card.id);return node&&node.productCount===card.count[0]&&node.consumedProductCount===card.count[1];}),'organization card supply/consumption differs from catalog');
+      if(language==='de'){
+        await capturePageSegmentScreenshot('.organization-explorer','canvas-type-colors-organizations.png',1440,1100);
+        await evaluate("document.querySelector('.org-fullscreen').click()");await settleFrames();
+        invariant(await evaluate("[...document.querySelectorAll('.org-office,.org-satellite')].every(card=>Math.abs(card.getBoundingClientRect().height-card.querySelector('daca-organization-card-content').getBoundingClientRect().height-14)<2)"),'fullscreen organization content overflows');
+        await captureScreenshot('canvas-type-colors-organizations-fullscreen.png');
+        await evaluate("document.querySelector('.org-fullscreen').click()");await settleFrames();
+      }
+      if(language==='fr')await capturePageSegmentScreenshot('.organization-explorer','canvas-type-colors-organizations-fr.png',1440,1100);
+    }
+    await evaluate("localStorage.removeItem('daca.preference.kassandra.valdata.language');document.documentElement.setAttribute('data-daca-theme','dark')");
+    await check('.org-office','--daca-canvas-organization');
+    await capturePageSegmentScreenshot('.organization-explorer','canvas-type-colors-organizations-dark.png',1440,1100);
+    await setViewport(390,844);await settleFrames();
+    invariant(await evaluate('document.documentElement.scrollWidth<=innerWidth+2'),'organization cards overflow mobile page');
+    await captureScreenshot('canvas-type-colors-organizations-mobile.png');
+    invariant(cdp.runtimeExceptions.length===0,`Card style browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+    console.log('PASS canvas-card-styles: semantic type stripes across domains/terms/Mapping/Lineage, organization counts and fitting cards in DE/FR/IT/RM/EN, dark theme and mobile scrolling');
+  }finally{await cdp.call('Fetch.disable',{},sessionId);cdp.mockReadResponses=null;}
+}
+
+async function canvasSelectionFlow() {
+  const cases=[
+    ['domains','/domains?view=network&ownOffice=0','kassandra.valdata','.domain-network','.graph-canvas'],
+    ['organizations','/?organization=all','kassandra.valdata','.organization-explorer','.org-stage'],
+    ['models','/models/83cb48b4-32b4-5bc9-b613-1036c3cb2e77/mappings','christian.man','.mapping-shell','.graph-canvas'],
+    ['terms','/domains/terminology?view=network','kassandra.valdata','.network-editor','.graph-canvas'],
+  ];
+  await navigate('/','kassandra.valdata',1440,1200);
+  const domains=expectStatus(await api('kassandra.valdata','/api/v1/domains'),200,'selection domains').body;
+  const mobility=domains.find(domain=>domain.preferredLabel==='Mobilität & Logistik');
+  invariant(mobility,'selection fixture domain missing');
+  const baseline=expectStatus(await api('kassandra.valdata','/api/v1/domain-network/view'),200,'selection view').body;
+  // A read-only layout fixture makes the four term cards visible together; no catalog or layout writes.
+  cdp.mockReadResponses=new Map([['/api/v1/domain-network/view',{...baseline,configuration:{schemaVersion:1,addedDomainIds:[],hiddenDomainIds:domains.filter(domain=>domain.id!==mobility.id).map(domain=>domain.id),positions:{['domain:'+mobility.id]:{x:60,y:30}},visibleKinds:['term']}}]]);
+  await cdp.call('Fetch.enable',{patterns:[{urlPattern:'*/api/v1/domain-network/view'}]},sessionId);
+  try {
+    for(const [name,route,actor,shell,canvas] of cases){
+      await navigate(route,actor,1440,1200);
+      if(name==='models')await clickText('.mapping-toolbar nav button','Graph');
+      const root=shell+' '+canvas;
+      await waitFor(`document.querySelectorAll(${JSON.stringify(root+' [data-canvas-object]')}).length>=2`,'selection objects missing: '+name);
+      await evaluate(`document.querySelector(${JSON.stringify(shell+' .canvas-fullscreen-toggle')}).click()`);
+      await waitFor(`document.querySelector(${JSON.stringify(shell)})?.classList.contains('is-fullscreen')`,'selection fullscreen missing: '+name);await settleFrames();
+      if(name==='domains'){
+        await waitFor("document.querySelectorAll('.domain-asset.is-term').length>=2",'selection terms missing');
+        await evaluate("document.querySelector('.domain-asset').scrollIntoView({block:'center',inline:'center',behavior:'instant'})");await settleFrames();
+        const rect=await evaluate(`(()=>{const cards=[...document.querySelectorAll('.domain-asset')].map(card=>card.getBoundingClientRect());return{left:Math.min(...cards.map(r=>r.left))-8,top:Math.min(...cards.map(r=>r.top))-8,right:Math.max(...cards.map(r=>r.right))+8,bottom:Math.max(...cards.map(r=>r.bottom))+8};})()`);
+        invariant(rect.top>0&&rect.bottom<1200&&rect.left>0&&rect.right<1440,'selection rectangle outside visible domain canvas: '+JSON.stringify(rect));
+        await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:rect.left,y:rect.top},sessionId);
+        await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',x:rect.left,y:rect.top,button:'left',buttons:1,clickCount:1},sessionId);
+        for(let step=1;step<=10;step++)await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:rect.left+(rect.right-rect.left)*step/10,y:rect.top+(rect.bottom-rect.top)*step/10,buttons:1},sessionId);
+        await captureScreenshot('canvas-selection-domain-marquee.png');
+        await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',x:rect.right,y:rect.bottom,button:'left',buttons:0,clickCount:1},sessionId);
+        invariant(await evaluate("document.querySelectorAll('.domain-asset[data-canvas-selected]').length===document.querySelectorAll('.domain-asset').length&&!document.querySelector('.graph-node[data-canvas-selected]')"),'rectangle must select only enclosed term cards');
+        const count=await evaluate("document.querySelectorAll('.domain-asset[data-canvas-selected]').length"),tabs=(await cdp.call('Target.getTargets')).targetInfos.length;
+        const toggle=await evaluate("(()=>{const r=document.querySelector('.domain-asset header').getBoundingClientRect();return{x:r.left+15,y:r.top+10};})()");
+        for(const expected of [count-1,count]){
+          await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...toggle,button:'left',buttons:1,clickCount:1,modifiers:2},sessionId);
+          await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...toggle,button:'left',buttons:0,clickCount:1,modifiers:2},sessionId);await settleFrames();
+          invariant(await evaluate("document.querySelectorAll('.domain-asset[data-canvas-selected]').length")===expected,'Ctrl-click did not toggle a term card');
+        }
+        invariant((await cdp.call('Target.getTargets')).targetInfos.length===tabs,'Ctrl-selection unexpectedly opened a details tab');
+      }else{
+        await evaluate(`document.querySelector(${JSON.stringify(root)}).focus({preventScroll:true})`);
+        await cdp.call('Input.dispatchKeyEvent',{type:'keyDown',key:'a',code:'KeyA',windowsVirtualKeyCode:65,modifiers:2},sessionId);
+        await cdp.call('Input.dispatchKeyEvent',{type:'keyUp',key:'a',code:'KeyA',windowsVirtualKeyCode:65,modifiers:2},sessionId);
+      }
+      await waitFor(`document.querySelectorAll(${JSON.stringify(root+' [data-canvas-selected]')}).length>=2`,'group selection missing: '+name);
+      const selected=await evaluate(`(()=>[...document.querySelectorAll(${JSON.stringify(root+' [data-canvas-selected]')})].map(element=>({id:element.dataset.canvasObject,x:parseFloat(element.style.left),y:parseFloat(element.style.top)})))()`);
+      const selector=root+' [data-canvas-object="'+selected[0].id+'"]';
+      await evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center',inline:'center',behavior:'instant'})`);await settleFrames();
+      const start=await evaluate(`(()=>{const card=document.querySelector(${JSON.stringify(selector)}),header=card.querySelector('header')??card,r=header.getBoundingClientRect();return{x:r.left+15,y:r.top+18};})()`);
+      const currentPath=await evaluate('location.pathname');
+      await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...start,button:'left',buttons:1,clickCount:1},sessionId);
+      await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:start.x+24,y:start.y+18,buttons:1},sessionId);await settleFrames();
+      await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',x:start.x+24,y:start.y+18,button:'left',buttons:0,clickCount:1},sessionId);await settleFrames();
+      const after=await evaluate(`(()=>[...document.querySelectorAll(${JSON.stringify(root+' [data-canvas-selected]')})].map(element=>({id:element.dataset.canvasObject,x:parseFloat(element.style.left),y:parseFloat(element.style.top)})))()`);
+      invariant(after.length===selected.length,'group selection lost after dragging: '+name);
+      const delta=after.map((item,index)=>({x:item.x-selected[index].x,y:item.y-selected[index].y}));
+      invariant(delta.some(point=>Math.hypot(point.x,point.y)>.1),'selected group did not move: '+name+' '+JSON.stringify(delta));
+      invariant(delta.every(point=>Math.abs(point.x-delta[0].x)<.02&&Math.abs(point.y-delta[0].y)<.02),'group spacing changed: '+name+' '+JSON.stringify(delta));
+      invariant(await evaluate('location.pathname')===currentPath,'group drag followed a card link: '+name);
+      await captureScreenshot('canvas-selection-'+name+'.png');
+      // Native browser fullscreen may consume physical Escape before the page receives it.
+      // Exercise the application's selection key on the canvas, then its native exit below.
+      await evaluate(`document.querySelector(${JSON.stringify(root)}).dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true,cancelable:true}))`);await settleFrames();
+      invariant(await evaluate(`!document.querySelector(${JSON.stringify(root+' [data-canvas-selected]')})&&document.querySelector(${JSON.stringify(shell)})?.classList.contains('is-fullscreen')`),'first Escape should clear selection before exiting fullscreen: '+name+' '+JSON.stringify(await evaluate(`({selected:document.querySelectorAll('[data-canvas-selected]').length,fullscreen:document.fullscreenElement?.className,active:document.activeElement?.outerHTML.slice(0,200),shell:document.querySelector(${JSON.stringify(shell)})?.className})`)));
+      await pressKey('Escape','Escape',27);await settleFrames();
+      invariant(await evaluate(`!document.querySelector(${JSON.stringify(shell)})?.classList.contains('is-fullscreen')`),'second Escape should exit fullscreen: '+name);
+    }
+    invariant(cdp.runtimeExceptions.length===0,`Selection browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+    console.log('PASS canvas-selection: real term-card rectangle, additive/keyboard selection, group drag with stable spacing on all four fullscreen canvases, no accidental links, Escape selection/fullscreen ordering; no layout writes');
+  }finally{await cdp.call('Fetch.disable',{},sessionId);cdp.mockReadResponses=null;}
+}
+
+async function canvasControlsFlow() {
+  const cases=[
+    ['organizations','/','kassandra.valdata','.organization-explorer','.org-stage'],
+    ['models','/models/83cb48b4-32b4-5bc9-b613-1036c3cb2e77/mappings','christian.man','.mapping-shell','.mapping-graph'],
+    ['domains','/domains/network','kassandra.valdata','.domain-network','.graph-node'],
+    ['terms','/domains/terminology?view=network','kassandra.valdata','.network-editor','.layout-actions'],
+  ];
+  for(const width of [1440,390])for(const [name,route,actor,selector,ready] of cases){
+    await navigate(route,actor,width,1000);
+    if(name==='models'){
+      await waitFor("document.querySelector('.mapping-toolbar nav button')",'model toolbar did not load');
+      // The Mapping workspace intentionally starts in its accessible table on
+      // narrow screens. Explicitly select the canvas before testing its controls.
+      await clickText('.mapping-toolbar nav button','Graph');
+    }
+    await waitFor(`document.querySelector(${JSON.stringify(selector+' '+ready)})&&document.querySelector(${JSON.stringify(selector+' .canvas-fullscreen-toggle')})`,'canvas controls missing: '+name);
+    const sizes=await evaluate(`(()=>{const root=document.querySelector(${JSON.stringify(selector)});return [...root.querySelectorAll('.daca-canvas-actions .daca-button')].map(button=>({text:button.textContent.trim(),height:button.getBoundingClientRect().height,font:getComputedStyle(button).fontSize}));})()`);
+    invariant(sizes.length&&sizes.every(button=>button.height>=31&&button.height<=45),'inconsistent compact canvas buttons: '+name+' '+JSON.stringify(sizes));
+    const overflow=await evaluate('document.body.style.overflow');
+    await capturePageSegmentScreenshot(selector,`canvas-controls-${name}-${width}.png`,width,1000);
+    await evaluate(`document.querySelector(${JSON.stringify(selector+' .canvas-fullscreen-toggle')}).click()`);
+    await waitFor(`document.querySelector(${JSON.stringify(selector)})?.classList.contains('is-fullscreen')`,'fullscreen failed: '+name);
+    await evaluate(`(()=>{const root=document.querySelector(${JSON.stringify(selector)});root.scrollTop=root.scrollHeight;})()`);await settleFrames();
+    invariant(await evaluate(`(()=>{const button=document.querySelector(${JSON.stringify(selector+' .canvas-fullscreen-toggle')}),r=button.getBoundingClientRect();return button.textContent.includes('Vollbild verlassen')&&getComputedStyle(button).position==='fixed'&&r.top>=0&&r.top<80&&r.right<=innerWidth&&r.left>=0;})()`),'fullscreen exit is unreachable after scrolling: '+name);
+    await captureScreenshot(`canvas-fullscreen-${name}-${width}.png`);
+    await pressKey('Escape','Escape',27);
+    await waitFor(`!document.querySelector(${JSON.stringify(selector)})?.classList.contains('is-fullscreen')&&document.body.style.overflow===${JSON.stringify(overflow)}`,'Escape left fullscreen or page scrolling locked: '+name);
+    await evaluate(`document.querySelector(${JSON.stringify(selector+' .canvas-fullscreen-toggle')}).click()`);
+    await waitFor(`document.querySelector(${JSON.stringify(selector)})?.classList.contains('is-fullscreen')`,'second fullscreen entry failed: '+name);
+    await evaluate(`document.querySelector(${JSON.stringify(selector+' .canvas-fullscreen-toggle')}).click()`);
+    await waitFor(`!document.querySelector(${JSON.stringify(selector)})?.classList.contains('is-fullscreen')&&document.body.style.overflow===${JSON.stringify(overflow)}`,'fullscreen close button failed: '+name);
+    invariant(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),'canvas header overflows page: '+name+' '+width);
+  }
+  invariant(cdp.runtimeExceptions.length===0,`Canvas control errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+  console.log('PASS canvas-controls: compact headers across organizations/models/domains/terms, visible exit after scrolling, Escape and button exit, desktop/mobile and restored page scrolling');
+}
+
+async function domainRadialLayoutFlow() {
+  const actor='kassandra.valdata',path='/api/v1/domain-network/view';
+  await navigate('/',actor);
+  const baseline=expectStatus(await api(actor,path),200,'read radial view baseline').body;
+  const shared=expectStatus(await api(actor,'/api/v1/semantic-graphs/domains'),200,'read shared radial baseline').body;
+  try {
+    const prepared=expectStatus(await api(actor,path,{method:'PUT',body:{revision:baseline.revision,configuration:{schemaVersion:1,positions:{},addedDomainIds:[],hiddenDomainIds:[],visibleKinds:['product']}}}),200,'set radial test view').body;
+    for(const [width,height] of [[1440,1100],[3840,2160],[390,850]]) {
+      await navigate('/domains/network',actor,width,height);
+      await waitFor("document.querySelectorAll('.domain-network .graph-node').length>=3&&document.querySelectorAll('.domain-asset').length>0",'radial domain fixtures missing');
+      if(width===3840)await evaluate("document.querySelector('.domain-network .canvas-tools button[aria-label=\"Vollbild öffnen\"]').click()");
+      invariant(await evaluate("document.querySelectorAll('.domain-network [role=switch]').length===6&&!document.querySelector('.domain-network input[type=checkbox]')"),'canvas controls must use the existing toggles');
+      invariant(await evaluate("(()=>{const layers=document.querySelector('.object-layers').getBoundingClientRect(),toolbar=document.querySelector('.network-canvas-toolbar').getBoundingClientRect();return toolbar.top-layers.bottom<=2&&[...document.querySelectorAll('.object-layers label')].every(label=>label.getBoundingClientRect().height>=44);})()"),'object toggles and filter/zoom row must be compact without reducing toggle targets');
+      if(width>=1440)invariant(await evaluate("(()=>{const own=document.querySelector('.network-filters .office-filter label').getBoundingClientRect(),retired=document.querySelector('.network-retired-toggle').getBoundingClientRect(),zoom=document.querySelector('.domain-network .graph-controls').getBoundingClientRect();return own.left<retired.left&&retired.right<=zoom.left&&Math.abs((own.top+own.bottom-retired.top-retired.bottom)/2)<4&&Math.abs((zoom.top+zoom.bottom-retired.top-retired.bottom)/2)<4;})()"),'canvas filters and zoom are not aligned in the requested order');
+      if(width===390)invariant(await evaluate("document.documentElement.scrollWidth<=innerWidth+1&&[...document.querySelectorAll('.network-canvas-toolbar button,.object-layers button')].every(button=>button.getBoundingClientRect().right<=innerWidth)"),'canvas toggles overflow on mobile');
+      await evaluate("document.querySelector('.network-retired-toggle [role=switch]').focus()");
+      await pressKey(' ','Space',32);
+      await waitFor("document.querySelector('.network-retired-toggle [role=switch]').getAttribute('aria-checked')==='true'",'retired toggle is not keyboard-operable');
+      await pressKey(' ','Space',32);
+      await waitFor("document.querySelector('.network-retired-toggle [role=switch]').getAttribute('aria-checked')==='false'",'retired toggle did not turn off');
+      await evaluate("(()=>{const minus=document.querySelector('.domain-network .graph-controls button[aria-label=\"Domänennetz verkleinern\"]');minus.click();minus.click();})()");
+      await clickText('.domain-network .draft-actions button','Automatisch anordnen');
+      if(width>=1440)invariant(await evaluate("parseInt(document.querySelector('.domain-network .graph-controls>span').textContent)>40"),'auto-arrange retained a previous tiny zoom despite available space');
+      await waitFor("(()=>{const viewport=document.querySelector('.domain-network .semantic-graph'),cards=[...document.querySelectorAll('.domain-network .graph-node,.domain-network .domain-asset')].map(node=>node.getBoundingClientRect()),xs=cards.map(card=>card.x),ys=cards.map(card=>card.y);if(!cards.length||new Set(xs.map(Math.round)).size<3||new Set(ys.map(Math.round)).size<3)return false;const left=Math.min(...cards.map(card=>card.left)),right=Math.max(...cards.map(card=>card.right)),top=Math.min(...cards.map(card=>card.top)),bottom=Math.max(...cards.map(card=>card.bottom)),box=viewport.getBoundingClientRect();return Math.abs((left+right)/2-(box.left+viewport.clientLeft+viewport.clientWidth/2))<4&&Math.abs((top+bottom)/2-(box.top+viewport.clientTop+viewport.clientHeight/2))<4;})()",'automatic network is not centered in its actual viewport');
+      invariant(await evaluate("(()=>{const cards=[...document.querySelectorAll('.domain-network .graph-node,.domain-network .domain-asset')].map(node=>node.getBoundingClientRect());return cards.every((a,i)=>cards.slice(i+1).every(b=>a.right<=b.left||b.right<=a.left||a.bottom<=b.top||b.bottom<=a.top));})()"),'radial cards overlap');
+      await capturePageSegmentScreenshot('.domain-network',`domain-radial-${width}.png`,width,height);
+      invariant(JSON.stringify(expectStatus(await api(actor,path),200,'verify radial draft').body)===JSON.stringify(prepared),'automatic arrangement saved unexpectedly');
+      await clickText('.domain-network .draft-actions button','Entwurf verwerfen');
+    }
+    invariant(JSON.stringify(expectStatus(await api(actor,'/api/v1/semantic-graphs/domains'),200,'verify radial shared graph').body)===JSON.stringify(shared),'radial arrangement changed shared links');
+    invariant(cdp.runtimeExceptions.length===0,`Radial layout errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+    console.log('PASS domain-radial-layout: centered radial clusters, products, no overlap, 1440px, 3840px fullscreen, 390px, draft and shared isolation');
+  } finally {
+    const current=expectStatus(await api(actor,path),200,'read radial cleanup').body;
+    expectStatus(await api(actor,path,{method:'PUT',body:{revision:current.revision,configuration:baseline.configuration}}),200,'restore radial personal view');
+  }
 }
 
 async function domainExplorationFlow() {
@@ -2149,9 +2519,9 @@ async function domainExplorationFlow() {
     await waitFor("document.querySelectorAll('.domain-network [data-domain-id]').length===2&&document.querySelectorAll('.domain-asset').length===2",'CPS domains and default products did not appear');
     console.log('CHECK domain-exploration default CPS domains/products loaded');
     invariant(await evaluate("[...document.querySelectorAll('.domain-owner')].every(node=>node.textContent.includes('Marcello Hebeisa'))"),'domain Owner not visible');
-    invariant(await evaluate("document.querySelectorAll('.object-layers input:checked').length===1&&document.querySelector('.object-layers input').checked"),'data products are not the default layer');
+    invariant(await evaluate("document.querySelectorAll('.object-layers [role=switch][aria-checked=true]').length===1&&document.querySelector('.object-layers [role=switch]').getAttribute('aria-checked')==='true'"),'data products are not the default layer');
     await capturePageSegmentScreenshot('.domain-network','domain-exploration-products.png',1440,1100);
-    await evaluate("document.querySelectorAll('.object-layers input').forEach(input=>{if(!input.checked)input.click();})");
+    await evaluate("document.querySelectorAll('.object-layers [role=switch]').forEach(toggle=>{if(toggle.getAttribute('aria-checked')!=='true')toggle.click();})");
     await waitFor("document.querySelectorAll('.domain-asset').length===16",'all four object layers did not appear immediately');
     console.log('CHECK domain-exploration all object layers loaded');
     invariant(await evaluate("document.querySelectorAll('[data-asset-kind=physical]').length===4&&[...document.querySelectorAll('.domain-asset')].every(link=>link.target==='_blank')"),'physical structures or new-tab links missing');
@@ -2173,7 +2543,7 @@ async function domainExplorationFlow() {
     invariant(JSON.stringify(expectStatus(await api(other,viewPath),200,'verify private isolation').body)===JSON.stringify(otherBaseline),'deputy private view changed');
     invariant(JSON.stringify(expectStatus(await api(actor,graphPath),200,'verify shared graph isolation').body)===JSON.stringify(shared),'private exploration changed shared graph');
     await navigate('/domains?view=network',actor);
-    await waitFor("document.querySelectorAll('.object-layers input:checked').length===4&&document.querySelector('.graph-node.is-foreign')&&document.querySelectorAll('[data-asset-kind=physical]').length===4",'private view did not survive reload');
+    await waitFor("document.querySelectorAll('.object-layers [role=switch][aria-checked=true]').length===4&&document.querySelector('.graph-node.is-foreign')&&document.querySelectorAll('[data-asset-kind=physical]').length===4",'private view did not survive reload');
     await capturePageSegmentScreenshot('.domain-network','domain-exploration-all-layers.png',1440,1200);
     invariant(cdp.runtimeExceptions.length===0,`Domain exploration raised browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
     console.log('PASS domain-exploration: CPS Owner, default products, all four immediate layers, cross-department picker, gray read-only domain, private PG persistence, shared/deputy isolation and native new-tab links');
@@ -2184,25 +2554,28 @@ async function domainExplorationFlow() {
 }
 
 async function domainNetworkFlow() {
-  await navigate('/domains','sibilla.micheli');
+  await navigate('/domains?view=cards','sibilla.micheli');
   const path='/api/v1/semantic-graphs/domains',baseline=expectStatus(await api('sibilla.micheli',path),200,'read domain graph baseline').body;
   const viewPath='/api/v1/domain-network/view',personalBaseline=expectStatus(await api('sibilla.micheli',viewPath),200,'read personal layout baseline').body;
   const domains=[],suffix=Date.now();let lastWritten=null;
   try {
     for(const label of ['Teilbereich','Gesamtbereich'])domains.push(await createApprovedTestDomain('sibilla.micheli',{ownerUserId:'sibilla.micheli',deputyOwnerUserId:'sandro.wenger',localizations:[{language:'de',preferredLabel:`Netz QA ${label} ${suffix}`,definition:'Synthetische UI-Testdomäne.'}]}));
     const [source,target]=domains;
-    await navigate('/domains/network','sibilla.micheli');
-    await waitFor(`document.querySelector('[data-domain-id="${source.id}"]')!==null`,'domain network cards missing');
+    await navigate('/domains/network?ownOffice=0','sibilla.micheli');
+    await waitFor(`document.querySelector('[data-domain-id="${source.id}"]')!==null&&!document.querySelector('.domain-network daca-loading-indicator')`,'domain network cards/objects did not finish loading');
+    await settleFrames();
     const before=await evaluate(`(() => {const card=document.querySelector('[data-domain-id="${source.id}"]');return{x:parseFloat(card.style.left),y:parseFloat(card.style.top)};})()`);
     await evaluate(`document.querySelector('[data-domain-id="${source.id}"] header').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}))`);
     invariant(expectStatus(await api('sibilla.micheli',path),200,'read locally moved domain graph').body.revision===baseline.revision,'domain move saved automatically');
     await clickText('.domain-network .draft-actions button','Entwurf verwerfen');
-    await waitFor(`parseFloat(document.querySelector('[data-domain-id="${source.id}"]').style.left)===${before.x}`,'discard did not restore the shared layout');
+    await waitFor(`(()=>{const style=document.querySelector('[data-domain-id="${source.id}"]').style;return Math.abs(parseFloat(style.left)-${before.x})<.02&&Math.abs(parseFloat(style.top)-${before.y})<.02;})()`,'discard did not restore the shared layout');
     await evaluate(`document.querySelector('[data-domain-id="${source.id}"] header').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}))`);
     await clickText('.domain-network .draft-actions button','Netz speichern');
     await waitFor("document.querySelector('.domain-network [role=status]')?.textContent.includes('Ansicht gespeichert')",'domain layout did not save');
     const personalSaved=expectStatus(await api('sibilla.micheli',viewPath),200,'read saved personal positions').body;
-    invariant(personalSaved.configuration.positions[`domain:${source.id}`].y===before.y+10,'domain position differs from private draft');
+    const savedY=personalSaved.configuration.positions[`domain:${source.id}`].y;
+    // Radial placement has subpixel coordinates; CSS serialization rounds them.
+    invariant(Math.abs(savedY-(before.y+10))<.02,'domain position differs from private draft: '+JSON.stringify({before:before.y,expected:before.y+10,saved:savedY}));
     const other=expectStatus(await api('christian.man',path),200,'read domain graph as another person').body;
     invariant(JSON.stringify(other.positions)===JSON.stringify(baseline.positions),'private layout leaked to another user');
     invariant(await evaluate(`!document.querySelector('[data-domain-id="${source.id}"] .ontology-port')`),'unconnected domain retained a connection port');
@@ -2260,7 +2633,7 @@ async function domainNetworkFlow() {
 }
 
 async function conceptNetworkEditingFlow() {
-  await navigate('/domains','christian.man');
+  await navigate('/domains?view=cards','christian.man');
   const suffix=Date.now();
   const domain={body:await createApprovedTestDomain('sibilla.micheli',{ownerUserId:'sibilla.micheli',deputyOwnerUserId:'sandro.wenger',localizations:[{language:'de',preferredLabel:`Begriffsnetz QA ${suffix}`,definition:'Isolierte synthetische Testdomäne für den Begriffsnetz-Editor.'}]})};
   const approve=async(proposal)=>{let result=proposal;for(const review of proposal.reviews)result=expectStatus(await api(review.ownerUserId,`/api/v1/glossary/term-proposals/${proposal.id}/reviews/${review.domainId}/decision`,{method:'POST',etag:`"${proposal.revision}"`,body:{decision:'approve',comment:'Synthetische Editorprüfung.'}}),200,'approve synthetic concept change').body;return result;};
@@ -3055,19 +3428,33 @@ async function lineageExplorerFlow() {
   await waitFor("document.querySelector('.lineage-node[data-kind=consumer]')&&document.querySelector('.lineage-node[data-kind=product]')?.textContent.includes('ESTV')",'Live lineage graph did not load');
   await evaluate("document.querySelector('.lineage-toolbar').scrollIntoView({block:'start',behavior:'instant'})");
   invariant(await evaluate(`(()=>{const nodes=[...document.querySelectorAll('.lineage-node')],labels=[...document.querySelectorAll('.flow-label')];return labels.every(label=>{const a=label.getBoundingClientRect();return nodes.every(node=>{const b=node.getBoundingClientRect();return a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom;});})&&nodes.every(node=>node.querySelector('.lineage-node-title').scrollWidth<=node.querySelector('.lineage-node-title').clientWidth+1);})()`),'Lineage card text or edge labels overlap');
-  invariant(await evaluate("getComputedStyle(document.querySelector('[data-kind=consumer]')).borderTopColor===getComputedStyle(document.querySelector('.lineage-legend .is-consumer')).backgroundColor"),'Consumer does not match its green legend');
-  invariant(await evaluate("[...document.querySelectorAll('.lineage-edge')].every(path=>path.getAttribute('marker-end')==='url(#lineage-arrow)')"),'Flow arrows missing');
-  invariant(await evaluate("[...document.querySelectorAll('.lineage-node')].every(node=>{const style=getComputedStyle(node);return node.offsetWidth===208&&node.offsetHeight===112&&style.borderRadius==='2px';})"),'Lineage cards lost their compact size or angular corners');
-  const pulseState=()=>evaluate("[...document.querySelectorAll('.flow-pulse .pulse-core')].slice(0,3).map(p=>({offset:parseFloat(getComputedStyle(p).strokeDashoffset),opacity:parseFloat(getComputedStyle(p.parentElement).opacity)}))");
+  invariant(await evaluate("getComputedStyle(document.querySelector('[data-kind=consumer]')).borderLeftColor===getComputedStyle(document.querySelector('.lineage-legend .is-consumer')).backgroundColor"),'Consumer does not match its green legend');
+  invariant(await evaluate("!document.querySelector('.flow-edges marker')&&[...document.querySelectorAll('.daca-highway-band')].every(path=>getComputedStyle(path).stroke.includes('url(')&&getComputedStyle(path).strokeWidth==='12px')"),'Shared gradient highway style missing');
+  invariant(await evaluate("[...document.querySelectorAll('.lineage-node')].every(node=>{const style=getComputedStyle(node);return node.offsetWidth===240&&node.offsetHeight===95&&style.borderRadius==='2px'&&style.borderLeftWidth==='3px'&&style.borderTopWidth==='1px'&&node.classList.contains('daca-canvas-object')&&node.querySelector('.canvas-object-type')&&node.querySelector('.canvas-object-title');})"),'Lineage cards differ from domain-network asset cards');
+  invariant(await evaluate("document.querySelector('[data-kind=product]').dataset.canvasKind==='product'&&getComputedStyle(document.querySelector('[data-kind=product]')).borderLeftColor==='rgb(171, 123, 43)'"),'Product type lost its shared mustard stripe');
+  invariant(await evaluate("(()=>{const card=document.querySelector('[data-kind=product]'),probe=document.createElement('span');probe.style.background='var(--daca-surface)';document.body.append(probe);const surface=getComputedStyle(probe).backgroundColor;probe.remove();return getComputedStyle(card).backgroundColor===surface&&card.querySelector('.lineage-node-owner')?.textContent.trim()==='Kassandra Valdata'&&card.getAttribute('aria-label').includes('Data Owner: Kassandra Valdata');})()"),'Selected product must retain the normal surface and show its Data Owner');
+
+  const pulseState=()=>evaluate("[...document.querySelectorAll('.daca-highway-packet')].map(p=>({offset:parseFloat(getComputedStyle(p).offsetDistance),opacity:parseFloat(getComputedStyle(p.querySelector('.daca-highway-halo')).opacity),duration:p.getAnimations().find(a=>a.animationName?.includes('daca-packet-travel'))?.effect.getTiming().duration}))");
   const before=await pulseState();
-  await sleep(180);
+  await sleep(240);
   const after=await pulseState();
-  invariant(after.filter((value,index)=>value.offset<before[index].offset-1).length>=2,'Ice-blue light bands are not travelling in the source-to-target direction');
-  invariant(after.some((value,index)=>Math.abs(value.opacity-before[index].opacity)>.02),'Light bands do not pulse');
+  invariant(after.every((value,index)=>value.duration===3000&&(value.offset-before[index].offset+100)%100>3),'Packets must cross each visible edge in three seconds');
+  invariant(after.some((value,index)=>Math.abs(value.opacity-before[index].opacity)>.01),'Packet halos do not pulse');
+  const endpoints=await evaluate("[...document.querySelectorAll('.lineage-connection')].map(connection=>{const path=connection.querySelector('.daca-highway-band'),matrix=path.getScreenCTM(),under=length=>{const p=path.getPointAtLength(length).matrixTransform(matrix);return document.elementFromPoint(p.x,p.y)?.closest('.lineage-node')?.dataset.nodeId;};return{source:under(0)===connection.dataset.sourceId,target:under(path.getTotalLength())===connection.dataset.targetId};})");
+  invariant(endpoints.every(edge=>edge.source&&edge.target),'Highway ends are not hidden under lineage cards');
+  const occlusion=await evaluate("(()=>[...document.querySelectorAll('.lineage-connection')].flatMap(connection=>{const packet=connection.querySelector('.daca-highway-packet'),animation=packet.getAnimations().find(a=>a.animationName?.includes('daca-packet-travel'));animation.pause();return[.001,.999].map(phase=>{const timing=animation.effect.getTiming();animation.currentTime=timing.delay+timing.duration*phase;const r=packet.querySelector('.daca-highway-core').getBoundingClientRect(),actual=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.closest('.lineage-node')?.dataset.nodeId;const expected=phase<.5?connection.dataset.sourceId:connection.dataset.targetId,covered=[[0,0],[-8,-8],[8,-8],[-8,8],[8,8]].every(([x,y])=>document.elementFromPoint(r.left+r.width/2+x,r.top+r.height/2+y)?.closest('.lineage-node')?.dataset.nodeId===expected);return{phase,actual,expected,covered};});}))()");
+  invariant(occlusion.every(sample=>sample.actual===sample.expected&&sample.covered),'Lineage packets must emerge from and disappear underneath their cards: '+JSON.stringify(occlusion));
+  await capturePageSegmentScreenshot('.lineage-canvas-card','lineage-packets-under-boxes.png',1920,1080);
+  await evaluate("document.querySelectorAll('.daca-highway-packet').forEach(packet=>packet.getAnimations().forEach(animation=>animation.play()))");
+
   await evaluate("document.querySelector('[data-kind=source]').focus()");await sleep(240);
   invariant(await evaluate("(()=>{const style=getComputedStyle(document.querySelector('[data-kind=source]'));return style.outlineStyle==='none'&&new DOMMatrixReadOnly(style.transform).m42===-2;})()"),'Card interaction must move the existing border without an extra outline');
   await pressKey('Escape','Escape',27);await evaluate('document.activeElement.blur()');
   await captureScreenshot('lineage-desktop.png');
+  await capturePageSegmentScreenshot('.lineage-canvas-card','lineage-highway-canvas.png',1920,1080);
+  await evaluate("document.documentElement.setAttribute('data-daca-theme','dark')");
+  await capturePageSegmentScreenshot('.lineage-canvas-card','lineage-highway-dark.png',1920,1080);
+  await evaluate("document.documentElement.removeAttribute('data-daca-theme')");
   for(const [term,expected] of [['Verified','Zertifikat dieser Quelle verfügbar'],['Declared','Quelle wurde durch den Data Owner manuell deklariert']]){
     await evaluate(`[...document.querySelectorAll('.legend-term')].find(button=>button.textContent===${JSON.stringify(term)}).focus()`);
     await waitFor(`document.querySelector('.daca-glossary-tooltip[role=tooltip]')?.textContent===${JSON.stringify(expected)}`,'Lineage term explanation missing');
@@ -3089,7 +3476,7 @@ async function lineageExplorerFlow() {
   await cdp.call('Target.closeTarget',{targetId:popup.targetId});await cdp.call('Page.bringToFront',{},sessionId);
   await pressKey('Escape','Escape',27);
   await cdp.call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]},sessionId);
-  invariant(await evaluate("getComputedStyle(document.querySelector('.flow-pulse')).display==='none'"),'Reduced motion preference ignored');
+  invariant(await evaluate("[...document.querySelectorAll('.daca-highway-packet')].every(p=>getComputedStyle(p).animationName==='none'&&getComputedStyle(p).offsetDistance==='50%')"),'Reduced motion preference ignored');
   await evaluate("document.querySelector('[data-kind=source]').focus()");
   invariant(await evaluate("getComputedStyle(document.querySelector('[data-kind=source]')).transform==='none'"),'Reduced motion must also disable card movement');
   await pressKey('Escape','Escape',27);await evaluate('document.activeElement.blur()');
@@ -3505,6 +3892,777 @@ async function physicalObjectActionsFlow() {
   console.log('PASS physical-object-actions: SAP prefix, categories, shared menu order, keyboard, new-tab queries, copy confirmation, source navigation, mobile, unchanged mappings');
 }
 
+
+async function recentWorkFlow(){
+  const actor='kassandra.valdata';
+  await navigate('/',actor,1440,1100);
+  const read=expectStatus(await api(actor,'/api/v1/me/recent-work'),200,'read recent saved edits');
+  invariant(read.headers['cache-control']==='no-store','recent edits must not be cached across identities');
+  const expected=read.body.categories.filter(group=>group.items.length);
+  invariant(read.body.categories.length===4&&read.body.categories.every(group=>group.items.length<=3&&new Set(group.items.map(item=>item.kind+':'+item.id)).size===group.items.length),'recent edit categories exceed three or contain duplicates');
+  await waitFor("document.querySelector('daca-recent-work')&&!document.querySelector('daca-recent-work .recent-state[role=status]')",'recent edits remained loading or failed');
+  invariant(await evaluate("document.querySelectorAll('.recent-category').length")===expected.length,'empty categories were displayed or populated categories omitted');
+  for(const group of expected)for(const item of group.items){
+    invariant(await evaluate(`(()=>{const row=document.querySelector('.recent-category[data-category="${group.id}"] [data-work-id="${item.id}"]'),a=row?.querySelector('a'),url=a?new URL(a.href):null;return !!url&&url.pathname===${JSON.stringify(item.route)}&&Object.entries(${JSON.stringify(item.queryParams)}).every(([key,value])=>url.searchParams.get(key)===value)&&row.querySelector('time')?.getAttribute('datetime')===${JSON.stringify(item.editedAt)};})()`),'recent-work link or timestamp differs from its current authorized item');
+  }
+  invariant(await evaluate("(()=>{const canvas=document.querySelector('daca-organization-canvas').getBoundingClientRect(),search=document.querySelector('.welcome-search').getBoundingClientRect(),work=document.querySelector('.recent-work').getBoundingClientRect();return search.left>=canvas.right-2&&work.top>=search.bottom-2;})()"),'recent work is not below the right-hand search');
+  await capturePageSegmentScreenshot('.welcome-workspace','recent-work-desktop.png',1440,1100);
+  let term=read.body.categories.find(group=>group.id==='terms')?.items[0];
+  let visualFixture=null;
+  // Only this isolated browser response is mocked: current user history remains
+  // untouched. Real catalog objects exercise twelve rows and a valid term link.
+  if(!expected.length){
+    const responses=await Promise.all([api(actor,'/api/v1/data-products?limit=3'),api(actor,'/api/v1/logical-models'),api(actor,'/api/v1/domains'),api(actor,'/api/v1/glossary/terms')]);
+    const lists=responses.map((response,index)=>{const body=expectStatus(response,200,'read visual fixture catalog '+index).body;return Array.isArray(body)?body:body.items;});
+    visualFixture={categories:['products','models','domains','terms'].map((id,index)=>({id,items:lists[index].slice(0,3).map((object,position)=>({id:object.id,kind:['product','logical','domain','term'][index],title:typeof object.title==='object'?object.title:{de:object.title||object.preferredLabel||object.localizations?.find(item=>item.language==='de')?.preferredLabel||object.id},editedAt:new Date(Date.now()-position*60000).toISOString(),route:index===0?`/products/${object.id}/overview`:index===1?`/models/${object.id}`:index===2?`/domains/${object.id}`:'/domains/terminology',queryParams:index===3?{termId:object.id,ownOffice:'0',view:'cards'}:{}}))}))};
+    cdp.mockReadResponses=new Map([['/api/v1/me/recent-work',visualFixture]]);
+    await cdp.call('Fetch.enable',{patterns:[{urlPattern:'*/api/v1/me/recent-work'}]},sessionId);
+    try{
+      await navigate('/',actor,1440,1100);
+      await waitFor("document.querySelectorAll('.recent-work li').length===12",'four populated recent-work categories did not render');
+      await capturePageSegmentScreenshot('.welcome-workspace','recent-work-twelve-rows-fixture-desktop.png',1440,1100);
+    }finally{await cdp.call('Fetch.disable',{},sessionId);cdp.mockReadResponses=null;}
+    term=visualFixture.categories[3].items[0];
+  }
+  if(term){
+    await evaluate(`document.querySelector('.recent-category[data-category=terms] [data-work-id="${term.id}"] a').click()`);
+    await waitFor(`location.pathname==='/domains/terminology'&&document.querySelectorAll('.term-card').length===1&&document.querySelector('.term-card[data-term-id="${term.id}"]')`,'recent terminology link did not open the exact term card');
+  }
+  if(visualFixture){cdp.mockReadResponses=new Map([['/api/v1/me/recent-work',visualFixture]]);await cdp.call('Fetch.enable',{patterns:[{urlPattern:'*/api/v1/me/recent-work'}]},sessionId);}
+  await navigate('/',actor,390,850);
+  await waitFor("document.querySelector('daca-recent-work')&&!document.querySelector('daca-recent-work .recent-state[role=status]')",'mobile recent work did not load');
+  invariant(await evaluate("(()=>{const search=document.querySelector('.welcome-search').getBoundingClientRect(),work=document.querySelector('.recent-work').getBoundingClientRect();return work.top>=search.bottom-2&&document.documentElement.scrollWidth<=innerWidth+1;})()"),'recent work causes mobile overflow');
+  await capturePageSegmentScreenshot('.welcome-sidebar',visualFixture?'recent-work-twelve-rows-fixture-mobile.png':'recent-work-mobile.png',390,1000);
+  if(visualFixture){await cdp.call('Fetch.disable',{},sessionId);cdp.mockReadResponses=null;}
+  await navigate('/','fausto.marzo',1440,1000);
+  const other=expectStatus(await api('fausto.marzo','/api/v1/me/recent-work'),200,'read switched identity work').body;
+  await waitFor("document.querySelector('daca-recent-work')&&!document.querySelector('daca-recent-work .recent-state[role=status]')",'switched identity work did not load');
+  invariant(await evaluate("[...document.querySelectorAll('.recent-work li')].map(row=>row.dataset.workId).sort().join(',')")===other.categories.flatMap(group=>group.items.map(item=>item.id)).sort().join(','),'recent works leaked between identities');
+  invariant(cdp.runtimeExceptions.length===0,`Recent work browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+  console.log('PASS recent-work: actor-specific saved edits, three per category, exact links and times, hidden empty groups, term target, right sidebar, mobile and identity switch');
+}
+
+async function enableOrganizationDomains() {
+  await waitFor("document.querySelector('.org-layer [role=switch]')",'organization domain toggle missing');
+  await evaluate("(()=>{const toggle=document.querySelector('.org-layer [role=switch]');if(toggle.getAttribute('aria-checked')==='false')toggle.click();})()");
+  await waitFor("document.querySelector('.org-layer [role=switch][aria-checked=true]')",'domain layer did not enable');
+}
+
+async function organizationObjectSearchFlow() {
+  const actor='kassandra.valdata';
+  await navigate('/?organization=vbs',actor,1440,1100);
+  await waitFor("document.querySelector('[data-organization-id=\"vbs-armasuisse\"]')&&!document.querySelector('.org-auto-layout').disabled",'data landscape did not load');
+  invariant(await evaluate("document.querySelector('.org-layer [role=switch]').getAttribute('aria-checked')==='false'&&!document.querySelector('.org-domain-bubble')"),'data landscape must start with domains hidden');
+  const graph=expectStatus(await api(actor,'/api/v1/organization-network'),200,'read actor-visible search scopes').body;
+  const organization=graph.nodes.find(node=>node.id==='vbs-armasuisse');
+  invariant(organization.objectKeys.some(key=>key.startsWith('domain:')),'organization needs its domain objects');
+  const context=async(selector)=>{
+    await evaluate(`(()=>{const target=document.querySelector(${JSON.stringify(selector)});target.scrollIntoView({behavior:'instant',block:'center'});const rect=target.getBoundingClientRect();target.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:rect.left+10,clientY:rect.top+10}));})()`);
+    await waitFor("document.querySelector('.org-context-menu')",'context menu missing');
+  };
+  await context('[data-organization-id="vbs-babs"]');
+  invariant(await evaluate("document.querySelector('[data-organization-object-search]')?.disabled===true"),'empty organization search is not disabled');
+  invariant(await evaluate("document.querySelector('[data-organization-product-search]')?.disabled===true"),'empty product-only action is not disabled');
+  await pressKey('Escape','Escape',27);
+  await context('[data-organization-id="vbs-armasuisse"]');
+  const productHref=await evaluate("document.querySelector('a[data-organization-product-search]').href");
+  const productParams=new URL(productHref).searchParams;
+  invariant(productParams.get('organization')===organization.id&&productParams.get('kind')==='product'&&!productParams.has('q')&&!productParams.has('status'),'all-products action must pass only organization and product-kind filters');
+  invariant(await evaluate("document.querySelector('[data-organization-product-search]').textContent.includes('Alle Datenprodukte der Organisation anzeigen')"),'organization product action wording missing');
+  await capturePageSegmentScreenshot('.organization-explorer','organization-products-menu.png',1440,1100);
+  await navigate(new URL(productHref).pathname+new URL(productHref).search,actor,1440,1100);
+  await waitFor("document.querySelector('.search-chips')&&!document.querySelector('.search-loading')&&document.querySelectorAll('[data-search-key]').length>0",'organization product-only search did not load');
+  const productKeys=await evaluate("[...document.querySelectorAll('[data-search-key]')].map(row=>row.dataset.searchKey)");
+  invariant(productKeys.every(key=>key.startsWith('product:')&&organization.objectKeys.includes(key)),'product-only search contains other kinds or unrelated products');
+  invariant(organization.objectKeys.filter(key=>key.startsWith('product:')).every(key=>productKeys.includes(key)),'product-only action omitted a readable product');
+  invariant(await evaluate("document.querySelector('#expert-search-input').value===''"),'all-products action injected a text search');
+  await capturePageSegmentScreenshot('.catalog-search','organization-products-results.png',1440,1100);
+  await navigate('/?organization=vbs',actor,1440,1100);await context('[data-organization-id="vbs-armasuisse"]');
+  const organizationHref=await evaluate("document.querySelector('a[data-organization-object-search]').href");
+  invariant(new URL(organizationHref).searchParams.get('organization')===organization.id&&!new URL(organizationHref).searchParams.has('q'),'organization action must pass an exact filter rather than a restrictive name query');
+  await capturePageSegmentScreenshot('.welcome-workspace','organization-object-menu.png',1440,1100);
+  await navigate(new URL(organizationHref).pathname+new URL(organizationHref).search,actor,1440,1100);
+  await waitFor("document.querySelector('.search-chips')&&!document.querySelector('.search-loading')&&document.querySelectorAll('[data-search-key]').length>0",'organization filter-only search did not return objects');
+  invariant(await evaluate("document.querySelector('#expert-search-input').value===''"),'scoped search injected free text');
+  const resultKeys=await evaluate("[...document.querySelectorAll('[data-search-key]')].map(row=>({key:row.dataset.searchKey,parent:row.closest('[data-search-group]')?.dataset.searchGroup}))");
+  invariant(resultKeys.every(row=>organization.objectKeys.includes(row.key)||organization.objectKeys.includes(row.parent)),'organization search contains unrelated objects');
+  invariant(resultKeys.some(row=>row.key.startsWith('domain:')),'organization search omitted assigned domains');
+  await capturePageSegmentScreenshot('.catalog-search','organization-object-results.png',1440,1100);
+  const domain=graph.domains.find(item=>item.label==='Personal');
+  invariant(domain?.objectKeys.some(key=>key.startsWith('logical:'))&&domain.objectKeys.some(key=>key.startsWith('term:')),'personnel domain fixture must contain models and terms');
+  await navigate('/?organization=vbs',actor,1440,1100);
+  await enableOrganizationDomains();
+  await waitFor(`document.querySelector('.org-domain-bubble[data-domain-id="${domain.id}"]')`,'domain bubble missing');
+  await evaluate(`(()=>{const target=document.querySelector('.org-domain-bubble[data-domain-id="${domain.id}"]');target.scrollIntoView({behavior:'instant',block:'center'});target.focus({preventScroll:true});target.dispatchEvent(new KeyboardEvent('keydown',{key:'F10',shiftKey:true,bubbles:true,cancelable:true}));})()`);
+  await waitFor("document.querySelector('a[data-domain-object-search]')",'keyboard domain context action missing');
+  await settleFrames();
+  const menuBounds=await evaluate("(()=>{const menu=document.querySelector('.org-context-menu');return {height:menu.clientHeight,content:menu.scrollHeight,max:menu.style.maxHeight,top:menu.getBoundingClientRect().top,viewport:menu.parentElement.getBoundingClientRect().toJSON(),window:innerHeight};})()");
+  invariant(menuBounds.height>=menuBounds.content-1,'domain context menu is clipped: '+JSON.stringify(menuBounds));
+  const domainHref=await evaluate("document.querySelector('a[data-domain-object-search]').href");
+  invariant(new URL(domainHref).searchParams.get('domain')===domain.id&&!new URL(domainHref).searchParams.has('q'),'domain action must pass its stable ID');
+  await capturePageSegmentScreenshot('.welcome-workspace','domain-object-menu.png',1440,1100);
+  await navigate(new URL(domainHref).pathname+new URL(domainHref).search,actor,1440,1100);
+  await waitFor("document.querySelector('.search-chips')&&!document.querySelector('.search-loading')&&document.querySelector('[data-search-kind=organization]')",'domain search did not load');
+  for(const kind of ['logical','term','organization'])invariant(await evaluate(`Number(document.querySelector('[data-search-kind=${kind}] b').textContent)>0`),'domain search omitted '+kind);
+  invariant(await evaluate(`document.querySelector('.search-sidebar details[open] select').value===${JSON.stringify(domain.id)}`),'domain filter is not visible/selected');
+  await capturePageSegmentScreenshot('.catalog-search','domain-object-results.png',1440,1100);
+  await evaluate("document.querySelector('[data-search-kind=organization]').click()");
+  await waitFor("document.querySelector('.search-row[data-search-key^=\"organization:\"]')",'domain organizations are not searchable');
+  const orgKeys=await evaluate("[...document.querySelectorAll('[data-search-key]')].map(row=>row.dataset.searchKey)");
+  invariant(orgKeys.every(key=>domain.objectKeys.includes(key)),'domain organization results contain ancestors without direct assignments');
+  await evaluate("document.querySelector('.search-chips button').click();document.querySelector('[data-search-kind=domain]').click()");
+  await waitFor("document.querySelectorAll('[data-search-key^=\"domain:\"]').length>0",'domain category cannot be searched without free text');
+  invariant(cdp.runtimeExceptions.length===0,`object scope search errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+  console.log('PASS organization-object-search: exact URLs, filter-only organization/domain results, disabled empty scope, domain keyboard menu, organizations/models/terms/products and visible domain filter');
+}
+
+async function protectedBuildingsFlow() {
+  const actor='sibilla.micheli',id='1aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  await navigate('/?organization=vbs',actor,1440,1100);
+  const product=expectStatus(await api(actor,`/api/v1/data-products/${id}`),200,'read image-seeded protected buildings product').body;
+  invariant(product.lifecycle==='active'&&product.ownerUserId==='giuseppe.starwars','armasuisse building product is not active or has the wrong Data Owner');
+  const demand=expectStatus(await api(actor,'/api/v1/data-products/1bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),200,'read image-seeded reverse building demand product').body;
+  invariant(demand.lifecycle==='active'&&demand.ownerUserId==='lawrence.hill','Verteidigung building demand has the wrong Data Owner or lifecycle');
+  const graph=expectStatus(await api(actor,'/api/v1/organization-network'),200,'read protected buildings catalog flow').body;
+  const edge=graph.relations.find(edge=>edge.sourceId==='vbs-armasuisse'&&edge.targetId==='vbs-verteidigung');
+  invariant(edge?.count===1&&!edge.inferred,'armasuisse must supply one product to Verteidigung');
+  const reverse=graph.relations.find(edge=>edge.sourceId==='vbs-verteidigung'&&edge.targetId==='vbs-armasuisse');
+  invariant(reverse?.count===1&&!reverse.inferred,'Verteidigung must supply one reverse product to armasuisse');
+  const nodes=Object.fromEntries(graph.nodes.map(node=>[node.id,node]));
+  invariant(nodes['vbs-armasuisse'].productCount>=1&&nodes['vbs-verteidigung'].consumedProductCount>=1,'producer/consumer counts missing');
+  const selector='.org-connection[data-source-id="vbs-armasuisse"][data-target-id="vbs-verteidigung"]';
+  const reverseSelector='.org-connection[data-source-id="vbs-verteidigung"][data-target-id="vbs-armasuisse"]';
+  await waitFor(`document.querySelector(${JSON.stringify(selector)})?.querySelectorAll('.org-packet').length===1`,'building flow is not visible inside VBS');
+  invariant(await evaluate("!document.querySelector('.org-office[data-organization-id=\"vbs-armasuisse\"]').classList.contains('is-empty')&&!document.querySelector('.org-office[data-organization-id=\"vbs-verteidigung\"]').classList.contains('is-empty')"),'supplying/consuming offices remain grey');
+  await evaluate("document.querySelector('.org-fullscreen').click()");
+  await waitFor("document.querySelector('.organization-explorer.is-fullscreen')",'VBS buildings fullscreen did not open');await settleFrames();
+  const lanes=await evaluate(`(${JSON.stringify([selector,reverseSelector])}).map(selector=>{const connection=document.querySelector(selector),line=connection.querySelector('.org-thread-hit'),start=line.getPointAtLength(0),end=line.getPointAtLength(line.getTotalLength()),flow=getComputedStyle(connection.querySelector('.org-flow')),dot=connection.querySelector('.org-packet'),animation=dot.getAnimations()[0];animation.pause();animation.currentTime=1200;const a=dot.querySelector('.org-packet-core').getBoundingClientRect();animation.currentTime=1800;const b=dot.querySelector('.org-packet-core').getBoundingClientRect();return{x1:start.x,y1:start.y,x2:end.x,y2:end.y,dx:b.x-a.x,dy:b.y-a.y,fromX:parseFloat(flow.getPropertyValue('--flow-from-x')),fromY:parseFloat(flow.getPropertyValue('--flow-from-y')),toX:parseFloat(flow.getPropertyValue('--flow-to-x')),toY:parseFloat(flow.getPropertyValue('--flow-to-y')),points:connection.querySelectorAll('.org-packet').length};})`);
+  invariant(lanes.every(lane=>lane.points===1&&lane.dx*(lane.x2-lane.x1)+lane.dy*(lane.y2-lane.y1)>0),'real reciprocal packets do not travel from each producer towards its consumer');
+  invariant(Math.hypot(lanes[0].x1-lanes[1].x2,lanes[0].y1-lanes[1].y2)<1&&Math.hypot(lanes[0].x2-lanes[1].x1,lanes[0].y2-lanes[1].y1)<1,'reciprocal products are not on the same organization connection');
+  invariant(Math.hypot(lanes[0].fromX-lanes[1].toX,lanes[0].fromY-lanes[1].toY)>4,'reciprocal particles overlap instead of occupying separate lanes');
+  invariant(await evaluate(`(${JSON.stringify([selector,reverseSelector])}).every(selector=>{const r=document.querySelector(selector).querySelector('.org-packet-core').getBoundingClientRect(),target=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return target&&!target.closest('.org-office,.org-satellite,.org-focus');})`),'reciprocal points are hidden behind overlapping organization cards');
+  await captureScreenshot('armasuisse-verteidigung-buildings-fullscreen.png');
+  await evaluate(`document.querySelector(${JSON.stringify(selector)}).querySelector('.org-thread-hit').focus()`);
+  await waitFor("document.querySelector('.daca-glossary-tooltip.is-visible')?.textContent.includes('1 konsumiertes Datenprodukt')",'building flow tooltip does not explain the supplied product');
+  await captureScreenshot('armasuisse-verteidigung-buildings-tooltip.png');
+  await pressKey('Escape','Escape',27);
+  invariant(cdp.runtimeExceptions.length===0,`protected building flow runtime errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+  console.log('PASS protected-buildings: two image-seeded products, existing owners, real reciprocal one-point flows on the same connection, opposing travel, separate particle lanes, counts, fullscreen and shared tooltip');
+}
+
+async function organizationHeadingSpaceFlow() {
+  const actor='kassandra.valdata',viewPath='/api/v1/organization-network/view';
+  await navigate('/?organization=efd',actor,1440,1100);
+  const graph=expectStatus(await api(actor,'/api/v1/organization-network'),200,'read heading-space graph').body;
+  const fixture={...graph,nodes:graph.nodes.filter(node=>['efd','efd-epa'].includes(node.id)),satelliteIds:[],domains:[],relations:[]};
+  let stored={revision:0,configuration:{schemaVersion:1,scopes:{}}},saves=0;
+  cdp.mockReadResponses=new Map([['/api/v1/organization-network',fixture],[viewPath,request=>{
+    if(request.method==='PUT'){const body=JSON.parse(request.postData);invariant(body.revision===stored.revision,'wrong layout revision');stored={revision:stored.revision+1,configuration:body.configuration};saves++;}
+    return stored;
+  }]]);
+  await cdp.call('Fetch.enable',{patterns:[{urlPattern:'*/api/v1/organization-network*'}]},sessionId);
+  await cdp.call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]},sessionId);
+  const dragBelowHeading=async(label)=>{
+    const hadAnchor=!!stored.configuration.scopes.efd;
+    await evaluate("document.querySelector('.org-auto-layout').click()");
+    if(hadAnchor)await waitFor("!document.querySelector('.org-save-layout').disabled",'automatic layout did not release the previous test anchor');
+    await settleFrames();
+    await evaluate("document.querySelector('.org-stage').scrollIntoView({block:'center',behavior:'instant'})");await settleFrames();
+    const points=await evaluate(`(()=>{const stage=document.querySelector('.org-stage').getBoundingClientRect(),heading=document.querySelector('.org-focus').getBoundingClientRect(),card=document.querySelector('.org-office[data-organization-id="efd-epa"]').getBoundingClientRect();const worldY=(heading.bottom-stage.top)/stage.height*650+62;return{from:{x:card.left+card.width/2,y:card.top+card.height/2},to:{x:stage.left+stage.width/2,y:stage.top+stage.height*worldY/650},worldY};})()`);
+    invariant(points.worldY<328,'heading fixture does not exercise the formerly blocked strip: '+JSON.stringify(points));
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...points.from},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...points.from,button:'left',buttons:1,clickCount:1},sessionId);
+    for(let step=1;step<=8;step++)await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:points.from.x+(points.to.x-points.from.x)*step/8,y:points.from.y+(points.to.y-points.from.y)*step/8,button:'left',buttons:1},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...points.to,button:'left',buttons:0,clickCount:1},sessionId);await settleFrames();
+    const actual=await evaluate(`(()=>{const stage=document.querySelector('.org-stage').getBoundingClientRect(),heading=document.querySelector('.org-focus').getBoundingClientRect(),card=document.querySelector('.org-office[data-organization-id="efd-epa"]').getBoundingClientRect();return{x:card.left+card.width/2,y:card.top+card.height/2,clearance:card.top-heading.bottom,worldY:(card.top+card.height/2-stage.top)/stage.height*650};})()`);
+    invariant(Math.hypot(actual.x-points.to.x,actual.y-points.to.y)<3&&actual.clearance>8,'card cannot occupy the newly freed space in '+label+': '+JSON.stringify({points,actual}));
+    await evaluate("document.querySelector('.org-save-layout').click()");
+    await waitFor("document.querySelector('.org-save-layout').disabled&&!document.querySelector('.org-layout-toolbar[aria-busy=true]')",'heading-space layout did not save');
+    invariant(Math.abs(stored.configuration.scopes.efd.offices['efd-epa'].y-(actual.worldY-240))<2,'saved anchor was rebased in '+label);
+    await capturePageSegmentScreenshot('.organization-explorer',`heading-space-${label}.png`,1440,1100);
+  };
+  try{
+    await navigate('/?organization=efd',actor,1440,1100);
+    for(const language of ['de','fr','it','rm','en']){
+      if(await evaluate(`document.documentElement.lang!==${JSON.stringify(language)}`)){
+        await evaluate(`(()=>{const select=document.querySelector('.daca-header-language select');select.value=${JSON.stringify(language)};select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+        await waitFor("document.querySelector('.daca-preference-dialog')",'language choice missing');
+        await evaluate("document.querySelectorAll('.daca-preference-dialog footer button')[1].click()");
+        await waitFor("!document.querySelector('.daca-preference-dialog')",'device-language choice did not close');
+      }
+      await dragBelowHeading(language);
+    }
+    const anchor=structuredClone(stored.configuration.scopes.efd.offices['efd-epa']);
+    await navigate('/?organization=efd',actor,1440,1100);
+    await waitFor("document.querySelector('.org-office[data-organization-id=\"efd-epa\"]')&&!document.querySelector('.org-auto-layout').disabled",'saved card did not reload');
+    invariant(JSON.stringify(stored.configuration.scopes.efd.offices['efd-epa'])===JSON.stringify(anchor),'reload changed saved anchors');
+    const restored=await evaluate("(()=>{const stage=document.querySelector('.org-stage').getBoundingClientRect(),card=document.querySelector('.org-office[data-organization-id=\"efd-epa\"]').getBoundingClientRect();return{x:(card.left+card.width/2-stage.left)/stage.width*960,y:(card.top+card.height/2-stage.top)/stage.height*650};})()");
+    invariant(Math.abs(restored.x-anchor.x-202)<2&&Math.abs(restored.y-anchor.y-240)<2,'reloaded card moved out of its saved coordinates');
+    await evaluate("document.querySelector('.org-fullscreen').click()");await settleFrames();
+    await dragBelowHeading('fullscreen');
+    await evaluate("document.querySelector('.org-fullscreen').click()");await settleFrames();
+    invariant(saves>0&&cdp.runtimeExceptions.length===0,'heading-space save or runtime failure: '+JSON.stringify({saves,errors:cdp.runtimeExceptions}));
+    console.log('PASS organization-heading-space: real drag directly below measured title in DE/FR/IT/RM/EN and fullscreen, title clearance, save/reload with stable coordinates, no real profile/catalog writes');
+  }finally{await cdp.call('Fetch.disable',{},sessionId);cdp.mockReadResponses=null;await cdp.call('Emulation.setEmulatedMedia',{features:[]},sessionId);}
+}
+
+async function organizationHighwayFlow() {
+  await organizationFlowFlow();
+  const actor='kassandra.valdata';
+  await navigate('/?organization=efd',actor,1440,1100);
+  await waitFor("document.querySelector('.org-highway-band')",'luminous data-highway ribbon missing');
+  const graph=expectStatus(await api(actor,'/api/v1/organization-network'),200,'read highway comparison graph').body;
+  const sg=graph.nodes.find(node=>node.kind==='cantonal'&&node.label.includes('St. Gallen'));
+  const ne=graph.nodes.find(node=>node.kind==='cantonal'&&node.label.includes('Neuch'));
+  invariant(sg&&ne,'canton cards missing for visual comparison');
+  const keep=new Set(['efd','efd-estv','efd-efv',sg.id,ne.id]);
+  // Read-only fixture: fixed card anchors make the selected connection treatment
+  // comparable to the mockup, without saving a new personal layout or catalog record.
+  const fixture={...graph,nodes:graph.nodes.filter(node=>keep.has(node.id)),satelliteIds:[sg.id,ne.id],domains:[],relations:graph.relations.filter(edge=>keep.has(edge.sourceId)&&keep.has(edge.targetId))};
+  const view={revision:1,configuration:{schemaVersion:1,scopes:{efd:{offices:{'efd-estv':{x:398,y:40},'efd-efv':{x:488,y:230}},satellites:{[sg.id]:{x:80,y:200},[ne.id]:{x:80,y:390}}}}}};
+  cdp.mockReadResponses=new Map([['/api/v1/organization-network',fixture],['/api/v1/organization-network/view',view]]);
+  await cdp.call('Fetch.enable',{patterns:[{urlPattern:'*/api/v1/organization-network*'}]},sessionId);
+  try{
+    await navigate('/?organization=efd',actor,1440,1100);
+    await waitFor("document.querySelectorAll('.org-highway-band').length===3",'comparison highways did not load');
+    const ribbon=await evaluate(`(()=>{const band=document.querySelector('.org-highway-band'),spine=document.querySelector('.org-thread'),packet=document.querySelector('.org-packet');return{width:parseFloat(getComputedStyle(band).strokeWidth),opacity:parseFloat(getComputedStyle(band).opacity),curve:spine.getAttribute('d'),path:getComputedStyle(packet).offsetPath,markers:document.querySelectorAll('.org-geometry marker').length};})()`);
+    invariant(ribbon.width>=10&&ribbon.width<=14&&ribbon.opacity>.5&&ribbon.curve.includes(' C ')&&ribbon.path.startsWith('path(')&&ribbon.markers===0,'highway differs from selected ribbon treatment: '+JSON.stringify(ribbon));
+    await evaluate("document.querySelector('.org-stage').scrollIntoView({block:'center',behavior:'instant'})");await settleFrames();
+    const finish=await evaluate(`(()=>{const bands=[...document.querySelectorAll('.org-highway-band')],probe=document.createElement('span');probe.style.color='var(--daca-blue-soft)';document.body.append(probe);const tint=getComputedStyle(probe).color;probe.remove();return{tinted:getComputedStyle(document.querySelector('.org-bubble')).fill===tint,bands:bands.map(band=>{const connection=band.parentElement,matrix=band.getScreenCTM(),a=band.getPointAtLength(0).matrixTransform(matrix),b=band.getPointAtLength(band.getTotalLength()).matrixTransform(matrix),under=p=>document.elementFromPoint(p.x,p.y)?.closest('[data-organization-id]')?.dataset.organizationId;return{source:under(a)===connection.dataset.sourceId,target:under(b)===connection.dataset.targetId,cap:getComputedStyle(band).strokeLinecap,gradient:getComputedStyle(band).stroke.includes('url(')};}),tails:[...document.querySelectorAll('.org-packet-tail')].map(tail=>({width:tail.getBBox().width,gradient:getComputedStyle(tail).fill.includes('url(')}))};})()`);
+    invariant(finish.tinted&&finish.bands.every(band=>band.source&&band.target&&band.cap==='butt'&&band.gradient)&&finish.tails.every(tail=>tail.width>=25&&tail.gradient),'highway tint, hidden endpoints, gradient or tapered tails missing: '+JSON.stringify(finish));
+    const samples=await evaluate(`(()=>[...document.querySelectorAll('.org-connection')].map(connection=>{const path=connection.querySelector('.org-highway-band'),packets=[...connection.querySelectorAll('.org-packet')],matrix=path.getScreenCTM(),length=path.getTotalLength();return packets.map(packet=>{const animation=packet.getAnimations().find(a=>a.animationName?.includes('daca-packet-travel'));animation.pause();animation.currentTime=1500;const rect=packet.querySelector('.org-packet-core').getBoundingClientRect(),center={x:rect.left+rect.width/2,y:rect.top+rect.height/2};let distance=Infinity;for(let i=0;i<=200;i++){const p=path.getPointAtLength(length*i/200).matrixTransform(matrix);distance=Math.min(distance,Math.hypot(p.x-center.x,p.y-center.y));}return{distance,center,duration:animation.effect.getTiming().duration};});}))()`);
+    invariant(samples.flat().every(sample=>sample.duration===3000&&sample.distance<3),'packets leave their curved lane: '+JSON.stringify(samples));
+    invariant(samples.filter(pair=>pair.length===2).every(pair=>Math.hypot(pair[0].center.x-pair[1].center.x,pair[0].center.y-pair[1].center.y)>28),'two products overlap in the highway');
+    await evaluate("document.querySelectorAll('.org-office,.org-satellite').forEach(card=>card.getAnimations().forEach(a=>{a.pause();a.currentTime=0;}))");
+    await capturePageSegmentScreenshot('.organization-explorer','highway-normal.png',1440,1100);
+    if(screenshotDirectory){
+      const clip=await evaluate("(()=>{const r=document.querySelector('.org-stage').getBoundingClientRect();return{x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1};})()");
+      const shot=await cdp.call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true,clip},sessionId);
+      await writeFile(path.join(path.resolve(screenshotDirectory),'highway-comparison-canvas.png'),Buffer.from(shot.data,'base64'));
+    }
+    const packetOcclusion=await evaluate("(()=>[...document.querySelectorAll('.org-connection')].flatMap(connection=>[...connection.querySelectorAll('.org-packet')].flatMap(packet=>{const animation=packet.getAnimations().find(a=>a.animationName?.includes('daca-packet-travel'));animation.pause();return[.001,.999].map(phase=>{const timing=animation.effect.getTiming();animation.currentTime=timing.delay+timing.duration*phase;const r=packet.querySelector('.org-packet-core').getBoundingClientRect(),actual=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.closest('[data-organization-id]')?.dataset.organizationId;const expected=phase<.5?connection.dataset.sourceId:connection.dataset.targetId,covered=[[0,0],[-8,-8],[8,-8],[-8,8],[8,8]].every(([x,y])=>document.elementFromPoint(r.left+r.width/2+x,r.top+r.height/2+y)?.closest('[data-organization-id]')?.dataset.organizationId===expected);return{phase,actual,expected,covered};});})))()");
+    invariant(packetOcclusion.every(sample=>sample.actual===sample.expected&&sample.covered),'Organization packets vanish before the card: '+JSON.stringify(packetOcclusion));
+    await capturePageSegmentScreenshot('.organization-explorer','highway-packets-under-boxes.png',1440,1100);
+    // Offset the cards so the chord meets a lower/upper card edge while the
+    // main curve turns horizontally: this previously exposed hard stub joins.
+    view.configuration.scopes.efd.offices['efd-estv']={x:118,y:70};
+    view.configuration.scopes.efd.satellites[sg.id]={x:80,y:140};
+    await navigate('/?organization=efd',actor,1440,1100);
+    await waitFor("document.querySelectorAll('.org-highway-band').length===3",'offset-card highway case did not load');
+    invariant(await evaluate("[...document.querySelectorAll('.org-highway-band')].every(band=>!band.getAttribute('d').includes(' L ')&&(band.getAttribute('d').match(/ C /g)??[]).length===1)"),'hard straight-to-curve joints remain in offset-card ribbons');
+    await evaluate("document.querySelectorAll('.org-office,.org-satellite,.org-packet').forEach(element=>element.getAnimations().forEach(animation=>{animation.pause();animation.currentTime=1500;}))");
+    await capturePageSegmentScreenshot('.organization-explorer','highway-offset-cards.png',1440,1100);
+    await evaluate("document.documentElement.setAttribute('data-daca-theme','dark')");await capturePageSegmentScreenshot('.organization-explorer','highway-dark.png',1440,1100);
+    await evaluate("document.documentElement.setAttribute('data-daca-theme','light')");
+    await setViewport(390,844);await settleFrames();
+    invariant(await evaluate('document.documentElement.scrollWidth<=innerWidth+2'),'highways overflow mobile page');
+    await capturePageSegmentScreenshot('.organization-explorer','highway-mobile.png',390,844);
+    invariant(cdp.runtimeExceptions.length===0,'highway browser errors: '+JSON.stringify(cdp.runtimeExceptions));
+    console.log('PASS organization-highway: pale-blue focus area, gradient ribbons ending under cards, tapered tails, curve-following packets, readable two-packet trains, three-second transit, desktop/dark/mobile and read-only visual comparison');
+  }finally{await cdp.call('Fetch.disable',{},sessionId);cdp.mockReadResponses=null;}
+}
+
+async function organizationFlowFlow() {
+  const actor='kassandra.valdata';
+  await navigate('/?organization=efd',actor,1440,1100);
+  await waitFor("document.querySelector('.org-packet')&&!document.querySelector('.org-auto-layout').disabled",'data-flow packets did not load');
+  const graph=expectStatus(await api(actor,'/api/v1/organization-network'),200,'read real directed catalog relationships').body;
+  invariant(await evaluate(`(()=>{const edges=${JSON.stringify(graph.relations)};return [...document.querySelectorAll('.org-connection')].every(line=>edges.some(edge=>edge.sourceId===line.dataset.sourceId&&edge.targetId===line.dataset.targetId));})()`),'rendered flow direction differs from API');
+  const sg=graph.nodes.find(node=>node.label==='Kanton St. Gallen');
+  const sgEdge=graph.relations.find(edge=>edge.sourceId==='efd-estv'&&edge.targetId===sg?.id);
+  invariant(sgEdge?.count===2&&sg.consumedProductCount===2,'real St. Gallen example does not consume two distinct ESTV products');
+  const realSelector=`.org-connection[data-source-id="efd-estv"][data-target-id="${sg.id}"]`;
+  invariant(await evaluate(`document.querySelector(${JSON.stringify(realSelector)}).querySelectorAll('.org-packet').length===2&&!document.querySelector('.org-flow-direction')`),'real ESTV → St. Gallen connection does not show exactly two points without arrows');
+  const timing=await evaluate(`(async()=>{const dot=document.querySelector(${JSON.stringify(realSelector)}).querySelector('.org-packet'),animation=dot.getAnimations().find(item=>item.animationName?.includes('daca-packet-travel'));if(!animation)return null;await new Promise(resolve=>requestAnimationFrame(resolve));const start=animation.currentTime,wall=performance.now();await new Promise(resolve=>setTimeout(()=>requestAnimationFrame(resolve),700));return{duration:animation.effect.getTiming().duration,rate:animation.playbackRate,state:animation.playState,elapsed:animation.currentTime-start,wall:performance.now()-wall,css:getComputedStyle(dot).animationDuration};})()`);
+  invariant(timing?.duration===3000&&timing.css==='3s'&&timing.rate===1&&timing.state==='running','live organization transit must be exactly three seconds: '+JSON.stringify(timing));
+  invariant(timing.elapsed/timing.wall>.85&&timing.elapsed/timing.wall<1.15,'live browser animation is slower than wall time: '+JSON.stringify(timing));
+  console.log('PASS three-second live transit: '+JSON.stringify(timing));
+  // Freeze a mid-flight frame for inspectable evidence of the real two-point train.
+  await evaluate(`document.querySelector(${JSON.stringify(realSelector)}).querySelectorAll('.org-packet').forEach(dot=>{const animation=dot.getAnimations()[0];animation.pause();animation.currentTime=2600;})`);
+  await capturePageSegmentScreenshot('.organization-explorer','catalog-flows.png',1440,1100);
+  // Reciprocal/high-density cases are browser-only fixtures; never fabricate
+  // consumption or access history in the authoritative catalog.
+  const fixture=structuredClone(graph),edge=fixture.relations.find(item=>item.sourceId==='efd-estv');
+  invariant(edge,'ESTV producer fixture missing');
+  fixture.relations=[{...edge,count:2},{...edge,sourceId:edge.targetId,targetId:edge.sourceId,count:1}];
+  cdp.mockReadResponses=new Map([['/api/v1/organization-network',fixture],['/api/v1/organization-network/view',{revision:0,configuration:{schemaVersion:1,scopes:{}}}]]);
+  await cdp.call('Fetch.enable',{patterns:[{urlPattern:'*/api/v1/organization-network*'}]},sessionId);
+  try {
+    await navigate('/?organization=efd',actor,1440,1100);
+    await waitFor("document.querySelectorAll('.org-connection').length===2",'reciprocal flow fixture did not load');
+    await cdp.call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]},sessionId);
+    await evaluate("document.querySelector('.org-fullscreen').click()");
+    await waitFor("document.querySelector('.organization-explorer.is-fullscreen')&&document.activeElement?.classList.contains('org-fullscreen')",'flow fullscreen missing');await settleFrames();
+    const state=await evaluate(`(()=>{const lines=[...document.querySelectorAll('.org-connection')];return lines.map(line=>{const flow=line.querySelector('.org-flow'),style=getComputedStyle(flow);return{count:line.querySelectorAll('.org-packet').length,startX:parseFloat(style.getPropertyValue('--flow-from-x')),startY:parseFloat(style.getPropertyValue('--flow-from-y')),endX:parseFloat(style.getPropertyValue('--flow-to-x')),endY:parseFloat(style.getPropertyValue('--flow-to-y'))};});})()`);
+    invariant(state[0].count===2&&state[1].count===1,'one product must have one point and two products exactly two points');
+    invariant(await evaluate("(()=>{const flows=[...document.querySelectorAll('.org-flow')];return getComputedStyle(flows[0]).getPropertyValue('--flow-duration')===getComputedStyle(flows[1]).getPropertyValue('--flow-duration');})()"),'product count changed stream speed');
+    invariant(await evaluate("(()=>{const dots=[...document.querySelector('.org-connection').querySelectorAll('.org-packet')];return Math.abs(parseFloat(dots[0].style.animationDelay)-parseFloat(dots[1].style.animationDelay))<=1.5;})()"),'two products are not a successive point train');
+    invariant(await evaluate("!document.querySelector('.org-flow-direction')&&!document.querySelector('.org-geometry marker')"),'organization connections still contain arrowheads');
+    invariant((state[0].endX-state[0].startX)*(state[1].endX-state[1].startX)+(state[0].endY-state[0].startY)*(state[1].endY-state[1].startY)<0,'reciprocal packet lanes point in the same direction');
+    invariant(Math.hypot(state[0].startX-state[1].endX,state[0].startY-state[1].endY)>4,'reciprocal streams overlap');
+    invariant(await evaluate("!document.querySelector('.org-domain-thread .org-packet')"),'domain assignment carries consumption packets');
+    for(let index=0;index<2;index++){
+      const motion=await evaluate(`(()=>{const g=document.querySelectorAll('.org-connection')[${index}].querySelector('.org-packet'),animation=g.getAnimations()[0],duration=animation.effect.getTiming().duration;animation.pause();animation.currentTime=duration*.2;const a=g.querySelector('.org-packet-core').getBoundingClientRect();animation.currentTime=duration*.4;const b=g.querySelector('.org-packet-core').getBoundingClientRect();animation.play();return{dx:b.x-a.x,dy:b.y-a.y};})()`);
+      invariant(motion.dx*(state[index].endX-state[index].startX)+motion.dy*(state[index].endY-state[index].startY)>0,'packet does not travel from producer towards consumer');
+    }
+    const transform=await evaluate("getComputedStyle(document.querySelector('.org-packet')).offsetDistance");await sleep(330);
+    invariant(await evaluate(`getComputedStyle(document.querySelector('.org-packet')).offsetDistance!==${JSON.stringify(transform)}`),'packets do not animate naturally');
+    const pulse=await evaluate("(()=>{const halo=document.querySelector('.org-packet-halo'),a=halo.getAnimations()[0];a.pause();a.currentTime=0;const low=getComputedStyle(halo).opacity;a.currentTime=700;const high=getComputedStyle(halo).opacity;a.play();return{low,high};})()");
+    invariant(Number(pulse.high)>Number(pulse.low)*2,'electron halo does not pulse strongly');
+    const hover=await evaluate("(()=>{for(const hit of [...document.querySelectorAll('.org-thread-hit')].reverse()){const m=hit.getScreenCTM();for(const t of [.5,.3,.7,.2,.8]){const p=hit.getPointAtLength(hit.getTotalLength()*t).matrixTransform(m);if(document.elementFromPoint(p.x,p.y)===hit)return{x:p.x,y:p.y};}}return null;})()");
+    invariant(hover,'connection hit area is blocked by the office field');
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:10,y:10},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:hover.x,y:hover.y},sessionId);
+    await waitFor("document.querySelector('.daca-glossary-tooltip.is-visible[role=tooltip]')?.textContent.includes('Ein Punkt steht für ein konsumiertes Datenprodukt')",'shared connection product-count tooltip missing');
+    invariant(await evaluate("document.querySelector('.daca-glossary-tooltip.is-visible').textContent.includes('nicht auf Live-Abrufen')"),'product-count tooltip misrepresents real traffic');
+    await captureScreenshot('reciprocal-electrons-tooltip-fullscreen.png');
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:10,y:10},sessionId);
+    await evaluate("document.querySelector('.org-thread-hit').focus()");
+    await waitFor("document.querySelector('.daca-glossary-tooltip.is-visible[role=tooltip]')",'keyboard connection tooltip missing');
+    await cdp.call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]},sessionId);
+    invariant(await evaluate("getComputedStyle(document.querySelector('.org-flow')).display!=='none'&&getComputedStyle(document.querySelector('.org-packet')).animationName==='none'&&!document.querySelector('.org-flow-direction')&&document.querySelector('.org-connection').querySelectorAll('.org-packet').length===2"),'reduced motion must retain two static points without arrows');
+    const still=await evaluate("getComputedStyle(document.querySelector('.org-packet')).offsetDistance");await sleep(250);
+    invariant(await evaluate(`getComputedStyle(document.querySelector('.org-packet')).offsetDistance===${JSON.stringify(still)}`),'reduced motion points keep travelling');
+    await captureScreenshot('flow-reduced-motion.png');
+    await pressKey('Escape','Escape',27);
+    invariant(await evaluate("!document.querySelector('.organization-explorer.is-fullscreen')"),'flow fullscreen cannot exit');
+    invariant(cdp.runtimeExceptions.length===0,`flow runtime errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+    console.log('PASS organization-flow: real second ESTV → St. Gallen product, exact one/two point trains, equal speed, no arrows, reciprocal lanes, motion/pulses, shared tooltip, fullscreen and static reduced motion');
+  } finally {
+    await cdp.call('Fetch.disable',{},sessionId);cdp.mockReadResponses=null;
+    await cdp.call('Emulation.setEmulatedMedia',{features:[]},sessionId);
+  }
+}
+
+async function organizationLocalizationFlow() {
+  const actor='kassandra.valdata',key=`daca.preference.${actor}.language`;
+  await navigate('/?organization=uvek-astra',actor,1440,1000);
+  await waitFor("document.querySelector('.org-focus-title')&&!document.querySelector('.org-auto-layout').disabled",'ASTRA landscape did not load');
+  const previous=await evaluate(`localStorage.getItem(${JSON.stringify(key)})`);
+  const profile=expectStatus(await api(actor,'/api/v1/me/preferences/language'),200,'read profile language').body;
+  const layout=expectStatus(await api(actor,'/api/v1/organization-network/view'),200,'read unchanged organization anchors').body;
+  const reads=await evaluate("performance.getEntriesByType('resource').filter(item=>new URL(item.name).pathname==='/api/v1/organization-network').length");
+  try {
+    for(const [language,code,label] of [['fr','OFROU','Office fédéral des routes'],['it','USTRA','Ufficio federale delle strade'],['rm','UVIAS','Uffizi federal da vias'],['en','FEDRO','Federal Roads Office'],['de','ASTRA','Bundesamt für Strassen']]){
+      if(await evaluate(`document.querySelector('.daca-header-language select').value!==${JSON.stringify(language)}`)){
+        await evaluate(`(()=>{const select=document.querySelector('.daca-header-language select');select.value=${JSON.stringify(language)};select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+        await waitFor("document.querySelector('.daca-preference-dialog')",'language storage choice missing');
+        await evaluate("document.querySelectorAll('.daca-preference-dialog footer button')[1].click()");
+      }
+      await waitFor(`document.documentElement.lang===${JSON.stringify(language)}&&document.querySelector('.org-focus-title')?.textContent.trim()===${JSON.stringify(code)}&&document.querySelector('.org-focus')?.textContent.includes(${JSON.stringify(label)})`,'localized ASTRA title/name missing: '+language);
+      invariant(await evaluate("document.querySelector('.org-breadcrumb button[aria-current]')?.textContent.trim()==="+JSON.stringify(code)), 'localized breadcrumb missing: '+language);
+      if(language==='fr'){
+        invariant(await evaluate("document.querySelector('.org-breadcrumb').textContent.includes('DETEC')&&!document.querySelector('.organization-explorer').textContent.includes('Bundesamt für Strassen')"),'French landscape still contains German organization names');
+        await capturePageSegmentScreenshot('.organization-explorer','organization-astra-french.png',1440,1000);
+        await evaluate("document.querySelector('.org-focus').focus()");
+        await waitFor("[...document.querySelectorAll('.daca-glossary-tooltip')].some(item=>item.textContent.includes('Office fédéral des routes'))",'French organization tooltip missing');
+        await pressKey('Escape','Escape',27);
+        await evaluate("document.querySelector('.org-fullscreen').click()");
+        await waitFor("document.querySelector('.organization-explorer.is-fullscreen .org-focus')?.textContent.includes('Office fédéral des routes')",'French fullscreen organization name missing');
+        await capturePageSegmentScreenshot('.organization-explorer','organization-astra-french-fullscreen.png',1440,1000);
+        await pressKey('Escape','Escape',27);
+      }
+    }
+    invariant(await evaluate("performance.getEntriesByType('resource').filter(item=>new URL(item.name).pathname==='/api/v1/organization-network').length")===reads,'language switching fetched the organization network again');
+    invariant(JSON.stringify(expectStatus(await api(actor,'/api/v1/organization-network/view'),200,'verify preserved organization layout').body)===JSON.stringify(layout),'language switching changed saved organization anchors');
+    invariant(JSON.stringify(expectStatus(await api(actor,'/api/v1/me/preferences/language'),200,'verify profile language unchanged').body)===JSON.stringify(profile),'browser-only language change altered the profile');
+    invariant(cdp.runtimeExceptions.length===0,`Organization localization errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+    await evaluate("(()=>{const select=document.querySelector('.daca-header-language select');select.value='rm';select.dispatchEvent(new Event('change',{bubbles:true}));})()");
+    await waitFor("document.querySelector('.daca-preference-dialog')",'Romansh storage choice missing');
+    invariant(await evaluate("document.querySelector('.daca-preference-dialog h2').textContent==='Memorisar la lingua'"),'Romansh storage dialog untranslated');
+    await evaluate("document.querySelectorAll('.daca-preference-dialog footer button')[2].click()");
+    await waitFor("!document.querySelector('.daca-preference-dialog')",'Romansh profile save did not finish');
+    invariant(expectStatus(await api(actor,'/api/v1/me/preferences/language'),200,'read Romansh profile preference').body.value==='rm','Romansh profile preference missing');
+    invariant(await evaluate(`localStorage.getItem(${JSON.stringify(key)})===null`),'profile save retained a browser language override');
+    await navigate('/settings/language-personal',actor,1440,1000);
+    await waitFor("document.documentElement.lang==='rm'&&document.querySelector('.settings-language-field select')?.value==='rm'",'Romansh profile did not survive navigation/reload');
+    invariant(await evaluate("document.querySelector('.settings-panel h2').textContent==='Parameters da lingua persunals'"),'Romansh settings text missing');
+    invariant(await evaluate("document.title.includes('Parameters da lingua')"),'Romansh page title missing');
+    await capturePageSegmentScreenshot('.settings-layout','language-romansh-settings.png',1440,1000);
+    await navigate('/?organization=efd-efv',actor,1440,1100);
+    await waitFor("document.documentElement.lang==='rm'&&document.querySelector('.org-focus-counts')?.textContent.includes('1 product da datas purschì')",'Romansh singular offering missing after profile restore');
+    invariant(await evaluate("document.querySelector('.org-breadcrumb').textContent.includes('Survista generala')"),'Romansh overview breadcrumb missing');
+    invariant(await evaluate("document.querySelector('.org-no-children').getBoundingClientRect().top>=document.querySelector('.org-viewport').getBoundingClientRect().bottom"),'empty-unit notice overlaps localized heading/counts');
+    await capturePageSegmentScreenshot('.organization-explorer','organization-romansh-counts.png',1440,1100);
+    await setViewport(390,900); await settleFrames();
+    invariant(await evaluate("document.documentElement.scrollWidth<=innerWidth+1"),'Romansh causes page overflow on mobile');
+    await evaluate("document.querySelector('.org-fullscreen').click()");
+    await waitFor("document.querySelector('.organization-explorer.is-fullscreen')",'Romansh fullscreen missing');
+    invariant(await evaluate("document.querySelector('.org-fullscreen').textContent.includes('Bandunar il maletg entir')"),'Romansh fullscreen exit untranslated');
+    await pressKey('Escape','Escape',27);
+    await waitFor("!document.querySelector('.organization-explorer.is-fullscreen')",'Romansh fullscreen did not exit');
+    await capturePageSegmentScreenshot('.welcome-workspace','organization-romansh-mobile.png',390,900);
+    invariant(JSON.stringify(expectStatus(await api(actor,'/api/v1/organization-network/view'),200,'verify unchanged anchors after Romansh restore').body)===JSON.stringify(layout),'Romansh changed saved organization anchors');
+    invariant(cdp.runtimeExceptions.length===0,`Romansh runtime errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+    console.log('PASS organization-localization: DE/FR/IT/RM/EN, UVIAS, localized counts and settings, profile save/restore, unchanged graph and anchors');
+  } finally {
+    await evaluate(previous===null?`localStorage.removeItem(${JSON.stringify(key)})`:`localStorage.setItem(${JSON.stringify(key)},${JSON.stringify(previous)})`);
+    expectStatus(await api(actor,'/api/v1/me/preferences/language',{method:'PUT',body:profile}),200,'restore original profile language');
+  }
+}
+
+async function organizationDomainLayoutFlow() {
+  const actor='kassandra.valdata',path='/api/v1/organization-network/view';
+  await navigate('/?organization=vbs',actor,1440,1100);
+  const baseline=expectStatus(await api(actor,path),200,'read original personal anchors').body;
+  const graph=expectStatus(await api(actor,'/api/v1/organization-network'),200,'read unchanged domain assignments').body;
+  const domain=graph.domains.find(item=>item.label==='Personal'),key='domain:'+domain.id;
+  const bubble=`.org-domain-bubble[data-domain-id="${domain.id}"]`;
+  try {
+    const configuration=structuredClone(baseline.configuration);
+    configuration.scopes.vbs={offices:{...(configuration.scopes.vbs?.offices??{}),'vbs-verteidigung':{x:100,y:160},[key]:{x:440,y:160}},satellites:configuration.scopes.vbs?.satellites??{}};
+    expectStatus(await api(actor,path,{method:'PUT',body:{revision:baseline.revision,configuration}}),200,'prepare independent domain and organization anchors');
+    await navigate('/?organization=vbs',actor,1440,1100);
+    await enableOrganizationDomains();
+    await waitFor(`document.querySelector('${bubble}')&&!document.querySelector('.org-auto-layout').disabled`,'domain anchors did not load');
+    await cdp.call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]},sessionId);
+    await evaluate("document.querySelector('.org-fullscreen').click()");
+    await waitFor("document.activeElement===document.querySelector('.org-fullscreen')",'domain fullscreen did not settle focus');await settleFrames();
+    await captureScreenshot('domain-position-before-drag.png');
+    const hit=await evaluate(`(()=>{const target=document.querySelector('${bubble}'),rect=target.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2;return {x,y,target:document.elementFromPoint(x,y)?.outerHTML.slice(0,500),left:target.style.left,top:target.style.top};})()`);
+    invariant(await evaluate(`document.elementFromPoint(${hit.x},${hit.y})?.closest('${bubble}')!==null`),'domain pointer target is obscured: '+JSON.stringify(hit));
+    const before=await evaluate(`(()=>{const target=document.querySelector('${bubble}'),r=target.getBoundingClientRect(),org=document.querySelector('[data-organization-id="vbs-verteidigung"]').getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+r.height/2,dx:(org.left+org.width/2-r.left-r.width/2)*.3,dy:(org.top+org.height/2-r.top-r.height/2)*.3,distance:Math.hypot(org.left+org.width/2-r.left-r.width/2,org.top+org.height/2-r.top-r.height/2),left:target.style.left,top:target.style.top};})()`);
+    const targetsBefore=(await cdp.call('Target.getTargets')).targetInfos.filter(target=>target.type==='page').length;
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:before.x,y:before.y},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',x:before.x,y:before.y,button:'left',buttons:1,clickCount:1},sessionId);
+    for(let step=1;step<=4;step++)await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:before.x+before.dx*step/4,y:before.y+before.dy*step/4,buttons:1},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',x:before.x+before.dx,y:before.y+before.dy,button:'left',buttons:0,clickCount:1},sessionId);
+    await waitFor("!document.querySelector('.org-save-layout').disabled",'domain drag did not stage an anchor');
+    const moved=await evaluate(`(()=>{const target=document.querySelector('${bubble}'),r=target.getBoundingClientRect(),org=document.querySelector('[data-organization-id="vbs-verteidigung"]').getBoundingClientRect();return{left:target.style.left,top:target.style.top,distance:Math.hypot(org.left+org.width/2-r.left-r.width/2,org.top+org.height/2-r.top-r.height/2)};})()`);
+    invariant(moved.left!==before.left&&moved.distance<before.distance-10,'domain did not move closer to its organization');
+    invariant((await cdp.call('Target.getTargets')).targetInfos.filter(target=>target.type==='page').length===targetsBefore,'dropping a dragged domain opened its detail link');
+    await evaluate("document.querySelector('.org-save-layout').click()");
+    await waitFor("document.querySelector('.org-save-layout').disabled&&document.querySelector('.org-layout-toolbar').getAttribute('aria-busy')==='false'",'domain anchor did not save');
+    const saved=expectStatus(await api(actor,path),200,'read saved domain anchor').body;
+    invariant(saved.configuration.scopes.vbs.offices[key].x<440,'profile domain anchor did not change');
+    invariant(JSON.stringify(saved.configuration.scopes.vbs.offices['vbs-verteidigung'])===JSON.stringify(configuration.scopes.vbs.offices['vbs-verteidigung']),'moving a domain changed a saved organization anchor');
+    await evaluate("document.querySelector('.org-layer [role=switch]').click()");await waitFor(`!document.querySelector('${bubble}')`,'domain layer did not hide');
+    await evaluate("document.querySelector('.org-layer [role=switch]').click()");await waitFor(`document.querySelector('${bubble}')?.style.left===${JSON.stringify(moved.left)}`,'domain position was lost when toggling the layer');
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:10,y:10},sessionId);
+    await cdp.call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]},sessionId);
+    const drift=await evaluate(`getComputedStyle(document.querySelector('${bubble}')).translate`);await sleep(1000);
+    invariant(await evaluate(`getComputedStyle(document.querySelector('${bubble}')).translate!==${JSON.stringify(drift)}`),'domain no longer floats around its saved anchor');
+    await capturePageSegmentScreenshot('.organization-explorer','domain-position-fullscreen-saved.png',1440,1100);
+    await pressKey('Escape','Escape',27);
+    await navigate('/?organization=vbs',actor,1440,1100);
+    await enableOrganizationDomains();
+    await waitFor(`document.querySelector('${bubble}')?.style.left===${JSON.stringify(moved.left)}&&!document.querySelector('.org-auto-layout').disabled`,'saved domain position did not survive reload');
+    await evaluate(`document.querySelector('${bubble}').focus()`);await pressKey('ArrowDown','ArrowDown',40);
+    await waitFor("!document.querySelector('.org-save-layout').disabled",'domain keyboard movement did not stage an anchor');
+    await evaluate("document.querySelector('.org-discard-layout').click()");
+    await waitFor(`document.querySelector('${bubble}')?.style.top===${JSON.stringify(moved.top)}`,'discard did not restore the saved domain position');
+    await evaluate("document.querySelector('.org-auto-layout').click()");
+    invariant(JSON.stringify(expectStatus(await api(actor,path),200,'automatic arrangement remains a draft').body)===JSON.stringify(saved),'automatic arrangement saved without confirmation');
+    await evaluate("document.querySelector('.org-save-layout').click()");
+    await waitFor("document.querySelector('.org-save-layout').disabled&&document.querySelector('.org-layout-toolbar').getAttribute('aria-busy')==='false'",'automatic reset did not save');
+    const reset=expectStatus(await api(actor,path),200,'read reset domain layout').body;
+    invariant(!reset.configuration.scopes.vbs,'automatic arrangement retained manual domain anchors');
+    const otherScopes=Object.fromEntries(Object.entries(configuration.scopes).filter(([scope])=>scope!=='vbs'));
+    invariant(JSON.stringify(reset.configuration.scopes)===JSON.stringify(otherScopes),'domain reset changed another organization level');
+    invariant(JSON.stringify(expectStatus(await api(actor,'/api/v1/organization-network'),200,'verify unchanged catalog assignments').body)===JSON.stringify(graph),'domain placement changed shared catalog data');
+    invariant(cdp.runtimeExceptions.length===0,`domain layout runtime errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+    console.log('PASS organization-domain-layout: real drag closer to organization, no link navigation, private save/reload, keyboard/discard, layer retention, fullscreen/floating, automatic reset and unchanged catalog');
+  } finally {
+    await cdp.call('Emulation.setEmulatedMedia',{features:[]},sessionId);
+    const current=expectStatus(await api(actor,path),200,'read domain layout cleanup').body;
+    expectStatus(await api(actor,path,{method:'PUT',body:{revision:current.revision,configuration:baseline.configuration}}),200,'restore original domain/organization anchors');
+  }
+}
+
+async function organizationLayoutFlow() {
+  const actor='kassandra.valdata',path='/api/v1/organization-network/view';
+  await navigate('/',actor,1440,1100);
+  const baseline=expectStatus(await api(actor,path),200,'read organization layout baseline').body;
+  const other=expectStatus(await api('beat.stalder',path),200,'read other organization layout').body;
+  const graph=expectStatus(await api(actor,'/api/v1/organization-network'),200,'read unchanged organizations').body;
+  try {
+    expectStatus(await api(actor,path,{method:'PUT',body:{revision:baseline.revision,configuration:{schemaVersion:1,scopes:{}}}}),200,'prepare empty personal anchors');
+    await navigate('/?organization=all',actor,1440,1100);
+    await waitFor("!document.querySelector('.org-auto-layout').disabled",'organization anchors did not load');
+    await evaluate("document.querySelector('.org-fullscreen').click()");
+    await waitFor("document.querySelector('.organization-explorer.is-fullscreen[aria-modal=true]')&&document.body.style.overflow==='hidden'",'organization fullscreen did not open');
+    invariant(await evaluate("(()=>{const r=document.querySelector('.organization-explorer').getBoundingClientRect();return r.left===0&&r.top===0&&Math.abs(r.width-innerWidth)<2&&Math.abs(r.height-innerHeight)<2;})()"),'fullscreen does not cover the viewport');
+    await waitFor("document.activeElement===document.querySelector('.org-fullscreen')",'fullscreen did not focus its exit control');await settleFrames();
+    await evaluate("document.querySelector('.org-accessible-list summary').focus()");await settleFrames();await pressKey('Tab','Tab',9);
+    invariant(await evaluate("document.activeElement===document.querySelector('.org-layer [role=switch]')"),'fullscreen focus escaped after last control: '+await evaluate("document.activeElement?.outerHTML.slice(0,400)"));
+    await pressKey('Tab','Tab',9); // Continue within the modal before starting a pointer gesture.
+    const before=await evaluate("(()=>{const c=document.querySelector('.org-office[data-organization-id=efd]'),r=c.getBoundingClientRect(),s=document.querySelector('.org-stage').getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+r.height/2,dx:r.left+r.width/2<s.left+s.width/2?65:-65,dy:r.top+r.height/2<s.top+s.height/2?25:-25,left:c.style.left};})()");
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:before.x,y:before.y},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',x:before.x,y:before.y,button:'left',buttons:1,clickCount:1},sessionId);
+    for(let step=1;step<=4;step++)await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:before.x+before.dx*step/4,y:before.y+before.dy*step/4,buttons:1},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',x:before.x+before.dx,y:before.y+before.dy,button:'left',buttons:0,clickCount:1},sessionId);
+    await waitFor("!document.querySelector('.org-save-layout').disabled&&!document.querySelector('.org-core')",'drag navigated or failed to stage a position');
+    invariant(await evaluate(`document.querySelector('.org-office[data-organization-id=efd]').style.left!==${JSON.stringify(before.left)}`),'drag did not move the organization anchor');
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:5,y:5},sessionId);
+    await cdp.call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]},sessionId);
+    const drift=await evaluate("getComputedStyle(document.querySelector('.org-office[data-organization-id=efd]')).translate");await sleep(1000);
+    invariant(await evaluate(`getComputedStyle(document.querySelector('.org-office[data-organization-id=efd]')).translate!==${JSON.stringify(drift)}`),'moved organization stopped floating');
+    await evaluate("document.querySelector('.org-save-layout').click()");
+    await waitFor("document.querySelector('.org-save-layout').disabled&&document.querySelector('.org-layout-toolbar').getAttribute('aria-busy')==='false'&&document.querySelector('.org-layout-message[role=status]')",'organization layout did not save');
+    const saved=expectStatus(await api(actor,path),200,'read saved overview anchors').body;
+    invariant(saved.configuration.scopes.overview.offices.efd,'overview anchor missing from profile');
+    const savedLeft=await evaluate("document.querySelector('.org-office[data-organization-id=efd]').style.left");
+    await capturePageSegmentScreenshot('.organization-explorer','organization-fullscreen-saved.png',1440,1100);
+    await pressKey('Escape','Escape',27);
+    await waitFor("!document.querySelector('.organization-explorer.is-fullscreen')&&document.body.style.overflow!=='hidden'",'Escape did not restore page scrolling');
+    await navigate('/?organization=all',actor,1440,1100);
+    invariant(await evaluate(`document.querySelector('.org-office[data-organization-id=efd]').style.left===${JSON.stringify(savedLeft)}`),'organization anchor did not survive reload');
+    await evaluate("document.querySelector('.org-office[data-organization-id=efd]').click()");
+    await waitFor("document.querySelector('.org-focus')?.textContent.includes('EFD')",'saved card cannot drill down');
+    const officeKey=await evaluate("(()=>{const card=document.querySelector('.org-office[data-organization-id=\"efd-estv\"]');card.focus();return parseFloat(card.style.top)<50?'ArrowDown':'ArrowUp';})()");await pressKey(officeKey,officeKey,officeKey==='ArrowDown'?40:38);
+    const satelliteKey=await evaluate("(()=>{const card=document.querySelector('.org-satellite[data-organization-id=vbs]');card.focus();return parseFloat(card.style.left)<50?'ArrowRight':'ArrowLeft';})()");await pressKey(satelliteKey,satelliteKey,satelliteKey==='ArrowRight'?39:37);
+    await waitFor("!document.querySelector('.org-save-layout').disabled",'nested anchor changes were not staged');
+    await evaluate("document.querySelector('.org-save-layout').click()");await waitFor("document.querySelector('.org-save-layout').disabled&&document.querySelector('.org-layout-toolbar').getAttribute('aria-busy')==='false'",'nested anchors did not save');
+    const nested=expectStatus(await api(actor,path),200,'read per-level office and satellite anchors').body;
+    invariant(nested.configuration.scopes.efd.offices['efd-estv']&&nested.configuration.scopes.efd.satellites.vbs,'nested anchors missing');
+    invariant(JSON.stringify(nested.configuration.scopes.overview)===JSON.stringify(saved.configuration.scopes.overview),'nested edits overwrote overview');
+    await evaluate("document.querySelector('.org-auto-layout').click()");await waitFor("!document.querySelector('.org-save-layout').disabled",'reset was not staged');await evaluate("document.querySelector('.org-save-layout').click()");await waitFor("document.querySelector('.org-save-layout').disabled&&document.querySelector('.org-layout-toolbar').getAttribute('aria-busy')==='false'",'reset did not save');
+    const reset=expectStatus(await api(actor,path),200,'read level reset').body;
+    invariant(!reset.configuration.scopes.efd&&JSON.stringify(reset.configuration.scopes.overview)===JSON.stringify(saved.configuration.scopes.overview),'reset changed the wrong scope');
+    await navigate('/?organization=all',actor,390,850);
+    await evaluate("document.querySelector('.org-fullscreen').click()");
+    await waitFor("document.querySelector('.organization-explorer.is-fullscreen')",'mobile fullscreen missing');
+    invariant(await evaluate("document.documentElement.scrollWidth<=innerWidth+1&&document.querySelector('.org-viewport').scrollWidth>document.querySelector('.org-viewport').clientWidth"),'mobile canvas must pan locally');
+    await evaluate("document.querySelector('.org-office[data-organization-id=efd]').scrollIntoView({block:'nearest',inline:'center',behavior:'instant'})");await settleFrames();
+    const touch=await evaluate("(()=>{const c=document.querySelector('.org-office[data-organization-id=efd]'),r=c.getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+r.height/2,left:c.style.left};})()");
+    await cdp.call('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:touch.x,y:touch.y,id:1}]},sessionId);
+    await cdp.call('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:touch.x+25,y:touch.y+12,id:1}]},sessionId);
+    await cdp.call('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]},sessionId);
+    await waitFor("!document.querySelector('.org-save-layout').disabled&&!document.querySelector('.org-core')",'touch moved the viewport or drilled into the card');
+    await cdp.call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]},sessionId);
+    invariant(await evaluate("[...document.querySelectorAll('.org-office,.org-satellite')].every(card=>getComputedStyle(card).animationName==='none')"),'personal anchors ignored reduced motion');
+    await capturePageSegmentScreenshot('.organization-explorer','organization-fullscreen-mobile.png',390,850);
+    await pressKey('Escape','Escape',27);await evaluate("document.querySelector('.org-discard-layout').click()");
+    invariant(JSON.stringify(expectStatus(await api('beat.stalder',path),200,'verify private layout isolation').body)===JSON.stringify(other),'another profile layout changed');
+    invariant(JSON.stringify(expectStatus(await api(actor,'/api/v1/organization-network'),200,'verify organization graph').body)===JSON.stringify(graph),'layout editing changed shared organizations or relations');
+    invariant(cdp.runtimeExceptions.length===0,`Organization layout errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+    console.log('PASS organization-layout: fullscreen, focus containment, mouse/touch/keyboard anchors, profile save/reload, floating, per-level reset, mobile/reduced motion, private/shared isolation');
+  } catch(error) {console.error('Organization layout scenario:',error.message);throw error;} finally {
+    await waitFor("document.querySelector('.org-layout-toolbar')?.getAttribute('aria-busy')!=='true'",'layout save did not settle before cleanup');
+    await cdp.call('Emulation.setEmulatedMedia',{features:[]},sessionId);
+    const current=expectStatus(await api(actor,path),200,'read organization layout cleanup').body;
+    expectStatus(await api(actor,path,{method:'PUT',body:{revision:current.revision,configuration:baseline.configuration}}),200,'restore original organization layout');
+  }
+}
+
+async function organizationExplorerFlow() {
+  const actor='kassandra.valdata';
+  // Exercise automatic placement without changing any user's saved anchors.
+  // Personal placement persistence is covered separately by organization-layout.
+  cdp.mockReadResponses=new Map([['/api/v1/organization-network/view',{revision:0,configuration:{schemaVersion:1,scopes:{}}}]]);
+  await cdp.call('Fetch.enable',{patterns:[{urlPattern:'*/api/v1/organization-network/view',requestStage:'Request'}]},sessionId);
+  try {
+  await navigate('/',actor,1440,1000);
+  await waitFor("document.querySelector('.org-stage')&&document.querySelector('.org-focus').textContent.includes('EFD')",'organization home did not resolve EFD');
+  await waitFor("!document.querySelector('.org-domain-bubble')&&document.querySelector('.org-layer .identifier-mode-switch[aria-checked=false] .identifier-mode-switch-thumb')",'domains must be hidden by default with the shared standard toggle');
+  await capturePageSegmentScreenshot('.organization-explorer','organization-domains-default.png',1440,1000);
+  await evaluate("document.querySelector('.org-layer [role=switch]').click()");
+  await waitFor("document.querySelector('.org-domain-bubble')&&document.querySelector('.org-layer [aria-checked=true]')",'standard toggle did not show domains');
+  await evaluate("document.querySelector('.org-layer [role=switch]').click()");
+  invariant(await evaluate("document.querySelector('#organization-explorer-title').textContent.trim()==='Datenraum der Schweizer Verwaltung und der bundesnahen Betriebe'"),'data landscape title differs from the requested wording');
+  invariant(await evaluate("parseFloat(getComputedStyle(document.querySelector('.welcome-intro h1')).fontSize)>=50&&parseFloat(getComputedStyle(document.querySelector('.welcome-intro')).paddingTop)>=50"),'original welcome typography and spacing were not restored');
+  await capturePageSegmentScreenshot('.welcome-intro','welcome-original-size.png',1440,900);
+  const graph=expectStatus(await api(actor,'/api/v1/organization-network'),200,'organization graph').body;
+  invariant(graph.homeId==='efd'&&graph.nodes.some(node=>node.id==='efd-estv-bi'),'trusted hierarchy or BI unit missing');
+  await evaluate("document.querySelector('.org-layer [role=switch]').click()");
+  const officeAssignments=graph.domains.filter(domain=>domain.label.startsWith('ROHS ')||domain.label==='Mehrwertsteuer');
+  invariant(officeAssignments.length>=3,'ROHS/VAT regression examples missing');
+  for(const domain of officeAssignments){
+    const office=domain.label.startsWith('ROHS ')?'efd-bit':'efd-estv',code=office==='efd-bit'?'BIT':'ESTV';
+    invariant(domain.organizationIds.includes(office),'trusted domain ancestry lacks '+code+': '+domain.label);
+    await waitFor(`document.querySelector('.org-domain-thread[data-domain-id="${domain.id}"][data-source-id="${office}"]')`,'domain line does not project to its visible assigned office: '+domain.label);
+    invariant(await evaluate(`document.querySelector('.org-domain-bubble[data-domain-id="${domain.id}"] .org-domain-assignment')?.textContent.includes('${code}')`),'domain bubble lacks its visible office assignment: '+domain.label);
+  }
+  const organizationLinkLengths=await evaluate("[...document.querySelectorAll('.org-thread')].map(line=>line.getTotalLength())");
+  console.log('Organization link lengths:',organizationLinkLengths.map(value=>Math.round(value)).join(', '));
+  const placementView=expectStatus(await api(actor,'/api/v1/organization-network/view'),200,'read personal placement constraints').body;
+  const efdAnchors=placementView.configuration.scopes.efd;
+  if(!efdAnchors||(!Object.keys(efdAnchors.offices??{}).length&&!Object.keys(efdAnchors.satellites??{}).length))invariant(organizationLinkLengths.every(length=>length<400),'automatic EFD placement still has a data link across the diagram');
+
+  await capturePageSegmentScreenshot('.organization-explorer','organization-assigned-domain-clusters.png',1440,1000);
+  await evaluate("document.querySelector('.org-layer [role=switch]').click()");
+
+  const sg=graph.nodes.find(node=>node.label==='Kanton St. Gallen');
+  const ne=graph.nodes.find(node=>node.label==='Kanton Neuchâtel');
+  invariant(sg&&ne,'cantonal directory nodes missing');
+  for(const organization of [sg,ne,graph.nodes.find(node=>node.id==='efd-estv')]){
+    invariant(Number.isInteger(organization.consumedProductCount),'separate consumption count missing: '+organization.label);
+    invariant(await evaluate(`(()=>{const card=document.querySelector('[data-organization-id="${organization.id}"]');return Number(card.querySelector('.org-offered-count').textContent.match(/\\d+/)[0])===${organization.productCount}&&Number(card.querySelector('.org-consumed-count').textContent.match(/\\d+/)[0])===${organization.consumedProductCount}&&card.getAttribute('aria-label').includes('konsumiert');})()`),'offering and consumption not distinguished on card: '+organization.label);
+  }
+  invariant(await evaluate("document.querySelector('.org-count-legend').textContent.includes('Angebot (Datenprodukte)')&&document.querySelector('.org-count-legend').textContent.includes('Konsumation (Datenprodukte)')&&document.querySelector('.org-focus-counts').textContent.includes('konsumiert')"),'offering/consumption legend or focus summary missing');
+  invariant(graph.relations.some(edge=>edge.sourceId==='efd-estv'&&edge.targetId===sg.id&&edge.evidence.includes('published-policy')),'existing St. Gallen policy relation missing');
+  invariant(graph.relations.some(edge=>edge.sourceId===sg.id&&edge.targetId==='vbs-armasuisse'),'new Zeughaus relation to armasuisse missing');
+  for(const canton of [sg,ne]) {
+    invariant(await evaluate(`(()=>{const card=document.querySelector('.org-satellite[data-organization-id="${canton.id}"]');return card?.classList.contains('is-connected')&&card.querySelector('.org-canton-prefix')?.textContent==='Kanton'&&parseFloat(getComputedStyle(card.querySelector('.org-canton-prefix')).fontSize)<parseFloat(getComputedStyle(card.querySelector('strong')).fontSize);})()`),'connected canton is gray or lacks its small prefix: '+canton.label);
+  }
+  invariant(await evaluate("!document.querySelector('.org-satellite[data-organization-id=\"eda\"]')?.classList.contains('is-connected')"),'unrelated outside organization is highlighted');
+  await capturePageSegmentScreenshot('.organization-explorer','organization-connected-cantons.png',1440,1000);
+  const overviewNodes=graph.nodes.filter(node=>node.parentId===null||['SBB','Post','ETH-Bereich'].includes(node.code)||(node.kind==='federal_related'&&node.parentId==='context:public'));
+  await evaluate("document.querySelector('.org-home').click()");
+  await waitFor(`document.querySelectorAll('.org-overview-card').length===${overviewNodes.length}&&!document.querySelector('.org-core,.org-bubble,.org-bubble-halo,.org-satellite')`,'overview must show peer organizations without a central department');
+  const overviewIds=await evaluate("[...document.querySelectorAll('.org-overview-card')].map(node=>node.dataset.organizationId).sort()");
+  invariant(JSON.stringify(overviewIds)===JSON.stringify(overviewNodes.map(node=>node.id).sort()),'overview omitted or duplicated a top-level organization');
+  invariant(['efd','vbs','context:cantons','context:banks'].every(id=>overviewIds.includes(id)),'overview lacks departments, cantons or cantonal banks');
+  await waitFor("document.querySelectorAll('.org-thread').length>0",'overview must project existing cross-organization relationships');
+  await capturePageSegmentScreenshot('.organization-explorer','organization-overview-desktop.png',1440,1000);
+  await evaluate("document.querySelector('.org-layer [role=switch]').click()");
+  await waitFor("document.querySelectorAll('.org-domain-bubble').length>0",'overview domain layer missing');
+  invariant(await evaluate("[...document.querySelectorAll('.org-domain-bubble')].every(node=>Math.abs(node.getBoundingClientRect().width-node.getBoundingClientRect().height)<2&&getComputedStyle(node).borderRadius==='50%')"),'overview domains must remain round');
+  await capturePageSegmentScreenshot('.organization-explorer','organization-overview-domains.png',1440,1000);
+  await evaluate("document.querySelector('.org-layer [role=switch]').click();document.querySelector('[data-organization-id=\"context:cantons\"]').click()");
+  await waitFor("document.querySelector('.org-focus')?.textContent.includes('Kantone')&&document.querySelectorAll('.org-office').length>0",'overview did not drill into the canton group');
+  await evaluate("document.querySelector('.org-home').click();document.querySelector('.org-own-home').click()");
+  await waitFor("document.querySelector('.org-focus')?.textContent.includes('EFD')",'own area did not return from the overview');
+  invariant(await evaluate("(()=>{const canvas=document.querySelector('daca-organization-canvas').getBoundingClientRect(),search=document.querySelector('.welcome-workspace .welcome-search').getBoundingClientRect();return search.left>=canvas.right-2&&search.right<=innerWidth;})()"),'search is not aligned at the right of the canvas');
+  invariant(await evaluate("document.querySelector('.welcome-context').textContent.includes('V, armasuisse, ASTRA, ESTV und BIT')&&!document.querySelector('.welcome-context').textContent.includes('PoC Data Catalog')"),'welcome credit or duplicate PoC wording is wrong');
+  invariant(await evaluate("document.querySelectorAll('.org-thread').length>0"),'existing catalog relationships have no thread');
+  await evaluate("document.querySelector('.welcome-intro-dismiss').focus()");
+  await waitFor("(()=>{const button=document.querySelector('.welcome-intro-dismiss'),tooltip=document.getElementById(button.getAttribute('aria-describedby'));return !button.hasAttribute('title')&&tooltip?.classList.contains('daca-glossary-tooltip')&&tooltip.textContent.includes('Einstellungen \u2192 Startseite');})()",'shared welcome tooltip or restoration hint missing');
+  await captureScreenshot('welcome-shared-tooltip.png');
+  await pressKey('Escape','Escape',27);
+  await evaluate("document.activeElement?.blur()");
+  invariant(await evaluate("document.querySelectorAll('.org-geometry ellipse').length===0&&document.querySelectorAll('.org-geometry rect').length===2&&getComputedStyle(document.querySelector('.org-satellite')).borderRadius===getComputedStyle(document.querySelector('.org-office')).borderRadius"),'organizations do not share the rounded rectangle shape');
+  const beforeDrift=await evaluate("['.org-office','.org-satellite'].map(selector=>getComputedStyle(document.querySelector(selector)).translate)");
+  await sleep(1200);
+  const afterDrift=await evaluate("['.org-office','.org-satellite'].map(selector=>getComputedStyle(document.querySelector(selector)).translate)");
+  invariant(beforeDrift.every((position,index)=>position!==afterDrift[index]),'inside/outside organizations are not both floating');
+  const officeClearance=await evaluate("(()=>{const cards=[...document.querySelectorAll('.org-office')].map(node=>({id:node.dataset.organizationId,...node.getBoundingClientRect().toJSON()}));return {irregular:new Set(cards.map(r=>Math.round(r.top))).size>cards.length/2,overlaps:cards.flatMap((a,i)=>cards.slice(i+1).filter(b=>!(a.right<=b.left||b.right<=a.left||a.bottom<=b.top||b.bottom<=a.top)).map(b=>[a,b]))};})()");
+  invariant(officeClearance.irregular&&!officeClearance.overlaps.length,'office cards overlap or remain in geometric rows: '+JSON.stringify(officeClearance));
+  await capturePageSegmentScreenshot('.welcome-workspace','organization-home-desktop.png',1440,900);
+  await evaluate("document.querySelector('.welcome-intro-dismiss').click()");
+  await waitFor("document.querySelector('.welcome-intro-confirm').open",'welcome confirmation did not open');
+  await clickText('.welcome-intro-confirm button','Abbrechen');
+  invariant(await evaluate("!!document.querySelector('.welcome-intro')"),'cancel hid the welcome');
+  await evaluate("document.querySelector('.welcome-intro-dismiss').click()");
+  await clickText('.welcome-intro-confirm button','Ja, ausblenden');
+  await waitFor("!document.querySelector('.welcome-intro')&&!!document.querySelector('#catalog-search')&&!!document.querySelector('.org-stage')",'confirmed dismissal removed the canvas/search or retained the intro');
+  await navigate('/',actor,1440,1000);
+  await waitFor("document.querySelector('.org-stage')&&!document.querySelector('.welcome-intro')",'welcome visibility was not persisted');
+  await waitFor("!document.querySelector('.org-domain-bubble')&&document.querySelector('.org-layer [aria-checked=false]')",'domains must start hidden after reopening the data landscape');
+  await clickText('.org-office','ESTV');
+  await waitFor("document.querySelector('.org-focus').textContent.includes('ESTV')&&[...document.querySelectorAll('.org-office')].some(node=>node.textContent.includes('BI'))",'ESTV unit drill-down failed');
+  const assertFocusedTitlePorts=async(expected=3)=>{
+    await waitFor(`(()=>{const stage=document.querySelector('.org-stage').getBoundingClientRect(),title=document.querySelector('.org-focus-title').getBoundingClientRect();const cx=(title.left+title.width/2-stage.left)/stage.width*960,cy=(title.top+title.height/2-stage.top)/stage.height*650,hx=(title.width/2+6)/stage.width*960,hy=(title.height/2+6)/stage.height*650;const atTitle=(x,y)=>Math.abs(Math.max(Math.abs(x-cx)/hx,Math.abs(y-cy)/hy)-1)<.03;return [...document.querySelectorAll('.org-thread')].filter(line=>{const a=line.getPointAtLength(0),b=line.getPointAtLength(line.getTotalLength());return atTitle(a.x,a.y)||atTitle(b.x,b.y);}).length>=${expected};})()`,'direct organization relationships do not attach to the title perimeter');
+    invariant(await evaluate("[...document.querySelectorAll('.org-thread')].every(line=>[line.getPointAtLength(0),line.getPointAtLength(line.getTotalLength())].every(point=>!(point.x===480&&point.y===325)))"),'a direct relationship still ends in the empty organization center');
+  };
+  await assertFocusedTitlePorts();
+  await capturePageSegmentScreenshot('.organization-explorer','organization-title-ports.png',1440,1000);
+  await evaluate("document.querySelector('.org-fullscreen').click()");
+  await waitFor("document.querySelector('.organization-explorer.is-fullscreen')",'title-port fullscreen missing');
+  await assertFocusedTitlePorts();
+  await capturePageSegmentScreenshot('.organization-explorer','organization-title-ports-fullscreen.png',1440,1000);
+  await pressKey('Escape','Escape',27);
+  await waitFor("!document.querySelector('.organization-explorer.is-fullscreen')",'title-port check did not exit fullscreen');
+  await clickText('.org-office','BI');
+  await waitFor("document.querySelector('.org-focus').textContent.includes('Business Intelligence')",'BI drill-down failed');
+  await clickText('.org-breadcrumb button','EFD');
+  await evaluate("document.querySelector('.org-layer [role=switch]').click()");
+  await waitFor("document.querySelector('.org-domains')",'domain layer did not switch on');
+  await waitFor("document.querySelector('.org-domain-bubble')",'enabled domains did not render bubbles');
+  invariant(await evaluate("[...document.querySelectorAll('.org-domain-bubble')].every(node=>{const rect=node.getBoundingClientRect();return Math.abs(rect.width-rect.height)<1&&getComputedStyle(node).borderRadius==='50%';})"),'domain bubbles are not round');
+  await waitFor("document.querySelectorAll('.org-domain-thread').length>0",'domain assignment lines missing');
+  invariant(await evaluate("[...document.querySelectorAll('.org-domain-thread')].every(line=>getComputedStyle(line).strokeDasharray!=='none')"),'domain assignment lines must be dashed');
+  invariant(await evaluate("document.querySelector('.org-thread:not(.is-inferred)')&&[...document.querySelectorAll('.org-thread:not(.is-inferred)')].every(line=>getComputedStyle(line).strokeDasharray==='none')"),'organization relationship lines must remain solid');
+  await capturePageSegmentScreenshot('.welcome-workspace','organization-round-domains.png',1440,900);
+  await evaluate("document.querySelector('.org-fullscreen').click()");
+  await waitFor("document.querySelector('.organization-explorer.is-fullscreen .org-domain-thread')",'domain assignments missing in fullscreen');
+  invariant(await evaluate("[...document.querySelectorAll('.org-domain-thread')].every(line=>getComputedStyle(line).strokeDasharray!=='none')"),'fullscreen domain assignments must be dashed');
+  await capturePageSegmentScreenshot('.organization-explorer','organization-domain-lines-fullscreen.png',1440,1000);
+  await pressKey('Escape','Escape',27);
+  await waitFor("!document.querySelector('.organization-explorer.is-fullscreen')",'domain line check did not exit fullscreen');
+
+
+  await evaluate("document.querySelector('.org-layer [role=switch]').click()");
+  await waitFor("!document.querySelector('.org-domains')&&!document.querySelector('.org-domain-thread')",'domain layer and assignment lines did not switch off');
+  await evaluate("(()=>{const node=[...document.querySelectorAll('.org-office')].find(node=>node.textContent.includes('ESTV'));node.focus();node.dispatchEvent(new KeyboardEvent('keydown',{key:'F10',code:'F10',shiftKey:true,bubbles:true,cancelable:true}));})()");
+  await waitFor("document.querySelector('.org-context-menu')",'keyboard context menu missing');
+  invariant(await evaluate("document.querySelectorAll('.org-context-menu a[target=\"_blank\"][rel=\"noopener\"]').length===2"),'context menu lacks native new-tab links');
+  await waitFor("[...document.querySelectorAll('.org-context-menu daca-search-icon')].every(icon=>performance.getEntriesByType('resource').some(resource=>resource.name.endsWith('/assets/catalog-search/'+icon.getAttribute('name')+'.svg')))",'menu icons did not load');
+  await settleFrames();
+
+  invariant(await evaluate("(()=>{const menu=document.querySelector('.org-context-menu'),items=[...menu.querySelectorAll('[role=menuitem]')],r=menu.getBoundingClientRect();return menu.classList.contains('daca-canvas-context-menu')&&getComputedStyle(menu).borderRadius==='8px'&&items.every(item=>item.querySelector('daca-search-icon')&&item.querySelector('span')&&getComputedStyle(item).display==='flex'&&parseFloat(getComputedStyle(item).minHeight)>=34)&&r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight;})()"),'organization menu does not match the shared canvas design or overflows the screen');
+  await capturePageSegmentScreenshot('.welcome-workspace','organization-context-menu.png',1440,900);
+  await pressKey('Escape','Escape',27);
+  await waitFor("!document.querySelector('.org-context-menu')",'Escape did not close the menu');
+  await cdp.call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]},sessionId);
+  invariant(await evaluate("[...document.querySelectorAll('.org-satellite,.org-office,.org-domain-bubble')].every(node=>getComputedStyle(node).animationName==='none')"),'satellites animate under reduced motion');
+  await evaluate("document.documentElement.dataset.dacaTheme='dark'");
+  await capturePageSegmentScreenshot('.welcome-workspace','organization-dark.png',1440,900);
+  await evaluate("document.documentElement.dataset.dacaTheme='light'");
+  await setViewport(390,844); await settleFrames();
+  await waitFor("document.documentElement.scrollWidth<=innerWidth+1&&document.querySelector('.org-viewport').scrollLeft>100",'mobile organization layout did not settle');
+  const mobileBounds=await evaluate("(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,x:scrollX,parts:['.welcome-page','.welcome-workspace','.org-viewport','.org-stage','.org-core','.org-context-menu'].map(selector=>{const e=document.querySelector(selector),r=e?.getBoundingClientRect();return{selector,left:r?.left,right:r?.right,width:r?.width,scroll:e?.scrollWidth};})}))()");
+  await captureScreenshot('organization-mobile-check.png');
+  invariant(mobileBounds.scroll<=mobileBounds.width+1,`organization canvas overflows the mobile page: ${JSON.stringify(mobileBounds)}`);
+  invariant(await evaluate("document.querySelector('.org-viewport').scrollWidth>document.querySelector('.org-viewport').clientWidth"),'mobile canvas has no local scrolling');
+  invariant(await evaluate("document.querySelector('.org-viewport').scrollLeft>100"),'mobile canvas did not center the home department');
+  await captureScreenshot('organization-mobile.png');
+  await evaluate("(()=>{const node=document.querySelector('.org-office');node.focus();node.dispatchEvent(new KeyboardEvent('keydown',{key:'F10',code:'F10',shiftKey:true,bubbles:true,cancelable:true}));})()");
+  await waitFor("document.querySelector('.org-context-menu')",'mobile keyboard context menu missing');
+  await settleFrames();
+  invariant(await evaluate("(()=>{const menu=document.querySelector('.org-context-menu').getBoundingClientRect();return menu.left>=0&&menu.right<=innerWidth&&menu.top>=0;})()"),'mobile context menu is clipped after canvas centering');
+  await pressKey('Escape','Escape',27);
+  await waitFor("!document.querySelector('.org-context-menu')",'mobile Escape did not close the menu');
+
+  await navigate('/?organization=all',actor,390,844);
+  await waitFor(`document.querySelectorAll('.org-overview-card').length===${overviewNodes.length}&&!document.querySelector('.org-core,.org-bubble')`,'overview deep link did not load on mobile');
+  invariant(await evaluate("document.documentElement.scrollWidth<=innerWidth+2&&document.querySelector('.org-viewport').scrollWidth>document.querySelector('.org-viewport').clientWidth"),'mobile overview must scroll locally without page overflow');
+  await capturePageSegmentScreenshot('.organization-explorer','organization-overview-mobile.png',390,850);
+  await evaluate("document.querySelector('.org-own-home').click()");
+  await waitFor("document.querySelector('.org-focus')?.textContent.includes('EFD')",'mobile own-area return failed');
+  await evaluate("(()=>{const card=document.querySelector('.org-office');card.focus();card.dispatchEvent(new KeyboardEvent('keydown',{key:'F10',code:'F10',shiftKey:true,bubbles:true,cancelable:true}));})()");
+  await waitFor("document.querySelector('.org-context-menu')",'mobile organization menu missing');await settleFrames();
+  await waitFor("(()=>{const r=document.querySelector('.org-context-menu').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight;})()",'mobile organization menu overflows the screen');
+  await captureScreenshot('organization-context-menu-mobile.png');
+  await pressKey('Escape','Escape',27);
+
+
+  await navigate('/settings/home',actor);
+  await clickText('.settings-panel button','Willkommensbereich wieder anzeigen');
+  await navigate('/',actor);
+  await waitFor("document.querySelector('.welcome-intro')&&document.querySelector('.org-stage')",'settings did not restore the welcome introduction');
+  await navigate('/?organization=vbs','sibilla.micheli',1440,1000);
+  await waitFor("document.querySelector('.org-focus')?.textContent.includes('VBS')&&document.querySelectorAll('.org-office').length>8",'VBS free office layout missing');
+  invariant(await evaluate(`document.querySelector('.org-satellite[data-organization-id="${sg.id}"]')?.classList.contains('is-connected')`),'St. Gallen must remain bright when supplying armasuisse inside VBS');
+  await evaluate(`document.querySelector('.org-satellite[data-organization-id="${sg.id}"]').click()`);
+  await waitFor("document.querySelector('.org-focus')?.textContent.includes('St. Gallen')",'cannot drill into the Zeughaus producer canton');
+  invariant(await evaluate("document.querySelector('.org-focus .org-canton-prefix')?.textContent==='Kanton'&&document.querySelector('.org-satellite[data-organization-id=\"vbs-armasuisse\"]')?.classList.contains('is-connected')"),'outbound canton relationship is not highlighted');
+  await assertFocusedTitlePorts(2);
+  await capturePageSegmentScreenshot('.organization-explorer','organization-st-gallen-armasuisse.png',1440,1000);
+  await evaluate("document.querySelector('.org-own-home').click()");
+  await waitFor("document.querySelector('.org-focus')?.textContent.includes('VBS')",'return to VBS failed');
+  await waitFor("document.querySelector('a[href=\"/profile\"]')?.textContent.includes('Sibilla Di Ciesa')",'renamed Sibilla profile label missing');
+  await capturePageSegmentScreenshot('.welcome-workspace','organization-vbs-free-layout.png',1440,900);
+  await navigate('/profile','fausto.marzo',1440,1000);
+  await waitFor("(()=>{const image=document.querySelector('img.profile-portrait');return image?.src.endsWith('/assets/data-owners/fausto-marzo.webp')&&image.complete&&image.naturalWidth===256;})()",'Fausto portrait is not loaded in his profile');
+  await waitFor("(()=>{const profile=document.querySelector('daca-user-profile')?.textContent??'';return profile.includes('EFD BIT PS')&&!profile.includes('EFD BIT PS CPS');})()",'Fausto organization must be PS without CPS');
+  await captureScreenshot('fausto-profile-portrait.png');
+  for(const [person,name,organization,role] of [
+    ['sibilla.micheli','Sibilla Di Ciesa','VBS GS','Local Data Steward Department (LDSD)'],
+    ['christian.spider','Christiano Stadello','VBS armasuisse','Amt Local Data Steward (ALDS)'],
+    ['thomas.wikinger','Thomas Wikinger','VBS armasuisse','Local Data Steward (LDS)'],
+    ['thomas.kriegli','Thomas Kriegli','EFD ESTV BI','Amt Local Data Steward (ALDS)'],
+    ['joel.ruod','Joel Ruod','EFD ESTV BI','Stellvertretung'],
+  ]){
+    await navigate('/profile',person,1440,1000);
+    await waitFor(`document.querySelector('#profile-name')?.textContent===${JSON.stringify(name)}&&document.querySelector('.profile-identity')?.textContent.includes(${JSON.stringify(organization)})&&document.querySelector('daca-user-profile')?.textContent.includes(${JSON.stringify(role)})`,'confirmed persona scope or mandate missing: '+person);
+    await captureScreenshot('profile-'+person.replaceAll('.','-')+'.png');
+    if(person==='sibilla.micheli')await captureScreenshot('journey-09-sibilla-profile.webp');
+  }
+  const domains=expectStatus(await api('thomas.kriegli','/api/v1/domains'),200,'read analytics domains').body;
+  invariant(domains.some(domain=>domain.localizations.some(label=>label.preferredLabel==='Data Analytics')&&domain.ownerUserId==='thomas.kriegli'),'Thomas must own Data Analytics');
+  await navigate('/domains?ownOffice=0&view=cards','sandro.wenger',1440,1100);
+  await setControls({'.semantic-search input':'Verteidigung'});
+  await waitFor("document.querySelector('.semantic-grid')?.textContent.includes('Sibilla Di Ciesa')",'current domain responsibility missing from guide evidence');
+  await captureScreenshot('journey-08-domain-register.webp');
+  invariant(cdp.runtimeExceptions.length===0,`organization explorer browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+  console.log('PASS organization-explorer: trusted hierarchy, NE relationship, right search, confirmed browser-local hide/reload/restore, EFD/ESTV/BI, domain layer, keyboard context links, dark/reduced-motion and 390px layout');
+  } finally {
+    await cdp.call('Fetch.disable',{},sessionId);
+    cdp.mockReadResponses=null;
+  }
+}
+
 try {
   const browser = await connectBrowser();
   cdp = new CdpClient(browser.webSocketDebuggerUrl);
@@ -3517,7 +4675,7 @@ try {
   await cdp.call('Page.addScriptToEvaluateOnNewDocument', {
     source: `try {
       const user = new URL(location.href).searchParams.get('demoUser');
-      if (user) localStorage.setItem('daca.preference.' + user + '.language', 'de');
+      if (user && ${JSON.stringify(args.get('--flow') !== 'organization-localization')}) localStorage.setItem('daca.preference.' + user + '.language', 'de');
     } catch {}`,
   }, sessionId);
   await cdp.call('Runtime.enable', {}, sessionId);
@@ -3527,7 +4685,7 @@ try {
   await cdp.call('Network.setCacheDisabled', { cacheDisabled: true }, sessionId);
   await cdp.call('Network.setBypassServiceWorker', { bypass: true }, sessionId);
 
-  if(args.get('--flow')==='domain-exploration'){await domainExplorationFlow();} else if(args.get('--flow')==='domain-loading-indicators'){await domainLoadingIndicatorsFlow();} else if(args.get('--flow')==='physical-domain-removal'){await physicalDomainRemovalFlow();} else if(args.get('--flow')==='lineage-access'){await lineageAccessFlow();} else if(args.get('--flow')==='domain-canvas-mobile-layout'){await domainCanvasMobileLayoutFlow();} else if(args.get('--flow')==='domain-canvas-approval'){await domainCanvasApprovalFlow();} else if(args.get('--flow')==='source-info-notices'){await sourceInfoNoticesFlow();} else if(args.get('--flow')==='mapping-status-tooltips'){await mappingStatusTooltipsFlow();} else if(args.get('--flow')==='personal-search-views'){await personalSearchViewsFlow();} else if(args.get('--flow')==='lineage-explorer'){await lineageExplorerFlow();} else if(args.get('--flow')==='model-department-default'){await modelDepartmentDefaultFlow();} else if(args.get('--flow')==='physical-derivation'){await physicalDerivationEntryFlow();} else if(args.get('--flow')==='physical-object-actions'){await physicalObjectActionsFlow();} else if(args.get('--flow')==='mapping-release-tail'){await navigate('/models','christian.man');const physical=await physicalFirstFlow();await existingToExistingFlow(physical);await dataModelJourneyTen();await sourceAccessReturnFlow();await fieldMoveFlow();console.log('PASS focused Mapping release tail');} else if(args.get('--flow')==='semantic-own-office'){await semanticOwnOfficeFlow();} else if(args.get('--flow')==='mapping-start'){await mappingStartFlow();} else if(args.get('--flow')==='expert-search'){await expertSearchFlow();} else if(args.get('--flow')==='mapping-live-refresh'){await mappingLiveRefreshFlow();} else if(args.get('--flow')==='domain-transfer'){await domainTransferFlow();} else if(args.get('--flow')==='domain-metadata'){await domainMetadataFlow();} else if(args.get('--flow')==='semantic-owner-search'){await semanticOwnerSearchFlow();} else if(args.get('--flow')==='domain-relation-types'){await domainRelationTypesFlow();} else if(args.get('--flow')==='organization-term-network'){await organizationTermNetworkFlow();} else if(args.get('--flow')==='domain-connection-gesture'){await domainConnectionGestureFlow();} else if(args.get('--flow')==='domain-card-actions'){await domainCardActionsFlow();} else if(args.get('--flow')==='governance-information'){await governanceInformationFlow();} else if(args.get('--flow')==='semantic-gestures'){await semanticGestureFlow();} else if(args.get('--flow')==='domain-network'){await domainNetworkFlow();} else if(args.get('--flow')==='field-move'){await fieldMoveFlow();} else if(args.get('--flow')==='hold-connections'){await holdConnectionFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});} else if(args.get('--flow')==='source-access-return'){await sourceAccessReturnFlow();} else if(args.get('--flow')==='csv-import'){await csvPhysicalModelsFlow();} else if(args.get('--flow')==='inventory-representation'){await inventoryRepresentationFlow();} else if(args.get('--flow')==='concept-network'){await conceptNetworkEditingFlow();} else if(args.get('--flow')==='line-editing'){
+  if(args.get('--flow')==='organization-heading-space'){await organizationHeadingSpaceFlow();} else if(args.get('--flow')==='organization-highway'){await organizationHighwayFlow();} else if(args.get('--flow')==='organization-view-options'){await organizationViewOptionsFlow();} else if(args.get('--flow')==='canvas-card-styles'){await canvasCardStylesFlow();} else if(args.get('--flow')==='canvas-selection'){await canvasSelectionFlow();} else if(args.get('--flow')==='protected-buildings'){await protectedBuildingsFlow();} else if(args.get('--flow')==='domain-product-layout'){await domainProductLayoutFlow();} else if(args.get('--flow')==='organization-flow'){await organizationFlowFlow();} else if(args.get('--flow')==='canvas-controls'){await canvasControlsFlow();} else if(args.get('--flow')==='recent-work'){await recentWorkFlow();} else if(args.get('--flow')==='organization-object-search'){await organizationObjectSearchFlow();} else if(args.get('--flow')==='organization-localization'){await organizationLocalizationFlow();} else if(args.get('--flow')==='organization-domain-layout'){await organizationDomainLayoutFlow();} else if(args.get('--flow')==='organization-layout'){await organizationLayoutFlow();} else if(args.get('--flow')==='semantic-performance'){await semanticPerformanceFlow();} else if(args.get('--flow')==='domain-radial-layout'){await domainRadialLayoutFlow();} else if(args.get('--flow')==='organization-explorer'){await organizationExplorerFlow();} else if(args.get('--flow')==='domain-exploration'){await domainExplorationFlow();} else if(args.get('--flow')==='domain-loading-indicators'){await domainLoadingIndicatorsFlow();} else if(args.get('--flow')==='physical-domain-removal'){await physicalDomainRemovalFlow();} else if(args.get('--flow')==='lineage-access'){await lineageAccessFlow();} else if(args.get('--flow')==='domain-canvas-mobile-layout'){await domainCanvasMobileLayoutFlow();} else if(args.get('--flow')==='domain-canvas-approval'){await domainCanvasApprovalFlow();} else if(args.get('--flow')==='source-info-notices'){await sourceInfoNoticesFlow();} else if(args.get('--flow')==='mapping-status-tooltips'){await mappingStatusTooltipsFlow();} else if(args.get('--flow')==='personal-search-views'){await personalSearchViewsFlow();} else if(args.get('--flow')==='lineage-explorer'){await lineageExplorerFlow();} else if(args.get('--flow')==='model-department-default'){await modelDepartmentDefaultFlow();} else if(args.get('--flow')==='physical-derivation'){await physicalDerivationEntryFlow();} else if(args.get('--flow')==='physical-object-actions'){await physicalObjectActionsFlow();} else if(args.get('--flow')==='mapping-release-tail'){await navigate('/models','christian.man');const physical=await physicalFirstFlow();await existingToExistingFlow(physical);await dataModelJourneyTen();await sourceAccessReturnFlow();await fieldMoveFlow();console.log('PASS focused Mapping release tail');} else if(args.get('--flow')==='semantic-own-office'){await semanticOwnOfficeFlow();} else if(args.get('--flow')==='mapping-start'){await mappingStartFlow();} else if(args.get('--flow')==='expert-search'){await expertSearchFlow();} else if(args.get('--flow')==='mapping-live-refresh'){await mappingLiveRefreshFlow();} else if(args.get('--flow')==='domain-transfer'){await domainTransferFlow();} else if(args.get('--flow')==='domain-metadata'){await domainMetadataFlow();} else if(args.get('--flow')==='semantic-owner-search'){await semanticOwnerSearchFlow();} else if(args.get('--flow')==='domain-relation-types'){await domainRelationTypesFlow();} else if(args.get('--flow')==='organization-term-network'){await organizationTermNetworkFlow();} else if(args.get('--flow')==='domain-connection-gesture'){await domainConnectionGestureFlow();} else if(args.get('--flow')==='domain-card-actions'){await domainCardActionsFlow();} else if(args.get('--flow')==='governance-information'){await governanceInformationFlow();} else if(args.get('--flow')==='semantic-gestures'){await semanticGestureFlow();} else if(args.get('--flow')==='domain-network'){await domainNetworkFlow();} else if(args.get('--flow')==='field-move'){await fieldMoveFlow();} else if(args.get('--flow')==='hold-connections'){await holdConnectionFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});} else if(args.get('--flow')==='source-access-return'){await sourceAccessReturnFlow();} else if(args.get('--flow')==='csv-import'){await csvPhysicalModelsFlow();} else if(args.get('--flow')==='inventory-representation'){await inventoryRepresentationFlow();} else if(args.get('--flow')==='concept-network'){await conceptNetworkEditingFlow();} else if(args.get('--flow')==='line-editing'){
     invariant(args.get('--model-id')&&args.get('--snapshot-id'),'line-editing flow requires model-id and snapshot-id');
     await edgeEditingFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});
   } else {
@@ -3558,10 +4716,19 @@ try {
   try {
     if (cdp) await cdp.call('Browser.close');
   } catch {}
-  if (!edge.killed) edge.kill();
+  // Windows may retain the temporary profile lock until Edge has actually exited.
+  const waitForExit=async()=>{
+    if(edge.exitCode!==null)return;
+    await new Promise(resolve=>{
+      const done=()=>{clearTimeout(timer);edge.off('exit',done);resolve();};
+      const timer=setTimeout(done,2000);edge.once('exit',done);
+    });
+  };
+  await waitForExit();
+  if (edge.exitCode===null&&!edge.killed) { edge.kill(); await waitForExit(); }
   const temporaryRoot = path.resolve(tmpdir());
   const resolvedProfile = path.resolve(profileDirectory);
   if (resolvedProfile.startsWith(`${temporaryRoot}${path.sep}daca-edge-e2e-`)) {
-    await rm(resolvedProfile, { recursive: true, force: true, maxRetries: 4, retryDelay: 100 });
+    await rm(resolvedProfile, { recursive: true, force: true, maxRetries: 12, retryDelay: 200 });
   }
 }

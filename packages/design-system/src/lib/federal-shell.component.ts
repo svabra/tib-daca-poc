@@ -61,7 +61,7 @@ export interface DacaUserOption {
               <span>{{ notificationCount() > 99 ? '99+' : notificationCount() }}</span>
             </a>
           }
-          <label class="daca-header-language"><span class="daca-sr-only">{{ shellLabel('language') }}</span><select [value]="locale()" (change)="languageChange.emit($any($event.target).value)"><option value="de">DE</option><option value="fr">FR</option><option value="it">IT</option><option value="en">EN</option></select></label>
+          <label class="daca-header-language"><span class="daca-sr-only">{{ shellLabel('language') }}</span><select [value]="locale()" (change)="languageChange.emit($any($event.target).value)"><option value="de">DE</option><option value="fr">FR</option><option value="it">IT</option><option value="rm" lang="rm">RM</option><option value="en">EN</option></select></label>
           <button class="daca-header-theme" type="button" (click)="themeToggle.emit()" [attr.aria-label]="shellLabel(theme() === 'dark' ? 'lightMode' : 'darkMode')">{{ theme() === 'dark' ? '☀' : '◐' }}<span class="daca-header-icon-tooltip" aria-hidden="true">{{ shellLabel(theme() === 'dark' ? 'lightMode' : 'darkMode') }}</span></button>
           @if (documentationHref()) {
             <a class="daca-header-documentation" [routerLink]="documentationHref()" [attr.aria-label]="shellLabel('documentation')">
@@ -189,7 +189,20 @@ export interface DacaUserOption {
 })
 export class FederalShellComponent {
   shellLabel(key: string): string {
-    if (key === 'profile') return ({ de: 'Profil', fr: 'Profil', it: 'Profilo', en: 'Profile' })[this.locale()];
+    const locale = this.locale();
+    if (locale === 'rm') {
+      const labels: Record<string, string> = {
+        profile: 'Profil', skip: 'Ir al cuntegn', federalNavigation: 'Navigaziun da las autoritads federalas',
+        federalAuthorities: 'Tut las autoritads federalas svizras', logout: 'Sa deconnectar', language: 'Tschernar la lingua',
+        lightMode: 'Activar il modus cler', darkMode: 'Activar il modus stgir', settings: 'Avrir ils parameters',
+        documentation: 'Documentaziun dal catalog da datas', environment: 'Ambient POC', localCatalog: 'Catalog local',
+        menu: 'Menu', mainNavigation: 'Navigaziun principala', homePrefix: 'A la pagina iniziala da ', homeSuffix: '',
+        confederation: 'Confederaziun svizra', notificationSingular: 'incumbensa averta da mussar', notificationPlural: 'incumbensas avertas da mussar',
+        submenu: 'Sutmenu', close: 'serrar', open: 'avrir',
+      };
+      return labels[key] ?? key;
+    }
+    if (key === 'profile') return ({ de: 'Profil', fr: 'Profil', it: 'Profilo', en: 'Profile' })[locale];
     const labels: Record<string, readonly [string, string, string, string]> = {
       skip: ['Zum Inhalt springen', 'Aller au contenu', 'Vai al contenuto', 'Skip to content'],
       federalNavigation: ['Navigation der Bundesbehörden', 'Navigation des autorités fédérales', 'Navigazione delle autorità federali', 'Federal authority navigation'],
@@ -213,7 +226,7 @@ export class FederalShellComponent {
       close: ['schliessen', 'fermer', 'chiudi', 'close'],
       open: ['öffnen', 'ouvrir', 'apri', 'open'],
     };
-    return labels[key]?.[({ de: 0, fr: 1, it: 2, en: 3 })[this.locale()]] ?? key;
+    return labels[key]?.[({ de: 0, fr: 1, it: 2, en: 3 })[locale]] ?? key;
   }
   readonly appTitle = input.required<string>();
   readonly appSubtitle = input('Bundesamt f\u00fcr Informatik und Telekommunikation BIT');
@@ -223,7 +236,7 @@ export class FederalShellComponent {
   readonly versionDescription = input('A PoC by BIT and ESTV');
   readonly versionFeatureScope = input<DacaFeatureScope>('catalog');
   readonly subtitleBelow = input(false);
-  readonly locale = input<'de' | 'fr' | 'it' | 'en'>('en');
+  readonly locale = input<'de' | 'fr' | 'it' | 'en' | 'rm'>('en');
   readonly theme = input<'light' | 'dark'>('light');
   readonly userName = input<string | null>(null);
   readonly userId = input<string | null>(null);

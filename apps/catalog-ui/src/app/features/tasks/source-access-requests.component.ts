@@ -15,7 +15,7 @@ import { SourceAccessRequest } from '../../core/catalog.models';
         <div>
           <p class="daca-eyebrow">Datenquellen erschliessen</p>
           <h2 id="source-access-owner-title">Datenquellen-Zugriffsanfragen</h2>
-          <p>Direkte Owner-Entscheide für den Oracle-Sourcing-PoC – ohne Produkt-PBAC oder OPA-Projektion.</p>
+          <p>Direkte Data Owner-Entscheide für den Oracle-Sourcing-PoC – ohne Produkt-PBAC oder OPA-Projektion.</p>
         </div>
         <span>{{ api.sourceAccessRequestsLoading() || api.sourceAccessRequestsError() ? '–' : api.sourceAccessRequests().length }}</span>
       </header>
@@ -65,7 +65,7 @@ import { SourceAccessRequest } from '../../core/catalog.models';
                 }
               </div>
               <aside class="source-access-owner-actions">
-                <span class="source-access-owner-badge">Owner-Entscheid</span>
+                <span class="source-access-owner-badge">Data Owner-Entscheid</span>
                 <p>Keine zweite Kontrollperson. Der Entscheid erzeugt einen auditierbaren Source Grant.</p>
                 <button class="daca-button" type="button" [disabled]="decidingId() === request.id" (click)="decide(request, 'approve')">
                   {{ decidingId() === request.id ? 'Wird verarbeitet…' : 'Zugriff genehmigen' }}

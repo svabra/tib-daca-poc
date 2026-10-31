@@ -30,11 +30,11 @@ import { DacaGlossaryTermComponent } from '@bit-daca/design-system';
     </section>
 
     <div class="simulation-grid">
-      <a class="daca-card simulation-card" routerLink="/poc-simulation/product-submitted"><span>01</span><div><h2>Datenprodukt im DaCa eingereicht</h2><p>Die reale Metadatenpublikation übernimmt ein bereits kuratiertes REST-Datenprodukt und erzeugt Owner-Aufgaben.</p></div><strong>Simulation öffnen</strong></a>
+      <a class="daca-card simulation-card" routerLink="/poc-simulation/product-submitted"><span>01</span><div><h2>Datenprodukt im DaCa eingereicht</h2><p>Die reale Metadatenpublikation übernimmt ein bereits kuratiertes REST-Datenprodukt und erzeugt Data Owner-Aufgaben.</p></div><strong>Simulation öffnen</strong></a>
       <a class="daca-card simulation-card" routerLink="/poc-simulation/quality-below-threshold"><span>02</span><div><h2>Datenqualität zu tief</h2><p>Erzeugt einen separaten Alarm bei 58 % gegenüber dem Mindestwert von 80 %, ohne die Reifemedaille zu verfälschen.</p></div><strong>Simulation öffnen</strong></a>
       <a class="daca-card simulation-card" routerLink="/poc-simulation/not-discoverable"><span>03</span><div><h2>Datenprodukt nicht auffindbar</h2><p>Entfernt die Katalogsichtbarkeit und erzeugt eine Aufgabe für den verantwortlichen Data Owner.</p></div><strong>Simulation öffnen</strong></a>
       <a class="daca-card simulation-card" routerLink="/poc-simulation/isbo-restricted"><span>04</span><div><h2>Durch den <daca-glossary-term term="ISBO" /> eingeschränkt</h2><p>Simuliert eine dringende Sicherheitsprüfung; bestehende Freigaben werden bewusst nicht automatisch widerrufen.</p></div><strong>Simulation öffnen</strong></a>
-      <a class="daca-card simulation-card" routerLink="/poc-simulation/domain-glossary"><span>05</span><div><h2>Domäne und Terminology</h2><p>Bereitet das synthetische Fahrzeugprodukt für Domain-Antrag, gemeinsamen Termreview und Wissensgraph vor.</p></div><strong>Fixture öffnen</strong></a>
+      <a class="daca-card simulation-card" routerLink="/poc-simulation/domain-glossary"><span>05</span><div><h2>Domäne und Terminologie</h2><p>Bereitet das synthetische Fahrzeugprodukt für Domain-Antrag, gemeinsamen Termreview und Wissensgraph vor.</p></div><strong>Fixture öffnen</strong></a>
     </div>
 
     <p class="daca-alert is-warning"><strong>PoC-Grenze:</strong> Alle Ereignisse betreffen ausschliesslich synthetische Fixture-Produkte. Auslösungen und Resets werden append-only protokolliert.</p>

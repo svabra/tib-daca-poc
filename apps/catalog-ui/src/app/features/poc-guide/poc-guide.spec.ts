@@ -54,7 +54,7 @@ describe('PoC guide contract', () => {
     expect(screenshots.slice(-3).map((screenshot) => screenshot.src)).toEqual([
       '/assets/poc-guide/journey-08-semantic-suggestions.webp',
       '/assets/poc-guide/journey-08-domain-register.webp',
-      '/assets/poc-guide/journey-09-glossary-review.webp',
+      '/assets/poc-guide/journey-09-sibilla-profile.webp',
     ]);
     const consumerActions = POC_JOURNEYS[0].steps.flatMap((step) => step.actions ?? []);
     expect(consumerActions).toContainEqual(expect.objectContaining({
@@ -112,7 +112,7 @@ describe('PoC guide contract', () => {
     expect(journeyCards.item(9).getAttribute('data-poc-guide-journey')).toBe('create-data-model');
     expect(journeyCards.item(10).getAttribute('data-poc-guide-journey')).toBe('derive-logical-model');
     expect(journeyCards.item(11).getAttribute('data-poc-guide-journey')).toBe('overview-access-responsibility');
-    expect(journeyCards.item(8).textContent).toContain('Glossarterm gemeinsam prüfen');
+    expect(journeyCards.item(8).textContent).toContain('Terminologiebegriff gemeinsam prüfen');
     expect(root.textContent).toContain('Das können Sie testen');
     expect(root.textContent).toContain('Das ist nicht Teil des PoC');
     expect(root.querySelector('a[href="/poc-simulation"]')).not.toBeNull();

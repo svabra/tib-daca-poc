@@ -1,6 +1,7 @@
 import { HttpClient, HttpErrorResponse, HttpHeaders, HttpResponse } from '@angular/common/http';
 import { computed, effect, inject, Injectable, signal } from '@angular/core';
-import { catchError, forkJoin, map, Observable, of, switchMap, tap, throwError, timeout } from 'rxjs';
+import { catchError, EMPTY, expand, finalize, forkJoin, map, Observable, of, reduce, shareReplay, switchMap, tap, throwError, timeout } from 'rxjs';
+import type { OrganizationNetwork } from '../features/welcome/organization-canvas.component';
 import {
   AccessRequestSubmission,
   AccessRenewalFixtureState,
@@ -38,6 +39,16 @@ import {
 } from './catalog.models';
 import { FALLBACK_EDGES, FALLBACK_NODES, FALLBACK_OWNED_ACCESS_CONSUMERS, FALLBACK_PRODUCT, FALLBACK_PRODUCTS, FALLBACK_PROVENANCE } from './catalog.seed';
 import { DemoIdentityService } from './demo-identity.service';
+
+// System task copy may come from older persisted workflow fixtures.
+function workflowCopy(value: string): string {
+  return (value ?? '').replace(/Glossartermvorschlag/g, 'Terminologievorschlag')
+    .replace(/Glossarterme/g, 'Terminologie')
+    .replace(/Glossarterm/g, 'Terminologiebegriff')
+    .replace(/Data-Owner/g, 'Data Owner')
+    .replace(/\b(?:Domain|Product) Owners?\b/g, (role) => role.endsWith('Owners') ? 'Data Owners' : 'Data Owner')
+    .replace(/(?<!Data )\bOwner(s)?\b/g, 'Data Owner$1');
+}
 
 type Collection<T> = T[] | { items: T[] };
 type ProductWire = Partial<Omit<DataProduct, 'contact' | 'quality' | 'license'>> & {
@@ -189,6 +200,9 @@ export class CatalogApiService {
   private readonly workflowTaskState = signal<readonly WorkflowTaskWire[]>([]);
   private readonly sourceAccessRequestState = signal<readonly SourceAccessRequest[]>([]);
   private readonly domainState = signal<readonly DomainSummary[]>([]);
+  private readonly domainIdentityState = signal<string | null>(null);
+  private readonly domainReads = new Map<string, Observable<readonly DomainSummary[]>>();
+  private cachedDomains(): readonly DomainSummary[] { return this.domainIdentityState() === this.identity.userId() ? this.domainState() : []; }
   private productsRefreshGeneration = 0;
   private ownerInboxRefreshGeneration = 0;
   private workflowTasksRefreshGeneration = 0;
@@ -226,6 +240,7 @@ export class CatalogApiService {
       const userId = this.identity.userId();
       if (userId === this.lastRefreshedIdentity) return;
       this.lastRefreshedIdentity = userId;
+      this.domainState.set([]); this.domainIdentityState.set(null);
       this.productsState.set([]);
       this.ownerAccessRequestState.set([]);
       this.ownedAccessConsumerState.set([]);
@@ -241,6 +256,18 @@ export class CatalogApiService {
     this.refreshProducts();
     this.refreshOwnerAccessRequestInbox();
     this.refreshWorkflowTasks();
+  }
+
+  loadOrganizationNetwork():Observable<OrganizationNetwork> {
+    return this.http.get<OrganizationNetwork>('/api/v1/organization-network',{headers:this.identity.headers()});
+  }
+
+  loadSearchProducts():Observable<DataProduct[]> {
+    const headers=this.identity.headers();
+    type Page={items:ProductWire[];nextCursor:string|null};
+    const page=(cursor?:string)=>this.http.get<Page>('/api/v1/data-products',{headers,params:cursor?{limit:'100',cursor}:{limit:'100'}});
+    return page().pipe(expand(result=>result.nextCursor?page(result.nextCursor):EMPTY),
+      map(result=>result.items.map(item=>this.normalizeProduct(item))),reduce((items,page)=>[...items,...page],[] as DataProduct[]));
   }
 
   refreshProducts(): void {
@@ -405,10 +432,15 @@ export class CatalogApiService {
   }
 
   loadDomains(includeRetired = false): Observable<readonly DomainSummary[]> {
-    return this.http.get<Collection<DomainWire>>('/api/v1/domains', {
+    const actor = this.identity.userId(), key = `${actor}:${includeRetired}`;
+    const pending = this.domainReads.get(key); if (pending) return pending;
+    const request = this.http.get<Collection<DomainWire>>('/api/v1/domains', {
       headers: this.identity.headers(),
       params: includeRetired ? { includeRetired: true } : {},
-    }).pipe(map((result) => (Array.isArray(result) ? result : result.items).map((item) => this.normalizeDomain(item))), tap((items) => this.domainState.set(items)));
+    }).pipe(map((result) => (Array.isArray(result) ? result : result.items).map((item) => this.normalizeDomain(item))),
+      tap(items => { if (actor === this.identity.userId()) { this.domainState.set(items); this.domainIdentityState.set(actor); } }),
+      finalize(() => this.domainReads.delete(key)), shareReplay({bufferSize: 1, refCount: true}));
+    this.domainReads.set(key, request); return request;
   }
 
   loadDomain(domainId: string): Observable<DomainSummary> {
@@ -476,7 +508,7 @@ export class CatalogApiService {
     return this.http.post<DomainWire>('/api/v1/domains',payload,{headers:this.identity.headers()}).pipe(map(item=>this.normalizeDomain(item)),catchError(error=>throwError(()=>this.describeError(error))));
   }
   loadGlossaryTerm(termId:string):Observable<GlossaryTermSummary>{
-    const domains$=this.domainState().length?of(this.domainState()):this.loadDomains(true);
+    const domains$=this.cachedDomains().length?of(this.cachedDomains()):this.loadDomains(true);
     return domains$.pipe(switchMap(domains=>this.http.get<GlossaryTermWire>(`/api/v1/glossary/terms/${encodeURIComponent(termId)}`,{headers:this.identity.headers()}).pipe(map(item=>this.normalizeGlossaryTerm(item,domains)))));
   }
   retireTermDirect(term:GlossaryTermSummary):Observable<GlossaryTermSummary>{
@@ -497,21 +529,21 @@ export class CatalogApiService {
 
   loadGlossaryTerms(domainIds: readonly string[] = []): Observable<readonly GlossaryTermSummary[]> {
     const params: Record<string, string> = domainIds.length ? { domainId: domainIds[0] } : {};
-    const domains$ = this.domainState().length ? of(this.domainState()) : this.loadDomains(true);
+    const domains$ = this.cachedDomains().length ? of(this.cachedDomains()) : this.loadDomains(true);
     return domains$.pipe(switchMap((domains) => this.http.get<Collection<GlossaryTermWire>>('/api/v1/glossary/terms', {
       headers: this.identity.headers(), params,
     }).pipe(map((result) => (Array.isArray(result) ? result : result.items).map((item) => this.normalizeGlossaryTerm(item, domains))))));
   }
 
   loadGlossaryTermProposals(): Observable<readonly GlossaryTermProposal[]> {
-    const domains$ = this.domainState().length ? of(this.domainState()) : this.loadDomains(true);
+    const domains$ = this.cachedDomains().length ? of(this.cachedDomains()) : this.loadDomains(true);
     return domains$.pipe(switchMap(() => this.http.get<Collection<ProposalWire>>('/api/v1/glossary/term-proposals', {
       headers: this.identity.headers(),
     }).pipe(map((result) => (Array.isArray(result) ? result : result.items).map((item) => this.normalizeProposal(item))))));
   }
 
   loadGlossaryTermProposal(proposalId: string): Observable<GlossaryTermProposal> {
-    const domains$ = this.domainState().length ? of(this.domainState()) : this.loadDomains(true);
+    const domains$ = this.cachedDomains().length ? of(this.cachedDomains()) : this.loadDomains(true);
     return domains$.pipe(switchMap(() => this.http.get<ProposalWire>(`/api/v1/glossary/term-proposals/${encodeURIComponent(proposalId)}`, {
       headers: this.identity.headers(),
     }).pipe(map((item) => this.normalizeProposal(item)))));
@@ -683,7 +715,7 @@ export class CatalogApiService {
         next: (tasks) => {
           if (refreshGeneration !== this.workflowTasksRefreshGeneration) return;
           this.workflowTasksError.set(null);
-          this.workflowTaskState.set(tasks.map((task) => ({ ...task, kind: task.taskType === 'glossary_term_collaboration' ? 'collaboration' : task.taskKind ?? task.kind ?? 'action' })));
+          this.workflowTaskState.set(tasks.map((task) => ({ ...task, title: workflowCopy(task.title), detail: workflowCopy(task.detail), kind: task.taskType === 'glossary_term_collaboration' ? 'collaboration' : task.taskKind ?? task.kind ?? 'action' })));
           this.workflowTasksLoading.set(false);
         },
         error: () => {

@@ -1,3 +1,4 @@
+import { catalogCopy } from '../../core/catalog-localization';
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, computed, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DocumentationApiService, DocumentationGlossaryTerm, ResponsibilityRole } from '../../core/documentation-api.service';
@@ -44,9 +45,9 @@ export class GlossaryWordComponent implements OnDestroy {
   private loadedKey = '';
   private closeTimer: ReturnType<typeof setTimeout> | null = null;
 
-  readonly linkLabel = computed(() => ({ de: 'Im Glossar öffnen', fr: 'Ouvrir dans le glossaire', it: 'Apri nel glossario', en: 'Open in glossary' })[this.preferences.language()]);
-  readonly loadingLabel = computed(() => ({ de: 'Begriff wird geladen …', fr: 'Chargement du terme…', it: 'Caricamento del termine…', en: 'Loading term…' })[this.preferences.language()]);
-  readonly missingLabel = computed(() => ({ de: 'Kein Glossareintrag gefunden.', fr: 'Aucune entrée trouvée.', it: 'Nessuna voce trovata.', en: 'No glossary entry found.' })[this.preferences.language()]);
+  readonly linkLabel = computed(() => ({ de: 'Im Glossar öffnen', fr: 'Ouvrir dans le glossaire', it: 'Apri nel glossario', en: 'Open in glossary', rm: 'Avrir en il glossari' })[this.preferences.language()]);
+  readonly loadingLabel = computed(() => ({ de: 'Begriff wird geladen …', fr: 'Chargement du terme…', it: 'Caricamento del termine…', en: 'Loading term…', rm: 'Il term vegn chargià …' })[this.preferences.language()]);
+  readonly missingLabel = computed(() => ({ de: 'Kein Glossareintrag gefunden.', fr: 'Aucune entrée trouvée.', it: 'Nessuna voce trovata.', en: 'No glossary entry found.', rm: 'Nagina endataziun da glossari chattada.' })[this.preferences.language()]);
 
   open(): void {
     this.keepOpen();
@@ -110,6 +111,6 @@ export class RoleTermComponent {
       data_steward: ['Data Steward', 'Data Steward', 'Data Steward', 'Data Steward'],
       deputy_data_steward: ['Stv. Data Steward', 'Data Steward suppléant', 'Sostituto Data Steward', 'Deputy Data Steward'],
     } as const;
-    return labels[this.role()][({ de: 0, fr: 1, it: 2, en: 3 })[this.preferences.language()]];
+    return catalogCopy(labels[this.role()], this.preferences.language());
   });
 }

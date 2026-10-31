@@ -37,11 +37,14 @@ from .models import (
     PhysicalTable,
     SeedMarker,
     SemanticGraphState,
+    utc_now,
 )
 
 ORG = "efd-bit-ps-cps"
 OWNER = "marcello.hebeisa"
 DEPUTY = "matteo.duca"
+CONTROL_PERSON = "fausto.marzo"
+CONTROL_PERSON_MARKER = "rohs-cps-control-person-fausto-v1"
 MARKER = "rohs-cps-catalog-v1"
 CATALOG = "urn:daca:catalog:bit-poc"
 
@@ -156,9 +159,13 @@ def responsibility(session, target, object_id):
 
 
 def seed_rohs_cps_catalog(session):
+    from .organization_network_seed import seed_organization_explorer
+
+    seed_organization_explorer(session)
     # A committed marker makes restart non-destructive: never resurrect retired objects,
     # revoked roles, removed assignments, or overwrite later editorial/ownership changes.
     if session.get(SeedMarker, MARKER):
+        seed_rohs_cps_control_person(session)
         return
     if session.get(AdministrativeOrganization, "efd-bit") is None:
         return
@@ -562,6 +569,58 @@ def seed_rohs_cps_catalog(session):
     )
     session.add(SeedMarker(name=MARKER))
     session.flush()
+    seed_rohs_cps_control_person(session)
+
+
+def seed_rohs_cps_control_person(session):
+    """Apply the requested reviewer once, preserving later edits and revocations."""
+    from .control_people import is_active_publication_approver
+    from .poc_identity_updates import FAUSTO_ORGANIZATION, seed_fausto_ps_organization
+    from .service_levels import audit_control_person_change, control_person_change_blocked
+
+    seed_fausto_ps_organization(session)
+    if session.get(SeedMarker, CONTROL_PERSON_MARKER) or session.get(DemoUser, OWNER) is None:
+        return
+    products = list(session.scalars(
+        select(DataProduct).where(DataProduct.owner_user_id == OWNER).with_for_update()
+    ))
+    for product in products:
+        if product.deputy_owner_user_id == CONTROL_PERSON:
+            raise RuntimeError("Fausto cannot review a product where he is deputy owner")
+        if product.control_person_user_id != CONTROL_PERSON and control_person_change_blocked(session, product.id):
+            raise RuntimeError(f"Finish the active approval before changing control person: {product.id}")
+
+    controller = session.get(DemoUser, CONTROL_PERSON)
+    if controller is None:
+        controller = DemoUser(
+            id=CONTROL_PERSON, display_name="Fausto Marzo", organization="EFD BIT PS",
+            email=f"{CONTROL_PERSON}@example.invalid", roles=["publication_approver"],
+            avatar_url="/assets/data-owners/fausto-marzo.webp", preferences={},
+            active=True, selectable=True,
+        )
+        session.add(controller)
+        session.flush()
+        session.add(IdentityDirectoryEntry(
+            id=CONTROL_PERSON, display_name=controller.display_name,
+            organization=controller.organization, organization_id=FAUSTO_ORGANIZATION,
+            email=controller.email, source="federal", source_system="rohs-cps-poc", active=True,
+        ))
+        session.add(FederalPersonMembership(
+            id=identity(f"membership:{CONTROL_PERSON}"), user_id=CONTROL_PERSON,
+            organization_id=FAUSTO_ORGANIZATION, is_primary=True, valid_from=date(2026, 10, 31),
+        ))
+    if not is_active_publication_approver(controller):
+        raise RuntimeError("Fausto Marzo must be an active publication approver")
+    for product in products:
+        if product.control_person_user_id == CONTROL_PERSON:
+            continue
+        product.control_person_user_id = CONTROL_PERSON
+        product.revision += 1
+        product.updated_at = utc_now()
+        audit_control_person_change(session, product, OWNER)
+    session.add(SeedMarker(name=CONTROL_PERSON_MARKER))
+    session.flush()
+    seed_fausto_ps_organization(session)
 
 
 if __name__ == "__main__":

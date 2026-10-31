@@ -102,7 +102,7 @@ def test_modeling_seed_is_idempotent_and_preserves_legacy_persona_roles(session_
         assert first_counts == second_counts == (6, 3, 3, 3, 5)
         assert session.get(DemoUser, "sibilla.micheli").roles == legacy_roles
         assert session.get(DemoUser, "giuseppe.starwars").organization == "armasuisse"
-        assert session.get(DemoUser, "thomas.wikinger").organization == "armasuisse"
+        assert session.get(DemoUser, "thomas.wikinger").organization == "VBS armasuisse"
         assert {
             (assignment.user_id, assignment.role)
             for assignment in session.scalars(

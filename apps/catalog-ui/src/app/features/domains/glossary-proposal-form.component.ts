@@ -56,7 +56,7 @@ interface DuplicateHint {
             Nach der Freigabe automatisch an dieses Produkt anhängen
           </label>
           @if (!canAttachProduct) {
-            <small>Nur Product Owner oder Stellvertretung dürfen die automatische Zuordnung beantragen.</small>
+            <small>Nur Data Owner oder Stellvertretung dürfen die automatische Zuordnung beantragen.</small>
           } @else if (!sharesProductDomain()) {
             <small>Für die automatische Zuordnung muss mindestens eine gewählte Domain auch dem Produkt zugeordnet sein.</small>
           }

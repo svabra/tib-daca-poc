@@ -28,7 +28,7 @@ const DOMAIN: DomainSummary = {
   definition: 'Fachdomain der direkten Bundessteuer.',
   labels: [{ language: 'de', preferredLabel: 'Direkte Bundessteuer', alternativeLabels: ['DBST'], definition: 'Fachdomain der direkten Bundessteuer.' }],
   ownerUserId: 'domain.owner',
-  ownerName: 'Domain Owner',
+  ownerName: 'Data Owner',
   ownerOrganization: 'ESTV',
   deputyOwnerUserId: 'domain.deputy',
   deputyOwnerName: 'Domain Deputy',

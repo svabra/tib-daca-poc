@@ -14,7 +14,9 @@ describe('DocumentationStaticComponent', () => {
     const root=fixture.nativeElement as HTMLElement;
     expect(root.querySelectorAll('daca-governance-information tbody tr')).toHaveLength(19);
     expect(root.querySelector('#rollen-zustaendigkeiten')?.textContent).toContain('Amt Local Data Steward');
-    expect(root.querySelector('#rollen-zustaendigkeiten')?.textContent).not.toMatch(/\b(?:VBS|SLDS)\b/);
+    expect(root.querySelector('#rollen-zustaendigkeiten thead')?.textContent).not.toMatch(/\b(?:VBS|SLDS)\b/);
+    expect(root.textContent).toContain('Christiano Stadello');
+    expect(root.textContent).toContain('GS-VBS');
     fixture.componentInstance.query.set('DATENDOMANEN');fixture.detectChanges();await fixture.whenStable();
     expect([...root.querySelectorAll<HTMLElement>('.documentation-articles>article')].filter(article=>!article.hidden).map(article=>article.id)).toEqual(['rollen-zustaendigkeiten']);
     fixture.componentInstance.query.set('Unauffindbarer Suchtext');fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();

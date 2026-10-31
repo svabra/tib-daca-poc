@@ -148,7 +148,7 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
         <footer class="editor-actions">
           <div class="editor-footer-context">@if(!embedded()){<a class="daca-button is-secondary" routerLink="/models">Zur Übersicht</a>}<span>{{ form.dirty ? 'Ungespeicherte Änderungen' : 'Alle Änderungen gespeichert' }}</span></div>
           <aside class="review-owner-info" aria-live="polite">
-            @if(selectedDomain();as domain){<strong>Prüfung: {{ domain.ownerName }}</strong><span>{{ domain.preferredLabel }} · Stv. {{ domain.deputyOwnerName }}</span><small>Erst «Zur Domänenfreigabe einreichen» erzeugt den persönlichen Prüfauftrag beim primären Domain Owner.</small>}
+            @if(selectedDomain();as domain){<strong>Prüfung: {{ domain.ownerName }}</strong><span>{{ domain.preferredLabel }} · Stv. {{ domain.deputyOwnerName }}</span><small>Erst «Zur Domänenfreigabe einreichen» erzeugt den persönlichen Prüfauftrag beim primären Data Owner.</small>}
             @else{<strong>Prüfung noch nicht zugewiesen</strong><span>Wählen Sie eine DaCa-Domäne.</span>}
           </aside>
           <div class="editor-primary-actions">
@@ -157,7 +157,7 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
             <div class="save-action"><button class="daca-button" type="submit" [disabled]="saving() || !canEditCurrentModel() || model()?.status === 'retired' || model()?.status === 'review_pending'">{{ saving() ? 'Wird gespeichert …' : 'Als Entwurf speichern' }}</button><ng-container [ngTemplateOutlet]="saveFeedback" /></div>
           </div>
         </footer>
-        @if (model()?.status === 'review_pending') { <p class="publish-note">Die Aufgabe liegt beim primären Domain Owner der gewählten Domäne. Der Entscheid erfolgt über den persönlichen Prüfauftrag.</p> }
+        @if (model()?.status === 'review_pending') { <p class="publish-note">Die Aufgabe liegt beim primären Data Owner der gewählten Domäne. Der Entscheid erfolgt über den persönlichen Prüfauftrag.</p> }
       </form>
       }
     }
@@ -744,7 +744,7 @@ export class LogicalModelEditorComponent {
   }
   canSubmitForReview(): boolean { const current=this.model();return Boolean(current?.status==='draft'&&!this.form.dirty&&!this.form.invalid&&!this.saving()&&this.selectedDomain()&&this.identity.modelingRoles(this.identity.user()).some(role=>role==='data_steward'||role==='deputy_data_steward')); }
   submitBlockedReason(): string | null { const current=this.model();if(!current)return'Zuerst den Entwurf speichern.';if(current.status!=='draft')return'Nur ein Entwurf kann eingereicht werden.';if(this.form.dirty)return'Zuerst die Änderungen als Entwurf speichern.';if(this.form.invalid)return'Zuerst die ungültigen Felder korrigieren und speichern.';if(!this.identity.modelingRoles(this.identity.user()).some(role=>role==='data_steward'||role==='deputy_data_steward'))return'Nur ein Data Steward kann das Modell einreichen.';return null; }
-  submitForReview(): void { const current = this.model(); if (!current || !this.canSubmitForReview()) return; this.saving.set(true);this.error.set(null);this.saveError.set(null); this.api.submitLogicalModel(current.id, current.versionId, this.etag()).pipe(finalize(() => this.saving.set(false))).subscribe({ next: ({ body, etag }) => { this.model.set(body); this.etag.set(etag);this.patch(body);this.form.markAsPristine();this.catalogApi.refreshWorkflowTasks(); this.notice.set(`Der Prüfauftrag wurde an ${this.selectedDomain()?.ownerName ?? 'den primären Domain Owner'} übermittelt.`); }, error: (error: Error) => this.error.set(error.message) }); }
+  submitForReview(): void { const current = this.model(); if (!current || !this.canSubmitForReview()) return; this.saving.set(true);this.error.set(null);this.saveError.set(null); this.api.submitLogicalModel(current.id, current.versionId, this.etag()).pipe(finalize(() => this.saving.set(false))).subscribe({ next: ({ body, etag }) => { this.model.set(body); this.etag.set(etag);this.patch(body);this.form.markAsPristine();this.catalogApi.refreshWorkflowTasks(); this.notice.set(`Der Prüfauftrag wurde an ${this.selectedDomain()?.ownerName ?? 'den primären Data Owner'} übermittelt.`); }, error: (error: Error) => this.error.set(error.message) }); }
   retire(): void { const current = this.model(); if (!current || current.status !== 'published' || !this.canPublishCurrentModel() || !window.confirm(`«${current.title.de || current.identifiers[0]}» stilllegen? Die Versionshistorie bleibt erhalten.`)) return; this.saving.set(true); this.error.set(null); this.api.retireLogicalModel(current.id, current.versionId, this.etag()).pipe(finalize(() => this.saving.set(false))).subscribe({ next: ({ body, etag }) => { this.model.set(body); this.etag.set(etag); this.notice.set('Das Modell wurde stillgelegt; die Versionshistorie bleibt erhalten.'); }, error: (error: Error) => this.error.set(error.message) }); }
   private patch(model: LogicalModel): void {
     this.patchingModel=true;

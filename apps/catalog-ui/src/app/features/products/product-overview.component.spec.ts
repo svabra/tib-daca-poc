@@ -133,12 +133,12 @@ describe('ProductOverviewComponent SLA control person', () => {
 
     expect(root.textContent).toContain('Thomas Kriegli');
     expect(root.textContent).toContain('ESTV · Kontrollperson / Publication Approver');
-    expect(root.textContent).toContain('Joel Ruod · ESTV');
+    expect(root.textContent).toContain('Joel Ruod · EFD ESTV');
     expect(root.querySelector<HTMLImageElement>('.product-overview-owner img')?.src).toContain('/assets/data-owners/joel-ruod.webp');
     const ownerPeople = root.querySelectorAll<HTMLElement>('.product-overview-owner-person');
     expect(ownerPeople).toHaveLength(2);
     expect(ownerPeople[1].textContent).toContain('Stv. Data Owner');
-    expect(ownerPeople[1].textContent).toContain('Kassandra Valdata · ESTV');
+    expect(ownerPeople[1].textContent).toContain('Kassandra Valdata · EFD ESTV');
     expect(ownerPeople[1].querySelector<HTMLImageElement>('img')?.src).toContain('/assets/kassandra-valdata.webp');
     expect(component.selectedControlPersonId()).toBe('thomas.estv');
     expect(component.activePublicationApprovers().map((user) => user.id)).toEqual(['thomas.bag', 'thomas.estv']);

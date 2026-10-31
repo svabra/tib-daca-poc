@@ -158,7 +158,7 @@ def complete_quality(
     if not page.get_by_label("Fachgebiet", exact=True).input_value().strip():
         page.get_by_label("Fachgebiet", exact=True).fill("Kantonale Gewerbesteuer")
     if not page.get_by_label("Kontakt", exact=True).input_value().strip():
-        page.get_by_label("Kontakt", exact=True).fill("joel.ruod@efv.admin.ch")
+        page.get_by_label("Kontakt", exact=True).fill("joel.ruod@estv.admin.ch")
     if not page.get_by_label("Aktualisierung", exact=True).input_value().strip():
         page.get_by_label("Aktualisierung", exact=True).fill("monthly")
     discoverable = page.get_by_test_id("quality-discoverable")

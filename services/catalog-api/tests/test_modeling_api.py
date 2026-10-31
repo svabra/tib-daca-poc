@@ -107,6 +107,9 @@ def test_personal_preferences_are_validated_and_scoped_to_demo_user(client, sess
     assert saved.status_code == 200
     assert client.get(path, headers=_headers("christian.spider")).json() == {"value": "fr"}
     assert client.get(path, headers=_headers("cinthya.thor")).json() == {"value": "de"}
+    assert client.put(path, json={"value": "rm"}, headers=_headers("christian.spider")).status_code == 200
+    assert client.get(path, headers=_headers("christian.spider")).json() == {"value": "rm"}
+    assert client.get(path, headers=_headers("cinthya.thor")).json() == {"value": "de"}
     assert client.put(path, json={"value": "invalid"}, headers=_headers("christian.spider")).status_code == 422
 
 

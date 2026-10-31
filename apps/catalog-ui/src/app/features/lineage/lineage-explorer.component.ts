@@ -9,11 +9,13 @@ import { FALLBACK_EDGES, FALLBACK_NODES, FALLBACK_PROVENANCE } from '../../core/
 import { LineageEdge, LineageNode, ProvenanceEvent } from '../../core/catalog.models';
 import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav.component';
 import { TooltipDirective } from '../../shared/tooltip.directive';
+import { highwayPacketEndpoint } from '../../shared/data-highway';
 import { SearchIconComponent } from '../search/search-icon.component';
 
 export interface PositionedNode extends LineageNode { x: number; y: number; }
-export interface PositionedEdge extends LineageEdge { path: string; labelX: number; labelY: number; labelWidth: number; }
-export const LINEAGE_CARD = { width: 208, height: 112 };
+export interface PositionedEdge extends LineageEdge { path: string; ribbonPath: string; flightPath: string; from: {x:number;y:number}; to: {x:number;y:number}; labelX: number; labelY: number; labelWidth: number; }
+export const LINEAGE_CARD = { width: 240, height: 95 };
+let lineageCanvasSequence = 0;
 const KIND_ICONS = { source: 'database', transform: 'adjustments-horizontal', product: 'box', consumer: 'server' };
 
 /** Round routed bends without discarding Dagre's obstacle-avoiding waypoints. */
@@ -24,7 +26,7 @@ function roundedPath(points: { x: number; y: number }[]): string {
     const previous = points[index - 1], point = points[index], next = points[index + 1];
     const before = Math.hypot(point.x - previous.x, point.y - previous.y);
     const after = Math.hypot(next.x - point.x, next.y - point.y);
-    const radius = Math.min(14, before / 2, after / 2);
+    const radius = Math.min(32, before / 2, after / 2);
     if (!before || !after) continue;
     path += ` L ${point.x - (point.x - previous.x) * radius / before} ${point.y - (point.y - previous.y) * radius / before}`;
     path += ` Q ${point.x} ${point.y} ${point.x + (next.x - point.x) * radius / after} ${point.y + (next.y - point.y) * radius / after}`;
@@ -50,7 +52,12 @@ export function layoutLineage(nodes: readonly LineageNode[], edges: readonly Lin
     nodes: nodes.map(node => ({ ...node, x: graph.node(node.id).x, y: graph.node(node.id).y + offsetY })),
     edges: validEdges.map(edge => {
       const item = graph.edge(edge.source, edge.target, edge.id) as { points: {x: number; y: number}[]; x: number; y: number; width: number };
-      return { ...edge, path: roundedPath(item.points.map(point => ({ x: point.x, y: point.y + offsetY }))),
+      const points = item.points.map(point => ({ x: point.x, y: point.y + offsetY }));
+      const from = {x:graph.node(edge.source).x, y:graph.node(edge.source).y + offsetY};
+      const to = {x:graph.node(edge.target).x, y:graph.node(edge.target).y + offsetY};
+      // Packets continue past the port until head and trail are hidden under the card.
+      const flight = [highwayPacketEndpoint(points[0],from),...points,highwayPacketEndpoint(points[points.length-1],to)];
+      return { ...edge, path: roundedPath(points), ribbonPath: roundedPath([from,...points,to]), flightPath:roundedPath(flight), from, to,
         labelX: item.x!, labelY: item.y! + offsetY, labelWidth: item.width! };
     }),
   };
@@ -60,7 +67,7 @@ export function layoutLineage(nodes: readonly LineageNode[], edges: readonly Lin
   selector: 'daca-lineage-explorer', standalone: true,
   imports: [DatePipe, RouterLink, ProductWorkspaceNavComponent, StatusBadgeComponent, TooltipDirective, SearchIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  templateUrl: './lineage-explorer.component.html', styleUrl: './lineage-explorer.component.css',
+  templateUrl: './lineage-explorer.component.html', styleUrls: ['./lineage-explorer.component.css', '../../shared/data-highway.css'],
 })
 export class LineageExplorerComponent {
   readonly api = inject(CatalogApiService);
@@ -80,7 +87,7 @@ export class LineageExplorerComponent {
     ?? this.displayNodes().find(node => node.kind === 'product') ?? this.displayNodes()[0]);
   readonly graph = computed(() => layoutLineage(this.displayNodes(), this.edges()));
   readonly card = LINEAGE_CARD;
-  readonly pulsePhases = ['0s', '-1.5s'];
+  readonly highwayId = `lineage-highway-${++lineageCanvasSequence}`;
   readonly edgeMenu = signal<{edge: LineageEdge; x: number; y: number} | null>(null);
   private menuTrigger: HTMLElement | SVGElement | null = null;
   readonly accessHelp = 'Zugriffsprotokolle sind nur für den aktuellen Data Owner der Quelle oder des Produkts sichtbar.';
@@ -128,6 +135,19 @@ export class LineageExplorerComponent {
   escapeMenu(): void { if (this.edgeMenu()) { this.edgeMenu.set(null); this.menuTrigger?.focus(); } }
   kindLabel(kind: LineageNode['kind']): string { return ({ source: 'Source', transform: 'Transform', product: 'Product', consumer: 'Consumer' })[kind]; }
   icon(kind: LineageNode['kind']): string { return KIND_ICONS[kind]; }
+  canvasKind(node: LineageNode): string {
+    if (node.productId || node.kind === 'product') return 'product';
+    const type = (node.urn ?? node.id).match(/^urn:daca:(logical-model|physical-snapshot|physical-representation|physical-declaration|organization|domain|terminology|term):/i)?.[1]?.toLowerCase();
+    return type === 'logical-model' ? 'logical' : type?.startsWith('physical-') ? 'physical'
+      : type === 'terminology' ? 'term' : type ?? node.kind;
+  }
+  objectLabel(node: LineageNode): string {
+    if (/^urn:daca:physical-declaration:/i.test(node.urn ?? node.id)) return 'Physische Deklaration';
+    return ({product:'Datenprodukt', logical:'Logisches Modell', physical:'Physische Repräsentation', organization:'Organisation', domain:'Domäne', term:'Term'} as Record<string,string>)[this.canvasKind(node)] ?? this.kindLabel(node.kind);
+  }
+  objectIcon(node: LineageNode): string {
+    return ({product:'box', logical:'schema', physical:'table', organization:'hierarchy', domain:'grid', term:'book'} as Record<string,string>)[this.canvasKind(node)] ?? this.icon(node.kind);
+  }
   urn(node: LineageNode): string { return node.urn || (node.id.startsWith('urn:') ? node.id : `urn:daca:lineage:${node.id}`); }
   owner(node: LineageNode): string {
     const product = this.api.product();
@@ -144,6 +164,6 @@ export class LineageExplorerComponent {
   edgeHelp(edge: LineageEdge): string {
     const source = this.nodes().find(node => node.id === edge.source)?.label ?? edge.source;
     const target = this.nodes().find(node => node.id === edge.target)?.label ?? edge.target;
-    return `Datenfluss: ${source} → ${target}. ${edge.label}. ${edge.state === 'verified' ? this.verifiedHelp : this.declaredHelp}`;
+    return `Datenfluss: ${source} → ${target}. ${edge.label}. ${edge.state === 'verified' ? this.verifiedHelp : this.declaredHelp}. Ein Punkt je Beziehung durchläuft die Verbindung in drei Sekunden; kein Live-Datenverkehr.`;
   }
 }

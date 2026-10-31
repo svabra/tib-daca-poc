@@ -1,4 +1,4 @@
-import { signal } from '@angular/core';
+import { signal, WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { BehaviorSubject, of } from 'rxjs';
@@ -17,7 +17,7 @@ describe('Catalog expert search modes and shared preview',()=>{
   const field:CatalogSearchAsset={...table,key:'field:egid',id:'egid',kind:'field',label:'Gebäudeidentifikator (EGID)',description:'Identifikator des Gebäudes.',parent:table,dataType:'Integer',nullable:false};
   async function setup(params:Record<string,string>={q:'Gebäude'},assets:readonly CatalogSearchAsset[]=[table,field]){
     const query=new BehaviorSubject(convertToParamMap(params));
-    const data={assets:signal(assets),organizationLabels:signal(new Map<string,string>()),loading:signal(false),partial:signal(false),reload:vi.fn()};
+    const data={matchesOrganization:(item:CatalogSearchAsset,id:string)=>item.organization===id,matchesDomain:(item:CatalogSearchAsset,id:string)=>item.domains.some(domain=>domain.id===id),assets:signal(assets),organizationLabels:signal(new Map<string,string>()),loading:signal(false),partial:signal(false),reload:vi.fn()};
     await TestBed.configureTestingModule({imports:[CatalogExpertSearchComponent],providers:[
       provideRouter([]),{provide:CatalogApiService,useValue:{loading:signal(false),refreshWorkflowTasks:vi.fn()}},
       {provide:DemoIdentityService,useValue:{userId:signal('search-tester'),users:signal([])}},
@@ -30,6 +30,26 @@ describe('Catalog expert search modes and shared preview',()=>{
     return{fixture,component:fixture.componentInstance,root:fixture.nativeElement as HTMLElement,data,query,navigate};
   }
 
+  it('shows the shared spinner throughout scoped loading in both layouts, without a premature empty state',async()=>{
+    const {component,fixture,root,data}=await setup({organization:'armasuisse'},[]);
+    const catalogLoading=component.api.loading as WritableSignal<boolean>;
+    for(const mode of ['context','focus'] as const){
+      component.setMode(mode);
+      data.loading.set(true);fixture.detectChanges();
+      const indicator=root.querySelector('daca-loading-indicator.search-loading');
+      expect(indicator?.querySelector('svg.small-spinner')).not.toBeNull();
+      expect(indicator?.querySelector('[role=status]')?.textContent).toContain('Katalogbereiche werden geladen');
+      expect(root.querySelector('.search-results')?.getAttribute('aria-busy')).toBe('true');
+      expect(root.querySelector('.search-empty')).toBeNull();
+      catalogLoading.set(true);data.loading.set(false);fixture.detectChanges();
+      expect(root.querySelector('daca-loading-indicator.search-loading')).not.toBeNull();
+      catalogLoading.set(false);fixture.detectChanges();
+      expect(root.querySelector('daca-loading-indicator.search-loading')).toBeNull();
+      expect(root.querySelector('.search-results')?.getAttribute('aria-busy')).toBe('false');
+      expect(root.querySelector('.search-empty')).not.toBeNull();
+    }
+  });
+
   it('defaults to context navigation with large mode tiles beside the heading',async()=>{
     const {component,root}=await setup();
     expect(component.mode()).toBe('context');
@@ -39,7 +59,24 @@ describe('Catalog expert search modes and shared preview',()=>{
     expect(root.querySelectorAll('[data-search-key="field:egid"]')).toHaveLength(1);
     expect(root.querySelector('.search-preview')).toBeNull();
   });
+  it('opens organization and domain deep links without a free-text query and applies both filters centrally',async()=>{
+    const {component,query,root,fixture}=await setup({organization:'armasuisse'},[table,field,{...table,key:'logical:other',id:'other',kind:'logical',organization:'foreign'}]);
+    expect(component.query()).toBe('');expect(component.searchReady()).toBe(true);expect(component.results().map(item=>item.key).sort()).toEqual([field.key,table.key].sort());
+    expect(root.querySelector('.search-chips')?.textContent).toContain('armasuisse');
+    query.next(convertToParamMap({domain:'domain'}));fixture.detectChanges();
+    expect(component.searchReady()).toBe(true);expect(component.results()).toHaveLength(3);
+    expect(root.querySelector('.search-sidebar details[open] select')?.querySelector('option[value="domain"]')).not.toBeNull();
+    component.setFilter('organization','foreign');fixture.detectChanges();expect(component.results().map(item=>item.key)).toEqual(['logical:other']);
+    component.resetFilters();fixture.detectChanges();expect(component.searchReady()).toBe(false);
+  });
 
+  it('keeps a deep-linked domain selected when its options arrive after the first render',async()=>{
+    const {fixture,root,data,component}=await setup({domain:'domain'},[]);
+    expect(component.searchReady()).toBe(true);
+    data.assets.set([table,field]);fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();
+    expect(root.querySelector<HTMLSelectElement>('.search-sidebar details[open] select')?.value).toBe('domain');
+    expect(component.results().map(item=>item.key).sort()).toEqual([table.key,field.key].sort());
+  });
   it('applies every saved filter and supports a filter-only view without a search phrase',async()=>{
     const {component,navigate,fixture}=await setup({});
     const view:SearchView={id:'view',ownerUserId:'search-tester',name:'Gebäude-Felder',description:'',revision:1,createdAt:'',updatedAt:'',
@@ -48,7 +85,7 @@ describe('Catalog expert search modes and shared preview',()=>{
     expect(component.query()).toBe('');expect(component.searchReady()).toBe(true);expect(component.results()).toEqual([field]);
     expect(component.mode()).toBe('focus');expect(component.sort()).toBe('name');
     expect(navigate).toHaveBeenLastCalledWith([],expect.objectContaining({queryParams:expect.objectContaining({view:'view',q:'',kind:'field',organization:'armasuisse',domain:'domain',status:'active',connection:'metadata',sort:'name'})}));
-    component.applyView(null);expect(component.activeViewId()).toBeNull();expect(component.searchReady()).toBe(false);
+    component.applyView(null);expect(component.activeViewId()).toBeNull();expect(component.searchReady()).toBe(true);
   });
 
   it('does not overwrite an explicitly modified search when restoring a selected view',async()=>{

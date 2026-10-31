@@ -1,5 +1,26 @@
 # Expert search: context navigation and focus
 
+Both layouts use the shared `LoadingIndicatorComponent` above the workspace for pending search-data or catalog reads, with the existing localized `searchLoading` status text. It stays visible through initial catalog sections and dependent physical snapshots, including filter-only organization/domain links from the data landscape. The results region exposes `aria-busy`; no empty-result notice appears before completion. Partial-failure and retry notices retain their existing behavior. The shared indicator respects reduced-motion preferences.
+
+The data-landscape organization and domain context menus open the expert search with canonical `organization` or `domain` URL filters. Empty scopes have disabled menu actions. The expert search owns filtering, supports filter-only deep links, shows the domain selector directly, includes organization results, and loads every readable product page. Actor-readable object references use explicit office assignments, subordinate units and catalog consumption; display names never determine scoped membership. See [organization explorer](organization-explorer.md).
+
+The scope menus use `objectKeys` from the actor-specific organization-network projection.
+Organization filters include their descendants and consumed products as well as owned objects.
+Domain filters include products, logical/physical models, terms and directly assigned
+organizations, excluding the domain itself and unrelated ancestor organizations. Scope lookup
+is independent of translated labels. Legacy saved text-valued organization filters retain their
+exact-match fallback. Physical structures follow current source read scope and returned-access
+state; a forbidden source collection is treated as an empty readable category. All product pages
+are fetched independently of the start-page 25-item list. Filter-only searches do not require a
+free-text phrase; a short nonempty phrase still follows the existing minimum-length rule.
+The organization/domain selects retain their selected value when asynchronous options arrive.
+The new `organization` kind can be saved and restored in existing personal Views.
+
+Validation: focused frontend/API tests cover menus, exact-ID scopes, empty states, deep links,
+asynchronous selection, product pagination, private products and returned physical-source access.
+The `organization-object-search` Edge flow covers both menus and resulting searches; the
+existing `expert-search` flow also passes for preview, modes, filter controls and mobile layout.
+
 ## Personal search Views
 
 The compact View selector sits between the search heading and search controls. **Neue View**

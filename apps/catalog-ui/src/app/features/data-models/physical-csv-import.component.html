@@ -14,7 +14,7 @@
   </div>
   <div class="import-inputs">
     <label>Name des Strukturinventars<input type="text" maxlength="255" [ngModel]="name()" (ngModelChange)="name.set($event)" [disabled]="saving()"></label>
-    <label>Verantwortliche Organisation<select [ngModel]="scopeId()" (ngModelChange)="scopeId.set($event)" [disabled]="saving()">@for (scope of scopes(); track scope.id) {<option [value]="scope.id">{{ scope.department }} · {{ scope.label }}</option>}</select></label>
+    <label>Verantwortliche Organisation<select [ngModel]="scopeId()" (ngModelChange)="scopeId.set($event)" [disabled]="saving()">@for (scope of scopes(); track scope.id) {<option [value]="scope.id">{{ scopeLabel(scope.department, scope.label) }}</option>}</select></label>
   </div>
   <details class="csv-format-help"><summary>Hinweise zum CSV-Format</summary><p class="help">Semikolon-CSV mit den Spalten Tabelle, Feldname und Datentyp; weitere Angaben wie System, Datenobjekt, Länge, Kurzbeschreibung, Kommentar, Klassifizierung, Dezimalstellen und Werteliste bleiben erhalten. Systemnamen bilden die Gliederung; es wird keine Live-Verbindung eingerichtet.</p></details>
   @if (!scopes().length) {<p class="daca-alert is-warning">Für diese Identität ist keine zuweisbare Modellierungsorganisation verfügbar.</p>}

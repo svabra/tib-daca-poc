@@ -17,11 +17,11 @@ describe('LogicalModelsOverviewComponent',()=>{
   afterEach(()=>TestBed.resetTestingModule());
 
   it('defaults to the user department before loading, permits All and resets to the current user',()=>{
-    const original={id:'owner',displayName:'Owner',organization:'Verteidigung',department:'VBS',office:'vbs-verteidigung',roles:['data_owner'],primaryModelingRole:'data_owner'};
+    const original={id:'owner',displayName:'Data Owner',organization:'Verteidigung',department:'VBS',office:'vbs-verteidigung',roles:['data_owner'],primaryModelingRole:'data_owner'};
     const user=signal(original),userId=signal(original.id),models=new Subject<readonly typeof FALLBACK_LOGICAL_MODEL[]>();
     const domestic={...FALLBACK_LOGICAL_MODEL,id:'vbs',department:'VBS'},foreign={...FALLBACK_LOGICAL_MODEL,id:'efd',department:'EFD'};
     TestBed.configureTestingModule({imports:[LogicalModelsOverviewComponent],providers:[provideRouter([]),
-      {provide:DemoIdentityService,useValue:{userId,user,canEditModels:signal(true)}},
+      {provide:DemoIdentityService,useValue:{userId,user,users:signal([]),canEditModels:signal(true)}},
       {provide:DataModelsApiService,useValue:{listLogicalModels:()=>models.pipe(take(1))}},
     ]});
     const fixture=TestBed.createComponent(LogicalModelsOverviewComponent);fixture.detectChanges();TestBed.tick();fixture.detectChanges();
@@ -51,7 +51,7 @@ describe('LogicalModelsOverviewComponent',()=>{
     const user=signal({id:'cinthya.thor',displayName:'Cinthya Thor',organization:'Verteidigung',department:'VBS',office:'vbs-verteidigung',roles:['data_steward'],primaryModelingRole:'data_steward'});
     TestBed.configureTestingModule({imports:[LogicalModelsOverviewComponent],providers:[
       provideRouter([]),
-      {provide:DemoIdentityService,useValue:{userId:signal('cinthya.thor'),user,canEditModels:signal(true)}},
+      {provide:DemoIdentityService,useValue:{userId:signal('cinthya.thor'),user,users:signal([]),canEditModels:signal(true)}},
       {provide:DataModelsApiService,useValue:{listLogicalModels:()=>of([model])}},
     ]});
     const fixture=TestBed.createComponent(LogicalModelsOverviewComponent);fixture.detectChanges();TestBed.tick();fixture.detectChanges();
@@ -65,14 +65,14 @@ describe('LogicalModelsOverviewComponent',()=>{
     const user=signal({id:'cinthya.thor',displayName:'Cinthya Thor',organization:'Verteidigung',department:'VBS',office:'vbs-verteidigung',roles:['data_steward'],primaryModelingRole:'data_steward'});
     TestBed.configureTestingModule({imports:[LogicalModelsOverviewComponent],providers:[
       provideRouter([]),
-      {provide:DemoIdentityService,useValue:{userId:signal('cinthya.thor'),user,canEditModels:signal(true)}},
+      {provide:DemoIdentityService,useValue:{userId:signal('cinthya.thor'),user,users:signal([]),canEditModels:signal(true)}},
       {provide:DataModelsApiService,useValue:{listLogicalModels:()=>of([FALLBACK_LOGICAL_MODEL,other])}},
     ]});
     const fixture=TestBed.createComponent(LogicalModelsOverviewComponent);fixture.detectChanges();TestBed.tick();fixture.detectChanges();
     const component=fixture.componentInstance;const root=fixture.nativeElement as HTMLElement;
     const ownerSelect=root.querySelector<HTMLSelectElement>('select[aria-label="Data Owner"]')!;
 
-    expect([...ownerSelect.options].map((option)=>option.textContent?.trim())).toEqual(['Alle','Christian Spider','Lawrence Hill']);
+    expect([...ownerSelect.options].map((option)=>option.textContent?.trim())).toEqual(['Alle','Christiano Stadello','Lawrence Hill']);
     component.owner.set('lawrence.hill');fixture.detectChanges();
     expect(component.filteredModels().map((model)=>model.id)).toEqual(['model-lawrence']);
     expect(root.querySelectorAll('.model-row')).toHaveLength(1);
@@ -85,7 +85,7 @@ describe('LogicalModelsOverviewComponent',()=>{
     const user=signal({id:'cinthya.thor',displayName:'Cinthya Thor',organization:'Verteidigung',department:'VBS',office:'vbs-verteidigung',roles:['data_steward'],primaryModelingRole:'data_steward'});
     TestBed.configureTestingModule({imports:[LogicalModelsOverviewComponent],providers:[
       provideRouter([]),
-      {provide:DemoIdentityService,useValue:{userId:signal('cinthya.thor'),user,canEditModels:signal(true)}},
+      {provide:DemoIdentityService,useValue:{userId:signal('cinthya.thor'),user,users:signal([]),canEditModels:signal(true)}},
       {provide:DataModelsApiService,useValue:{listLogicalModels:()=>of([FALLBACK_LOGICAL_MODEL])}},
     ]});
     const fixture=TestBed.createComponent(LogicalModelsOverviewComponent);fixture.detectChanges();TestBed.tick();fixture.detectChanges();
@@ -97,7 +97,7 @@ describe('LogicalModelsOverviewComponent',()=>{
     const user=signal({id:'cinthya.thor',displayName:'Cinthya Thor',organization:'Verteidigung',department:'VBS',office:'vbs-verteidigung',roles:['data_steward'],primaryModelingRole:'data_steward'});
     TestBed.configureTestingModule({imports:[LogicalModelsOverviewComponent],providers:[
       provideRouter([]),
-      {provide:DemoIdentityService,useValue:{userId:signal('cinthya.thor'),user,canEditModels:signal(true)}},
+      {provide:DemoIdentityService,useValue:{userId:signal('cinthya.thor'),user,users:signal([]),canEditModels:signal(true)}},
       {provide:DataModelsApiService,useValue:{listLogicalModels:()=>of([])}},
     ]});
     const fixture=TestBed.createComponent(LogicalModelsOverviewComponent);fixture.detectChanges();TestBed.tick();fixture.detectChanges();
@@ -121,7 +121,7 @@ describe('LogicalModelsOverviewComponent',()=>{
     const user=signal({id:'reader',displayName:'Reader',organization:'Verteidigung',department:'VBS',office:'vbs-verteidigung',roles:['data_consumer'],primaryModelingRole:'data_consumer'});
     TestBed.configureTestingModule({imports:[LogicalModelsOverviewComponent],providers:[
       provideRouter([]),
-      {provide:DemoIdentityService,useValue:{userId:signal('reader'),user,canEditModels:signal(false)}},
+      {provide:DemoIdentityService,useValue:{userId:signal('reader'),user,users:signal([]),canEditModels:signal(false)}},
       {provide:DataModelsApiService,useValue:{listLogicalModels:()=>of([])}},
     ]});
     const fixture=TestBed.createComponent(LogicalModelsOverviewComponent);fixture.detectChanges();TestBed.tick();fixture.detectChanges();

@@ -1,3 +1,4 @@
+import { federalOrganizationLabel } from '../../core/organization-label';
 import { DataProduct, OwnedAccessConsumer } from '../../core/catalog.models';
 import type { DemoUser } from '../../core/demo-identity.service';
 
@@ -59,22 +60,8 @@ function teamsChatUrl(email: string): string {
   return `https://teams.microsoft.com/l/chat/0/0?users=${encodeURIComponent(email)}`;
 }
 
-const PERSON_ORGANIZATION_ABBREVIATIONS: Readonly<Record<string, string>> = {
-  'Eidgenössische Steuerverwaltung ESTV': 'ESTV',
-  'Eidg. Steuerverwaltung': 'ESTV',
-  'Eidgenössische Finanzverwaltung EFV': 'EFV',
-  'Eidg. Finanzverwaltung': 'EFV',
-  'Bundesamt für Zoll und Grenzsicherheit BAZG': 'BAZG',
-  'Bundesamt für Zoll BAZG': 'BAZG',
-  'EFD - ESTV': 'ESTV',
-  'EFD - EFV': 'EFV',
-  'EFD - BAZG': 'BAZG',
-  'EDI - BFS': 'BFS',
-  'EFD - BIT': 'BIT',
-};
-
 export function personOrganizationLabel(organization: string): string {
-  return PERSON_ORGANIZATION_ABBREVIATIONS[organization] ?? organization;
+  return federalOrganizationLabel(organization);
 }
 
 export type AccessRequestStatus =

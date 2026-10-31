@@ -55,15 +55,15 @@ interface PublicationResult {
       }
     </div>
 
-    <p id="publication-action-help" class="poc-action-help">Der Auslöser sendet die Fixture-Metadaten an denselben echten Publikationsendpoint, den auch eine externe DAAIF-Integration verwendet. Er erzeugt ein Datenprodukt und Owner-Aufgaben, aber keine Datenfreigabe.</p>
+    <p id="publication-action-help" class="poc-action-help">Der Auslöser sendet die Fixture-Metadaten an denselben echten Publikationsendpoint, den auch eine externe DAAIF-Integration verwendet. Er erzeugt ein Datenprodukt und Data Owner-Aufgaben, aber keine Datenfreigabe.</p>
 
     @if (selected(); as fixture) {
       <div class="poc-dialog-backdrop" (click)="closeBackdrop($event)">
         <section class="poc-dialog" role="dialog" aria-modal="true" aria-labelledby="publication-title">
           <header><div><p class="daca-eyebrow">DAAIF → DaCa</p><h2 id="publication-title">Metadaten publizieren</h2></div><button id="poc-publication-close" type="button" (click)="close()" aria-label="Schliessen">×</button></header>
           <p><strong>{{ fixture.title }}</strong></p>
-          <dl><div><dt>Quelle</dt><dd>DAAIF</dd></div><div><dt>Protokoll</dt><dd>REST · GET</dd></div><div><dt>Owner</dt><dd>{{ ownerName(fixture.ownerUserId) }}</dd></div></dl>
-          <fieldset><legend>Publikationsmodus</legend><label><input type="radio" name="mode" value="governance_review" [checked]="mode() === 'governance_review'" (change)="mode.set('governance_review')"><span><strong>Governance-Prüfung</strong><small>Owner-sichtbarer Entwurf mit zwei Aufgaben.</small></span></label><label><input type="radio" name="mode" value="automatic" [checked]="mode() === 'automatic'" (change)="mode.set('automatic')"><span><strong>Vollautomatische Publikation</strong><small>Sofort auffindbar, Datenzugriff weiterhin gesperrt.</small></span></label></fieldset>
+          <dl><div><dt>Quelle</dt><dd>DAAIF</dd></div><div><dt>Protokoll</dt><dd>REST · GET</dd></div><div><dt>Data Owner</dt><dd>{{ ownerName(fixture.ownerUserId) }}</dd></div></dl>
+          <fieldset><legend>Publikationsmodus</legend><label><input type="radio" name="mode" value="governance_review" [checked]="mode() === 'governance_review'" (change)="mode.set('governance_review')"><span><strong>Governance-Prüfung</strong><small>Data Owner-sichtbarer Entwurf mit zwei Aufgaben.</small></span></label><label><input type="radio" name="mode" value="automatic" [checked]="mode() === 'automatic'" (change)="mode.set('automatic')"><span><strong>Vollautomatische Publikation</strong><small>Sofort auffindbar, Datenzugriff weiterhin gesperrt.</small></span></label></fieldset>
           <label class="poc-discoverable"><input type="checkbox" [checked]="discoverable()" (change)="discoverable.set($any($event.target).checked)"><span><strong>Im Katalog auffindbar</strong><small>OpenAPI-Default: true. Dies gibt keine Produktdaten frei.</small></span></label>
           @if (error()) { <p class="daca-alert is-error" role="alert">{{ error() }}</p> }
           <footer><button class="daca-button is-secondary" type="button" (click)="close()">Abbrechen</button><button class="daca-button" type="button" [disabled]="submitting()" (click)="publish()">{{ submitting() ? 'Ereignis wird ausgelöst…' : 'Ereignis jetzt auslösen' }}</button></footer>

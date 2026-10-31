@@ -292,7 +292,7 @@ function orderedSupportWindow(control: AbstractControl): ValidationErrors | null
 
           @if (currentSummary.canEdit) {
             <section class="daca-card service-level-owner-actions" aria-labelledby="service-level-owner-actions-title">
-              <div class="daca-card-header"><h2 id="service-level-owner-actions-title">Data-Owner-Aktionen</h2></div>
+              <div class="daca-card-header"><h2 id="service-level-owner-actions-title">Data Owner-Aktionen</h2></div>
               <div class="daca-card-body">
                 @if (draftRevision(); as draft) {
                   <button type="button" class="daca-button" (click)="startEdit(draft)">Entwurf bearbeiten</button>

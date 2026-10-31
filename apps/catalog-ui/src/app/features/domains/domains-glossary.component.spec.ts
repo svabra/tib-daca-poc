@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService } from '../../core/demo-identity.service';
@@ -24,7 +24,7 @@ const DEFENCE: DomainSummary = {
   definition: 'Fachliche Verteidigungsdaten',
   labels: [{ language: 'de', preferredLabel: 'Verteidigung', alternativeLabels: [], definition: 'Fachliche Verteidigungsdaten' }],
   ownerUserId: 'sibilla.micheli',
-  ownerName: 'Sibilla Micheli',
+  ownerName: 'Sibilla Di Ciesa',
   ownerOrganization: 'VBS',
   deputyOwnerUserId: 'sandro.wenger',
   deputyOwnerName: 'Sandro Wenger',
@@ -85,17 +85,20 @@ const PROPOSAL: GlossaryTermProposal = {
 
 function apiStub() {
   return {
+    loadAdministrativeOrganizations: vi.fn(()=>of([])),
     loadSemanticGraph: vi.fn(() => of<SemanticGraphState>({revision: 0, positions: {}, relations: [], canEditLayout: false, canEditRelations: false, scopeDomainIds: [DEFENCE.id], scopeTermIds: [TERM.id]})),
+    loadDomainNetworkView: vi.fn(()=>of({revision:0,configuration:{schemaVersion:1,positions:{},addedDomainIds:[],hiddenDomainIds:[],visibleKinds:['product']}})),
+    loadDomainNetworkObjects: vi.fn(()=>of({items:[],truncated:false})),
     loadDomains: vi.fn(() => of([DEFENCE, MOBILITY])),
     loadGlossaryTerms: vi.fn(() => of([TERM])),
     loadDomainChangeRequests: vi.fn(() => of([])),
-    loadGlossaryTermProposals: vi.fn(() => of([])),
+    loadGlossaryTermProposals: vi.fn(() => of([] as GlossaryTermProposal[])),
     createGlossaryTermProposal: vi.fn(() => of(PROPOSAL)),
   };
 }
 
-async function render() {
-  const api = apiStub();
+async function render(view: string | null = 'cards', configure?: (api: ReturnType<typeof apiStub>) => void) {
+  const api = apiStub();configure?.(api);
   const user = signal({
     id: 'sandro.wenger',
     displayName: 'Sandro Wenger',
@@ -118,6 +121,7 @@ async function render() {
       { provide: DemoIdentityService, useValue: identity },
     ],
   }).compileComponents();
+  if(view)await TestBed.inject(Router).navigateByUrl('/?view='+view);
   const fixture = TestBed.createComponent(DomainsGlossaryComponent);
   fixture.detectChanges();
   await fixture.whenStable();
@@ -128,26 +132,40 @@ async function render() {
 describe('DomainsGlossaryComponent term lifecycle proposals', () => {
   afterEach(() => TestBed.resetTestingModule());
 
+  it('defaults both views to networks and displays domains before terminology or governance finishes',async()=>{
+    const terms=new Subject<GlossaryTermSummary[]>(),proposals=new Subject<GlossaryTermProposal[]>();
+    const {fixture,api}=await render(null,api=>{api.loadGlossaryTerms.mockReturnValue(terms);api.loadGlossaryTermProposals.mockReturnValue(proposals);});
+    const component=fixture.componentInstance;
+    expect(component.domainView()).toBe('network');expect(component.termView()).toBe('network');
+    expect(component.loading()).toBe(false);expect(component.termsLoading()).toBe(true);expect(component.governanceLoading()).toBe(true);
+    expect(fixture.nativeElement.querySelector('.domain-network')).not.toBeNull();
+    expect(api.loadDomains).toHaveBeenCalledTimes(1);expect(api.loadDomainChangeRequests).toHaveBeenCalledTimes(1);
+    component.setDomainView('cards');fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();
+    expect(TestBed.inject(Router).url).toContain('view=cards');expect(fixture.nativeElement.querySelector('.semantic-grid')).not.toBeNull();
+    terms.next([TERM]);terms.complete();proposals.next([]);proposals.complete();fixture.detectChanges();
+    expect(component.termsLoading()).toBe(false);expect(component.governanceLoading()).toBe(false);
+  });
+
   it('keeps the default scope empty without an office and allows explicitly clearing it',async()=>{
     const {fixture, api, identity}=await render(),component=fixture.componentInstance;
     api.loadSemanticGraph.mockClear();
     identity.user.update(user=>({...user,office:''}));fixture.detectChanges();
     expect(component.ownOfficeOnly()).toBe(true);
-    const checkbox=fixture.nativeElement.querySelector('.office-filter input') as HTMLInputElement;
-    expect(checkbox.checked).toBe(true);expect(checkbox.disabled).toBe(false);
+    const toggle=fixture.nativeElement.querySelector('.office-filter [role=switch]') as HTMLButtonElement;
+    expect(toggle.getAttribute('aria-checked')).toBe('true');expect(toggle.disabled).toBe(false);
     expect(component.filteredDomains()).toEqual([]);expect(component.filteredTerms()).toEqual([]);
     expect(api.loadSemanticGraph).not.toHaveBeenCalled();
-    checkbox.click();fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();
-    expect(component.ownOfficeOnly()).toBe(false);expect(checkbox.disabled).toBe(true);
+    toggle.click();fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();
+    expect(component.ownOfficeOnly()).toBe(false);expect(toggle.disabled).toBe(true);
   });
 
   it('filters by trusted independent object scope and combines it with text search', async () => {
     const {fixture, api} = await render(), component = fixture.componentInstance;
     // The scoped term belongs to a foreign domain: classification is not office ownership.
     component.terms.set([{...TERM, domains: [MOBILITY]}, {...TERM, id: 'foreign', preferredLabel: 'Fremd', domains: [DEFENCE]}]);
-    const checkbox = fixture.nativeElement.querySelector('.office-filter input') as HTMLInputElement;
-    expect(checkbox.closest('.semantic-filter-row')?.querySelector('.semantic-search')).not.toBeNull();
-    expect(checkbox.checked).toBe(true);
+    const toggle = fixture.nativeElement.querySelector('.office-filter [role=switch]') as HTMLButtonElement;
+    expect(toggle.closest('.semantic-filter-row')?.querySelector('.semantic-search')).not.toBeNull();
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
     expect(component.ownOfficeOnly()).toBe(true);
     expect(api.loadSemanticGraph).toHaveBeenCalledWith('organizations', 'bazg');
     expect(component.filteredDomains().map(item => item.id)).toEqual([DEFENCE.id]);
@@ -155,13 +173,13 @@ describe('DomainsGlossaryComponent term lifecycle proposals', () => {
     component.termQuery.set('Armored'); expect(component.filteredTerms()).toHaveLength(1);
     component.termQuery.set('Fremd'); expect(component.filteredTerms()).toEqual([]);
     expect((fixture.nativeElement.querySelector('a[href^="/domains/terminology"]') as HTMLAnchorElement).search).toContain('ownOffice=1');
-    checkbox.click(); fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
+    toggle.click(); fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
     expect(component.filteredDomains()).toHaveLength(2);
     expect(component.filteredTerms()[0].id).toBe('foreign');
     expect((fixture.nativeElement.querySelector('a[href^="/domains/terminology"]') as HTMLAnchorElement).search).toContain('ownOffice=0');
     component.tab.set('terms');fixture.detectChanges();
-    expect(fixture.nativeElement.querySelectorAll('.office-filter input')).toHaveLength(1);
-    expect(fixture.nativeElement.querySelector('.office-filter input').checked).toBe(false);
+    expect(fixture.nativeElement.querySelectorAll('.office-filter [role=switch]')).toHaveLength(1);
+    expect(fixture.nativeElement.querySelector('.office-filter [role=switch]').getAttribute('aria-checked')).toBe('false');
     expect(fixture.nativeElement.querySelector('.semantic-filter-row .semantic-search input')).not.toBeNull();
   });
 
@@ -313,6 +331,6 @@ describe('DomainsGlossaryComponent term lifecycle proposals', () => {
 
     component.termQuery.set('nicht vorhanden');
     fixture.detectChanges();
-    expect(root.textContent).toContain('Keine passenden Terminologie-Terme gefunden.');
+    expect(root.textContent).toContain('Keine passenden Terminologiebegriffe gefunden.');
   });
 });

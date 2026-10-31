@@ -66,6 +66,22 @@ describe('CatalogApiService identity refresh', () => {
     TestBed.resetTestingModule();
   });
 
+  it('loads every authorized product page for expert search without reusing the home-page cap', () => {
+    const api=TestBed.inject(CatalogApiService),http=TestBed.inject(HttpTestingController);
+    flushRefresh(requestsFor(http,'kassandra.valdata'),'Home product','Inbox','Task');
+    flushProductDetail(requestsFor(http,'kassandra.valdata'),'Home product');
+    let results:import('./catalog.models').DataProduct[]=[];
+    api.loadSearchProducts().subscribe(items=>results=items);
+    const first=http.expectOne('/api/v1/data-products?limit=100');
+    expect(first.request.headers.get('X-DaCa-User')).toBe('kassandra.valdata');
+    first.flush({items:[wireProduct('First page')],nextCursor:'next-page'});
+    expect(results).toEqual([]);
+    const next=http.expectOne('/api/v1/data-products?limit=100&cursor=next-page');
+    expect(next.request.headers.get('X-DaCa-User')).toBe('kassandra.valdata');
+    next.flush({items:[wireProduct('Second page','22222222-2222-4222-8222-222222222222')],nextCursor:null});
+    expect(results.map(item=>item.title)).toEqual(['First page','Second page']);
+    expect(api.products().map(item=>item.title)).toEqual(['Home product']);
+  });
   it('keeps the newest identity data when older product, inbox and task requests finish later', () => {
     const api = TestBed.inject(CatalogApiService);
     const http = TestBed.inject(HttpTestingController);
@@ -80,14 +96,14 @@ describe('CatalogApiService identity refresh', () => {
     expect(api.product().title).toBe('Datenprodukt wird geladen');
     const beatRequests = requestsFor(http, 'beat.stalder');
 
-    flushRefresh(beatRequests, 'Beat product', 'Beat inbox', 'Beat task');
+    flushRefresh(beatRequests, 'Beat product', 'Beat inbox', 'Glossarterm: Owner-Freigabe');
     const beatDetailRequests = requestsFor(http, 'beat.stalder');
     flushProductDetail(beatDetailRequests, 'Beat product');
     flushRefresh(kassandraRequests, 'Kassandra product', 'Kassandra inbox', 'Kassandra task');
 
     expect(api.products().map((product) => product.title)).toEqual(['Beat product']);
     expect(api.ownerAccessRequests().map((request) => request.purpose)).toEqual(['Beat inbox']);
-    expect(api.workflowTasks().map((task) => task.title)).toEqual(['Beat task']);
+    expect(api.workflowTasks().map((task) => task.title)).toEqual(['Terminologiebegriff: Data Owner-Freigabe']);
   });
 
   it('keeps a successful empty product result empty instead of exposing preview products', () => {
@@ -109,8 +125,8 @@ describe('CatalogApiService identity refresh', () => {
   it('keeps the last owner inbox and exposes an unknown status when refresh fails', () => {
     const api = TestBed.inject(CatalogApiService);
     const http = TestBed.inject(HttpTestingController);
-    flushRefresh(requestsFor(http, 'kassandra.valdata'), 'Owner product', 'Known owner request', 'Known task');
-    flushProductDetail(requestsFor(http, 'kassandra.valdata'), 'Owner product');
+    flushRefresh(requestsFor(http, 'kassandra.valdata'), 'Data Owner product', 'Known owner request', 'Known task');
+    flushProductDetail(requestsFor(http, 'kassandra.valdata'), 'Data Owner product');
 
     api.refreshOwnerAccessRequestInbox();
     http.expectOne('/api/v1/access-requests/inbox').flush(
@@ -186,7 +202,7 @@ describe('CatalogApiService identity refresh', () => {
     userId.set('beat.stalder');
     TestBed.tick();
     const beatRequests = requestsFor(http, 'beat.stalder');
-    flushRefresh(beatRequests, 'Beat product', 'Beat inbox', 'Beat task');
+    flushRefresh(beatRequests, 'Beat product', 'Beat inbox', 'Glossarterm: Owner-Freigabe');
     const beatDetailRequests = requestsFor(http, 'beat.stalder');
     flushProductDetail(beatDetailRequests, 'Beat product');
 
@@ -291,6 +307,27 @@ describe('CatalogApiService identity refresh', () => {
     expect(termUpdateRequest.request.body).toEqual({ operation: 'update', targetTermId: 'term', sourceProductId: undefined, autoAttach: false, payload: { domainIds: ['domain'], localizations: [{ language: 'de', preferredLabel: 'Geschütztes Fahrzeug', alternativeLabels: ['Panzerfahrzeug'], definition: 'Überarbeitete Definition' }], relations: [{ relation: 'exactMatch', targetUri: 'https://example.test/armored-vehicle' }] } });
     termUpdateRequest.flush({ id: 'update-proposal', operation: 'update', targetTermId: 'term', requesterUserId: 'kassandra.valdata', sourceProductId: null, autoAttach: false, status: 'in_review', requestedPayload: {}, reviewPayload: {}, revision: 1, decisionComment: null, reviews: [], createdAt: '', updatedAt: '' });
     http.expectOne('/api/v1/tasks/mine').flush([]);
+  });
+
+  it('shares a pending domain read across domain, term and proposal loads without keeping a completed response cache', () => {
+    const api = TestBed.inject(CatalogApiService), http = TestBed.inject(HttpTestingController);
+    flushRefresh(requestsFor(http, 'kassandra.valdata'), 'Product', 'Inbox', 'Task');
+    flushProductDetail(requestsFor(http, 'kassandra.valdata'), 'Product');
+    api.loadDomains(true).subscribe(); api.loadGlossaryTerms().subscribe(); api.loadGlossaryTermProposals().subscribe();
+    const domains=http.match(request=>request.url==='/api/v1/domains');expect(domains).toHaveLength(1);
+    domains[0].flush([domainWire()]);
+    http.expectOne('/api/v1/glossary/terms').flush([]);http.expectOne('/api/v1/glossary/term-proposals').flush([]);
+    api.loadDomains(true).subscribe();http.expectOne(request=>request.url==='/api/v1/domains').flush([domainWire()]);
+  });
+
+  it('isolates pending domain reads and their cached normalization data by identity', () => {
+    const api=TestBed.inject(CatalogApiService),http=TestBed.inject(HttpTestingController);
+    flushRefresh(requestsFor(http,'kassandra.valdata'),'Product','Inbox','Task');flushProductDetail(requestsFor(http,'kassandra.valdata'),'Product');
+    api.loadDomains(true).subscribe();const previous=http.expectOne(request=>request.url==='/api/v1/domains'&&request.headers.get('X-DaCa-User')==='kassandra.valdata');
+    userId.set('beat.stalder');TestBed.tick();flushRefresh(requestsFor(http,'beat.stalder'),'Beat product','Beat inbox','Beat task');flushProductDetail(requestsFor(http,'beat.stalder'),'Beat product');
+    api.loadDomains(true).subscribe();const current=http.expectOne(request=>request.url==='/api/v1/domains'&&request.headers.get('X-DaCa-User')==='beat.stalder');
+    previous.flush([domainWire()]);expect(api.domains()).toEqual([]);
+    current.flush([{...domainWire(),id:'beat-domain'}]);expect(api.domains()[0].id).toBe('beat-domain');
   });
 
   it('uses the domain-scoped review decision endpoint and maps taskKind', () => {

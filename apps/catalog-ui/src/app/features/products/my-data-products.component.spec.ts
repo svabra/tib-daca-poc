@@ -238,7 +238,7 @@ describe('MyDataProductsComponent quality medals', () => {
     fixture.detectChanges();
 
     const tableOwner = fixture.nativeElement.querySelector('.product-table-owner') as HTMLElement;
-    expect(tableOwner.textContent).toContain('Kassandra Valdata · ESTV');
+    expect(tableOwner.textContent).toContain('Kassandra Valdata · EFD ESTV');
     expect(tableOwner.querySelector('img')?.getAttribute('src')).toBe('/assets/kassandra-valdata.webp');
     expect(tableOwner.getAttribute('tabindex')).toBe('0');
     expect(tableOwner.getAttribute('aria-describedby')).toBeNull();
@@ -260,7 +260,7 @@ describe('MyDataProductsComponent quality medals', () => {
     const tooltip = fixture.nativeElement.querySelector('[role="tooltip"]') as HTMLElement;
     expect(tableOwner.getAttribute('aria-describedby')).toBe(`product-deputy-${product.id}`);
     expect(tooltip.textContent).toContain('Stv. Data Owner');
-    expect(tooltip.textContent).toContain('Joel Ruod · ESTV');
+    expect(tooltip.textContent).toContain('Joel Ruod · EFD ESTV');
     expect(tooltip.textContent).not.toContain('Thomas Kriegli');
     expect(tooltip.style.left).toBe('120px');
     expect(tooltip.style.top).toBe('218px');
@@ -278,12 +278,12 @@ describe('MyDataProductsComponent quality medals', () => {
     fixture.detectChanges();
     const recordOwners = fixture.nativeElement.querySelectorAll('.product-owner-pair .product-data-owner');
     expect(recordOwners).toHaveLength(2);
-    expect(recordOwners[0].textContent).toContain('Kassandra Valdata · ESTV');
+    expect(recordOwners[0].textContent).toContain('Kassandra Valdata · EFD ESTV');
     expect(recordOwners[0].textContent).toContain('+41 58 000 00 11');
     expect(recordOwners[0].querySelector('a[href^="tel:"]')?.getAttribute('href')).toBe('tel:+41580000011');
     expect(recordOwners[0].querySelector('.product-owner-teams')?.getAttribute('href')).toBe('https://teams.microsoft.com/l/chat/0/0?users=kassandra.valdata%40estv.admin.ch');
     expect(recordOwners[1].textContent).toContain('Stv. Data Owner');
-    expect(recordOwners[1].textContent).toContain('Joel Ruod · ESTV');
+    expect(recordOwners[1].textContent).toContain('Joel Ruod · EFD ESTV');
     expect(recordOwners[1].textContent).toContain('+41 58 000 00 82');
     expect(recordOwners[1].querySelector('a[href^="tel:"]')?.getAttribute('href')).toBe('tel:+41580000082');
     expect(recordOwners[1].querySelector('.product-owner-teams')?.getAttribute('href')).toBe('https://teams.microsoft.com/l/chat/0/0?users=joel.ruod%40estv.admin.ch');

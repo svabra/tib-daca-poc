@@ -368,6 +368,7 @@ class LogicalModelSummary(ApiModel):
     deputy_owner_user_id: str | None
     department_code: str
     organization_id: str
+    organization_label: str = ""
     organization_unit_id: str
     data_domain_id: uuid.UUID | None
     data_domain_label: str | None = None

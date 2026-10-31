@@ -104,7 +104,7 @@ def view_response(row):
     }
 
 
-def network_objects(session: Session, actor: str, domain_ids: list[uuid.UUID]):
+def network_objects(session: Session, actor: str, domain_ids: list[uuid.UUID], object_keys: set[str] | None = None):
     from .governance import can_view_private_product
     from .modeling_api import _assignments
     from .modeling_service import snapshot_summary
@@ -119,6 +119,8 @@ def network_objects(session: Session, actor: str, domain_ids: list[uuid.UUID]):
 
     def add(kind, identity, domain_id, label, description, owner, urn, route, params=None):
         key = f"{kind}:{identity}"
+        if object_keys is not None and key not in object_keys:
+            return
         if key not in nodes:
             nodes[key] = {
                 "key": key,
@@ -252,7 +254,8 @@ def network_objects(session: Session, actor: str, domain_ids: list[uuid.UUID]):
                 ["/physical-models", str(source.id)],
                 {"snapshotId": str(snapshot.id), "tableId": str(table.id)},
             )
-            nodes[f"physical:{table.id}"]["structureKind"] = table.kind
+            if f"physical:{table.id}" in nodes:
+                nodes[f"physical:{table.id}"]["structureKind"] = table.kind
     values = sorted(
         nodes.values(), key=lambda node: (node["kind"], node["label"].casefold(), node["key"])
     )
@@ -285,8 +288,43 @@ def create_domain_network_router():
             str(identity) for identity in [*config.added_domain_ids, *config.hidden_domain_ids]
         } - known:
             raise HTTPException(422, "The view must reference existing domains")
-        if any(not key.startswith("domain:") or key[7:] not in known for key in config.positions):
-            raise HTTPException(422, "Only existing domain positions may be saved")
+        from .governance import can_view_private_product
+
+        product_keys = {}
+        object_keys = set()
+        for key in config.positions:
+            if key.startswith("domain:") and key[7:] in known:
+                continue
+            try:
+                kind, identity = key.split(":", 1)
+                if kind not in {"product", "term", "logical", "physical"}:
+                    raise ValueError
+                parsed = uuid.UUID(identity)
+                if kind == "product":
+                    product_keys[key] = parsed
+                else:
+                    object_keys.add(key)
+            except ValueError:
+                raise HTTPException(422, "Positions must reference existing domains or readable catalog objects") from None
+        readable = {
+            product.id
+            for product in session.scalars(select(DataProduct).where(
+                DataProduct.id.in_(product_keys.values()), DataProduct.lifecycle != "retired",
+                DataProduct.domain_assignments.any(),
+            ))
+            if can_view_private_product(session, product, actor)
+        } if product_keys else set()
+        previous = (row.configuration if row else {}).get("positions", {})
+        changed_objects = {key for key in object_keys if previous.get(key) != config.positions[key].model_dump()}
+        if changed_objects:
+            allowed = {item["key"] for item in network_objects(
+                session, actor, [uuid.UUID(identity) for identity in known], changed_objects
+            )["items"]}
+            if changed_objects - allowed:
+                raise HTTPException(422, "Positions must reference existing domains or readable catalog objects")
+        if any(identity not in readable and previous.get(key) != config.positions[key].model_dump()
+               for key, identity in product_keys.items()):
+            raise HTTPException(422, "Positions must reference existing domains or readable catalog objects")
         if len(set(config.visible_kinds)) != len(config.visible_kinds):
             raise HTTPException(422, "Object types must be unique")
         if row is None:

@@ -118,17 +118,17 @@ describe('My data products filtering', () => {
 
     expect(resolvedDataOwner(staleProduct, users)).toEqual({
       name: 'Joel Ruod',
-      organization: 'ESTV',
+      organization: 'EFD ESTV',
       avatarUrl: '/assets/data-owners/joel-ruod.webp',
       phone: '+41 58 000 00 82',
       teamsUrl: 'https://teams.microsoft.com/l/chat/0/0?users=joel.ruod%40estv.admin.ch',
     });
   });
 
-  it('shortens legacy federal organization labels without changing cantons', () => {
-    expect(personOrganizationLabel('Eidgenössische Steuerverwaltung ESTV')).toBe('ESTV');
-    expect(personOrganizationLabel('Eidgenössische Finanzverwaltung EFV')).toBe('EFV');
-    expect(personOrganizationLabel('Bundesamt für Zoll und Grenzsicherheit BAZG')).toBe('BAZG');
+  it('qualifies legacy federal organization labels without changing cantons', () => {
+    expect(personOrganizationLabel('Eidgenössische Steuerverwaltung ESTV')).toBe('EFD ESTV');
+    expect(personOrganizationLabel('Eidgenössische Finanzverwaltung EFV')).toBe('EFD EFV');
+    expect(personOrganizationLabel('Bundesamt für Zoll und Grenzsicherheit BAZG')).toBe('EFD BAZG');
     expect(personOrganizationLabel('Kanton Neuchâtel')).toBe('Kanton Neuchâtel');
   });
 
@@ -170,7 +170,7 @@ describe('My data products filtering', () => {
 
     expect(resolvedDeputyDataOwner(FALLBACK_PRODUCTS[0], users)).toEqual({
       name: 'Joel Ruod',
-      organization: 'ESTV',
+      organization: 'EFD ESTV',
       avatarUrl: '/assets/data-owners/joel-ruod.webp',
       phone: '+41 58 000 00 82',
       teamsUrl: 'https://teams.microsoft.com/l/chat/0/0?users=joel.ruod%40estv.admin.ch',

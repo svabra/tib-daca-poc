@@ -192,7 +192,7 @@ DEMO_USERS = (
     {
         "id": "thomas.kriegli",
         "display_name": "Thomas Kriegli",
-        "organization": "ESTV",
+        "organization": "EFD ESTV BI",
         "email": "thomas.kriegli@estv.admin.ch",
         "phone": "+41 58 000 00 83",
         "avatar_url": "/assets/data-owners/thomas-kriegli.webp",
@@ -203,7 +203,7 @@ DEMO_USERS = (
     {
         "id": "joel.ruod",
         "display_name": "Joel Ruod",
-        "organization": "ESTV",
+        "organization": "EFD ESTV BI",
         "email": "joel.ruod@estv.admin.ch",
         "phone": "+41 58 000 00 82",
         "avatar_url": "/assets/data-owners/joel-ruod.webp",
@@ -223,11 +223,11 @@ DEMO_USERS = (
     },
     {
         "id": "sibilla.micheli",
-        "display_name": "Sibilla Micheli",
-        "organization": "VBS",
-        "email": "sibilla.micheli@vbs.admin.ch",
+        "display_name": "Sibilla Di Ciesa",
+        "organization": "VBS GS-VBS",
+        "email": "sibilla.di.ciesa@vbs.admin.ch",
         "phone": "+41 58 000 00 61",
-        "avatar_url": None,
+        "avatar_url": "/assets/data-owners/sibilla-micheli.webp",
         "roles": ["data_owner", "data_consumer"],
         "selectable": True,
     },
@@ -320,11 +320,11 @@ DIRECTORY_ENTRIES = (
     ("ariane.keller", "Ariane Keller", "ESTV", "ariane.keller@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("daniel.aebischer", "Daniel Aebischer", "EFV", "daniel.aebischer@efv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("simone.wyss", "Simone Wyss", "EFV", "simone.wyss@efv.admin.ch", "federal", "Bundespersonalverzeichnis"),
-    ("joel.ruod", "Joel Ruod", "ESTV", "joel.ruod@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
+    ("joel.ruod", "Joel Ruod", "EFD ESTV BI", "joel.ruod@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("sandro.wenger", "Sandro Wenger", "BAZG", "sandro.wenger@bazg.admin.ch", "federal", "Bundespersonalverzeichnis"),
-    ("sibilla.micheli", "Sibilla Micheli", "VBS", "sibilla.micheli@vbs.admin.ch", "federal", "Bundespersonalverzeichnis"),
+    ("sibilla.micheli", "Sibilla Di Ciesa", "VBS GS-VBS", "sibilla.di.ciesa@vbs.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("lea.hofmann", "Lea Hofmann", "BAZG", "lea.hofmann@bazg.admin.ch", "federal", "Bundespersonalverzeichnis"),
-    ("thomas.kriegli", "Thomas Kriegli", "ESTV", "thomas.kriegli@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
+    ("thomas.kriegli", "Thomas Kriegli", "EFD ESTV BI", "thomas.kriegli@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("noemie.rochat", "Noémie Rochat", "Kanton Neuchâtel", "noemie.rochat@ne.ch", "cantonal", "Kantonales Personalverzeichnis"),
     ("lucien.morel", "Lucien Morel", "Kanton Neuchâtel", "lucien.morel@ne.ch", "cantonal", "Kantonales Personalverzeichnis"),
     ("beat.stalder", "Beat Stalder", "Kanton St. Gallen", "beat.stalder@sg.ch", "cantonal", "Kantonales Personalverzeichnis"),
@@ -346,11 +346,11 @@ DIRECTORY_ORGANIZATION_IDS = {
     "ariane.keller": "efd-estv",
     "daniel.aebischer": "efd-efv",
     "simone.wyss": "efd-efv",
-    "joel.ruod": "efd-estv",
+    "joel.ruod": "efd-estv-bi",
     "sandro.wenger": "efd-bazg",
-    "sibilla.micheli": "vbs",
+    "sibilla.micheli": "vbs-gs",
     "lea.hofmann": "efd-bazg",
-    "thomas.kriegli": "efd-estv",
+    "thomas.kriegli": "efd-estv-bi",
     "sophie.brunner": "edi-bfs",
     "marc.gisler": "efd-bit",
     "nina.fankhauser": "bk",
@@ -599,7 +599,7 @@ def seed_workflow_reference_data(session: Session) -> bool:
                 "organization": definition["organization"],
                 "email": definition["email"],
                 "phone": definition["phone"],
-                "avatar_url": definition["avatar_url"],
+                "avatar_url": existing_user.avatar_url or definition["avatar_url"],
                 "roles": definition["roles"],
                 "supervisor_user_id": definition.get("supervisor_user_id"),
                 "selectable": definition["selectable"],
@@ -628,6 +628,9 @@ def seed_workflow_reference_data(session: Session) -> bool:
             )
             changed = True
     session.flush()
+
+    from .organization_network_seed import seed_organization_explorer
+    seed_organization_explorer(session)
 
     for identity_id, display_name, organization, email, source, source_system in DIRECTORY_ENTRIES:
         identity = session.get(IdentityDirectoryEntry, identity_id)

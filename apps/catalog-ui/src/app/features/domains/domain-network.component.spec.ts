@@ -15,6 +15,94 @@ describe('DomainNetworkComponent',()=>{
   beforeEach(()=>{personal={revision:0,configuration:{schemaVersion:1,addedDomainIds:[],hiddenDomainIds:[],positions:{},visibleKinds:['product']}};graph={revision:0,positions:{},relations:[],canEditLayout:true,canEditRelations:true};vi.clearAllMocks();TestBed.configureTestingModule({imports:[DomainNetworkComponent],providers: [{provide:UserPreferencesService,useValue:{language:signal('de')}},provideRouter([]),{provide:CatalogApiService,useValue:api},{provide:DemoIdentityService,useValue:{userId:signal('editor'),users:signal([])}}]});});
   afterEach(()=>TestBed.resetTestingModule());
   function render(){const fixture=TestBed.createComponent(DomainNetworkComponent);fixture.detectChanges();return fixture;}
+  it('moves and saves mixed object groups privately while preserving hidden anchors and untouched cards',async()=>{
+    personal.revision=1;personal.configuration.positions={'term:hidden':{x:900,y:800}};
+    const fixture=render(),component=fixture.componentInstance;
+    component.objects.set(['product','term','logical','physical'].map(kind=>({key:kind+':item',id:'item',kind,label:kind,description:'',ownerName:'Owner',urn:'urn:test:'+kind,route:[],params:{},domainIds:['a']} as DomainNetworkObject)));
+    component.visibleKinds.set(['product','term','logical','physical']);fixture.detectChanges();
+    const original=component.positions(),items=component.selection.items(),group=items.filter(item=>item.id!=='domain:b'&&item.id!=='domain:c');
+    const snapshot=component.selection.begin();component.selection.move(group.map(item=>({...item,x:item.x+35,y:item.y+20})));component.selection.finish();
+    for(const item of group)expect(component.positions()[item.id]).toEqual({x:item.x+35,y:item.y+20});
+    const untouched=items.find(item=>item.id==='domain:b')!;expect(component.positions()[untouched.id]).toEqual({x:untouched.x,y:untouched.y});
+    expect(component.positions()['term:hidden']).toEqual({x:900,y:800});expect(component.linksDirty()).toBe(false);
+    component.selection.cancel(snapshot);expect(component.positions()).toEqual(original);expect(component.layoutDirty()).toBe(false);
+    component.selection.begin();component.selection.move(group.map(item=>({...item,x:item.x+35,y:item.y+20})));component.selection.finish();await component.save();
+    for(const item of group)expect(personal.configuration.positions[item.id]).toEqual({x:item.x+35,y:item.y+20});
+    expect(api.saveSemanticGraph).not.toHaveBeenCalled();
+  });
+  it('moves product cards, updates assignment lines and persists private anchors without opening their links',async()=>{
+    const fixture=render(),component=fixture.componentInstance,root=fixture.nativeElement as HTMLElement;
+    const product={key:'product:p',id:'p',kind:'product',label:'Product',description:'',ownerName:'Owner',urn:'urn:test:p',route:['/products','p','overview'],params:{},domainIds:['a']} as DomainNetworkObject;
+    component.objects.set([product]);fixture.detectChanges();
+    const card=root.querySelector<HTMLAnchorElement>('.domain-asset')!,before=component.assetNodes()[0],path=component.assetEdges()[0].path;
+    expect(card.draggable).toBe(false);expect(card.target).toBe('_blank');
+    component.startAsset(before,new PointerEvent('pointerdown',{button:0,pointerId:7,clientX:20,clientY:20}));
+    component.move(new PointerEvent('pointermove',{pointerId:7,clientX:60,clientY:44,cancelable:true}));
+    component.up(new PointerEvent('pointerup',{pointerId:7}));fixture.detectChanges();
+    expect(component.assetNodes()[0].x).toBeCloseTo(before.x+50);expect(component.assetNodes()[0].y).toBeCloseTo(before.y+30);
+    expect(component.assetEdges()[0].path).not.toBe(path);expect(component.dirty()).toBe(true);expect(component.linksDirty()).toBe(false);
+    const click=new MouseEvent('click',{detail:1,cancelable:true});component.assetClick(product,click);expect(click.defaultPrevented).toBe(true);
+    await component.save();expect(personal.configuration.positions['product:p']).toEqual({x:before.x+50,y:before.y+30});
+    component.toggleKind('product');component.toggleKind('product');expect(component.assetNodes()[0].x).toBeCloseTo(before.x+50);
+    fixture.destroy();const restored=render();restored.componentInstance.objects.set([product]);restored.detectChanges();
+    const loaded=restored.componentInstance.assetNodes()[0];expect(loaded.x).toBeCloseTo(before.x+50);
+    restored.componentInstance.assetKey(loaded,new KeyboardEvent('keydown',{key:'ArrowLeft',cancelable:true}));expect(restored.componentInstance.assetNodes()[0].x).toBeCloseTo(loaded.x-10);
+    restored.componentInstance.discard();expect(restored.componentInstance.assetNodes()[0].x).toBeCloseTo(loaded.x);
+    restored.componentInstance.autoLayout();expect(restored.componentInstance.positions()['product:p']).toBeUndefined();
+    expect(api.saveSemanticGraph).not.toHaveBeenCalled();
+  });
+  it('cancels product movement with Escape and uses one blue port for selected endpoint dragging',()=>{
+    graph.relations=[{sourceId:'a',targetId:'b',relationType:'related'}];
+    const fixture=render(),component=fixture.componentInstance,root=fixture.nativeElement as HTMLElement;
+    component.objects.set([{key:'product:p',id:'p',kind:'product',label:'P',domainIds:['a'],route:[]} as unknown as DomainNetworkObject]);fixture.detectChanges();
+    const before=structuredClone(component.positions());component.startAsset(component.assetNodes()[0],new PointerEvent('pointerdown',{button:0,pointerId:8}));
+    component.move(new PointerEvent('pointermove',{pointerId:8,clientX:40,clientY:40}));
+    component.escape(new KeyboardEvent('keydown',{key:'Escape',cancelable:true}));expect(component.positions()).toEqual(before);expect(component.draggingAsset()).toBeNull();
+    component.selectedLink.set(0);fixture.detectChanges();expect(root.querySelector('.edge-handles')).toBeNull();expect(root.querySelectorAll('.ontology-port')).toHaveLength(2);
+    const edge=component.edges()[0],start=vi.spyOn(component,'startEndpoint');component.portPointer(edge.sourceId,edge.sourceSide,new PointerEvent('pointerdown',{button:0,pointerId:9}));
+    expect(start).toHaveBeenCalledWith(0,'source',expect.any(PointerEvent));
+    component.cancel(new PointerEvent('pointercancel',{pointerId:9}));
+  });
+  it('exits fullscreen with Escape after closing a menu while preserving the draft',async()=>{
+    const fixture=render(),component=fixture.componentInstance,root=fixture.nativeElement as HTMLElement;
+    const trigger=root.querySelector<HTMLElement>('.fullscreen-toggle')!;
+    component.layoutDirty.set(true);
+    await component.toggleFullscreen(trigger);fixture.detectChanges();
+    expect(root.querySelector('.canvas-fullscreen-label')?.textContent).toContain('Vollbild verlassen');
+    expect(document.body.style.overflow).toBe('hidden');
+    component.menu.set({id:'a',x:0,y:0});component.escape(new KeyboardEvent('keydown',{key:'Escape',cancelable:true}));
+    expect(component.menu()).toBeNull();expect(component.fullscreen()).toBe(true);
+    component.escape(new KeyboardEvent('keydown',{key:'Escape',cancelable:true}));fixture.detectChanges();
+    expect(component.fullscreen()).toBe(false);expect(document.body.style.overflow).not.toBe('hidden');
+    expect(component.dirty()).toBe(true);expect(api.saveDomainNetworkView).not.toHaveBeenCalled();
+  });
+  it('keeps zoom controls within their limits after fitting a radial network',()=>{
+    const component=render().componentInstance;component.zoom.set(.42);component.changeZoom(-.2);expect(component.zoom()).toBe(.4);
+    component.zoom.set(1.55);component.changeZoom(.2);expect(component.zoom()).toBe(1.6);
+  });
+  it('fits the compact content afresh instead of retaining a previous tiny zoom',()=>{
+    const fixture=render(),component=fixture.componentInstance,viewport=fixture.nativeElement.querySelector('.semantic-graph') as HTMLElement;
+    Object.defineProperty(viewport,'clientWidth',{configurable:true,value:1440});
+    Object.defineProperty(viewport,'clientHeight',{configurable:true,value:800});
+    component.zoom.set(.42);component.autoLayout();fixture.detectChanges();
+    expect(component.zoom()).toBe(1);
+    expect(component.dirty()).toBe(true);
+    expect(api.saveDomainNetworkView).not.toHaveBeenCalled();
+  });
+  it('automatically arranges whole clusters about the canvas center while preserving hidden positions and shared links',()=>{
+    graph.positions={'domain:a':{x:35,y:35},'domain:b':{x:35,y:500},'domain:c':{x:35,y:900},'domain:hidden':{x:90,y:70}};
+    graph.relations=[{sourceId:'a',targetId:'b',relationType:'related'}];
+    const fixture=render(),component=fixture.componentInstance;
+    component.objects.set([{key:'product:p',id:'p',kind:'product',label:'Product',domainIds:['a'],route:[]} as unknown as DomainNetworkObject]);
+    component.autoLayout();fixture.detectChanges();
+    expect(component.positions()).toEqual({'domain:hidden':{x:90,y:70}});
+    expect(new Set(component.nodes().map(node=>Math.round(node.x))).size).toBeGreaterThan(1);
+    const boxes=[...component.nodes().map(node=>({...node,width:230,height:120})),...component.assetNodes().map(node=>({...node,width:240,height:95}))];
+    const left=Math.min(...boxes.map(box=>box.x)),right=Math.max(...boxes.map(box=>box.x+box.width));
+    expect((left+right)/2).toBeCloseTo(component.width()/2);
+    expect(component.dirty()).toBe(true);expect(component.links()).toEqual(graph.relations);
+    expect(api.saveDomainNetworkView).not.toHaveBeenCalled();expect(api.saveSemanticGraph).not.toHaveBeenCalled();
+  });
   it('lets readers pin a foreign domain through the picker despite the own-office filter',async()=>{
     graph.canEditLayout=false;graph.canEditRelations=false;
     const fixture=render(),component=fixture.componentInstance;
@@ -30,10 +118,16 @@ describe('DomainNetworkComponent',()=>{
   });
   it('switches prefetched object layers immediately and opens members in new tabs',()=>{
     const fixture=render(),component=fixture.componentInstance;
-    component.objects.set(['product','term','logical','physical'].map(kind=>({key:kind+':1',id:'1',kind:kind as 'product'|'term'|'logical'|'physical',label:kind,description:'Beschreibung',ownerName:'Owner',urn:'urn:daca:test:'+kind,route:['/models','1'],params:{},domainIds:['a','b']})));
+    component.objects.set(['product','term','logical','physical'].map(kind=>({key:kind+':1',id:'1',kind:kind as 'product'|'term'|'logical'|'physical',label:kind,description:'Beschreibung',ownerName:'Data Owner',urn:'urn:daca:test:'+kind,route:['/models','1'],params:{},domainIds:['a','b']})));
     fixture.detectChanges();expect(fixture.nativeElement.querySelectorAll('.domain-asset')).toHaveLength(1);
     const requests=api.loadDomainNetworkObjects.mock.calls.length;
-    component.toggleKind('term');component.toggleKind('logical');component.toggleKind('physical');fixture.detectChanges();
+    const toggles=[...fixture.nativeElement.querySelectorAll('.object-layers [role=switch]')] as HTMLButtonElement[];
+    expect(toggles.map(toggle=>toggle.getAttribute('aria-checked'))).toEqual(['true','false','false','false']);
+    toggles.slice(1).forEach(toggle=>toggle.click());fixture.detectChanges();
+    expect(toggles.every(toggle=>toggle.getAttribute('aria-checked')==='true')).toBe(true);
+    const retired=fixture.nativeElement.querySelector('.network-retired-toggle [role=switch]') as HTMLButtonElement;
+    retired.click();fixture.detectChanges();expect(component.showRetired()).toBe(true);expect(retired.getAttribute('aria-checked')).toBe('true');
+    expect(fixture.nativeElement.querySelector('input[type=checkbox]')).toBeNull();
     expect(fixture.nativeElement.querySelectorAll('.domain-asset')).toHaveLength(4);expect(component.assetEdges()).toHaveLength(8);
     expect([...fixture.nativeElement.querySelectorAll('.domain-asset')].every((element:any)=>element.target==='_blank')).toBe(true);
     expect(api.loadDomainNetworkObjects.mock.calls).toHaveLength(requests);
@@ -42,7 +136,7 @@ describe('DomainNetworkComponent',()=>{
     graph.relations=[{sourceId:'a',targetId:'c',relationType:'related'}];
     const fixture=render(),component=fixture.componentInstance;
     fixture.componentRef.setInput('visibleDomainIds',['a','c']);fixture.detectChanges();
-    const objects:DomainNetworkObject[]=Array.from({length:50},(_,index)=>({key:'product:'+index,id:String(index),kind:'product',label:'Produkt '+index,description:'',ownerName:'Owner',urn:'urn:daca:test:'+index,route:[],params:{},domainIds:['b']}));component.objects.set(objects);api.loadDomainNetworkObjects.mockReturnValueOnce(of({items:objects,truncated:false}));
+    const objects:DomainNetworkObject[]=Array.from({length:50},(_,index)=>({key:'product:'+index,id:String(index),kind:'product',label:'Produkt '+index,description:'',ownerName:'Data Owner',urn:'urn:daca:test:'+index,route:[],params:{},domainIds:['b']}));component.objects.set(objects);api.loadDomainNetworkObjects.mockReturnValueOnce(of({items:objects,truncated:false}));
     const before=component.nodes().map(node=>({id:node.id,x:node.x,y:node.y}));
     fixture.nativeElement.querySelector('.semantic-graph').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:900,clientY:400}));component.canvasAction('search');
     await component.selectDomain({id:'b',label:'Domäne b',description:'',route:[]});

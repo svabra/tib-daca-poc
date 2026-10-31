@@ -2,7 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 
-export type CatalogLanguage = 'de' | 'fr' | 'it' | 'en';
+export type CatalogLanguage = 'de' | 'fr' | 'it' | 'en' | 'rm';
 export type CatalogTheme = 'light' | 'dark';
 type PreferenceName = 'language' | 'theme';
 type PendingPreference = { name: PreferenceName; value: CatalogLanguage | CatalogTheme; previous?: CatalogLanguage };
@@ -73,7 +73,13 @@ export class UserPreferencesService {
         this.apply(pending.name, value);
         this.pending.set(null);
       },
-      error: () => this.error.set('Die Einstellung konnte nicht im Benutzerprofil gespeichert werden.'),
+      error: () => this.error.set(({
+        de: 'Die Einstellung konnte nicht im Benutzerprofil gespeichert werden.',
+        fr: 'Le paramètre n’a pas pu être enregistré dans le profil.',
+        it: 'Impossibile salvare l’impostazione nel profilo utente.',
+        rm: 'Il parameter n’ha betg pudì vegnir memorisà en il profil d’utilisader.',
+        en: 'The setting could not be saved in the user profile.',
+      })[this.language()]),
     });
   }
 
@@ -92,7 +98,7 @@ export class UserPreferencesService {
 
   private key(name: PreferenceName): string { return `daca.preference.${this.userId}.${name}`; }
   private headers(): HttpHeaders { return new HttpHeaders({ 'X-DaCa-User': this.userId }); }
-  private isLanguage(value: string): value is CatalogLanguage { return ['de', 'fr', 'it', 'en'].includes(value); }
+  private isLanguage(value: string): value is CatalogLanguage { return ['de', 'fr', 'it', 'en', 'rm'].includes(value); }
   private valid(name: PreferenceName, value: string): boolean { return name === 'language' ? this.isLanguage(value) : value === 'light' || value === 'dark'; }
   private apply(name: PreferenceName, value: string): void {
     if (!this.valid(name, value)) return;

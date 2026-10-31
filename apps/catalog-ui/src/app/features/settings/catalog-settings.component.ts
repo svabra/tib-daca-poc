@@ -1,12 +1,14 @@
+import { catalogCopy } from '../../core/catalog-localization';
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { ActivatedRoute, RouterLink, RouterLinkActive } from '@angular/router';
 import { DacaReleaseHistoryComponent } from '../../../../../../packages/design-system/src/lib/release-history.component';
 import { DACA_VERSION } from '../../../../../../packages/design-system/src/lib/version';
 import { CatalogLanguage, CatalogTheme, UserPreferencesService } from '../../core/user-preferences.service';
+import { LandingPreferencesService } from '../../core/landing-preferences.service';
 import { ResponsibilityPerspectivesComponent } from './responsibility-perspectives.component';
 import { RoleChangeProtocolComponent } from './role-change-protocol.component';
 
-type SettingsSection = 'language' | 'appearance' | 'features' | 'responsibilities' | 'role-changes';
+type SettingsSection = 'language' | 'appearance' | 'home' | 'features' | 'responsibilities' | 'role-changes';
 type Copy = readonly [string, string, string, string];
 
 @Component({
@@ -20,6 +22,7 @@ type Copy = readonly [string, string, string, string];
         <nav [attr.aria-label]="tr(['Einstellungsbereiche', 'Rubriques des paramètres', 'Sezioni delle impostazioni', 'Settings sections'])">
           <a routerLink="/settings/language-personal" routerLinkActive="is-active" ariaCurrentWhenActive="page">{{ tr(['Spracheinstellungen', 'Paramètres linguistiques', 'Impostazioni lingua', 'Language settings']) }}</a>
           <a routerLink="/settings/appearance" routerLinkActive="is-active" ariaCurrentWhenActive="page">{{ tr(['Erscheinungsbild', 'Apparence', 'Aspetto', 'Appearance']) }}</a>
+          <a routerLink="/settings/home" routerLinkActive="is-active" ariaCurrentWhenActive="page">{{ tr(['Startseite', 'Accueil', 'Pagina iniziale', 'Home page']) }}</a>
           <a routerLink="/settings/features" routerLinkActive="is-active" ariaCurrentWhenActive="page">{{ tr(['Featureliste', 'Liste des fonctionnalités', 'Elenco delle funzionalità', 'Feature list']) }}</a>
           <a routerLink="/settings/responsibilities" routerLinkActive="is-active" ariaCurrentWhenActive="page">{{ tr(['Rollen und Zuständigkeiten', 'Rôles et responsabilités', 'Ruoli e responsabilità', 'Roles and responsibilities']) }}</a>
           <a routerLink="/settings/role-changes" routerLinkActive="is-active" ariaCurrentWhenActive="page">{{ tr(['Rollenprotokoll', 'Journal des rôles', 'Registro dei ruoli', 'Role protocol']) }}</a>
@@ -37,7 +40,7 @@ type Copy = readonly [string, string, string, string];
             <header><p class="daca-eyebrow">{{ tr(['Sprache', 'Langue', 'Lingua', 'Language']) }}</p><h2 id="settings-language-title">{{ tr(['Persönliche Spracheinstellungen', 'Paramètres linguistiques personnels', 'Impostazioni linguistiche personali', 'Personal language settings']) }}</h2></header>
             <div class="settings-panel-body">
               <p>{{ tr(['Die Auswahl kann nur in diesem Browser bleiben oder für alle Ihre Geräte im DaCa-Profil gespeichert werden.', 'Le choix peut rester dans ce navigateur ou être enregistré dans votre profil DaCa pour tous vos appareils.', 'La scelta può restare in questo browser o essere salvata nel profilo DaCa per tutti i dispositivi.', 'Your choice can stay in this browser or be saved in your DaCa profile for all devices.']) }}</p>
-              <label class="settings-language-field"><span>{{ tr(['Darstellungssprache', 'Langue d’affichage', 'Lingua di visualizzazione', 'Display language']) }}</span><select [value]="preferences.language()" (change)="preferences.requestLanguage($any($event.target).value)"><option value="de">Deutsch</option><option value="fr">Français</option><option value="it">Italiano</option><option value="en">English</option></select></label>
+              <label class="settings-language-field"><span>{{ tr(['Darstellungssprache', 'Langue d’affichage', 'Lingua di visualizzazione', 'Display language']) }}</span><select [value]="preferences.language()" (change)="preferences.requestLanguage($any($event.target).value)"><option value="de">Deutsch</option><option value="fr">Français</option><option value="it">Italiano</option><option value="rm">Rumantsch Grischun</option><option value="en">English</option></select></label>
               <p class="settings-note">{{ tr(['Die DaCa-Oberfläche wird sofort in der gewählten Sprache angezeigt. Fachliche Namen, Datenwerte und externe Quellbezeichnungen bleiben unverändert.', 'L’interface DaCa s’affiche immédiatement dans la langue choisie. Les noms métiers, les valeurs et les libellés de sources externes restent inchangés.', 'L’interfaccia DaCa viene mostrata subito nella lingua scelta. Nomi di dominio, valori e denominazioni delle fonti esterne restano invariati.', 'The DaCa interface switches to the selected language immediately. Domain names, data values and external source labels stay unchanged.']) }}</p>
             </div>
           </section>
@@ -51,6 +54,17 @@ type Copy = readonly [string, string, string, string];
                 <button type="button" [class.is-selected]="preferences.theme() === 'dark'" [attr.aria-pressed]="preferences.theme() === 'dark'" (click)="chooseTheme('dark')"><span aria-hidden="true">◐</span><strong>{{ tr(['Dunkel', 'Sombre', 'Scuro', 'Dark']) }}</strong><small>{{ tr(['Weniger Helligkeit bei längerer Arbeit', 'Luminosité réduite pour les longues sessions', 'Luminosità ridotta per sessioni lunghe', 'Less brightness for longer sessions']) }}</small></button>
               </fieldset>
               <p class="settings-note">{{ tr(['Aktuelles Erscheinungsbild:', 'Apparence actuelle :', 'Aspetto attuale:', 'Current appearance:']) }} {{ preferences.theme() === 'dark' ? tr(['Dunkel', 'Sombre', 'Scuro', 'Dark']) : tr(['Hell', 'Clair', 'Chiaro', 'Light']) }}.</p>
+            </div>
+          </section>
+        } @else if (section === 'home') {
+          <section class="settings-panel" aria-labelledby="settings-welcome-title">
+            <header><p class="daca-eyebrow">{{ tr(['Startseite', 'Accueil', 'Pagina iniziale', 'Home']) }}</p><h2 id="settings-welcome-title">{{ tr(['Willkommensbereich', 'Message de bienvenue', 'Sezione di benvenuto', 'Welcome section']) }}</h2></header>
+            <div class="settings-panel-body">
+              <p>{{ tr(['Der einführende Willkommensbereich kann auf der Startseite nach Bestätigung ausgeblendet werden. Organisationscanvas und Suche bleiben sichtbar. Diese Auswahl gilt pro Benutzer in diesem Browser.', 'Le message de bienvenue peut être masqué après confirmation sur l’accueil. Le canvas et la recherche restent visibles. Ce choix est personnel et propre à ce navigateur.', 'Il benvenuto può essere nascosto dopo conferma nella pagina iniziale. Canvas e ricerca restano visibili. La scelta vale per utente e browser.', 'The welcome section can be hidden after confirmation on the home page. The organization canvas and search remain visible. This choice is per user in this browser.']) }}</p>
+              <p>{{ landing.welcomeVisible() ? tr(['Der Willkommensbereich ist sichtbar.', 'Le message est visible.', 'Il benvenuto è visibile.', 'The welcome section is visible.']) : tr(['Der Willkommensbereich ist ausgeblendet.', 'Le message est masqué.', 'Il benvenuto è nascosto.', 'The welcome section is hidden.']) }}</p>
+              <button type="button" class="daca-button is-secondary" [disabled]="landing.welcomeVisible()" (click)="landing.setWelcome(true)">{{ tr(['Willkommensbereich wieder anzeigen', 'Rétablir le message de bienvenue', 'Ripristina il benvenuto', 'Restore welcome section']) }}</button>
+              <p><a routerLink="/">{{ tr(['Zur Startseite', 'Vers l’accueil', 'Alla pagina iniziale', 'Back to home']) }}</a></p>
+              @if (landing.storageError()) { <p role="status">{{ tr(['Browserspeicher nicht verfügbar; die Auswahl gilt nur für diese Sitzung.', 'Stockage indisponible ; ce choix vaut pour cette session.', 'Memoria non disponibile; la scelta vale per questa sessione.', 'Browser storage is unavailable; this choice applies only to this session.']) }}</p> }
             </div>
           </section>
         } @else if (section === 'responsibilities') {
@@ -70,13 +84,15 @@ type Copy = readonly [string, string, string, string];
 export class CatalogSettingsComponent {
   private readonly route = inject(ActivatedRoute);
   readonly preferences = inject(UserPreferencesService);
+  readonly landing = inject(LandingPreferencesService);
   readonly section = (this.route.snapshot.data['settingsSection'] as SettingsSection | undefined) ?? 'features';
   readonly version = DACA_VERSION;
 
-  tr(copy: Copy): string { return copy[({ de: 0, fr: 1, it: 2, en: 3 } satisfies Record<CatalogLanguage, number>)[this.preferences.language()]]; }
+  tr(copy: Copy): string { return catalogCopy(copy, this.preferences.language()); }
   description(): string {
     if (this.section === 'language') return this.tr(['Ihre persönliche Spracheinstellung für DaCa.', 'Votre préférence linguistique personnelle pour DaCa.', 'La vostra preferenza linguistica personale per DaCa.', 'Your personal language preference for DaCa.']);
     if (this.section === 'appearance') return this.tr(['Helles oder dunkles Erscheinungsbild – im Browser oder profilweit speichern.', 'Enregistrez une apparence claire ou sombre dans le navigateur ou dans votre profil.', 'Salvate un aspetto chiaro o scuro nel browser o nel profilo.', 'Save a light or dark appearance in this browser or your profile.']);
+    if (this.section === 'home') return this.tr(['Willkommensbereich und Einstieg in Ihren Datenraum.', 'Message de bienvenue et accès à votre espace de données.', 'Benvenuto e accesso al vostro spazio dati.', 'Welcome section and entry to your data landscape.']);
     if (this.section === 'responsibilities') return this.tr(['Zuständigkeiten aus dem Katalog.', 'Responsabilités du catalogue.', 'Responsabilità del catalogo.', 'Catalog responsibilities.']);
     return this.tr(['Version, Updates und die nachvollziehbare Featureliste von DaCa.', 'Version, mises à jour et liste des fonctionnalités de DaCa.', 'Versione, aggiornamenti ed elenco delle funzionalità di DaCa.', 'Version, updates and DaCa’s feature list.']);
   }

@@ -15,6 +15,8 @@ from .object_governance import OWNER_ROLES
 
 
 def domain_organization_ids(session, domain):
+    if (snapshot := session.info.get("semantic_read")) and domain.id in snapshot.domain_ids:
+        return snapshot.domain_scopes(domain)
     explicit = set(session.scalars(select(CatalogObjectResponsibility.organization_id).where(
         CatalogObjectResponsibility.domain_id == domain.id,
         CatalogObjectResponsibility.active.is_(True),
@@ -33,6 +35,8 @@ def domain_organization_ids(session, domain):
 
 def person_organization_ids(session, user_id):
     """Trusted current primary scope; expired membership never falls back to directory data."""
+    if (snapshot := session.info.get("semantic_read")) and user_id in snapshot.people:
+        return snapshot.person_scopes(user_id)
     today = utc_now().date()
     history = list(session.scalars(select(FederalPersonMembership).where(
         FederalPersonMembership.user_id == user_id,
@@ -63,6 +67,8 @@ def replace_domain_owners(session, domain, organization_ids):
 
 
 def active_scope_organizations(session, organization_ids):
+    if snapshot := session.info.get("semantic_read"):
+        return snapshot.active_organizations(organization_ids)
     today = utc_now().date()
     return list(session.scalars(select(AdministrativeOrganization).where(
         AdministrativeOrganization.id.in_(organization_ids), AdministrativeOrganization.active.is_(True),

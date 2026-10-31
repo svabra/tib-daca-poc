@@ -34,6 +34,9 @@ def active_publication_approvers(
 def default_control_person(
     session: Session, owner_user_id: str | None
 ) -> DemoUser | None:
+    if owner_user_id == "marcello.hebeisa":
+        controller = session.get(DemoUser, "fausto.marzo")
+        return controller if is_active_publication_approver(controller) else None
     owner = session.get(DemoUser, owner_user_id) if owner_user_id else None
     if owner is not None and owner.supervisor_user_id:
         supervisor = session.get(DemoUser, owner.supervisor_user_id)
