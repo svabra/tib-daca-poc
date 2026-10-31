@@ -35,6 +35,7 @@ from .modeling_service import (
     logical_version_payload,
     logical_write_from_payload,
     mapping_payload,
+    record_audit,
 )
 from .models import (
     AssetMapping,
@@ -136,6 +137,36 @@ def create_model_domain_router():
             raise HTTPException(422, "Select exactly this physical object")
         apply_domain_targets(session, actor, body.data_domain_id, body.physical_domain_targets,
                              source.department_code, source.organization_id)
+        result = physical_domain_state(session, source_id, table.stable_key)
+        session.commit()
+        return result
+
+    @router.delete("/physical-tables/{table_id}/domain-assignments/{domain_id}", response_model=PhysicalDomainState)
+    def remove_physical_domain(table_id: uuid.UUID, domain_id: uuid.UUID, body: PhysicalDomainTarget,
+                               session: SessionDep, actor: ActorDep):
+        table, snapshot_id, source_id = physical_table_context(session, table_id)
+        # Assignment and removal lock the same source, including historical revisions.
+        source = session.scalar(select(PhysicalSource).where(PhysicalSource.id == source_id).with_for_update())
+        require_source_access(session, actor, source.id)
+        _require_scope(session, actor, source.department_code, source.organization_id,
+                       roles={"data_owner", "data_steward"})
+        if source.lifecycle != "active":
+            raise HTTPException(422, "Only active sources support domain changes")
+        if body.physical_table_id != table_id or body.physical_snapshot_id != snapshot_id:
+            raise HTTPException(422, "Select exactly this physical object and revision")
+        state = physical_domain_state(session, source_id, table.stable_key)
+        if state["domainVersion"] != body.expected_domain_version:
+            raise HTTPException(409, "Physical domain assignments changed; reload before removing")
+        assignment = session.scalar(select(PhysicalDomainAssignment).where(
+            PhysicalDomainAssignment.physical_source_id == source_id,
+            PhysicalDomainAssignment.physical_table_key == table.stable_key,
+            PhysicalDomainAssignment.domain_id == domain_id))
+        if assignment is None:
+            raise HTTPException(404, "Domain assignment not found")
+        record_audit(session, "physical-domain-assignment", assignment.id, "removed", actor, None,
+            {"physicalSourceId": str(source_id), "physicalTableKey": table.stable_key, "domainId": str(domain_id)})
+        session.delete(assignment)
+        session.flush()
         result = physical_domain_state(session, source_id, table.stable_key)
         session.commit()
         return result

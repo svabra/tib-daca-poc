@@ -11,9 +11,11 @@ import { catalogSearchIsReady, normalizeCatalogSearch } from '../welcome/welcome
 import { CatalogSearchDataService } from './catalog-search-data.service';
 import { CatalogSearchAsset, groupSearchAssets, SEARCH_ICONS, SEARCH_KINDS, searchAssetIcon, searchAssetMatches, SearchKind, SearchMode } from './catalog-search.models';
 import { SearchIconComponent } from './search-icon.component';
+import { SearchViewsComponent } from './search-views.component';
+import { SearchView, SearchViewConfiguration } from './search-views-api.service';
 
 @Component({selector:'daca-catalog-expert-search',standalone:true,
-  imports:[DatePipe,NgTemplateOutlet,RouterLink,QualityMedalComponent,SearchIconComponent,TooltipDirective],
+  imports:[DatePipe,NgTemplateOutlet,RouterLink,QualityMedalComponent,SearchIconComponent,TooltipDirective,SearchViewsComponent],
   providers:[CatalogSearchDataService],changeDetection:ChangeDetectionStrategy.OnPush,
   templateUrl:'./catalog-expert-search.component.html',styleUrl:'./catalog-expert-search.component.css',
 })
@@ -32,19 +34,24 @@ export class CatalogExpertSearchComponent {
   readonly selectedOwner=linkedSignal(()=>this.params().get('organization')??'all');
   readonly selectedStatus=linkedSignal(()=>this.params().get('status')==='active'?'active':'all');
   readonly selectedConnection=linkedSignal(()=>['connected','metadata'].includes(this.params().get('connection')??'')?this.params().get('connection')!:'all');
+  readonly activeViewId=linkedSignal(()=>this.params().get('view'));
+  readonly sharedViewId=computed(()=>this.params().get('sharedView'));
   readonly filterOpen=signal(false);
   readonly limit=signal(30);
-  readonly sort=signal<'relevance'|'name'>('relevance');
+  readonly sort=linkedSignal<'relevance'|'name'>(()=>this.params().get('sort')==='name'?'name':'relevance');
+  readonly viewConfiguration=computed<SearchViewConfiguration>(()=>({schemaVersion:1,query:this.query().trim(),mode:this.mode(),kind:this.selectedKind(),
+    domain:this.selectedDomain(),organization:this.selectedOwner(),status:this.selectedStatus(),
+    connection:this.selectedConnection() as SearchViewConfiguration['connection'],sort:this.sort()}));
   readonly kinds=SEARCH_KINDS;
   readonly icons=SEARCH_ICONS;
   readonly collapsedGroups=signal<ReadonlySet<string>>(new Set());
-  readonly searchReady=computed(()=>catalogSearchIsReady(this.query()));
+  readonly searchReady=computed(()=>catalogSearchIsReady(this.query())||(!!this.activeViewId()&&!this.query().trim()));
   readonly organizations=computed(()=>[...new Set(this.data.assets().map(item=>item.organization).filter(Boolean))].sort((a,b)=>a.localeCompare(b)));
   readonly domains=computed(()=>[...new Map(this.data.assets().flatMap(item=>item.domains).map(item=>[item.id,item])).values()].sort((a,b)=>a.label.localeCompare(b.label)));
   readonly filterCount=computed(()=>[this.selectedOwner(),this.selectedDomain(),this.selectedStatus(),this.selectedConnection()].filter(value=>value!=='all').length);
   readonly matches=computed(()=>{
     if(!this.searchReady())return[];
-    return this.data.assets().filter(item=>searchAssetMatches(item,this.query()))
+    return this.data.assets().filter(item=>!this.query().trim()||searchAssetMatches(item,this.query()))
       .filter(item=>this.selectedOwner()==='all'||item.organization===this.selectedOwner())
       .filter(item=>this.selectedDomain()==='all'||item.domains.some(domain=>domain.id===this.selectedDomain()))
       .filter(item=>this.selectedStatus()==='all'||['active','published','validated'].includes(item.status))
@@ -79,13 +86,24 @@ export class CatalogExpertSearchComponent {
     effect(()=>{const key=this.pinnedKey()??this.hoveredKey();const available=this.results().some(item=>item.key===key)||this.groups().some(group=>group.parent.key===key);if(key&&!available)untracked(()=>this.closePreview(false));});
     inject(DestroyRef).onDestroy(()=>{clearTimeout(this.hoverTimer);clearTimeout(this.closeTimer);});
   }
-  private updateUrl():void{
+  private updateUrl(extra:Record<string,string|null>={}):void{
     void this.router.navigate([],{relativeTo:this.route,queryParamsHandling:'merge',replaceUrl:true,queryParams:{
-      q:this.query().trim()||null,mode:this.mode()==='context'?null:this.mode(),kind:this.selectedKind()==='all'?null:this.selectedKind(),
+      q:this.query().trim()||(this.activeViewId()?'':null),mode:this.mode()==='context'?null:this.mode(),kind:this.selectedKind()==='all'?null:this.selectedKind(),
       domain:this.selectedDomain()==='all'?null:this.selectedDomain(),organization:this.selectedOwner()==='all'?null:this.selectedOwner(),
       status:this.selectedStatus()==='all'?null:this.selectedStatus(),connection:this.selectedConnection()==='all'?null:this.selectedConnection(),
+      view:this.activeViewId(),sort:this.sort()==='name'?'name':null,...extra,
     }});
   }
+  applyView(view:SearchView|null):void{
+    this.activeViewId.set(view?.id??null);
+    if(view){const config=view.configuration;this.query.set(config.query);this.mode.set(config.mode);this.selectedKind.set(config.kind);
+      this.selectedOwner.set(config.organization);this.selectedDomain.set(config.domain);this.selectedStatus.set(config.status);
+      this.selectedConnection.set(config.connection);this.sort.set(config.sort);this.closePreview(false);}
+    this.updateUrl();
+  }
+  restoreView(view:SearchView):void{if(!this.params().has('q'))this.applyView(view);}
+  closeSharedView():void{this.updateUrl({sharedView:null});}
+  setSort(value:string):void{this.sort.set(value==='name'?'name':'relevance');this.updateUrl();}
   updateQuery(value:string):void{this.query.set(value);this.updateUrl();}
   clearQuery():void{this.updateQuery('');this.host.nativeElement.querySelector<HTMLInputElement>('#expert-search-input')?.focus();}
   setMode(mode:SearchMode):void{this.mode.set(mode);this.updateUrl();}

@@ -36,6 +36,9 @@ class ContextSpec:
 
 
 CATALOG_TABLES = {
+    "domain_network_views": "Private authenticated-user domain exploration: revision-checked version-1 configuration stores explicit domain additions, hidden domains, domain positions and visible related-object types. Existing active users can present cross-department references; no shared relationship, catalog edit or data-access grant is stored here.",
+    "search_views": "Private user-owned expert-search filter presets with validated version-1 configuration JSON, optimistic revision and timestamps; they confer no catalog permissions and contain no saved result rows.",
+    "search_view_shares": "Recipient-addressed immutable copies of one saved search-view revision, including name/description/filter JSON and optional message. Acceptance creates an independent private view; original deletion only clears the optional source reference. Acceptance/dismissal and the corresponding workflow task are completed atomically.",
     "organization_steward_mandates": "Explicit LDSD department and ALDS office mandates, with optional named deputy, active state, revision and appointment decision reference; operator provisioning appends audit evidence and seeds preserve changes/revocations.",
     "asset_mapping_logical_fields": "Ordered many-to-many references from one immutable mapping version to logical field versions.",
     "asset_mapping_physical_columns": "Ordered many-to-many references from one immutable mapping version to physical snapshot columns.",
@@ -43,7 +46,7 @@ CATALOG_TABLES = {
     "asset_mappings": "Versioned aggregate roots for mappings between a logical model and a physical source.",
     "data_model_role_assignments": "Organization-scoped Data Owner, delegated deputy Data Owner, Data Steward and deputy Data Steward assignments used by legacy modeling guards; these are not LDSD/ALDS mandates or universal object ownership.",
     "catalog_object_responsibilities": "Explicit person-to-object roles, including deputy stewardship and independent term ownership. Domain handover revokes old Owner rows and pins the office (or explicit lack of office) with domain-handover provenance. Model, source/table and product modules retain their established checks.",
-    "physical_domain_assignments": "Explicit current domain memberships keyed by physical source and stable table/object key, independent of imported snapshots and field mappings; audited editor assignments append memberships and preserve existing domains.",
+    "physical_domain_assignments": "Explicit current domain memberships keyed by physical source and stable table/object key, independent of imported snapshots and field mappings; scoped editor assignment/removal commands lock the source and check a canonical domainVersion. Removal deletes only the selected current membership and appends physical-domain-assignment/removed audit metadata with source, stable table key and domain ID; other memberships, mappings, logical model domains and immutable imported structures are preserved.",
     "role_change_events": "Append-only, sequential audit of organization roles, direct object responsibilities and domain/model/product owner changes; includes a migration baseline.",
     "dcat_catalog_versions": "Immutable multilingual DCAT catalog metadata revisions.",
     "dcat_catalogs": "Central DCAT catalog roots with stable URNs and retirement tombstones.",
@@ -90,7 +93,7 @@ CATALOG_TABLES = {
     "administrative_organization_labels": "Language-specific official labels for one imported federal organization node.",
     "federal_organization_import_runs": "Auditable, content-hashed offline Staatskalender import attempts and outcomes.",
     "federal_person_memberships": "Time-bounded primary organizational memberships for federal modeling and terminology personas.",
-    "audit_events": "Append-only catalog audit trail keyed by stable resource type and identifier.",
+    "audit_events": "Append-only catalog audit trail keyed by stable resource type and identifier. Owner-only lineage-access/data-read receipts use the edge UUID as resource_id, principal ID as actor and execution timestamp as occurred_at; schemaVersion=1 details contain resourceUrn, consumerUrn, subjectType (person/machine), protocol (http-rest/postgresql) and outcome (success/denied/error), never data records, tokens or raw request/decision payloads. Reporter-generated event IDs deduplicate retries without overwriting evidence. Resource-owner authorization is separate from generic audit viewing.",
     "canonical_ontology_terms": "Classes and properties belonging to one canonical ontology version.",
     "canonical_ontology_versions": "Versioned canonical DaCa ontologies; one version can be active.",
     "data_product_domains": "Ordered many-to-many assignments from products to governed subject domains.",
@@ -99,7 +102,7 @@ CATALOG_TABLES = {
     "data_products": "Catalog aggregate root for metadata, ownership, lifecycle and discoverability.",
     "demo_login_sessions": "Revocable, expiring local PoC browser sessions stored by token hash.",
     "demo_users": "PoC identities available to the demo identity switcher, with personal display preferences.",
-    "domain_change_requests": "Versioned requests to create, update or retire a governed domain.",
+    "domain_change_requests": "Versioned requests to create, update or retire a governed domain. New domains require approval by the scoped office ALDS/mandated deputy other than the requester; owner/deputy guards remain for updates and retirement.",
     "domain_localizations": "BCP-47-labelled preferred names and definitions for subject domains.",
     "domains": "Versioned subject domains with a primary Data Owner and deputy.",
     "endpoints": "Credential-free HTTP/REST or PostgreSQL endpoint descriptions.",
@@ -139,7 +142,7 @@ CATALOG_TABLES = {
     "source_access_grants": "Immutable person or group-snapshot grants for metadata-only source catalog entries.",
     "source_access_requests": "Auditable direct-owner requests for access to discoverable data sources.",
     "source_catalog_entries": "Credential-free metadata for discoverable PoC data sources and their synthetic object inventory.",
-    "workflow_tasks": "Owner and approver work items for quality, access governance, SLA review and request processing.",
+    "workflow_tasks": "Owner and approver work items for quality, access governance, SLA review and request processing, plus recipient-private search-view messages linked through search_view_share_id.",
 }
 
 CONTROL_PLANE_TABLES = {
@@ -168,8 +171,10 @@ CONTEXTS = (
         boundary="The central catalog owns product metadata, workflows, access governance and semantic evidence.",
         table_descriptions=CATALOG_TABLES,
         json_notes=(
+            "`domain_network_views.configuration` has schemaVersion=1, addedDomainIds (max 200 existing UUIDs), hiddenDomainIds (max 2000), positions keyed only by domain:<existing UUID> with bounded finite x/y, and unique visibleKinds product/term/logical/physical (product default). The user primary key is derived from trusted authentication; no supplied user ID, relationship or object payload is accepted. Audit details contain counts only. Shared domain relationships remain in semantic_graph_states. The rohs-cps-catalog-v1 seed marker preserves later changes to synthetic CPS catalog fixtures, scoped roles and registry memberships.",
+            "`search_views.configuration` is a strict schemaVersion=1 object: query (max 200 chars), mode (context/focus), kind (all/product/logical/structure/field/term/domain/source), organization/domain IDs or all, status (all/active), connection (all/connected/metadata), sort (relevance/name). `search_view_shares.snapshot` freezes name, description and that configuration at send time. No result rows, credentials or permission grants are copied. Recipient acceptance deep-copies this JSON; later source/copy edits and deletion do not synchronize. Private phrases, messages and descriptions are excluded from append-only audit details.",
             "`data_products.keywords` is a string array; `contact`, `quality` and physical `metadata` hold DCAT-friendly extension objects.",
-            "`domain_change_requests.requested_payload` preserves the submitted domain draft while `review_payload` holds its revision-controlled working copy. Domains themselves remain relational and are not inferred from organizations.",
+            "`domain_change_requests.requested_payload` preserves the submitted domain draft while `review_payload` holds its revision-controlled working copy. For new domains, the original proposed owner's trusted active primary office determines the ALDS review scope; review edits cannot move the owner outside the deciding ALDS scope. Pending review tasks follow current mandates. Domains themselves remain relational and are not inferred from organizations.",
             "`glossary_term_localizations.alternative_labels` is a language-scoped list. Glossary proposal payloads preserve submitted and reviewed multilingual labels, definitions, domain IDs and SKOS relations; audit rows contain only identifiers and decision metadata.",
             "`endpoints.connection` describes only HTTP/REST or PostgreSQL connectivity and never contains credentials.",
             "`policy_revisions.definition` is the constrained PBAC document. Each grant targets one person, machine or group, carries its validity period, optional IANA-zone weekly availability and independent KOBY/MCP and I14Y flags; group grants contain a server-generated membership snapshot. Generated Rego is stored separately and is not editable.",

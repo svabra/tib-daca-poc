@@ -34,6 +34,7 @@ describe('Mapping workspace live refresh',()=>{
       listRepresentations:vi.fn(()=>of(state.snapshot.tables.map((table)=>({physicalSnapshotId:state.snapshot.id,physicalTableId:table.id})))),
       loadPhysicalSnapshot:vi.fn(()=>of(state.snapshot)),loadCanvasLayout:vi.fn(()=>of(state.layout)),loadDrift:vi.fn(()=>of(null)),
       saveWorkspaceDraft:vi.fn(),
+      removePhysicalDomain:vi.fn(),
       rememberMappingWorkspace:vi.fn(()=>of(undefined)),
     };
     TestBed.configureTestingModule({imports:[MappingWorkspaceComponent],providers:[
@@ -50,6 +51,38 @@ describe('Mapping workspace live refresh',()=>{
     return{fixture,component:fixture.componentInstance,state,api,actor,secondTable};
   }
   function visibleIds(root:HTMLElement,attribute:string):string[]{return[...root.querySelectorAll(`[${attribute}]`)].map((element)=>element.getAttribute(attribute)!).sort();}
+
+  it('updates physical labels only after confirmed removal and preserves draft mappings on failures',()=>{
+    const {component,api}=setup();
+    component.manageScopes.set([{role:'data_owner',descendantOrganizationIds:[component.facade.model()!.office]}] as any);
+    const item=component.facade.representations()[0],state={dataDomains:[{id:'domain',displayName:'Personal',lifecycle:'active' as const}],domainVersion:'1'.repeat(64)};
+    component.facade.updatePhysicalDomains(item.snapshot.sourceId,item.table.stableKey,state);
+    component.facade.reviseMapping(component.facade.mappings()[0].id,{mappingType:'Renamed'});
+    const before=JSON.stringify(component.facade.mappings()),pending=new Subject<import('./data-models.models').PhysicalDomainState>();
+    api.removePhysicalDomain.mockReturnValueOnce(pending);
+    component.removePhysicalDomain(item.table.id,'domain');
+    expect(component.facade.representations()[0].table.dataDomains).toHaveLength(1);
+    expect(component.domainBusy()).toBe(true);
+    pending.error(new Error('conflict'));
+    expect(component.facade.representations()[0].table.dataDomains).toHaveLength(1);
+    expect(component.error()).toContain('nicht entfernt');
+    api.removePhysicalDomain.mockReturnValueOnce(of({dataDomains:[],domainVersion:'2'.repeat(64)}));
+    component.removePhysicalDomain(item.table.id,'domain');
+    expect(component.facade.representations()[0].table.dataDomains).toEqual([]);
+    expect(JSON.stringify(component.facade.mappings())).toBe(before);
+  });
+
+
+  it('keeps a binding action target stable when an in-flight refresh finishes',()=>{
+    const {component,api,state}=setup(),pending=new Subject<ApiResult<LogicalModel>>();
+    api.loadLogicalModel.mockReturnValueOnce(pending);component.refreshWorkspace();
+    const item=component.linkedRepresentations()[0];component.bindingMenu.set({item,x:10,y:10});
+    state.model={...state.model,title:{...state.model.title,de:'Remote revision'}};
+    pending.next({body:state.model,etag:'"2"'});pending.complete();
+    expect(component.facade.model()?.title.de).not.toBe('Remote revision');
+    const reads=api.loadLogicalModel.mock.calls.length;component.refreshWorkspace();expect(api.loadLogicalModel).toHaveBeenCalledTimes(reads);
+    component.closeBindingMenu();component.refreshWorkspace();expect(component.facade.model()?.title.de).toBe('Remote revision');
+  });
 
   it('remembers opened context once without treating automatic refresh as new work',()=>{
     const {component,api}=setup();

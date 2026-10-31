@@ -48,7 +48,7 @@ Update generated sections with `npm run docs:data-model`. Validate them with
 
 | Persistence context | Storage | Tables | Alembic head | Migration fingerprint |
 |---|---|---:|---|---|
-| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 101 | `0045_mapping_workspace_visits` | `c67221775f4f57cf` |
+| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 104 | `0047_domain_network_views` | `720d0e7cac1524b6` |
 | [Control-plane data model](control-plane.md) | PostgreSQL (`daca_control_plane`) | 6 | `20260803_0001` | `ff3a5ea9ca863788` |
 | [Sample data-product model](sample-data-product.md) | PostgreSQL (`daca_sample`) | 4 | `0004_vibdbu_buildings` | `62c6765d78832f77` |
 
@@ -99,6 +99,7 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.demo_users`
 - `catalog.domain_change_requests`
 - `catalog.domain_localizations`
+- `catalog.domain_network_views`
 - `catalog.domains`
 - `catalog.endpoints`
 - `catalog.federal_organization_import_runs`
@@ -155,6 +156,8 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.product_semantic_mappings`
 - `catalog.provenance_events`
 - `catalog.role_change_events`
+- `catalog.search_view_shares`
+- `catalog.search_views`
 - `catalog.seed_markers`
 - `catalog.semantic_graph_states`
 - `catalog.service_level_revisions`

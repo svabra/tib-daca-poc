@@ -1,0 +1,79 @@
+<div class="views-bar" aria-label="Views">
+  <label class="view-select"><daca-search-icon name="pin"/><span class="daca-sr-only">{{i18n.t('viewsMine')}}</span><select [ngModel]="selected()?.id ?? ''" [disabled]="loading()||busy()" (ngModelChange)="choose($event)"><option value="">{{i18n.t('viewsCurrent')}}</option><optgroup [label]="i18n.t('viewsMine')">@for(view of views();track view.id){<option [value]="view.id">{{view.name}}</option>}</optgroup></select></label>
+  @if(selected()){
+    <details class="view-actions"><summary [attr.aria-label]="i18n.t('viewsActions')">⋯</summary><div class="view-action-list">
+      <button type="button" [disabled]="busy()" (click)="open('edit',$event.currentTarget)"><daca-search-icon name="forms"/>{{i18n.t('viewsEdit')}}</button>
+      @if(modified()){<button type="button" [disabled]="busy()" (click)="saveCurrent()"><daca-search-icon name="pin"/>{{i18n.t('viewsSaveCurrent')}}</button>}
+      <button type="button" [disabled]="busy()" (click)="open('share',$event.currentTarget)"><daca-search-icon name="arrow-up-right"/>{{i18n.t('viewsShare')}}</button><hr>
+      <button type="button" class="is-danger" [disabled]="busy()" (click)="open('delete',$event.currentTarget)"><daca-search-icon name="x"/>{{i18n.t('viewsDelete')}}</button>
+    </div></details>
+  }
+  <button type="button" class="view-toolbar-button" [disabled]="loading()||busy()||!!loadError()" (click)="open('create',$event.currentTarget)"><span aria-hidden="true">＋</span>{{i18n.t('viewsNew')}}</button>
+  <button class="view-help" type="button" [dacaTooltip]="i18n.t('viewsHelp')" [attr.aria-label]="i18n.t('viewsHelp')"><daca-search-icon name="info-circle"/></button>
+  @if(modified()){<small class="view-modified">{{i18n.t('viewsModified')}}</small>}
+  @if(incoming().length){<button type="button" class="view-toolbar-button incoming-trigger" (click)="open('inbox',$event.currentTarget)"><daca-search-icon name="arrow-up-right"/>{{i18n.t('viewsInbox')}}<b>{{incoming().length}}</b></button>}
+  @if(loading()){<daca-loading-indicator [label]="i18n.t('viewsLoading')"/>}
+</div>
+@if(loadError()){<p class="view-feedback is-error" role="alert">{{loadError()}} <button type="button" (click)="load()">{{i18n.t('viewsRetry')}}</button></p>}
+@if(error()&&!dialogMode()){<p class="view-feedback is-error" role="alert">{{error()}} <button type="button" (click)="load()">{{i18n.t('viewsRetry')}}</button></p>}
+@if(notice()){<p class="view-feedback" role="status">{{notice()}}</p>}
+
+@if(dialogMode();as mode){
+  <dialog #dialog class="view-dialog" [class.is-sharing]="mode==='share'" aria-labelledby="search-view-dialog-title" (cancel)="$event.preventDefault();close()">
+    <form #viewForm="ngForm" (ngSubmit)="submit()">
+      <header><div><p class="daca-eyebrow">{{i18n.t(mode==='review'||mode==='inbox'?'viewsInbox':'viewsMine')}}</p><h2 id="search-view-dialog-title">{{i18n.t(mode==='create'?'viewCreateTitle':mode==='edit'?'viewEditTitle':mode==='share'?'viewShareTitle':mode==='delete'?'viewDeleteTitle':mode==='review'?'viewReviewTitle':'viewsInbox')}}</h2></div><button type="button" class="view-close" [disabled]="busy()" [attr.aria-label]="i18n.t('viewClose')" (click)="close()"><daca-search-icon name="x"/></button></header>
+      @if(error()){<p class="daca-alert is-error" role="alert">{{error()}}</p>}
+      <fieldset [disabled]="busy()">
+        @if(mode==='create'||mode==='edit'){
+          <label>{{i18n.t('viewName')}} *<input name="name" required maxlength="120" [(ngModel)]="form.name"></label>
+          <label>{{i18n.t('viewDescription')}}<textarea name="description" rows="2" maxlength="2000" [(ngModel)]="form.description"></textarea></label>
+          <details class="view-filter-editor" [open]="mode==='edit'"><summary>{{i18n.t('viewFilters')}}</summary><div class="view-filter-grid">
+            <label class="is-wide">{{i18n.t('searchTerm')}}<input name="query" type="search" maxlength="200" [(ngModel)]="form.configuration.query"></label>
+            <label>{{i18n.t('searchAll')}}<select name="kind" [(ngModel)]="form.configuration.kind"><option value="all">{{i18n.t('searchAll')}}</option>@for(kind of kinds;track kind){<option [value]="kind">{{kindLabel(kind)}}</option>}</select></label>
+            <label>{{i18n.t('organization')}}<select name="organization" [(ngModel)]="form.configuration.organization"><option value="all">{{i18n.t('allOrganizations')}}</option>@if(form.configuration.organization!=='all'&&!organizations().includes(form.configuration.organization)){<option [value]="form.configuration.organization">{{organizationLabel(form.configuration.organization)}}</option>}@for(organization of organizations();track organization){<option [value]="organization">{{organizationLabel(organization)}}</option>}</select></label>
+            <label>{{i18n.t('searchDomain')}}<select name="domain" [(ngModel)]="form.configuration.domain"><option value="all">{{i18n.t('allDomains')}}</option>@for(domain of domains();track domain.id){<option [value]="domain.id">{{domain.label}}</option>}@if(form.configuration.domain!=='all'&&!domainKnown(form.configuration.domain)){<option [value]="form.configuration.domain">{{form.configuration.domain}}</option>}</select></label>
+            <label>{{i18n.t('searchStatus')}}<select name="status" [(ngModel)]="form.configuration.status"><option value="all">{{i18n.t('searchAllStatuses')}}</option><option value="active">{{i18n.t('searchActive')}}</option></select></label>
+            <label>{{i18n.t('searchConnection')}}<select name="connection" [(ngModel)]="form.configuration.connection"><option value="all">{{i18n.t('searchAnyConnection')}}</option><option value="connected">{{i18n.t('searchConnected')}}</option><option value="metadata">{{i18n.t('searchMetadata')}}</option></select></label>
+            <label>{{i18n.t('searchMode')}}<select name="mode" [(ngModel)]="form.configuration.mode"><option value="context">{{i18n.t('searchContextMode')}}</option><option value="focus">{{i18n.t('searchFocusMode')}}</option></select></label>
+            <label>{{i18n.t('searchSort')}}<select name="sort" [(ngModel)]="form.configuration.sort"><option value="relevance">{{i18n.t('searchRelevance')}}</option><option value="name">{{i18n.t('searchName')}}</option></select></label>
+          </div></details>
+          @if(mode==='create'){<div class="view-summary" [attr.aria-label]="i18n.t('viewFilters')">@for(label of summary(form.configuration);track $index){<span>{{label}}</span>}</div>}
+        }
+        @if(mode==='share'){
+          <strong>{{editing()?.name}}</strong><p class="view-hint">{{i18n.t('viewShareHint')}}</p>
+          <label>{{i18n.t('viewPeopleSearch')}}<input name="personQuery" type="search" autocomplete="off" [ngModel]="personQuery()" (ngModelChange)="personQuery.set($event)"></label>
+          <div class="view-recipients">@for(person of people();track person.id){<label><input type="checkbox" [checked]="recipients().has(person.id)" [disabled]="!recipients().has(person.id)&&recipients().size>=30" (change)="toggleRecipient(person.id,$any($event.target).checked)"><span class="person-initial" aria-hidden="true">{{person.displayName.slice(0,1)}}</span><span><strong>{{person.displayName}}</strong><small>{{person.organization}}</small></span></label>}@empty{<p>{{i18n.t('viewNoPeople')}}</p>}</div>
+          <small aria-live="polite">{{i18n.t('viewSelectedPeople',{count:recipients().size})}}</small>
+          <label>{{i18n.t('viewMessage')}}<textarea name="message" rows="2" maxlength="1000" [(ngModel)]="message"></textarea></label>
+          <details class="view-shared-details"><summary>{{i18n.t('viewReadMore')}}</summary><div class="view-summary">@for(label of summary(editing()!.configuration);track $index){<span>{{label}}</span>}</div></details>
+        }
+        @if(mode==='delete'){<p><strong>{{editing()?.name}}</strong></p><p>{{i18n.t('viewDeleteHint')}}</p>}
+        @if(mode==='inbox'){
+          <div class="received-views">@for(item of incoming();track item.id){<article><div><strong>{{item.snapshot.name}}</strong><p>{{i18n.t('viewFrom',{name:item.senderName})}} · {{item.sentAt|date:'dd.MM.yyyy, HH:mm'}}</p>@if(item.message){<p class="received-message">{{item.message}}</p>}</div><button type="button" class="daca-button is-secondary" (click)="review(item.id,$event.currentTarget)">{{i18n.t('viewPending')}}</button></article>}@empty{<p>{{i18n.t('viewNoReceived')}}</p>}</div>
+        }
+        @if(mode==='review'){
+          @if(shared();as item){
+            <p class="view-from">{{i18n.t('viewFrom',{name:item.senderName})}} · {{item.sentAt|date:'dd.MM.yyyy, HH:mm'}}</p><strong class="received-name">{{item.snapshot.name}}</strong>
+            @if(item.message){<blockquote>{{item.message}}</blockquote>}
+            @if(item.snapshot.description){<p>{{item.snapshot.description}}</p>}
+            <p class="view-hint">{{i18n.t('viewCopyHint')}}</p><div class="view-summary">@for(label of summary(item.snapshot.configuration);track $index){<span>{{label}}</span>}</div>
+            @if(!item.acceptedAt&&!item.dismissedAt){<label>{{i18n.t('viewName')}} *<input name="adoptedName" [(ngModel)]="adoptedName" required maxlength="120"></label>}
+            @if(item.dismissedAt){<p>{{i18n.t('viewDismissed')}}</p>}
+            @if(item.acceptedAt&&!item.acceptedViewId){<p>{{i18n.t('viewUnavailable')}}</p>}
+          }@else if(!error()){<daca-loading-indicator [label]="i18n.t('viewsLoading')"/>}
+        }
+      </fieldset>
+      <footer>
+        @if(busy()){<daca-loading-indicator [label]="i18n.t('viewsLoading')"/>}
+        <button class="daca-button is-secondary" type="button" [disabled]="busy()" (click)="close()">{{i18n.t(mode==='inbox'||mode==='review'?'viewClose':'viewCancel')}}</button>
+        @if(mode==='create'||mode==='edit'){<button class="daca-button" type="submit" [disabled]="busy()||viewForm.invalid||!form.name.trim()">{{i18n.t('viewSave')}}</button>}
+        @if(mode==='share'){<button class="daca-button" type="submit" [disabled]="busy()||!recipients().size">{{i18n.t('viewSend')}}</button>}
+        @if(mode==='delete'){<button class="daca-button" type="submit" [disabled]="busy()">{{i18n.t('viewsDelete')}}</button>}
+        @if(mode==='review'&&shared();as item){
+          @if(!item.acceptedAt&&!item.dismissedAt){<button class="daca-button is-secondary" type="button" [disabled]="busy()" (click)="dismiss()">{{i18n.t('viewDismiss')}}</button><button class="daca-button" type="submit" [disabled]="busy()||viewForm.invalid||!adoptedName.trim()">{{i18n.t('viewAccept')}}</button>}
+          @if(item.acceptedAt&&item.acceptedViewId){<button class="daca-button" type="submit" [disabled]="busy()">{{i18n.t('viewOpenOwn')}}</button>}
+        }
+      </footer>
+    </form>
+  </dialog>
+}

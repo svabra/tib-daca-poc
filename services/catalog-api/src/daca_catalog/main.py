@@ -40,7 +40,7 @@ from .access_renewals import (
     reset_fixture as reset_access_renewal_fixture,
 )
 from .control_people import assign_default_control_person, is_active_publication_approver
-from .database import default_session_factory, get_session
+from .database import default_session_factory, get_session, identity_session
 from .deputy_owners import assign_default_deputy_owner
 from .documentation_read import catalog_responsibilities, glossary_entries, role_change_history
 from .domain_glossary_seed import (
@@ -67,6 +67,7 @@ from .governance import (
 from .i14y_public_api import I14YPublicApiPort, VerifiedI14YPublicApi
 from .i14y_publication import DisabledI14YPublicationAdapter, I14YPublicationPort
 from .import_journey_api import create_import_journey_router
+from .lineage_access import can_read_access, create_lineage_access_router
 from .logical_model_review_api import create_logical_model_review_router
 from .mapping_inconsistency_api import create_mapping_inconsistency_router
 from .mapping_workspace_history_api import create_mapping_workspace_history_router
@@ -134,6 +135,7 @@ from .object_governance import (
 from .office_governance import (
     can_edit_domain_metadata,
     can_transfer_domain,
+    domain_creation_reviewers,
     seed_rapid_prototyping_domain,
     seed_requested_steward_mandates,
 )
@@ -239,6 +241,7 @@ from .schemas import (
     WorkflowTaskResponse,
     to_camel,
 )
+from .search_views_api import create_search_views_router
 from .seed import seed_catalog
 from .semantic_graph_api import create_semantic_graph_router
 from .semantic_suggestions import RapidFuzzSuggestionProvider, SuggestionCandidate
@@ -331,7 +334,7 @@ def require_demo_actor(
     if x_daca_user is None or not x_daca_user.strip():
         raise HTTPException(401, "Provide X-DaCa-User for this local demo mutation")
     actor = x_daca_user.strip()[:200]
-    with request.app.state.session_factory() as session:
+    with identity_session(request) as session:
         user = session.get(DemoUser, actor)
         if user is None or not user.active:
             raise HTTPException(401, "Unknown or inactive local demo identity")
@@ -1266,6 +1269,8 @@ def _require_active_data_owner(session: Session, user_id: str) -> DemoUser:
 
 
 def _domain_request_reviewers(session: Session, change: DomainChangeRequest) -> set[str]:
+    if change.operation == "create":
+        return domain_creation_reviewers(session, change.requested_payload.get("ownerUserId"), change.requester_user_id)
     target = session.get(Domain, change.target_domain_id) if change.target_domain_id else None
     if target:
         owners = domain_owners(session, target)
@@ -1277,7 +1282,35 @@ def _domain_request_reviewers(session: Session, change: DomainChangeRequest) -> 
 
 def _require_domain_request_reviewer(session: Session, actor: str, change: DomainChangeRequest) -> None:
     if actor not in _domain_request_reviewers(session, change):
-        raise HTTPException(403, "Only a currently assigned object owner or deputy other than the requester may review")
+        raise HTTPException(403, "New domains require the scoped office ALDS or mandated deputy other than the requester; other changes require an assigned object owner/deputy")
+
+
+def _sync_domain_creation_reviews(session: Session) -> None:
+    """Keep pending review notifications aligned with live, trusted office mandates."""
+    changes = session.scalars(select(DomainChangeRequest).where(
+        DomainChangeRequest.operation == "create", DomainChangeRequest.status == "submitted",
+    ).with_for_update(skip_locked=True))
+    for change in changes:
+        desired = _domain_request_reviewers(session, change)
+        kept = set()
+        changed = False
+        for task in session.scalars(select(WorkflowTask).where(
+            WorkflowTask.domain_change_request_id == change.id, WorkflowTask.task_type == "domain_change_review",
+            WorkflowTask.status != "completed",
+        )):
+            if task.assignee_user_id in desired and task.assignee_user_id not in kept:
+                kept.add(task.assignee_user_id)
+            else:
+                task.status, task.completed_at, task.updated_at = "completed", utc_now(), utc_now()
+                changed = True
+        for reviewer in sorted(desired - kept):
+            _create_workflow_task(session, task_type="domain_change_review", task_kind="action", assignee=reviewer,
+                                  title=f"Review domain request {change.request_number}",
+                                  detail="Neue Domäne: Freigabe durch den zuständigen Amts-ALDS erforderlich.", domain_request_id=change.id)
+            changed = True
+        if changed:
+            audit(session, "domain-change-request", str(change.id), "alds-review-routed", "system:domain-review-routing",
+                  change.revision, {"reviewerUserIds": sorted(desired)})
 
 
 def _proposal_for_actor(session: Session, proposal: GlossaryTermProposal, actor: str) -> GlossaryTermProposal:
@@ -1298,6 +1331,8 @@ def _preferred_localization(localizations: list[Any], language: str = "de") -> A
 
 
 def _domain_response(session: Session, domain: Domain, actor: str | None = None) -> DomainResponse:
+    from .domain_network import domain_scope
+
     localizations = list(
         session.scalars(
             select(DomainLocalization)
@@ -1309,6 +1344,9 @@ def _domain_response(session: Session, domain: Domain, actor: str | None = None)
     return DomainResponse.model_validate(
         {
             **{column.name: getattr(domain, column.name) for column in Domain.__table__.columns},
+            **domain_scope(session, domain, actor),
+            "ownerName": session.get(DemoUser, domain.owner_user_id).display_name,
+            "deputyOwnerName": session.get(DemoUser, domain.deputy_owner_user_id).display_name,
             "canEditMetadata": can_edit_domain_metadata(session, actor, domain),
             "canTransferOwnership": can_transfer_domain(session, actor, domain),
             "preferredLabel": preferred.preferred_label if preferred else domain.urn,
@@ -2272,15 +2310,9 @@ def _prepare_domain_glossary_fixture(session: Session, product: DataProduct, act
     session.execute(
         delete(WorkflowTask).where(WorkflowTask.domain_change_request_id == DEFENCE_REQUEST_ID)
     )
-    _create_workflow_task(
-        session,
-        task_type="domain_change_review",
-        task_kind="action",
-        assignee="sibilla.micheli",
-        title="Domain request Verteidigung review",
-        detail="Review owner, deputy and the subject-domain definition.",
-        domain_request_id=DEFENCE_REQUEST_ID,
-    )
+    session.flush()
+    _sync_domain_creation_reviews(session)
+
     audit(
         session,
         "poc-fixture",
@@ -2497,18 +2529,7 @@ def create_router() -> APIRouter:
         _require_active_data_owner(session, actor)
         if body.owner_user_id != actor:
             raise HTTPException(403, "Create a domain under your own ownership, or submit a request to the proposed owner")
-        domain = _create_domain(session, _domain_draft_payload(body))
-        audit(
-            session,
-            "domain",
-            str(domain.id),
-            "created",
-            actor,
-            domain.revision,
-            {"status": domain.lifecycle},
-        )
-        session.commit()
-        return _domain_response(session, domain, actor)
+        raise HTTPException(409, "Submit a domain-change request; a new domain requires approval by the office ALDS or mandated deputy.")
 
     @router.patch(
         "/domains/{domain_id}", response_model=DomainResponse, tags=["domains & glossary"]
@@ -2628,6 +2649,8 @@ def create_router() -> APIRouter:
             if body.payload
             else {}
         )
+        if body.operation == "create":
+            _validate_domain_stewards(session, payload["ownerUserId"], payload["deputyOwnerUserId"])
         request_id = uuid.uuid4()
         change = DomainChangeRequest(
             id=request_id,
@@ -2644,7 +2667,7 @@ def create_router() -> APIRouter:
         session.add(change)
         reviewers = _domain_request_reviewers(session, change)
         if not reviewers:
-            raise HTTPException(409, "No other active object owner or deputy is available for review")
+            raise HTTPException(409, "No other active office ALDS/deputy is available for this new domain" if change.operation == "create" else "No other active object owner or deputy is available for review")
         for owner_id in sorted(reviewers):
             _create_workflow_task(
                 session,
@@ -2652,7 +2675,7 @@ def create_router() -> APIRouter:
                 task_kind="action",
                 assignee=owner_id,
                 title=f"Review domain request {change.request_number}",
-                detail=f"A data owner requested a domain {body.operation} operation.",
+                detail="Neue Domain: Freigabe durch den zust\u00e4ndigen Amts-ALDS erforderlich." if body.operation == "create" else f"A data owner requested a domain {body.operation} operation.",
                 domain_request_id=change.id,
             )
         audit(
@@ -2675,6 +2698,8 @@ def create_router() -> APIRouter:
     def list_domain_change_requests(
         session: SessionDep, actor: ActorDep
     ) -> list[DomainChangeRequest]:
+        _sync_domain_creation_reviews(session)
+        session.commit()
         changes = list(session.scalars(select(DomainChangeRequest).order_by(DomainChangeRequest.created_at.desc())))
         visible = []
         for change in changes:
@@ -2707,9 +2732,14 @@ def create_router() -> APIRouter:
         if change.status != "submitted":
             raise HTTPException(409, "Only a submitted request may be edited")
         require_revision(if_match, change.revision)
-        change.review_payload = body.review_payload.model_dump(
-            mode="json", by_alias=True, exclude_none=True
-        )
+        payload = body.review_payload.model_dump(mode="json", by_alias=True, exclude_none=True)
+        if change.operation == "create":
+            if not all(payload.get(key) for key in ("ownerUserId", "deputyOwnerUserId", "localizations")):
+                raise HTTPException(422, "A new domain review requires its complete draft")
+            _validate_domain_stewards(session, payload["ownerUserId"], payload["deputyOwnerUserId"])
+            if actor not in domain_creation_reviewers(session, payload["ownerUserId"], change.requester_user_id):
+                raise HTTPException(403, "The reviewed owner must remain within your office ALDS scope")
+        change.review_payload = payload
         change.revision += 1
         change.updated_at = utc_now()
         audit(
@@ -2753,6 +2783,8 @@ def create_router() -> APIRouter:
         if body.decision == "reject":
             change.status = "rejected"
         elif change.operation == "create":
+            if actor not in domain_creation_reviewers(session, change.review_payload.get("ownerUserId"), change.requester_user_id):
+                raise HTTPException(403, "The reviewed owner is outside your current office ALDS scope")
             fixture_target = (
                 session.scalar(
                     select(Domain).where(Domain.id == change.target_domain_id).with_for_update()
@@ -4360,6 +4392,7 @@ def create_router() -> APIRouter:
     @router.get("/tasks/mine", response_model=list[WorkflowTaskResponse], tags=["workflow"])
     def list_my_tasks(session: SessionDep, actor: ActorDep) -> list[WorkflowTask]:
         reconcile_group_membership_tasks(session, actor)
+        _sync_domain_creation_reviews(session)
         session.commit()
         return list(
             session.scalars(
@@ -6104,7 +6137,9 @@ def create_router() -> APIRouter:
         )
         return LineageResponse(
             product_urn=product.urn,
-            edges=[LineageEdgeResponse.model_validate(edge) for edge in edges],
+            edges=[LineageEdgeResponse.model_validate(edge).model_copy(update={
+                "can_view_access_logs": can_read_access(session, edge, actor),
+            }) for edge in edges],
         )
 
     @router.get(
@@ -6894,6 +6929,8 @@ def create_app(
             with resolved_session_factory() as session:
                 seed_catalog(session)
                 seed_modeling_catalog(session)
+                from .rohs_cps_seed import seed_rohs_cps_catalog
+                seed_rohs_cps_catalog(session)
                 seed_requested_steward_mandates(session)
                 seed_rapid_prototyping_domain(session)
                 seed_site_glossary_terms(session)
@@ -6920,7 +6957,7 @@ def create_app(
         CORSMiddleware,
         allow_origins=resolved_settings.cors_origins,
         allow_credentials=False,
-        allow_methods=["GET", "POST", "PATCH", "PUT", "OPTIONS"],
+        allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "If-Match", "If-None-Match", "X-DaCa-User", "X-Request-ID"],
         expose_headers=["ETag", "X-Request-ID"],
     )
@@ -6951,6 +6988,10 @@ def create_app(
     app.include_router(create_mapping_inconsistency_router())
     app.include_router(create_modeling_resources_router())
     app.include_router(create_mapping_workspace_history_router())
+    app.include_router(create_search_views_router())
+    from .domain_network import create_domain_network_router
+    app.include_router(create_domain_network_router())
+    app.include_router(create_lineage_access_router())
 
     @app.get("/health/live", response_model=HealthResponse, tags=["health"])
     def live() -> HealthResponse:

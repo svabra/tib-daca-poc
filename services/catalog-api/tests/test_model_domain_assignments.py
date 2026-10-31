@@ -1,6 +1,6 @@
 import uuid
 
-from daca_catalog.modeling_domains import physical_domain_state
+from daca_catalog.modeling_domains import physical_domain_state, physical_table_context
 from daca_catalog.modeling_seed import VEHICLE_MODEL_ID, seed_modeling_catalog
 from daca_catalog.modeling_service import (
     get_logical_model,
@@ -9,6 +9,7 @@ from daca_catalog.modeling_service import (
     logical_write_from_payload,
 )
 from daca_catalog.models import (
+    AuditEvent,
     DcatDatasetVersion,
     LogicalModelVersion,
     PhysicalDomainAssignment,
@@ -17,6 +18,55 @@ from daca_catalog.models import (
 from sqlalchemy import func, select
 
 HEADERS = {"X-DaCa-User": "christian.man"}
+
+
+def test_remove_physical_domain_is_guarded_versioned_and_preserves_other_memberships_and_mappings(client, session_factory):
+    from daca_catalog.models import AssetMapping, Domain
+    model, _, targets, domain_id = setup_workspace(client, session_factory)
+    target = targets[0]
+    assign = f"/api/v1/physical-tables/{target['physicalTableId']}/domain-assignment"
+    state = client.post(assign, headers=HEADERS, json={"dataDomainId": str(domain_id), "physicalDomainTargets": [target]}).json()
+    with session_factory() as session:
+        table, _, source_id = physical_table_context(session, uuid.UUID(target['physicalTableId']))
+        other = session.scalar(select(Domain).where(Domain.id != domain_id, Domain.lifecycle == 'active'))
+        other_id = str(other.id)
+        session.add(PhysicalDomainAssignment(id=uuid.uuid4(),physical_source_id=source_id,physical_table_key=table.stable_key,domain_id=other.id,provenance='explicit'))
+        session.commit()
+        mappings = [(row.id,row.lifecycle,row.revision,row.content_hash) for row in session.scalars(select(AssetMapping))]
+    path = f"/api/v1/physical-tables/{target['physicalTableId']}/domain-assignments/{domain_id}"
+    stale = {**target,'expectedDomainVersion':state['domainVersion']}
+    assert client.request('DELETE',path,headers=HEADERS,json=stale).status_code == 409
+    current = client.get(f"/api/v1/physical-tables/{target['physicalTableId']}/domains",headers=HEADERS).json()
+    body = {**target,'expectedDomainVersion':current['domainVersion']}
+    assert client.request('DELETE',path,headers={'X-DaCa-User':'daca-test-editor'},json=body).status_code == 403
+    assert client.request('DELETE',path,headers=HEADERS,json={**body,'physicalSnapshotId':str(uuid.uuid4())}).status_code == 422
+    removed = client.request('DELETE',path,headers=HEADERS,json=body)
+    assert removed.status_code == 200, removed.text
+    assert [row['id'] for row in removed.json()['dataDomains']] == [other_id]
+    assert removed.json()['domainVersion'] != current['domainVersion']
+    assert client.get(f"/api/v1/physical-tables/{target['physicalTableId']}/domains",headers=HEADERS).json() == removed.json()
+    with session_factory() as session:
+        assert [(row.id,row.lifecycle,row.revision,row.content_hash) for row in session.scalars(select(AssetMapping))] == mappings
+        audit = session.scalar(select(AuditEvent).where(AuditEvent.resource_type=='physical-domain-assignment',AuditEvent.action=='removed'))
+        assert audit and audit.details['domainId'] == str(domain_id)
+    assert client.get(f"/api/v1/logical-models/{model['id']}",headers=HEADERS).json()['dataDomainId'] is None
+
+
+def test_csv_domain_removal_returns_to_unassigned_and_allows_explicit_reassignment(client, session_factory):
+    from test_inventory_representation_scopes import setup_inventory
+    _inventory, model, table, payload = setup_inventory(client, session_factory)
+    domain_id = model.json()['dataDomainId']
+    snapshot_id = payload['representations'][0]['physicalSnapshotId']
+    read = f"/api/v1/physical-tables/{table['id']}/domains"
+    original = client.get(read,headers=HEADERS).json()
+    target = {'physicalTableId':table['id'],'physicalSnapshotId':snapshot_id,'expectedDomainVersion':original['domainVersion']}
+    path = f"/api/v1/physical-tables/{table['id']}/domain-assignment"
+    assigned = client.post(path,headers=HEADERS,json={'dataDomainId':domain_id,'physicalDomainTargets':[target]})
+    assert assigned.status_code == 200, assigned.text
+    deleted = client.request('DELETE',f"/api/v1/physical-tables/{table['id']}/domain-assignments/{domain_id}",headers=HEADERS,json={**target,'expectedDomainVersion':assigned.json()['domainVersion']})
+    assert deleted.status_code == 200 and deleted.json() == original
+    assert client.get(read,headers=HEADERS).json()['dataDomains'] == []
+    assert client.post(path,headers=HEADERS,json={'dataDomainId':domain_id,'physicalDomainTargets':[target]}).status_code == 200
 
 
 def setup_workspace(client, session_factory):

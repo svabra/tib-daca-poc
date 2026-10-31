@@ -21,8 +21,14 @@ from .models import (
     GlossaryTermRelation,
     SemanticGraphState,
 )
-from .object_governance import governs_domain, governs_term, may_create_domain
+from .object_governance import active_actor, governs_domain, governs_term
 from .semantic_organization import can_edit_organization_layout, organization_objects
+
+
+def governs_network_domain(session, actor, domain):
+    from .domain_network import domain_scope
+    return bool(domain and governs_domain(session, actor, domain)
+                and not domain_scope(session, domain, actor)["foreignDepartment"])
 
 
 class DomainLink(ApiModel):
@@ -61,7 +67,7 @@ def graph_context(session, actor, domain_id, organization_id=None):
         organization, domains, terms = organization_objects(session, organization_id)
         return f"organizations:{organization_id}", can_edit_organization_layout(session, actor, organization, domains, terms), False
     user = session.get(DemoUser, actor)
-    owned = any(governs_domain(session, actor, domain) for domain in session.scalars(select(Domain)))
+    owned = any(governs_network_domain(session, actor, domain) for domain in session.scalars(select(Domain)))
     domain = session.get(Domain, domain_id) if domain_id else None
     if domain_id and domain is None:
         raise HTTPException(404, "Domain not found")
@@ -139,7 +145,7 @@ def create_semantic_graph_router():
         additional = row.additional_node_ids if row else []
         nodes = known_nodes(session, domain_id, additional, organization_id)
         retired = {f"term:{identity}" for identity in session.scalars(select(GlossaryTerm.id).where(GlossaryTerm.lifecycle == "retired"))} if domain_id or organization_id else {f"domain:{identity}" for identity in session.scalars(select(Domain.id).where(Domain.lifecycle == "retired"))}
-        sources = sorted(f"domain:{domain.id}" for domain in session.scalars(select(Domain)) if governs_domain(session, actor, domain))
+        sources = sorted(f"domain:{domain.id}" for domain in session.scalars(select(Domain)) if governs_network_domain(session, actor, domain))
         if domain_id or organization_id:
             active = {f"term:{identity}" for identity in session.scalars(select(GlossaryTerm.id).where(GlossaryTerm.lifecycle == "active")) if governs_term(session, actor, identity)}
         else:
@@ -154,7 +160,7 @@ def create_semantic_graph_router():
                 "hiddenNodeIds": [key for key in row.hidden_node_ids if key in nodes] if row else [],
                 "additionalNodeIds": additional, "deletableNodeIds": deletable,
                 "retiredNodeIds": sorted(nodes & retired),
-                "canCreateDomains": may_create_domain(session, actor),
+                "canCreateDomains": active_actor(session, actor),
                 "relationSourceNodeIds": sources if domain_id is None else []}
 
     def save(body, session, actor, domain_id, organization_id=None):
@@ -196,7 +202,7 @@ def create_semantic_graph_router():
                 validate_relations(session, body.relations, relations)
                 old = {(link["sourceId"], link["targetId"], link["relationType"]) for link in relations}
                 new = {(link["sourceId"], link["targetId"], link["relationType"]) for link in requested}
-                if any(not governs_domain(session, actor, session.get(Domain, uuid.UUID(source))) for source, _, _ in old ^ new):
+                if any(not governs_network_domain(session, actor, session.get(Domain, uuid.UUID(source))) for source, _, _ in old ^ new):
                     raise HTTPException(403, "Nur Data Owner oder Stellvertretung der Ausgangsdomäne dürfen diese Beziehung ändern.")
                 relations = requested
         previous = row.relations if row else []

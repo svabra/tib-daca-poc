@@ -1,8 +1,9 @@
 from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from fastapi import Request
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -40,6 +41,24 @@ def default_session_factory(settings: Settings) -> sessionmaker[Session]:
     )
 
 
+@contextmanager
+def identity_session(request: Request) -> Iterator[Session]:
+    """Finish identity validation before the route borrows its lazy transaction connection."""
+    with request.app.state.session_factory() as session:
+        yield session
+
+
+def bind_demo_actor(session: Session, actor_id: str) -> None:
+    # A yield dependency must not hold a pool slot while waiting for another
+    # dependency or for a handler thread. Bind each actual transaction lazily.
+    def after_begin(_session, _transaction, connection):
+        from .models import DemoUser
+        active = connection.scalar(select(DemoUser.id).where(DemoUser.id == actor_id, DemoUser.active.is_(True)))
+        if active:
+            connection.execute(text("SELECT set_config('daca.role_actor', :actor, true)"), {"actor": active})
+    event.listen(session, "after_begin", after_begin)
+
+
 def get_session(request: Request) -> Iterator[Session]:
     session_factory: sessionmaker[Session] = request.app.state.session_factory
     with session_factory() as session:
@@ -48,11 +67,7 @@ def get_session(request: Request) -> Iterator[Session]:
         if request.app.state.settings.daca_demo_auth:
             actor_id = (request.headers.get("X-DaCa-User") or "").strip()[:200]
             if actor_id:
-                from .models import DemoUser
-
-                user = session.get(DemoUser, actor_id)
-                if user is not None and user.active:
-                    session.execute(text("SELECT set_config('daca.role_actor', :actor, true)"), {"actor": actor_id})
+                bind_demo_actor(session, actor_id)
         # Exception handlers need to roll back failed flushes before returning a
         # RFC-7807 response.  Keep the request-scoped session discoverable for
         # that narrow purpose only.

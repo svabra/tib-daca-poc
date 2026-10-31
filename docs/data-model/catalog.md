@@ -382,10 +382,10 @@ reads it from the actual footer. It never denotes the number of S3 objects (`obj
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
-- Alembic head: `0045_mapping_workspace_visits`
-- Schema fingerprint: `778dd6c66231f89d`
-- Migration fingerprint: `c67221775f4f57cf`
-- Tables: `101`
+- Alembic head: `0047_domain_network_views`
+- Schema fingerprint: `f7bf867ca9efe361`
+- Migration fingerprint: `720d0e7cac1524b6`
+- Tables: `104`
 
 ## Domain status vocabulary
 
@@ -405,8 +405,10 @@ reads it from the actual footer. It never denotes the number of S3 objects (`obj
 
 ## Persisted structured values
 
+- `domain_network_views.configuration` has schemaVersion=1, addedDomainIds (max 200 existing UUIDs), hiddenDomainIds (max 2000), positions keyed only by domain:<existing UUID> with bounded finite x/y, and unique visibleKinds product/term/logical/physical (product default). The user primary key is derived from trusted authentication; no supplied user ID, relationship or object payload is accepted. Audit details contain counts only. Shared domain relationships remain in semantic_graph_states. The rohs-cps-catalog-v1 seed marker preserves later changes to synthetic CPS catalog fixtures, scoped roles and registry memberships.
+- `search_views.configuration` is a strict schemaVersion=1 object: query (max 200 chars), mode (context/focus), kind (all/product/logical/structure/field/term/domain/source), organization/domain IDs or all, status (all/active), connection (all/connected/metadata), sort (relevance/name). `search_view_shares.snapshot` freezes name, description and that configuration at send time. No result rows, credentials or permission grants are copied. Recipient acceptance deep-copies this JSON; later source/copy edits and deletion do not synchronize. Private phrases, messages and descriptions are excluded from append-only audit details.
 - `data_products.keywords` is a string array; `contact`, `quality` and physical `metadata` hold DCAT-friendly extension objects.
-- `domain_change_requests.requested_payload` preserves the submitted domain draft while `review_payload` holds its revision-controlled working copy. Domains themselves remain relational and are not inferred from organizations.
+- `domain_change_requests.requested_payload` preserves the submitted domain draft while `review_payload` holds its revision-controlled working copy. For new domains, the original proposed owner's trusted active primary office determines the ALDS review scope; review edits cannot move the owner outside the deciding ALDS scope. Pending review tasks follow current mandates. Domains themselves remain relational and are not inferred from organizations.
 - `glossary_term_localizations.alternative_labels` is a language-scoped list. Glossary proposal payloads preserve submitted and reviewed multilingual labels, definitions, domain IDs and SKOS relations; audit rows contain only identifiers and decision metadata.
 - `endpoints.connection` describes only HTTP/REST or PostgreSQL connectivity and never contains credentials.
 - `policy_revisions.definition` is the constrained PBAC document. Each grant targets one person, machine or group, carries its validity period, optional IANA-zone weekly availability and independent KOBY/MCP and I14Y flags; group grants contain a server-generated membership snapshot. Generated Rego is stored separately and is not editable.
@@ -792,6 +794,12 @@ erDiagram
         string preferred_label
         text definition
         string normalized_label
+    }
+    domain_network_views {
+        string user_id PK,FK
+        integer revision
+        json configuration
+        datetime updated_at
     }
     domains {
         uuid id PK
@@ -1455,6 +1463,29 @@ erDiagram
         json before_state
         json after_state
     }
+    search_view_shares {
+        uuid id PK
+        string sender_user_id FK
+        string recipient_user_id FK
+        uuid source_view_id FK
+        integer source_revision
+        json snapshot
+        string message
+        datetime sent_at
+        datetime accepted_at
+        uuid accepted_view_id FK
+        datetime dismissed_at
+    }
+    search_views {
+        uuid id PK
+        string owner_user_id FK
+        string name
+        text description
+        json configuration
+        integer revision
+        datetime created_at
+        datetime updated_at
+    }
     seed_markers {
         string name PK
         datetime applied_at
@@ -1635,6 +1666,7 @@ erDiagram
     }
     workflow_tasks {
         uuid id PK
+        uuid search_view_share_id FK
         string task_type
         string task_kind
         string status
@@ -1718,6 +1750,7 @@ erDiagram
     demo_users ||--o{ domain_change_requests : "requester_user_id"
     demo_users o|--o{ domain_change_requests : "reviewer_user_id"
     domains ||--o| domain_localizations : "domain_id"
+    demo_users ||--o| domain_network_views : "user_id"
     demo_users ||--o{ domains : "owner_user_id"
     demo_users ||--o{ domains : "deputy_owner_user_id"
     data_products ||--o{ endpoints : "data_product_id"
@@ -1822,6 +1855,11 @@ erDiagram
     data_product_fields o|--o{ product_semantic_mappings : "data_product_field_id"
     canonical_ontology_terms ||--o{ product_semantic_mappings : "ontology_term_id"
     data_products o|--o{ provenance_events : "data_product_id"
+    demo_users ||--o{ search_view_shares : "sender_user_id"
+    demo_users ||--o{ search_view_shares : "recipient_user_id"
+    search_views o|--o{ search_view_shares : "source_view_id"
+    search_views o|--o{ search_view_shares : "accepted_view_id"
+    demo_users ||--o{ search_views : "owner_user_id"
     domains o|--o{ semantic_graph_states : "domain_id"
     demo_users ||--o{ semantic_graph_states : "updated_by_user_id"
     data_products ||--o{ service_level_revisions : "data_product_id"
@@ -1852,6 +1890,7 @@ erDiagram
     demo_users ||--o{ terminology_term_versions : "created_by_user_id"
     terminology_term_versions o|--o{ terminology_terms : "latest_version_id"
     demo_users ||--o{ terminology_terms : "creator_user_id"
+    search_view_shares o|--o{ workflow_tasks : "search_view_share_id"
     demo_users ||--o{ workflow_tasks : "assignee_user_id"
     data_products o|--o{ workflow_tasks : "data_product_id"
     access_requests o|--o{ workflow_tasks : "access_request_id"
@@ -2086,7 +2125,7 @@ Constraints and indexes:
 
 ### `audit_events`
 
-Append-only catalog audit trail keyed by stable resource type and identifier.
+Append-only catalog audit trail keyed by stable resource type and identifier. Owner-only lineage-access/data-read receipts use the edge UUID as resource_id, principal ID as actor and execution timestamp as occurred_at; schemaVersion=1 details contain resourceUrn, consumerUrn, subjectType (person/machine), protocol (http-rest/postgresql) and outcome (success/denied/error), never data records, tokens or raw request/decision payloads. Reporter-generated event IDs deduplicate retries without overwriting evidence. Resource-owner authorization is separate from generic audit viewing.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -2590,7 +2629,7 @@ Constraints and indexes:
 
 ### `domain_change_requests`
 
-Versioned requests to create, update or retire a governed domain.
+Versioned requests to create, update or retire a governed domain. New domains require approval by the scoped office ALDS/mandated deputy other than the requester; owner/deputy guards remain for updates and retirement.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -2639,6 +2678,22 @@ Constraints and indexes:
 
 - Foreign key `domain_id` → `domains.id`; on delete `CASCADE`
 - Index `ix_domain_localization_label` on `language, normalized_label`
+
+### `domain_network_views`
+
+Private authenticated-user domain exploration: revision-checked version-1 configuration stores explicit domain additions, hidden domains, domain positions and visible related-object types. Existing active users can present cross-department references; no shared relationship, catalog edit or data-access grant is stored here.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `user_id` | `VARCHAR(200)` | no | PK, FK | — |
+| `revision` | `INTEGER` | no | — | — |
+| `configuration` | `JSON` | no | — | — |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Check `ck_domain_network_view_revision`: `revision >= 1`
+- Foreign key `user_id` → `demo_users.id`; on delete `CASCADE`
 
 ### `domains`
 
@@ -3629,7 +3684,7 @@ Constraints and indexes:
 
 ### `physical_domain_assignments`
 
-Explicit current domain memberships keyed by physical source and stable table/object key, independent of imported snapshots and field mappings; audited editor assignments append memberships and preserve existing domains.
+Explicit current domain memberships keyed by physical source and stable table/object key, independent of imported snapshots and field mappings; scoped editor assignment/removal commands lock the source and check a canonical domainVersion. Removal deletes only the selected current membership and appends physical-domain-assignment/removed audit metadata with source, stable table key and domain ID; other memberships, mappings, logical model domains and immutable imported structures are preserved.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -4046,6 +4101,57 @@ Constraints and indexes:
 - Index `ix_role_change_scope` on `scope_type, scope_id, sequence`
 - Index `ix_role_change_subject` on `subject_user_id, sequence`
 
+### `search_view_shares`
+
+Recipient-addressed immutable copies of one saved search-view revision, including name/description/filter JSON and optional message. Acceptance creates an independent private view; original deletion only clears the optional source reference. Acceptance/dismissal and the corresponding workflow task are completed atomically.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `sender_user_id` | `VARCHAR(200)` | no | FK | — |
+| `recipient_user_id` | `VARCHAR(200)` | no | FK | — |
+| `source_view_id` | `CHAR(32)` | yes | FK | — |
+| `source_revision` | `INTEGER` | no | — | — |
+| `snapshot` | `JSON` | no | — | — |
+| `message` | `VARCHAR(1000)` | no | — | `` |
+| `sent_at` | `DATETIME` | no | — | `utc_now` |
+| `accepted_at` | `DATETIME` | yes | — | — |
+| `accepted_view_id` | `CHAR(32)` | yes | FK | — |
+| `dismissed_at` | `DATETIME` | yes | — | — |
+
+Constraints and indexes:
+
+- Check `ck_search_view_share_decision`: `accepted_at IS NULL OR dismissed_at IS NULL`
+- Check `ck_search_view_share_other_user`: `sender_user_id <> recipient_user_id`
+- Check `ck_search_view_share_revision`: `source_revision >= 1`
+- Unique `uq_search_view_share_revision`: `source_view_id, source_revision, recipient_user_id`
+- Foreign key `sender_user_id` → `demo_users.id`; on delete `CASCADE`
+- Foreign key `recipient_user_id` → `demo_users.id`; on delete `CASCADE`
+- Foreign key `source_view_id` → `search_views.id`; on delete `SET NULL`
+- Foreign key `accepted_view_id` → `search_views.id`; on delete `SET NULL`
+- Index `ix_search_view_share_recipient` on `recipient_user_id, sent_at`
+
+### `search_views`
+
+Private user-owned expert-search filter presets with validated version-1 configuration JSON, optimistic revision and timestamps; they confer no catalog permissions and contain no saved result rows.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `owner_user_id` | `VARCHAR(200)` | no | FK | — |
+| `name` | `VARCHAR(120)` | no | — | — |
+| `description` | `TEXT` | no | — | `` |
+| `configuration` | `JSON` | no | — | — |
+| `revision` | `INTEGER` | no | — | `1` |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Check `ck_search_view_revision`: `revision >= 1`
+- Foreign key `owner_user_id` → `demo_users.id`; on delete `CASCADE`
+- Index `ix_search_view_owner` on `owner_user_id, updated_at`
+
 ### `seed_markers`
 
 Idempotency markers for deterministic PoC seed operations.
@@ -4411,11 +4517,12 @@ Constraints and indexes:
 
 ### `workflow_tasks`
 
-Owner and approver work items for quality, access governance, SLA review and request processing.
+Owner and approver work items for quality, access governance, SLA review and request processing, plus recipient-private search-view messages linked through search_view_share_id.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
 | `id` | `CHAR(32)` | no | PK | — |
+| `search_view_share_id` | `CHAR(32)` | yes | FK | — |
 | `task_type` | `VARCHAR(64)` | no | — | — |
 | `task_kind` | `VARCHAR(32)` | no | — | `action` |
 | `status` | `VARCHAR(32)` | no | — | `open` |
@@ -4442,6 +4549,7 @@ Owner and approver work items for quality, access governance, SLA review and req
 Constraints and indexes:
 
 - Check `ck_workflow_task_kind`: `task_kind IN ('action', 'information')`
+- Foreign key `search_view_share_id` → `search_view_shares.id`; on delete `CASCADE`
 - Foreign key `assignee_user_id` → `demo_users.id`
 - Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
 - Foreign key `access_request_id` → `access_requests.id`; on delete `CASCADE`
@@ -4462,6 +4570,7 @@ Constraints and indexes:
 - Index `ix_workflow_task_product` on `data_product_id`
 - Index `ix_workflow_task_source_access_request` on `source_access_request_id`
 - Index `ix_workflow_tasks_physical_source_access_request_id` on `physical_source_access_request_id`
+- Index `ix_workflow_tasks_search_view_share_id` on `search_view_share_id`
 
 <!-- END GENERATED: data-model. -->
 

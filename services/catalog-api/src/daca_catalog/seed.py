@@ -840,6 +840,7 @@ def main() -> None:
     # Imported lazily to keep the foundational catalog seed reusable by the
     # modeling seed without creating a module import cycle.
     from .modeling_seed import seed_modeling_catalog
+    from .rohs_cps_seed import seed_rohs_cps_catalog
     from .site_glossary_seed import seed_site_glossary_terms
 
     settings = get_settings()
@@ -847,6 +848,7 @@ def main() -> None:
     with session_factory() as session:
         created = seed_catalog(session)
         seed_modeling_catalog(session)
+        seed_rohs_cps_catalog(session)
         from .office_governance import (
             seed_rapid_prototyping_domain,
             seed_requested_steward_mandates,

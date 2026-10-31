@@ -1,3 +1,4 @@
+import { physicalCategoryLabel } from './physical-representation-labels';
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { PhysicalSnapshot, PhysicalSource, PhysicalTable } from './data-models.models';
 
@@ -7,7 +8,7 @@ import { PhysicalSnapshot, PhysicalSource, PhysicalTable } from './data-models.m
     <article class="object-detail">
       <header><div><p class="daca-eyebrow">{{ typeLabel() }}</p><h2>{{ table().name }}</h2><code>{{ table().storageLocation || (snapshot().sourceType === 'csv' ? snapshot().catalogPath + ':' + table().stableKey : snapshot().catalogPath + table().schemaName + '/' + table().name) }}</code></div><ng-content /></header>
       @if(snapshot().sourceType === 'csv'){<p class="inventory-origin">Herkunft: Aus Strukturinventar · {{ source().name }}</p>}
-      <section class="object-facts"><div><h3>Quelle und Verantwortung</h3><p>{{ source().name }} · {{ source().ownerName }}</p><p>Snapshot {{ snapshot().revision }}@if(table().databaseName){ · {{ table().databaseName }}}</p></div><dl><div><dt>Objekt</dt><dd>{{ typeLabel() }}</dd></div><div><dt>Spalten</dt><dd>{{ table().columns.length }}</dd></div><div><dt>{{ table().kind === 'parquet' ? 'Zeilen (Parquet-Footer)' : 'Zeilen' }}</dt><dd>{{ table().rowCount ?? 'Nicht erhoben' }}</dd></div><div><dt>Dateigrösse</dt><dd>{{ table().sizeBytes === null ? 'Nicht erhoben' : table().sizeBytes + ' Bytes' }}</dd></div><div><dt>Datenzugriff</dt><dd>Keine Datenzeilen in dieser Ansicht</dd></div></dl></section>
+      <section class="object-facts"><div><h3>Quelle und Verantwortung</h3><p>{{ source().name }} · {{ source().ownerName }}</p><p>{{ physicalCategoryLabel(snapshot().sourceType) }} · Revision {{ snapshot().revision }}@if(table().databaseName){ · {{ table().databaseName }}}</p></div><dl><div><dt>Objekt</dt><dd>{{ typeLabel() }}</dd></div><div><dt>Spalten</dt><dd>{{ table().columns.length }}</dd></div><div><dt>{{ table().kind === 'parquet' ? 'Zeilen (Parquet-Footer)' : 'Zeilen' }}</dt><dd>{{ table().rowCount ?? 'Nicht erhoben' }}</dd></div><div><dt>Dateigrösse</dt><dd>{{ table().sizeBytes === null ? 'Nicht erhoben' : table().sizeBytes + ' Bytes' }}</dd></div><div><dt>Datenzugriff</dt><dd>Keine Datenzeilen in dieser Ansicht</dd></div></dl></section>
       <section class="columns-section"><header><div><p class="daca-eyebrow">Struktur</p><h3>Spalten</h3></div><span>Nur Strukturmetadaten</span></header><div class="daca-table-wrap" role="region" tabindex="0" [attr.aria-label]="'Felder von ' + table().name"><table class="daca-table field-table"><thead><tr><th>#</th><th>Feld</th><th>Datentyp</th><th>Länge</th><th>Precision / Scale</th><th>Nullability</th><th>Kommentar</th></tr></thead><tbody>@for (column of table().columns; track column.id) {<tr><td>{{ column.ordinalPosition }}</td><th scope="row">{{ column.name }}</th><td><code>{{ column.dataType }}</code></td><td>{{ column.length ?? '–' }}</td><td>{{ column.precision ?? '–' }} / {{ column.scale ?? '–' }}</td><td>{{ column.importMetadata?.nullabilityKnown === false ? 'Nicht angegeben' : column.nullable ? 'NULL' : 'NOT NULL' }}</td><td>{{ column.comment || '–' }}</td></tr>}</tbody></table></div></section>
       @if (table().importMetadata) {
         <section class="columns-section csv-originals"><p class="daca-eyebrow">CSV-Originalangaben</p><p>Originaltypen und ergänzende Angaben aus dem Strukturinventar; Klassifizierungen wurden nicht in eine Zugriffspolicy umgewandelt.</p>
@@ -26,6 +27,7 @@ import { PhysicalSnapshot, PhysicalSource, PhysicalTable } from './data-models.m
   `],
 })
 export class PhysicalObjectDetailComponent {
+  readonly physicalCategoryLabel = physicalCategoryLabel;
   readonly table = input.required<PhysicalTable>();
   readonly snapshot = input.required<PhysicalSnapshot>();
   readonly source = input.required<PhysicalSource>();

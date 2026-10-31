@@ -5,7 +5,11 @@ import uuid
 from fastapi import HTTPException
 from sqlalchemy import select
 
-from .domain_ownership import active_scope_organizations, domain_organization_ids
+from .domain_ownership import (
+    active_scope_organizations,
+    domain_organization_ids,
+    person_organization_ids,
+)
 from .models import (
     AdministrativeOrganization,
     AuditEvent,
@@ -23,6 +27,27 @@ def can_edit_domain_metadata(session, actor, domain):
     if governs_domain(session, actor, domain):
         return True
     return _mandate_domain_authority(session, actor, domain, {"alds"})
+
+
+def domain_creation_reviewers(session, owner_user_id, requester_user_id):
+    """New domains require an active office ALDS mandate, independent of proposed ownership."""
+    from .modeling_api import _descendant_ids
+
+    scopes = {row.id for row in active_scope_organizations(session, person_organization_ids(session, owner_user_id))}
+    if not scopes:
+        return set()
+    reviewers = set()
+    for organization in active_scope_organizations(session, set(session.scalars(
+        select(OrganizationStewardMandate.organization_id).where(
+            OrganizationStewardMandate.active.is_(True), OrganizationStewardMandate.mandate_type == "alds",
+        )
+    ))):
+        if organization.organization_type != "office" or not scopes.intersection(_descendant_ids(session, organization.id)):
+            continue
+        mandate = session.get(OrganizationStewardMandate, organization.id)
+        reviewers.update(identity for identity in (mandate.user_id, mandate.deputy_user_id)
+                         if identity and identity != requester_user_id and active_actor(session, identity))
+    return reviewers
 
 
 def can_transfer_domain(session, actor, domain, *, lock=False):

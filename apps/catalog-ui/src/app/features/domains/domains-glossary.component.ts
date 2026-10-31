@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { DestroyRef, effect, untracked, afterNextRender, ChangeDetectionStrategy, Component, computed, ElementRef, inject, Injector, signal, viewChild } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -30,7 +31,7 @@ export function resolveSemanticTab(routeTab: unknown, legacyTab: string | null):
 @Component({
   selector: 'daca-domains-glossary',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, StatusBadgeComponent, DomainCardActionsComponent, TermCardActionsComponent, OrganizationTermNetworkComponent, DomainNetworkComponent, DomainTransferDialogComponent, TooltipDirective, LoadingIndicatorComponent],
+  imports: [NgTemplateOutlet, ReactiveFormsModule, RouterLink, StatusBadgeComponent, DomainCardActionsComponent, TermCardActionsComponent, OrganizationTermNetworkComponent, DomainNetworkComponent, DomainTransferDialogComponent, TooltipDirective, LoadingIndicatorComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="daca-page-heading">
@@ -50,14 +51,14 @@ export function resolveSemanticTab(routeTab: unknown, legacyTab: string | null):
     @if (error()) { <p class="daca-alert is-error" role="alert">{{ error() }} <button class="daca-button is-secondary" type="button" (click)="load()">Erneut laden</button></p> }
 
     <nav class="semantic-tabs" [attr.aria-label]="i18n.t('domainTerminology')">
-      <a routerLink="/domains" [queryParams]="ownOfficeOnly() ? {ownOffice: '1'} : {}" [attr.aria-current]="tab() === 'domains' ? 'page' : null" [class.is-active]="tab() === 'domains'">{{ i18n.t('domains') }} <span>{{ domains().length }}</span></a>
-      <a routerLink="/domains/terminology" [queryParams]="ownOfficeOnly() ? {ownOffice: '1'} : {}" [attr.aria-current]="tab() === 'terms' ? 'page' : null" [class.is-active]="tab() === 'terms'">{{ i18n.t('terminology') }} <span>{{ terms().length }}</span></a>
+      <a routerLink="/domains" [queryParams]="{ownOffice: ownOfficeOnly() ? '1' : '0'}" [attr.aria-current]="tab() === 'domains' ? 'page' : null" [class.is-active]="tab() === 'domains'">{{ i18n.t('domains') }} <span>{{ domains().length }}</span></a>
+      <a routerLink="/domains/terminology" [queryParams]="{ownOffice: ownOfficeOnly() ? '1' : '0'}" [attr.aria-current]="tab() === 'terms' ? 'page' : null" [class.is-active]="tab() === 'terms'">{{ i18n.t('terminology') }} <span>{{ terms().length }}</span></a>
       <a routerLink="/domains/concepts">{{ i18n.t('i14yConcepts') }}</a>
       <a routerLink="/domains/themes">{{ i18n.t('themes') }}</a>
       <a routerLink="/domains/governance" [attr.aria-current]="tab() === 'governance' ? 'page' : null" [class.is-active]="tab() === 'governance'">Governance <span>{{ openGovernanceCount() }}</span></a>
     </nav>
 
-    @if (tab() !== 'governance') {
+    <ng-template #officeFilter>
       <div class="office-filter">
         <label [dacaTooltip]="i18n.t(officeId() ? 'ownOfficeFilterHint' : 'ownOfficeUnavailable', {name: officeName()})">
           <input type="checkbox" [checked]="ownOfficeOnly()" [disabled]="!officeId() && !ownOfficeOnly()" (change)="setOwnOfficeOnly($event)">
@@ -67,13 +68,18 @@ export function resolveSemanticTab(routeTab: unknown, legacyTab: string | null):
         @if (ownOfficeOnly() && officeError()) { <span class="daca-alert is-error" role="alert">{{ i18n.t('officeScopeError') }} <button type="button" class="daca-button is-secondary" (click)="loadOfficeScope()">{{i18n.t('retryOfficeScope')}}</button></span> }
         @if (ownOfficeOnly() && !officeId()) { <span role="status">{{i18n.t('ownOfficeUnavailable')}}</span> }
       </div>
-    }
+    </ng-template>
     @if (loading()) {
-      <div class="daca-card semantic-state" aria-live="polite">{{ i18n.t('loadingSemantics') }}</div>
+      <div class="daca-card semantic-state"><daca-loading-indicator [label]="i18n.t('loadingSemantics')"/></div>
     } @else if (!error() && tab() === 'domains') {
       <div class="term-view-switch domain-view-switch" role="group" [attr.aria-label]="i18n.t('domainView')"><button class="daca-button is-secondary" type="button" [attr.aria-pressed]="domainView()==='cards'" (click)="setDomainView('cards')">{{i18n.t('semanticCards')}}</button><button class="daca-button is-secondary" type="button" [attr.aria-pressed]="domainView()==='network'" (click)="setDomainView('network')">{{i18n.t('domainNetwork')}}</button></div>
-      @if(domainView()==='network'){<daca-domain-network [embedded]="true" [visibleDomainIds]="officeDomainIds()"/>}@else{
+      <div class="semantic-filter-row" [class.is-network]="domainView()==='network'">
+        @if(domainView()==='cards'){
       <label class="semantic-search">{{ i18n.t('searchDomains') }} <input type="search" [value]="query()" (input)="query.set(searchValue($event))" [placeholder]="i18n.t('domainSearchPlaceholder')"></label>
+        }
+        <ng-container [ngTemplateOutlet]="officeFilter"/>
+      </div>
+      @if(domainView()==='network'){<daca-domain-network [embedded]="true" [visibleDomainIds]="officeDomainIds()"/>}@else{
       @if (filteredDomains().length) {
         <div class="semantic-grid">
           @for (domain of filteredDomains(); track domain.id) {
@@ -87,8 +93,13 @@ export function resolveSemanticTab(routeTab: unknown, legacyTab: string | null):
       }
     } @else if (!error() && tab() === 'terms') {
       <div class="term-view-switch" role="group" [attr.aria-label]="i18n.t('semanticView')"><button class="daca-button is-secondary" type="button" [attr.aria-pressed]="termView()==='cards'" (click)="setTermView('cards')">{{i18n.t('semanticCards')}}</button><button class="daca-button is-secondary" type="button" [attr.aria-pressed]="termView()==='network'" (click)="setTermView('network')">{{i18n.t('termNetwork')}}</button></div>
-      @if(termView()==='network'){<daca-organization-term-network [domains]="domains()" [terms]="terms()" [ownOfficeOnly]="ownOfficeOnly()" [visibleNodeIds]="officeNodeIds()"/>}@else{
+      <div class="semantic-filter-row" [class.is-network]="termView()==='network'">
+        @if(termView()==='cards'){
       <label class="semantic-search">{{ i18n.t('searchTerminology') }} <input type="search" [value]="termQuery()" (input)="termQuery.set(searchValue($event))" [placeholder]="i18n.t('termSearchPlaceholder')"></label>
+        }
+        <ng-container [ngTemplateOutlet]="officeFilter"/>
+      </div>
+      @if(termView()==='network'){<daca-organization-term-network [domains]="domains()" [terms]="terms()" [ownOfficeOnly]="ownOfficeOnly()" [visibleNodeIds]="officeNodeIds()"/>}@else{
       @if (filteredTerms().length) {
         <div class="semantic-grid">
           @for (term of filteredTerms(); track term.id) {
@@ -115,6 +126,7 @@ export function resolveSemanticTab(routeTab: unknown, legacyTab: string | null):
           <label>Data Owner (User-ID) *<input formControlName="ownerUserId"></label>
           <label>Stellvertretung (User-ID) *<input formControlName="deputyOwnerUserId"></label>
           <p>Owner und Stellvertretung müssen unterschiedliche aktive Data Owners sein.</p>
+          @if(requestMode()==='create'){<p>Neue Domänen benötigen die Freigabe durch den zuständigen Amts-ALDS oder seine mandatierte Stellvertretung. Zuständig ist das Amt des vorgeschlagenen Data Owners; der Antragsteller darf nicht selbst bewilligen.</p>}
           <div><button class="daca-button is-secondary" type="button" (click)="requestOpen.set(false)">Abbrechen</button><button class="daca-button" type="submit" [disabled]="requestForm.invalid || saving()">{{ saving() ? 'Wird eingereicht …' : 'Antrag einreichen' }}</button></div>
         </form>
       </section>
@@ -122,9 +134,9 @@ export function resolveSemanticTab(routeTab: unknown, legacyTab: string | null):
 
   `,
   styles: [`
-    .office-filter{display:flex;align-items:center;flex-wrap:wrap;gap:.75rem;margin:0 0 1rem}.office-filter label{display:flex;align-items:center;gap:.5rem;min-height:44px;cursor:pointer}.office-filter input{width:1rem;height:1rem;accent-color:var(--daca-blue)}
+    .semantic-filter-row{display:flex;align-items:flex-start;flex-wrap:wrap;gap:.75rem 1.5rem;margin-bottom:1.25rem}.semantic-filter-row .semantic-search{flex:0 1 38rem;width:100%;min-width:0;margin:0}.office-filter{display:flex;align-items:flex-start;flex-direction:column;gap:.5rem;min-width:0;max-width:100%;padding-top:1.65rem}.semantic-filter-row.is-network .office-filter{padding-top:0}.office-filter .daca-alert{max-width:36rem}.office-filter label{font-size:.875rem;font-weight:400}.semantic-search input{width:100%;min-height:44px;border:1px solid var(--daca-border-strong);padding:.55rem .7rem;background:var(--daca-surface,#fff);font:inherit;font-weight:400}@media(max-width:900px){.semantic-filter-row{gap:.4rem}.semantic-filter-row .semantic-search{flex-basis:100%;max-width:none}.office-filter{padding-top:0}}.office-filter label{display:flex;align-items:center;gap:.5rem;min-height:44px;cursor:pointer}.office-filter input{width:1rem;height:1rem;accent-color:var(--daca-blue)}
     .domain-card-heading{color:inherit;text-decoration:none;cursor:pointer}.domain-card-heading>div{min-width:0}.domain-card-heading h2{overflow-wrap:anywhere}.domain-card-heading:hover{background:var(--daca-blue-soft)}.domain-card-heading:focus-visible{outline:2px solid var(--daca-blue);outline-offset:-3px}.domain-card .domain-actions{justify-content:flex-end}
-    .semantic-tabs{display:flex;gap:.5rem;margin:0 0 1.5rem;border-bottom:1px solid var(--daca-color-border,#d5d8dc)}.semantic-tabs>a{padding:.9rem 1rem;color:inherit;font-weight:700;text-decoration:none;border-bottom:3px solid transparent}.semantic-tabs>a.is-active{border-color:#e1001a}.semantic-tabs span{margin-left:.4rem;color:#646b72}.semantic-search{display:grid;gap:.35rem;max-width:38rem;margin-bottom:1.25rem;font-weight:700}.semantic-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(19rem,1fr));gap:1rem}.semantic-card h2{margin:0}.semantic-card dl{display:grid;gap:.65rem}.semantic-card dl div{display:grid;grid-template-columns:7rem 1fr;gap:.75rem}.semantic-card dt{font-weight:700}.semantic-card dd{margin:0}.domain-actions{display:flex;flex-wrap:wrap;gap:.5rem}.term-actions{margin-top:1rem;justify-content:flex-end}.term-view-switch{display:flex;gap:.5rem;margin-bottom:1rem}.term-view-switch [aria-pressed=true]{background:var(--daca-blue-soft);border-color:var(--daca-blue)}.term-actions .daca-button{font-size:.875rem;min-height:40px}.semantic-chips{display:flex;flex-wrap:wrap;gap:.4rem;margin:1rem 0}.semantic-chips a{padding:.25rem .55rem;background:#eef3f7;border-radius:1rem}.semantic-state{padding:2rem;text-align:center}.semantic-governance{display:grid;gap:2rem}.governance-row{padding:1rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;margin:.75rem 0}.governance-row p{margin:.25rem 0 0}.governance-row>div:last-child{display:flex;gap:.5rem}.dialog-backdrop{position:fixed;inset:0;background:#0008;z-index:20}.semantic-dialog{position:fixed;z-index:21;inset:50% auto auto 50%;transform:translate(-50%,-50%);width:min(36rem,calc(100vw - 2rem));max-height:90vh;overflow:auto}.term-dialog{width:min(58rem,calc(100vw - 2rem))}.semantic-dialog .daca-card-header button{font-size:1.75rem;border:0;background:none}.dialog-form{display:grid;gap:1rem}.dialog-form label{display:grid;gap:.35rem;font-weight:700}.dialog-form>div{display:flex;justify-content:flex-end;gap:.5rem}.term-language-grid{display:grid!important;grid-template-columns:1fr 1fr;gap:1rem;justify-content:stretch!important}.term-language-grid fieldset,.term-domain-selection{display:grid;gap:.75rem;margin:0;padding:1rem;border:1px solid var(--daca-color-border,#d5d8dc)}.term-language-grid legend,.term-domain-selection legend{font-weight:700}.term-domain-selection{grid-template-columns:repeat(auto-fit,minmax(13rem,1fr))}.term-domain-selection legend{grid-column:1/-1}.term-domain-selection label{display:flex;align-items:center;gap:.5rem}.form-hint{margin:0;color:#a3291b}@media(max-width:700px){.governance-row{align-items:flex-start;flex-direction:column}.semantic-card dl div,.term-language-grid{grid-template-columns:1fr}}
+    .semantic-tabs{display:flex;gap:.5rem;min-width:0;max-width:100%;overflow-x:auto;margin:0 0 1.5rem;border-bottom:1px solid var(--daca-color-border,#d5d8dc)}.semantic-tabs>a{flex:0 0 auto;white-space:nowrap;padding:.9rem 1rem;color:inherit;font-weight:700;text-decoration:none;border-bottom:3px solid transparent}.semantic-tabs>a.is-active{border-color:#e1001a}.semantic-tabs span{margin-left:.4rem;color:#646b72}.semantic-search{display:grid;gap:.35rem;max-width:38rem;margin-bottom:1.25rem;font-weight:700}.semantic-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(19rem,1fr));gap:1rem}.semantic-card h2{margin:0}.semantic-card dl{display:grid;gap:.65rem}.semantic-card dl div{display:grid;grid-template-columns:7rem 1fr;gap:.75rem}.semantic-card dt{font-weight:700}.semantic-card dd{margin:0}.domain-actions{display:flex;flex-wrap:wrap;gap:.5rem}.term-actions{margin-top:1rem;justify-content:flex-end}.term-view-switch{display:flex;gap:.5rem;margin-bottom:1rem}.term-view-switch [aria-pressed=true]{background:var(--daca-blue-soft);border-color:var(--daca-blue)}.term-actions .daca-button{font-size:.875rem;min-height:40px}.semantic-chips{display:flex;flex-wrap:wrap;gap:.4rem;margin:1rem 0}.semantic-chips a{padding:.25rem .55rem;background:#eef3f7;border-radius:1rem}.semantic-state{padding:2rem;text-align:center}.semantic-governance{display:grid;gap:2rem}.governance-row{padding:1rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;margin:.75rem 0}.governance-row p{margin:.25rem 0 0}.governance-row>div:last-child{display:flex;gap:.5rem}.dialog-backdrop{position:fixed;inset:0;background:#0008;z-index:20}.semantic-dialog{position:fixed;z-index:21;inset:50% auto auto 50%;transform:translate(-50%,-50%);width:min(36rem,calc(100vw - 2rem));max-height:90vh;overflow:auto}.term-dialog{width:min(58rem,calc(100vw - 2rem))}.semantic-dialog .daca-card-header button{font-size:1.75rem;border:0;background:none}.dialog-form{display:grid;gap:1rem}.dialog-form label{display:grid;gap:.35rem;font-weight:700}.dialog-form>div{display:flex;justify-content:flex-end;gap:.5rem}.term-language-grid{display:grid!important;grid-template-columns:1fr 1fr;gap:1rem;justify-content:stretch!important}.term-language-grid fieldset,.term-domain-selection{display:grid;gap:.75rem;margin:0;padding:1rem;border:1px solid var(--daca-color-border,#d5d8dc)}.term-language-grid legend,.term-domain-selection legend{font-weight:700}.term-domain-selection{grid-template-columns:repeat(auto-fit,minmax(13rem,1fr))}.term-domain-selection legend{grid-column:1/-1}.term-domain-selection label{display:flex;align-items:center;gap:.5rem}.form-hint{margin:0;color:#a3291b}@media(max-width:700px){.governance-row{align-items:flex-start;flex-direction:column}.semantic-card dl div,.term-language-grid{grid-template-columns:1fr}}
   `],
 })
 export class DomainsGlossaryComponent {
@@ -154,7 +166,7 @@ export class DomainsGlossaryComponent {
   readonly organizationNetwork=viewChild(OrganizationTermNetworkComponent);
   setDomainView(view:'cards'|'network'):void{if(view===this.domainView())return;void this.router.navigate([],{relativeTo:this.route,queryParams:{view:view==='network'?'network':null},queryParamsHandling:'merge',replaceUrl:true});}
   setTermView(view:'cards'|'network'):void{if(view===this.termView()||!this.canDeactivate())return;this.termView.set(view);void this.router.navigate([],{relativeTo:this.route,queryParams:{view:view==='network'?'network':null},queryParamsHandling:'merge',replaceUrl:true});}
-  readonly ownOfficeOnly = signal(false);
+  readonly ownOfficeOnly = signal(true);
   readonly officeId = computed(() => this.identity.user().office ?? '');
   readonly officeName = computed(() => this.officeScope()?.organizationName
     ?? this.identity.user().modelingAssignments?.find(assignment => assignment.organizationId === this.officeId())?.organizationName
@@ -174,7 +186,7 @@ export class DomainsGlossaryComponent {
     if (control.checked && this.organizationNetwork() && this.organizationNetwork()!.organizationId() !== this.officeId() && !this.organizationNetwork()!.canDeactivate()) {
       control.checked = this.ownOfficeOnly(); return;
     }
-    void this.router.navigate([], {relativeTo: this.route, queryParams: {ownOffice: control.checked ? '1' : null}, queryParamsHandling: 'merge', replaceUrl: true});
+    void this.router.navigate([], {relativeTo: this.route, queryParams: {ownOffice: control.checked ? '1' : '0'}, queryParamsHandling: 'merge', replaceUrl: true});
   }
   loadOfficeScope(): void {
     this.officeRequest?.unsubscribe(); this.officeScope.set(null); this.officeError.set(false);
@@ -214,7 +226,7 @@ export class DomainsGlossaryComponent {
   constructor() {
     const routeTab = this.route.snapshot.data['semanticTab'];
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
-      this.ownOfficeOnly.set(params.get('ownOffice') === '1');
+      this.ownOfficeOnly.set(params.get('ownOffice') !== '0');
       this.tab.set(resolveSemanticTab(routeTab, params.get('tab')));
       this.termView.set(params.get('view')==='network'?'network':'cards');
       this.domainView.set(params.get('view')==='network'?'network':'cards');

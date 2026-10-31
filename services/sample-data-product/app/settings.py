@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     daca_demo_auth: bool = False
     catalog_deployment_ack_url: str | None = None
     catalog_internal_token: str = "local-development-only"
+    catalog_access_events_url: str | None = None
+    # Trusted deployment mapping: product UUID:subject type:subject ID -> lineage edge UUID.
+    catalog_access_event_routes: dict[str, str] = {}
     deployment_ack_timeout_seconds: float = 2.0
     seed_policy_revision_id: str = "51111111-1111-4111-8111-111111111111"
     product_id: str = "11111111-1111-4111-8111-111111111111"

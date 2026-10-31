@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { LoadingIndicatorComponent } from '../../shared/loading-indicator.component';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, linkedSignal, signal, untracked, viewChild } from '@angular/core';
 import { PhysicalCsvImportComponent } from './physical-csv-import.component';
 import { RouterLink } from '@angular/router';
 import { StatusBadgeComponent } from '@bit-daca/design-system';
@@ -10,7 +11,7 @@ import { LogicalModelStatus, LogicalModelSummary } from './data-models.models';
 
 @Component({
   selector: 'daca-logical-models-overview', standalone: true,
-  imports: [RouterLink, StatusBadgeComponent, PhysicalCsvImportComponent],
+  imports: [RouterLink, StatusBadgeComponent, PhysicalCsvImportComponent, LoadingIndicatorComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="daca-page-heading models-heading">
@@ -45,7 +46,7 @@ import { LogicalModelStatus, LogicalModelSummary } from './data-models.models';
       <header><div><p class="daca-eyebrow">{{ i18n.t('inventory') }}</p><h2 id="model-filter-title">{{ i18n.t('filterModels') }}</h2></div><button type="button" (click)="resetFilters()">{{ i18n.t('resetFilters') }}</button></header>
       <div>
         <label>{{ i18n.t('searchModels') }}<input type="search" [value]="query()" (input)="query.set(inputValue($event))" [placeholder]="i18n.t('modelSearchPlaceholder')"></label>
-        <label>{{ i18n.t('department') }}<select [value]="department()" (change)="department.set(selectValue($event))"><option value="">{{ i18n.t('all') }}</option>@for(value of departments();track value){<option [value]="value">{{ value }}</option>}</select></label>
+        <label>{{ i18n.t('department') }}<select [value]="department()" (change)="department.set(selectValue($event))"><option value="" [selected]="!department()">{{ i18n.t('all') }}</option>@for(value of departments();track value){<option [value]="value" [selected]="department()===value">{{ value }}</option>}</select></label>
         <label>{{ i18n.t('office') }}<select [value]="office()" (change)="office.set(selectValue($event))"><option value="">{{ i18n.t('all') }}</option>@for(value of offices();track value){<option [value]="value">{{ officeLabel(value) }}</option>}</select></label>
         <label>{{ i18n.t('domain') }}<select [value]="domain()" (change)="domain.set(selectValue($event))"><option value="">{{ i18n.t('all') }}</option>@for(value of domains();track value){<option [value]="value">{{ value }}</option>}</select></label>
         <label>Data Owner<select aria-label="Data Owner" [value]="owner()" (change)="owner.set(selectValue($event))"><option value="">{{ i18n.t('all') }}</option>@for(value of owners();track value.id){<option [value]="value.id">{{ value.displayName }}</option>}</select></label>
@@ -55,8 +56,8 @@ import { LogicalModelStatus, LogicalModelSummary } from './data-models.models';
     </section>
 
     @if (error()) { <p class="daca-alert is-error" role="alert">{{ error() }} <button class="daca-button is-secondary" type="button" (click)="load()">Erneut laden</button></p> }
-    @if (loading()) {
-      <div class="daca-card models-state" aria-live="polite">{{ i18n.t('loadingModels') }}</div>
+    @if (loading() || !identityReady()) {
+      <div class="daca-card models-state"><daca-loading-indicator [label]="i18n.t('loadingModels')" /></div>
     } @else if (!error() && filteredModels().length) {
       <p class="model-result-count" aria-live="polite">{{ i18n.t('modelsCount', { count: filteredModels().length, total: models().length }) }}</p>
       <div class="model-list">
@@ -94,30 +95,36 @@ export class LogicalModelsOverviewComponent {
   readonly models = signal<readonly LogicalModelSummary[]>([]);
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
-  readonly query = signal(''); readonly department = signal(''); readonly office = signal(''); readonly domain = signal(''); readonly owner = signal('');
+  private readonly departmentScope = computed(() => ({
+    userId:this.identity.userId(),department:(this.identity.user().department??'').trim().toLocaleUpperCase('de-CH'),
+  }), {equal:(previous,current)=>previous.userId===current.userId&&previous.department===current.department});
+  readonly identityReady = computed(()=>this.identity.user().id===this.identity.userId());
+  readonly department = linkedSignal({source:this.departmentScope,computation:scope=>scope.department});
+  readonly query = signal(''); readonly office = signal(''); readonly domain = signal(''); readonly owner = signal('');
   readonly status = signal<LogicalModelStatus | ''>(''); readonly mappingFilter = signal<'all' | 'mapped' | 'unmapped'>('all');
-  readonly departments = computed(() => this.unique(this.models().map((item) => item.department)));
+  readonly departments = computed(() => this.unique([this.departmentScope().department,...this.models().map((item) => item.department.trim().toLocaleUpperCase('de-CH'))]));
   readonly offices = computed(() => this.unique(this.models().map((item) => item.office)));
   readonly domains = computed(() => this.unique(this.models().map((item) => item.dataDomain.displayName)));
   readonly owners = computed(() => [...new Map(this.models().map((item)=>[item.dataOwner.id,item.dataOwner])).values()].sort((a,b)=>a.displayName.localeCompare(b.displayName,'de-CH')));
   readonly filteredModels = computed(() => {
+    if(!this.identityReady())return [];
     const query = this.query().trim().toLocaleLowerCase('de-CH');
     return this.models().filter((item) => (!query || [item.title.de, item.description.de, item.identifiers.join(' '), item.dataOwner.displayName].join(' ').toLocaleLowerCase('de-CH').includes(query))
-      && (!this.department() || item.department === this.department()) && (!this.office() || item.office === this.office())
+      && (!this.department() || item.department.trim().toLocaleUpperCase('de-CH') === this.department()) && (!this.office() || item.office === this.office())
       && (!this.domain() || item.dataDomain.displayName === this.domain()) && (!this.owner() || item.dataOwner.id === this.owner()) && (!this.status() || item.status === this.status())
       && (this.mappingFilter() === 'all' || item.hasPhysicalMapping === (this.mappingFilter() === 'mapped')));
   });
   private readonly creationDialog = viewChild<ElementRef<HTMLDialogElement>>('creationDialog');
   private readonly newModelTrigger = viewChild<ElementRef<HTMLButtonElement>>('newModelTrigger');
 
-  constructor() { effect(() => { this.identity.userId(); this.load(); }); }
+  constructor() { effect(() => { this.identity.userId(); untracked(()=>{this.resetFilters();this.load();}); }); }
   openCreationChoice(): void {
     if (this.identity.canEditModels()) this.creationDialog()?.nativeElement.showModal();
   }
   closeCreationChoice(): void { this.creationDialog()?.nativeElement.close(); }
   restoreCreationFocus(): void { this.newModelTrigger()?.nativeElement.focus(); }
   load(): void { this.loading.set(true); this.error.set(null); this.api.listLogicalModels().pipe(finalize(() => this.loading.set(false))).subscribe({ next: (items) => this.models.set(items), error: (error: Error) => this.error.set(error.message) }); }
-  resetFilters(): void { this.query.set(''); this.department.set(''); this.office.set(''); this.domain.set(''); this.owner.set(''); this.status.set(''); this.mappingFilter.set('all'); }
+  resetFilters(): void { this.query.set(''); this.department.set(this.departmentScope().department); this.office.set(''); this.domain.set(''); this.owner.set(''); this.status.set(''); this.mappingFilter.set('all'); }
   inputValue(event: Event): string { return (event.target as HTMLInputElement).value; }
   selectValue(event: Event): string { return (event.target as HTMLSelectElement).value; }
   statusValue(event: Event): LogicalModelStatus | '' { return this.selectValue(event) as LogicalModelStatus | ''; }

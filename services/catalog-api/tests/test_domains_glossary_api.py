@@ -525,7 +525,7 @@ def test_final_approval_marks_proposal_stale_when_review_domain_was_retired(
         }
 
 
-def test_domain_object_owner_if_match_and_retirement_rules(client):
+def test_domain_object_owner_if_match_and_retirement_rules(client, session_factory):
     draft = {
         "ownerUserId": "kassandra.valdata",
         "deputyOwnerUserId": "ariane.keller",
@@ -546,15 +546,20 @@ def test_domain_object_owner_if_match_and_retirement_rules(client):
     )
     assert invalid.status_code == 422
     created = client.post("/api/v1/domains", headers=KASSANDRA, json=draft)
-    assert created.status_code == 201
+    assert created.status_code == 409
+    from daca_catalog.main import _create_domain
+    with session_factory() as session:
+        domain = _create_domain(session, draft)
+        created_id = str(domain.id)
+        session.commit()
     no_precondition = client.patch(
-        f"/api/v1/domains/{created.json()['id']}",
+        f"/api/v1/domains/{created_id}",
         headers=KASSANDRA,
         json={"localizations": draft["localizations"]},
     )
     assert no_precondition.status_code == 428
     retired = client.post(
-        f"/api/v1/domains/{created.json()['id']}/retire",
+        f"/api/v1/domains/{created_id}/retire",
         headers={**KASSANDRA, "If-Match": '"1"'},
     )
     assert retired.status_code == 200
@@ -563,7 +568,7 @@ def test_domain_object_owner_if_match_and_retirement_rules(client):
     assignment = client.patch(
         f"/api/v1/data-products/{product['id']}",
         headers={**SANDRO, "If-Match": f'"{product["revision"]}"'},
-        json={"domainIds": [created.json()["id"]]},
+        json={"domainIds": [created_id]},
     )
     assert assignment.status_code == 422
 
@@ -639,7 +644,13 @@ def test_active_term_is_not_selectable_when_all_owning_domains_are_retired(clien
     }
 
 
-def test_domain_glossary_fixture_prepare_and_reset_are_scoped_and_idempotent(client):
+def test_domain_glossary_fixture_prepare_and_reset_are_scoped_and_idempotent(client, session_factory):
+    from daca_catalog.modeling_seed import seed_modeling_catalog
+    from daca_catalog.office_governance import seed_requested_steward_mandates
+    with session_factory() as session:
+        seed_modeling_catalog(session)
+        seed_requested_steward_mandates(session)
+        session.commit()
     defence_id = _domain_by_label(client, "Verteidigung")["id"]
     initial = client.get("/api/v1/poc/domain-glossary-fixture", headers=SANDRO)
     assert initial.status_code == 200
@@ -669,7 +680,7 @@ def test_domain_glossary_fixture_prepare_and_reset_are_scoped_and_idempotent(cli
     )
     decision = client.post(
         f"/api/v1/domain-change-requests/{request['id']}/decision",
-        headers={**SIBILLA, "If-Match": f'"{request["revision"]}"'},
+        headers={"X-DaCa-User": "christian.man", "If-Match": f'"{request["revision"]}"'},
         json={"decision": "approve", "comment": "Fixture-Domain fachlich genehmigt."},
     )
     assert decision.status_code == 200

@@ -10,7 +10,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .database import get_session
+from .database import get_session, identity_session
 from .i14y_concepts import (
     code_list_entry_to_cache_dict,
     concept_to_cache_dict,
@@ -126,7 +126,7 @@ def require_modeling_actor(
     if not x_daca_user or not x_daca_user.strip():
         raise HTTPException(401, "Provide X-DaCa-User for this local demo operation")
     actor = x_daca_user.strip()[:200]
-    with request.app.state.session_factory() as session:
+    with identity_session(request) as session:
         user = session.get(DemoUser, actor)
         if user is None or not user.active:
             raise HTTPException(401, "Unknown or inactive local demo identity")
@@ -1709,7 +1709,7 @@ def create_modeling_router() -> APIRouter:
                         "title": title,
                         "description": (
                             f"Technischer Entwurf aus {source.name}, Objekt {qualified_name}, "
-                            f"Snapshot {snapshot.sequence}. Fachliche Angaben sind vor der "
+                            f"Revision {snapshot.sequence}. Fachliche Angaben sind vor der "
                             "Publikation zu prüfen."
                         ),
                     }
@@ -1734,7 +1734,7 @@ def create_modeling_router() -> APIRouter:
                 },
                 "accessRights": "urn:daca:access-rights:internal",
                 "comment": (
-                    f"Direkt aus {source.name} / {qualified_name} / Snapshot "
+                    f"Direkt aus {source.name} / {qualified_name} / Revision "
                     f"{snapshot.sequence} abgeleitet."
                 ),
                 "entities": [

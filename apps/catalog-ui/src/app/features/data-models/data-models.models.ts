@@ -517,6 +517,12 @@ export const MAPPING_STATUS_LABELS: Record<MappingStatus, string> = {
   superseded: 'Abgelöst',
 };
 
+export const MAPPING_STATUS_HELP = {
+  valid: 'Dieses Mapping wurde erfolgreich validiert. Die technische Prüfung hat keine blockierenden Fehler festgestellt.',
+  review: 'Dieses Mapping ist ein Entwurf oder muss nach einer Änderung erneut geprüft werden. Prüfen Sie die Feldzuordnung, Datentypen und allfällige Transformationsregeln.',
+  broken: 'Eine Strukturänderung hat dieses Mapping ungültig gemacht, zum Beispiel ein entferntes Feld oder ein inkompatibler Datentyp. Passen Sie das Mapping an die aktuelle physische Repräsentation/Deklaration an und validieren Sie es erneut.',
+} as const;
+
 export const CLASSIFICATION_LABELS: Record<DataClassification, string> = {
   unclassified: 'Nicht klassifiziert',
   internal: 'Intern',

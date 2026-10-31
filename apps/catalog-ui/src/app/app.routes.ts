@@ -149,6 +149,11 @@ export const routes: Routes = [
     title: 'Produktmetadaten | DaCa',
   },
   {
+    path: 'products/:id/lineage/:edgeId/access-events',
+    loadComponent: () => import('./features/lineage/lineage-access.component').then((m) => m.LineageAccessComponent),
+    title: 'Zugriffsprotokolle | DaCa',
+  },
+  {
     path: 'products/:id/lineage',
     loadComponent: () => import('./features/lineage/lineage-explorer.component').then((m) => m.LineageExplorerComponent),
     title: 'Produkt-Lineage | DaCa',

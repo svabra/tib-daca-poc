@@ -49,6 +49,17 @@ describe('PhysicalCsvImportComponent', () => {
     context.fixture.detectChanges();
   }
 
+  it('opens the native picker through the accessible file button and prevents replacement while saving',()=>{
+    const context=setup();
+    const input=context.root.querySelector<HTMLInputElement>('input[type=file]')!;
+    const select=context.root.querySelector<HTMLButtonElement>('.csv-file-select')!;
+    const pick=vi.spyOn(input,'click').mockImplementation(()=>{});
+    expect(input.hidden).toBe(true);expect(select.textContent?.trim()).toBe('Datei auswählen');
+    select.click();expect(pick).toHaveBeenCalledOnce();
+    context.component.saving.set(true);context.fixture.detectChanges();
+    expect(select.disabled).toBe(true);select.click();expect(pick).toHaveBeenCalledOnce();
+  });
+
   it('previews a dropped CSV without importing and rejects multiple files',async()=>{
     const context=setup();
     const file=new File(['Tabelle;Feldname;Datentyp\nADA;ADA_ID;UUID'],'ada.csv',{type:'text/csv'});
@@ -68,7 +79,7 @@ describe('PhysicalCsvImportComponent', () => {
     const context = setup(); await upload(context);
     expect(context.api.previewPhysicalCsv).toHaveBeenCalledWith(btoa('CSV'));
     expect(context.api.importPhysicalCsv).not.toHaveBeenCalled();
-    expect(context.root.textContent).toContain('2 physische Modelle');
+    expect(context.root.textContent).toContain('2 physische Modelle (Physische Repräsentation)');
     expect(context.root.textContent).toContain('Schutzzonen');
     expect(context.root.textContent).toContain('Projektabhängig');
     expect(context.root.querySelector('script')).toBeNull();

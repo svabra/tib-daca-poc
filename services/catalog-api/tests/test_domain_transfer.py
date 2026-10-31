@@ -156,7 +156,11 @@ def test_model_review_task_moves_to_deputy_when_new_owner_is_submitter(client,se
 
 def test_term_owners_and_other_domain_tasks_do_not_transfer(client,session_factory):
     domain=prepare(client,session_factory)
-    second=client.post("/api/v1/domains",headers=h("sibilla.micheli"),json={"ownerUserId":"sibilla.micheli","deputyOwnerUserId":"sandro.wenger","localizations":[{"language":"de","preferredLabel":"Weitere Domäne","definition":"Unabhängige Verantwortung."}]}).json()
+    from daca_catalog.main import _create_domain
+    with session_factory() as session:
+        extra = _create_domain(session, {"ownerUserId":"sibilla.micheli","deputyOwnerUserId":"sandro.wenger","localizations":[{"language":"de","preferredLabel":"Weitere Domäne","definition":"Unabhängige Verantwortung."}]})
+        second = {"id": str(extra.id)}
+        session.commit()
     created=client.post("/api/v1/glossary/term-proposals",headers=h("sandro.wenger"),json={"payload":{"domainIds":[domain["id"],second["id"]],"localizations":[{"language":"de","preferredLabel":"Neuer Reviewbegriff","definition":"Ein Begriff in zwei Domänen."}]}})
     assert created.status_code==201,created.text
     with session_factory() as session:

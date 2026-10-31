@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-__version__ = "0.2.1"
+__version__ = "0.3.2"
 
 
 def get_runtime_version() -> str:

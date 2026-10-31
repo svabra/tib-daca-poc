@@ -146,6 +146,8 @@ services:
       DACA_DEMO_AUTH: ${DACA_DEMO_AUTH:-true}
       CATALOG_DEPLOYMENT_ACK_URL: http://catalog-api:8001/internal/v1/policy-deployments/acknowledge
       CATALOG_INTERNAL_TOKEN: local-development-only
+      CATALOG_ACCESS_EVENTS_URL: http://catalog-api:8001/internal/v1/lineage
+      CATALOG_ACCESS_EVENT_ROUTES: '{"11111111-1111-4111-8111-111111111111:person:kanton-st-gallen":"31111111-1111-4111-8111-222222222222","11111111-1111-4111-8111-111111111111:machine:svc-estv-cantonal-tax-dashboard":"31111111-1111-4111-8111-222222222222"}'
     ports:
       - "8003:8000"
     depends_on:

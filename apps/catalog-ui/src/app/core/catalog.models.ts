@@ -146,7 +146,19 @@ export interface LocalizedConceptLabel {
   definition: string;
 }
 
+export type DomainObjectKind = 'product'|'term'|'logical'|'physical';
+export interface DomainNetworkView {
+  revision:number;
+  configuration:{schemaVersion:1;addedDomainIds:string[];hiddenDomainIds:string[];positions:Record<string,{x:number;y:number}>;visibleKinds:DomainObjectKind[]};
+}
+export interface DomainNetworkObject {
+  structureKind?:'table'|'view'|'materialized_view'|'parquet';
+  key:string;id:string;kind:DomainObjectKind;label:string;description:string;ownerName:string;urn:string;route:string[];params:Record<string,string>;domainIds:string[];
+}
 export interface DomainSummary {
+  departmentCodes?:string[];
+  officeCodes?:string[];
+  foreignDepartment?:boolean;
   canTransferOwnership?: boolean;
   canEditMetadata?: boolean;
   id: string;
@@ -293,6 +305,9 @@ export interface DomainGlossaryFixtureState {
 
 export interface LineageNode {
   id: string;
+  urn?: string;
+  owner?: string | null;
+  productId?: string;
   label: string;
   detail: string;
   kind: 'source' | 'transform' | 'product' | 'consumer';
@@ -305,6 +320,25 @@ export interface LineageEdge {
   target: string;
   label: string;
   state: 'verified' | 'declared';
+  canViewAccessLogs?: boolean;
+}
+
+export interface LineageAccessEvent {
+  id: string;
+  occurredAt: string;
+  subjectId: string;
+  subjectName: string;
+  subjectType: 'person' | 'machine';
+  protocol: 'http-rest' | 'postgresql';
+  outcome: 'success' | 'denied' | 'error';
+}
+export interface LineageAccessPage {
+  resourceUrn: string;
+  resourceLabel: string;
+  consumerUrn: string;
+  consumerLabel: string;
+  items: LineageAccessEvent[];
+  nextCursor: string | null;
 }
 
 export interface ProvenanceEvent {

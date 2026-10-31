@@ -206,6 +206,28 @@ async def evaluate_opa(input_document: dict[str, Any]) -> tuple[bool, str, str |
     return result["allow"], str(result.get("reason", "policy evaluated")), body.get("decision_id")
 
 
+async def report_access(product_id: str, subject_id: str, subject_type: str, outcome: str) -> None:
+    """Report only configured consumer routes; never accept routing or event IDs from a caller."""
+    edge_id = settings.catalog_access_event_routes.get(f"{product_id}:{subject_type}:{subject_id}")
+    if not edge_id:
+        return
+    if not settings.catalog_access_events_url:
+        raise ProblemError(503, "Access log unavailable", "The access reporter is not configured.", "access-log-unavailable")
+    body = {"id": str(uuid.uuid4()), "occurredAt": dt.datetime.now(dt.UTC).isoformat(),
+            "subjectId": subject_id, "subjectType": subject_type, "protocol": "http-rest", "outcome": outcome}
+    # Retry the same receipt, allowing the catalog to deduplicate a lost acknowledgement.
+    for attempt in range(2):
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                response = await client.post(f"{settings.catalog_access_events_url.rstrip('/')}/{edge_id}/access-events",
+                    headers={"Authorization": f"Bearer {settings.catalog_internal_token}"}, json=body)
+                response.raise_for_status()
+            return
+        except httpx.HTTPError:
+            if attempt:
+                raise ProblemError(503, "Access log unavailable", "The read receipt could not be persisted; no data is returned.", "access-log-unavailable") from None
+
+
 def acknowledge_seed_projection() -> bool:
     """Best-effort acknowledgement retried by readiness until the catalog accepts it."""
     global _seed_projection_acknowledged
@@ -266,6 +288,7 @@ def ready() -> dict[str, str]:
 async def read_tax_statistics(
     request: Request,
     x_daca_user: str | None = Header(default=None, alias="X-DaCa-User"),
+    x_daca_machine: str | None = Header(default=None, alias="X-DaCa-Machine"),
 ) -> dict[str, Any]:
     if not settings.daca_demo_auth:
         raise ProblemError(
@@ -274,15 +297,23 @@ async def read_tax_statistics(
             "Demo identity is disabled and no OIDC provider is configured for this POC.",
             "identity-unavailable",
         )
-    if not x_daca_user or not x_daca_user.strip():
-        raise ProblemError(401, "Identity required", "Provide X-DaCa-User.", "identity-required")
-    subject_id = x_daca_user.strip()
-    allow, reason, decision_id = await evaluate_opa(decision_input(subject_id, request))
+    identities = [value.strip() for value in (x_daca_user, x_daca_machine) if value and value.strip()]
+    if len(identities) != 1:
+        raise ProblemError(401, "Identity required", "Provide exactly one demo person or machine identity.", "identity-required")
+    subject_id = identities[0]
+    subject_type = "machine" if x_daca_machine and x_daca_machine.strip() else "person"
+    allow, reason, decision_id = await evaluate_opa(decision_input(subject_id, request, subject_type=subject_type))
     if not allow:
+        await report_access(settings.product_id, subject_id, subject_type, "denied")
         raise ProblemError(403, "Access denied", reason, "access-denied")
 
     product_id = uuid.UUID(settings.product_id)
-    rows = await run_in_threadpool(fetch_statistics, subject_id, product_id)
+    try:
+        rows = await run_in_threadpool(fetch_statistics, subject_id, product_id, subject_type)
+    except Exception:
+        await report_access(settings.product_id, subject_id, subject_type, "error")
+        raise
+    await report_access(settings.product_id, subject_id, subject_type, "success")
     return {
         "dataProduct": {
             "id": settings.product_id,
@@ -295,6 +326,7 @@ async def read_tax_statistics(
         "records": rows,
         "authorization": {
             "subjectId": subject_id,
+            "subjectType": subject_type,
             "decision": "allow",
             "reason": reason,
             "decisionId": decision_id,
@@ -325,6 +357,7 @@ async def read_daaif_reference_product(
         decision_input(subject_id, request, subject_type=subject_type, product_id=DAAIF_REFERENCE_PRODUCT_ID)
     )
     if not allow:
+        await report_access(DAAIF_REFERENCE_PRODUCT_ID, subject_id, subject_type, "denied")
         raise ProblemError(403, "Access denied", reason, "access-denied")
     rows = await run_in_threadpool(
         fetch_statistics,
@@ -332,6 +365,7 @@ async def read_daaif_reference_product(
         uuid.UUID(DAAIF_REFERENCE_PRODUCT_ID),
         subject_type,
     )
+    await report_access(DAAIF_REFERENCE_PRODUCT_ID, subject_id, subject_type, "success")
     return {
         "dataProduct": {
             "id": DAAIF_REFERENCE_PRODUCT_ID,

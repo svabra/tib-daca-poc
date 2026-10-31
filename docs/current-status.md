@@ -1,5 +1,206 @@
 # Current status
 
+Release **0.3.2** synchronizes the UIs, API/runtime packages, PWA metadata, lockfiles, focused
+OpenAPI documents and OpenShift image pins. The current release notes cover all changes since
+0.2.1: domain exploration and ROHS CPS fixtures, private search Views, physical-first Mapping,
+physical instance terminology/menus, governed domain proposals, Lineage and owner access logs.
+The 0.2.1 notes remain archived; unissued intermediate versions are not invented.
+
+The domain network now separates personal presentation (`domain_network_views`, migration 0047)
+from shared governed relationships. Every active user may add existing domains across department
+boundaries. Owner labels and trusted department/office codes identify responsibility; foreign
+department cards are gray and read-only. Related products are enabled initially; terms, logical
+models and physical representations/declarations can be switched on immediately after the
+authorized object metadata loads. Private products and inaccessible physical sources are omitted.
+ROHS CPS operator fixtures add two domains, six terms, two draft data products, four logical
+drafts and four synthetic physical structures with field mappings. The selectable Owner Marcello
+Hebeisa and deputy Matteo Duca belong to the PoC unit EFD–BIT–PS–CPS. Restart preserves subsequent
+edits and retirements. The glossary now defines a data product by consumption beyond its Owner
+and deputy. See [domain network design](domains-and-glossary.md#personal-domain-network-exploration).
+Browser verification exposed nested connection borrowing in demo identity checks under concurrent
+tab loading. Catalog/modeling identity checks now finish before route transactions borrow a connection;
+transaction-local audit actors bind lazily, retaining the same demo-only/active-user guards. A single-connection pool regression exercises both actor paths.
+
+The shared small spinner now renders an explicit 20 px SVG ring/arc rather than an empty span
+whose visibility depends on borders. It follows the theme blue, keeps a fixed flex footprint and
+remains visible when reduced motion disables rotation. Domain register/network loading is checked
+with deliberately paused real reads, actual geometry/computed visibility and animation state.
+All 592 frontend tests and the read-only `domain-loading-indicators` Edge flow pass, including
+visible register/network spinners, rotation, dark theme, reduced motion and completion cleanup.
+
+Physical representation/declaration menus now offer **Domänenzuordnung entfernen**, individually
+labelled when multiple domains exist. The shared action works in the canvas, physical bindings and
+physical-only Mapping entry; assignment can be restored explicitly. A scoped, source-locked DELETE
+checks object/revision identity and domainVersion before removing only the requested current
+membership and appending audit evidence. Other domains, logical domain, mappings and immutable
+imports stay unchanged. UI labels update only after API success; failures retain the assignment.
+The separator immediately following “Bindungen und Mappings bleiben erhalten” is removed.
+Validated with all 592 frontend tests and eight domain-assignment API cases (seven in the broad
+run plus the corrected preservation-fixture rerun), current data-model docs and the
+`physical-domain-removal` browser flow. It checks unauthorized/stale writes, individual
+membership preservation, binding/canvas updates, reload persistence and physical-only
+remove/reassign without changing mappings; its original fixture membership is restored.
+
+Lineage edge context menus now expose access receipts in a new tab for the current resource
+Data Owner only. Other users see the disabled option; direct API URLs reauthorize the concrete
+source/product owner and never inherit the displayed graph product owner for unknown sources.
+The private page filters persons/machines, outcomes and time, paginates with a stable cursor,
+clears receipts on identity/filter changes and uses the shared loader. Trusted reporters append
+minimal, idempotent `lineage-access` audit events; read APIs return `Cache-Control: no-store`.
+The sample HTTP PEP reports only server-configured subject/edge routes after completed reads,
+with distinct denial/error events and retry-safe event IDs; reporting failures return no data.
+No fictitious historical accesses or grant-derived receipts are added. External sources/direct
+PostgreSQL require an execution-side reporter. No SQL schema migration is needed.
+Validated with all 589 frontend tests, five isolated PostgreSQL authorization/receipt cases,
+17 PEP/authorization tests, generated data-model checks and the `lineage-access` Edge flow.
+The browser verifies actual PEP person/machine outcomes, the native new tab, filter isolation,
+mobile bounds, loading spinner, disabled non-owner menu and denied direct URL. Real test reads
+remain append-only evidence; no historical receipts or product-policy changes are fabricated.
+
+Domain cards now group open/relationship/catalog actions, named term/domain searches and drawing
+removal before general new-tab model searches, with icons/separators. The blank canvas starts with create, then
+insert an existing domain and model searches; name-based semantic searches stay on actual cards.
+Shared loading indicators cover the register, domain network and creation form.
+Every new domain is a versioned request and a personal pending card, including for Data Owners.
+Only the proposed owner's trusted office ALDS or mandated deputy may approve; no self-approval,
+foreign office or profile-role fallback. Review scope is anchored to the submitted owner and
+checked again on edit/decision. Current mandates drive pending tasks; direct active creation
+returns 409. Update/retirement responsibilities are preserved. No SQL schema migration is needed.
+Validated with all 584 frontend tests, 58 relevant PostgreSQL API cases (including the corrected
+metadata-only fixture rerun), regenerated data-model documentation and the `domain-canvas-approval`
+Edge flow. Browser evidence covers register/network/form spinners, grouped menus and keyboard/mobile
+bounds, a personal proposal surviving reload without a shared write, denied Owner approval,
+ALDS notification/UI approval and replacement with the active domain. Only its unique test domain
+was retired afterwards; audit/decision history remains. The read-only `domain-canvas-mobile-layout`
+flow additionally verifies locally scrolling tabs and bounded menus at 390px and 360px.
+
+Visible-source informational notices can be dismissed individually using the small right-hand X.
+Only mounted UI state changes: filtering/data refresh does not reopen them, while a page reload
+restores them. No browser or PostgreSQL preference is persisted. The discovery notice now links
+to expert search and business domains and suggests asking domain owners directly (DE/FR/IT/EN).
+Verified by all 11 source-explorer component tests and the `source-info-notices` Edge flow,
+including click/keyboard dismissal, refresh retention, reload reset, links and mobile bounds.
+
+Expert search now has PostgreSQL-backed personal Views with create, edit, delete, a compact
+selector/action menu and an explicit current-filter update. A searchable recipient modal sends
+immutable filter copies and optional messages through recipient-private workflow tasks. Recipients
+review, rename/adopt or dismiss; adoption is idempotent and independent of the source, including
+after source deletion. Known View filters can be used without a phrase. Existing catalog visibility
+still controls results. Notification counts refresh every 15 seconds while visible and on focus.
+Migration 0046 adds private view/share tables and the workflow-task link; data-model documentation
+has been regenerated. See [personal Views](expert-search.md#personal-search-views).
+Verified by 579 frontend tests, seven isolated PostgreSQL API tests and the two-user
+`personal-search-views` Edge flow, including immutable delivery after source deletion, independent
+adoption, persisted filter-only searches, confirmed deletion and mobile dialogs.
+
+Domains and terms now default to the own-office filter. In card views its checkbox sits next to
+the search input and below it on narrow screens; network views keep it below their view switch.
+`ownOffice=0` preserves an explicit All choice across views, semantic tabs and refreshes, while
+fresh links default to scoped results. Shared tooltip, loading/error handling and trusted office
+scope resolution remain in place. See [own-office display filter](domains-and-glossary.md#own-office-display-filter).
+Verified by all ten semantic-page component tests and the `semantic-own-office` Edge flow for two
+identities, desktop/mobile placement, default activation, explicit All and tab/view retention.
+
+Lineage cards are now compact (208 × 112 px) with 2 px corners. Hover/focus moves the existing
+card by 2 px without an extra frame; staggered ice-blue light bands pulse along the directed edges.
+Reduced motion disables both effects. The lineage explorer uses type-based colors (including green
+consumers), contained multiline titles and label-aware routing. Shared tooltips explain
+Verified/Declared and the other legend terms; interactive summaries
+support pointer and keyboard access to owner, exact URN, optional description and a native new-tab
+link. Known products open their overview; URN-only assets open their exact reference in the graph.
+Missing owner information stays explicit. See [lineage explorer](lineage-explorer.md).
+The compact/pulsing update passes all three lineage component tests and the read-only
+`lineage-explorer` browser flow: exact card size/corners, no extra interaction outline, moving and
+pulsing light bands, native tabs, summaries, mobile bounds and reduced-motion card behavior.
+
+Physical-instance labels no longer use Snapshot: connected structures are physical representations,
+CSV inventories are physical declarations. Loading/empty/error states, Mapping bindings and dialogs,
+drift, object details, source history, domain membership and in-app guide use the same vocabulary.
+Version numbers are labelled Revision. Newly generated derivation descriptions/comments use Revision;
+existing authored metadata, internal API fields and immutable identifiers are preserved.
+
+Physical context menus start with source navigation and drawing removal, followed by its hint
+that bindings and mappings remain intact. Separators group domain actions, named term/domain
+searches and the two general model searches, in that order. Empty domain groups are omitted.
+The graph legend and toolbar counts explain valid, review (including drafts) and broken mappings
+using shared hover/focus tooltips. Faint wavy underlines reveal these keyboard-accessible hints.
+Focused hints now remain anchored through automatic scrolling while their trigger stays visible;
+pointer-only hints still close on scroll. This uses the shared tooltip component throughout the app.
+Verified by 47 component tests and the `mapping-status-tooltips` Edge flow: all six hints,
+keyboard focus with automatic scrolling, Escape and pointer hover.
+General logical/physical model searches show native new-tab result links by default with external-link icons; source/snapshot/table
+parameters remain exact and the Mapping workspace stays open. Explicit counterpart selection
+and derivation are current-object actions in physical-first Mapping, preserving the paired-workflow
+path. Selection-mode browsers still emit selected objects instead of navigating.
+
+The logical-model overview starts with the signed-in user's department selected. Reset filters
+restores that department; All/other-department choices remain explicit and survive model refreshes
+or same-department profile updates. Identity/department changes restore the appropriate default.
+The dropdown includes the own department even when it has no models; user-directory loading
+keeps the spinner visible instead of briefly showing another user's models. Legacy profiles without
+a department fall back to All. This is a display filter, with API authorization unchanged.
+Verified by six overview component tests (including delayed data/profile loading and a department
+change) and the `model-department-default` browser flow on desktop/mobile: default, explicit All,
+reset and fresh-page behavior.
+
+**Datenquelle öffnen** in physical-object context menus opens a new tab with the exact source,
+snapshot and object. An external-link icon and accessible new-tab hint make this explicit; the
+Mapping workspace stays open. Canvas cards and physical bindings share this behavior.
+
+Physical-first Mapping now offers an existing logical-model search and **Logisches Modell ableiten**
+in the canvas placeholder, physical-object context menu and blank-canvas context menu. Choosing an existing counterpart retains the physical context and runs the existing compatibility check. Deriving
+opens the complete `/models/new` editor with exact snapshot/table query parameters, without a
+quick-create write. Users edit descriptions, owner/domain/classification and field/concept decisions
+before explicit saving through the existing derivation API, then return to Mapping. Both choices
+remain visible on mobile. Blank-canvas menus omit term/domain searches; actual model cards retain
+their name-prefilled searches. CSV origins are labelled as physical declarations.
+The focused `physical-derivation` browser flow passed for CSV and S3/Parquet: desktop/mobile
+choices, both context menus, full editable metadata and field forms, and exact Save payloads
+after renaming/removing fields. It intercepts the save with a synthetic rejection to verify retained
+user input without adding catalog records; the existing editor contract test verifies successful
+Save navigation back to Mapping. The `mapping-start` flow separately checks existing-model
+selection, compatibility, pairing and recent-work history.
+
+For an opened logical model, the canvas menu puts **Neue physische Repräsentation** first, followed by grouped
+logical/physical model searches. Term/domain searches appear only on model cards. Small outline icons distinguish
+creation, model types and semantics. The shared physical binding/canvas menu uses the same icon
+vocabulary while placing drawing removal immediately after source navigation.
+
+The data-model overview now uses the shared small loading indicator beside its localized loading
+message. The indicator disappears on success or failure through the existing request lifecycle.
+
+Physical results in the common catalog-object search display the object system/schema/name and
+**Quelle: <name> · Physische Deklaration (CSV)** or the corresponding representation/provider.
+An unobtrusive info button exposes owner, import timestamp/person, revision, catalog path and
+source/object IDs through the existing hover/focus tooltip. Technical paths and IDs remain searchable,
+while visible result text stays readable. The navigation still targets the exact snapshot and object.
+
+Mapping now distinguishes logical models, physical representations and CSV physical declarations.
+The incorrect ImmoGIS prefix for SAP.CSV.VIBDBU was a display bug: labels used the first database
+of the inventory instead of the mapped table's database. Bindings, canvas, column choices, physical
+object searches and derivation defaults now use the table identity; existing mapping IDs remain
+unchanged. Physical binding cards and canvas share source/model/domain/semantic actions with
+group separators and drawing removal immediately after source navigation. Semantic links carry the object name as q and open
+new tabs with an external-link icon. Copying the logical domain uses the existing confirmation
+and optimistic concurrency checks. CSV source cards offer open/archive/restore/delete through
+the accessible three-dot menu; source headers distinguish declarations from representations.
+Validation covers the Angular suite plus focused dialog, refresh-target stability and logical-menu
+regressions. Browser flows `physical-object-actions` (the real SAP.CSV.VIBDBU case, without
+persisting changes) and `csv-import` cover matching menus, new-tab queries, domain-copy
+confirmation, mobile fit and confirmed inventory archive/restore/delete. Screenshots remain
+under ignored `output/ui-regression/`; no catalog schema change is introduced. The focused
+`mapping-live-refresh` browser check also passed: simulated deletion disappeared from both
+views in 5,246 ms, with restoration and mobile visibility preserved.
+
+The physical CSV importer uses a full-width drop area with a standard file-selection button;
+the native file input remains hidden. Drag-and-drop and selection both load the existing preview,
+and only **Importieren** persists metadata. Name and organization use aligned 44px controls rather
+than stretching to the drop area's height. Advanced CSV format help is initially collapsed.
+Intro, preview totals and selected-object heading clarify **Physische Repräsentation**.
+Verified with the importer component tests and `--flow csv-import`: file selection and a real
+browser drop, compact desktop fields, mobile dialog fit, preview, cancellation, confirmed import
+and reusing identical content. Local screenshots stay under ignored `output/ui-regression/csv-import-modern`.
+
 Release **0.2.1** synchronizes all managed package/runtime/image versions. Catalog release notes
 in DE/EN describe the new expert search, direct Mapping entry and private recents, physical
 binding refresh, own-office semantic filters and footer version controls; 0.2.0 remains archived.
@@ -224,7 +425,7 @@ Neighbor positions share the existing revision-checked layout; visibility is a t
 Term/domain cards now distinguish quick movement from a 180 ms hold. A held card exposes a red
 point/line; dropping onto blank canvas opens create/search actions, and dropping onto another
 card prepares a relationship. Each action opens a focused modal with Escape/cancel. Creation
-reuses glossary proposals and domain requests; eligible owners may create domains directly under their own ownership.
+reuses glossary proposals and domain requests; all new domains require the scoped office ALDS approval.
 Pending creation cards are personal until approval. A connection-search selection restores or
 adds a card; the four-type context browser remains navigation-only.
 
@@ -238,7 +439,7 @@ proposals block direct term retirement. Retired cards disappear from active canv
 Term layouts are now central and explicit: **Layout speichern** publishes the current arrangement
 for all readers; terminology proposals retain their separate domain-owner approval. A legacy
 private layout may be loaded as an unsaved draft only when no central layout exists.
-`/domains/network` adds the domain graph with shared layout, local relationship drafts, zoom,
+`/domains/network` adds the domain graph with private per-user presentation, shared governed relationship drafts, zoom,
 print, fullscreen, arrow-key movement, ports, rewiring and a textual alternative. Relationships are
 `related`, `interfacesWith`, `overlapsWith` (symmetric associations) and `partOf` (source is a subdomain of target); assigned source-domain owners/deputies
 manage those links. Cycles, inverse duplicates, self-links and new links to retired domains are rejected.
@@ -460,7 +661,7 @@ the left uses the logical field’s left port and the physical column’s right 
 left/right representations use both logical ports. Drag logical and physical card headers
 to arrange the canvas, or use arrow keys on a focused header (Shift for larger steps). Connections
 follow their field ports. Clicking or opening the context menu on a physical card offers
-**Darstellung der physischen Repräsentation entfernen**; this hides its drawing and connections
+**Darstellung dieser Physischen Repräsentation/Deklaration löschen**; this hides its drawing and connections
 without deleting bindings or mappings or creating an unsaved draft. Selecting it in the
 representation list restores the card. Layout and visibility survive Graph/Table/Drift switches
 within the workspace; they reset when the workspace is reloaded. New representations are added
@@ -553,6 +754,8 @@ It sits beside the footer text on desktop and below it on small screens, without
 content. The version, `Co-Designed by V, armasuisse, ASTRA, ESTV und BIT` credit and feature-list button
 remain available. The redundant current-version status is removed; an available PWA update still
 shows its ready status, reload action and confirmation dialog.
+Co-designers are credited once in the version area. The catalog footer description omits its
+duplicate co-design sentence in DE/FR/IT/EN.
 Verified with seven version/update component tests and both production UI builds. Read-only
 catalog browser checks cover 1440px and 390px widths in light/dark themes, footer placement,
 horizontal overflow, feature-popup opening and focus return. No commit was created.

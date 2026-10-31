@@ -1,0 +1,88 @@
+<daca-product-workspace-nav [productId]="api.product().id" [productTitle]="api.product().title" activeSection="lineage"/>
+<section class="daca-page-heading">
+  <div><p class="daca-eyebrow">Datenprodukt · Herkunft</p><h1>Lineage &amp; Provenienz</h1><p>Quellen, Transformationen und deklarierte Konsumenten im Überblick.</p></div>
+  <daca-status-badge tone="green">{{ edges().length }} Beziehungen</daca-status-badge>
+</section>
+<div class="lineage-toolbar daca-card">
+  <div class="lineage-legend" aria-label="Legende des Datenflusses">
+    @for (item of legend; track item.kind) {
+      <button type="button" class="legend-term" [dacaTooltip]="item.explanation"><i [class]="'is-' + item.kind"></i><span>{{ item.label }}</span></button>
+    }
+    <span class="legend-divider" aria-hidden="true"></span>
+    <button type="button" class="legend-term" [dacaTooltip]="verifiedHelp"><b></b><span>Verified</span></button>
+    <button type="button" class="legend-term" [dacaTooltip]="declaredHelp"><b class="is-declared"></b><span>Declared</span></button>
+  </div>
+  <div class="lineage-controls"><button type="button" class="daca-button is-secondary" (click)="focusProduct()">Datenprodukt fokussieren</button><span [dacaTooltip]="'Pfeile und hellblaue Impulse zeigen die Richtung des Datenflusses. Die Animation ist keine Anzeige von Live-Datenverkehr.'" tabindex="0">Datenfluss →</span></div>
+</div>
+<div class="lineage-layout">
+  <section class="daca-card lineage-canvas-card" aria-labelledby="lineage-graph-title">
+    <div class="daca-card-header"><div><p class="daca-eyebrow">Herkunft und Verwendung</p><h2 id="lineage-graph-title">{{ api.product().title }}</h2></div></div>
+    <div class="lineage-canvas" tabindex="0" aria-label="Datenflussdiagramm, horizontal scrollbar">
+      <div class="lineage-graph" [style.width.px]="graph().width" [style.height.px]="graph().height">
+        <svg class="flow-edges" [attr.width]="graph().width" [attr.height]="graph().height" aria-label="Datenflusskanten">
+          <defs><marker id="lineage-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+          @for (edge of graph().edges; track edge.id) {
+            <path class="lineage-edge-hit" [attr.data-edge-id]="edge.id" [attr.d]="edge.path" tabindex="0" role="button" [attr.aria-label]="edgeHelp(edge) + ' Kontextmenü öffnen.'" (contextmenu)="openEdgeMenu(edge,$event)" (keydown.shift.f10)="openEdgeMenu(edge,$event)" (keydown.enter)="openEdgeMenu(edge,$event)"/>
+            <path class="lineage-edge" [class.is-declared]="edge.state === 'declared'" [attr.d]="edge.path" marker-end="url(#lineage-arrow)"/>
+            @for (phase of pulsePhases; track phase) {
+              <g class="flow-pulse">
+                <path class="pulse-glow" [attr.d]="edge.path" pathLength="100" stroke-dasharray="18 100"><animate attributeName="stroke-dashoffset" values="18;-100" dur="3s" [attr.begin]="phase" repeatCount="indefinite"/></path>
+                <path class="pulse-core" [attr.d]="edge.path" pathLength="100" stroke-dasharray="18 100"><animate attributeName="stroke-dashoffset" values="18;-100" dur="3s" [attr.begin]="phase" repeatCount="indefinite"/><animate attributeName="stroke-width" values="1.5;3;1.5;3;1.5" dur="3s" [attr.begin]="phase" repeatCount="indefinite"/></path>
+                <animate attributeName="opacity" values="0;1;.35;1;0" keyTimes="0;.2;.48;.7;1" dur="3s" [attr.begin]="phase" repeatCount="indefinite"/>
+              </g>
+            }
+          }
+        </svg>
+        @for (edge of graph().edges; track edge.id) {
+          <button type="button" class="flow-label" [style.left.px]="edge.labelX" [style.top.px]="edge.labelY" [style.max-width.px]="edge.labelWidth" [dacaTooltip]="edgeHelp(edge)" (contextmenu)="openEdgeMenu(edge,$event)" (keydown.shift.f10)="openEdgeMenu(edge,$event)">{{ edge.label }}</button>
+        }
+        @for (node of graph().nodes; track node.id) {
+          <button type="button" [class]="'lineage-node is-' + node.kind" [class.is-selected]="selectedNode()?.id === node.id"
+            [style.left.px]="node.x - card.width / 2" [style.top.px]="node.y - card.height / 2" [attr.data-node-id]="node.id" [attr.data-kind]="node.kind"
+            [attr.aria-pressed]="selectedNode()?.id === node.id" [attr.aria-label]="kindLabel(node.kind) + ': ' + node.label" [dacaTooltip]="node.label" [dacaTooltipContent]="summary" (click)="selectedId.set(node.id)">
+            <span class="node-topline"><span class="node-type"><daca-search-icon [name]="icon(node.kind)"/>{{ kindLabel(node.kind) }}</span><daca-search-icon name="info-circle"/></span>
+            <strong class="lineage-node-title">{{ node.label }}</strong><span class="lineage-node-catalog">{{ node.catalog }}</span>
+          </button>
+          <ng-template #summary>
+            <div class="lineage-summary"><span class="summary-kind">{{ kindLabel(node.kind) }} · {{ node.catalog }}</span><strong>{{ node.label }}</strong>
+              @if (node.detail) { <p>{{ node.detail }}</p> }
+              <dl><div><dt>Data Owner</dt><dd>{{ owner(node) }}</dd></div><div><dt>URN</dt><dd><code>{{ urn(node) }}</code></dd></div></dl>
+              <a [routerLink]="routeFor(node)" [queryParams]="paramsFor(node)" target="_blank" rel="noopener">{{ linkLabel(node) }}<daca-search-icon name="external-link"/><span class="sr-only"> (neuer Tab)</span></a>
+              @if (!node.productId) { <small>Referenz im Herkunftsgraphen</small> }
+            </div>
+          </ng-template>
+        }
+      </div>
+    </div>
+  </section>
+  @if (selectedNode(); as node) {
+    <aside class="daca-card lineage-detail">
+      <div class="daca-card-header"><h2>Ausgewähltes Objekt</h2><span [class]="'detail-type is-' + node.kind">{{ kindLabel(node.kind) }}</span></div>
+      <div class="daca-card-body">
+        <span [class]="'lineage-detail-icon is-' + node.kind"><daca-search-icon [name]="icon(node.kind)"/></span><h3>{{ node.label }}</h3>
+        @if (node.detail) { <p>{{ node.detail }}</p> }
+        <dl class="metadata-definition-list"><div><dt>Data Owner</dt><dd>{{ owner(node) }}</dd></div><div><dt>Katalog</dt><dd>{{ node.catalog }}</dd></div><div><dt>URN</dt><dd><code>{{ urn(node) }}</code></dd></div></dl>
+        <a class="daca-button is-secondary asset-link" [routerLink]="routeFor(node)" [queryParams]="paramsFor(node)" target="_blank" rel="noopener">{{ linkLabel(node) }}<daca-search-icon name="external-link"/><span class="sr-only"> (neuer Tab)</span></a>
+        @if (!node.productId) { <small class="reference-note">Referenz im Herkunftsgraphen</small> }
+      </div>
+    </aside>
+  }
+</div>
+<section class="daca-card provenance-card" aria-labelledby="provenance-title">
+  <div class="daca-card-header"><div><p class="daca-eyebrow" dacaTooltip="Ereignisse werden dem Protokoll hinzugefügt. Frühere Einträge bleiben nachvollziehbar." tabindex="0">Append-only evidence</p><h2 id="provenance-title">Provenienzverlauf</h2></div><span>{{ provenance().length }} Ereignisse</span></div>
+  <div class="daca-card-body provenance-timeline">
+    @for (event of provenance(); track event.id; let first = $first) {
+      <article [class.is-latest]="first"><div class="provenance-marker"></div><time [attr.datetime]="event.occurredAt">{{ event.occurredAt | date: 'dd MMM yyyy · HH:mm' : 'UTC' }} UTC</time><div><strong>{{ event.type }}</strong><p>{{ event.summary }}</p><small>{{ event.actor }} · Evidence <code>{{ event.evidence }}</code></small></div></article>
+    }
+  </div>
+</section>
+@if(edgeMenu(); as menu){
+  <div class="lineage-edge-menu" role="menu" tabindex="-1" aria-label="Kantenaktionen" [style.left.px]="menu.x" [style.top.px]="menu.y">
+    @if(canOpenLogs(menu.edge)){
+      <a role="menuitem" [routerLink]="['/products',api.product().id,'lineage',menu.edge.id,'access-events']" target="_blank" rel="noopener" (click)="edgeMenu.set(null)"><daca-search-icon name="book"/><span>Zugriffsprotokolle öffnen</span><daca-search-icon name="external-link"/></a>
+    }@else{
+      <span [dacaTooltip]="accessHelp" tabindex="0"><button role="menuitem" type="button" disabled><daca-search-icon name="book"/><span>Zugriffsprotokolle öffnen</span><daca-search-icon name="external-link"/></button></span>
+      <small>Nur für den Data Owner der Quelle oder des Produkts.</small>
+    }
+  </div>
+}

@@ -1,5 +1,15 @@
 # Objektverantwortung und organisatorische Mandate
 
+## Neue Domänen freigeben
+
+Neue Domänen werden vorläufig als persönliche Vorschlagskarten erfasst. Freigeben darf nur der
+aktuell mandatierte ALDS des Amts des vorgeschlagenen Data Owners oder dessen mandatierte
+Stellvertretung. Untergeordnete Einheiten sind eingeschlossen; der Antragsteller darf nicht selbst
+entscheiden. Globale Profilrollen, eine fremde Amtszuständigkeit und das LDSD-Mandat genügen nicht.
+Der ALDS erhält eine Aufgabe. Erst seine Freigabe erzeugt eine aktive Domäne; eine Ablehnung
+erzeugt keine. Auch Data Owner können diese Freigabe nicht durch direkte Erstellung umgehen.
+Bestehende Owner-/Stellvertretungsrechte für Änderungen und Stilllegung bleiben bestehen.
+
 ## Präzisierung und Umsetzung vom 28. Oktober 2026
 
 **Local Data Steward Department (LDSD)** ist eine bestehende Rolle auf Departementsebene.

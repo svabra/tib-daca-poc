@@ -1,3 +1,5 @@
+import { physicalCategoryKey, physicalCategoryLabel } from './physical-representation-labels';
+import { InfoNoticeComponent } from '../../shared/info-notice.component';
 import { SourceCardActionsComponent } from './source-card-actions.component';
 import { SourceAccessActionsComponent } from './source-access-actions.component';
 import { ReturnedSourcesComponent } from './returned-sources.component';
@@ -19,14 +21,14 @@ interface PhysicalSchemaGroup { name: string; tables: readonly PhysicalTable[]; 
 @Component({
   selector: 'daca-physical-assets',
   standalone: true,
-  imports: [SourceCardActionsComponent, SourceAccessActionsComponent, ReturnedSourcesComponent, StructureInventoryActionsComponent, StructureInventoryAuditComponent, PhysicalCsvImportComponent, PhysicalObjectDetailComponent, RouterLink, DacaGlossaryTermComponent],
+  imports: [InfoNoticeComponent,SourceCardActionsComponent, SourceAccessActionsComponent, ReturnedSourcesComponent, StructureInventoryActionsComponent, StructureInventoryAuditComponent, PhysicalCsvImportComponent, PhysicalObjectDetailComponent, RouterLink, DacaGlossaryTermComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (!selectedSourceId()) {
       <section class="daca-page-heading source-page-heading"><div><p class="daca-eyebrow">{{ i18n.t('sourcesEyebrow') }}</p><h1>{{ i18n.t('visibleSources') }}</h1><p>{{ i18n.t('sourcesIntro') }}</p></div></section>
-      @if (logicalModelId()) { <p class="daca-alert is-info" role="status">Wählen Sie eine weitere Datenquelle für das bestehende logische Modell.</p> }
-      <p class="source-notice"><strong>{{ i18n.t('notIngested') }}</strong> {{ i18n.t('structureNotice') }}</p>
-      <p class="source-notice">{{ i18n.t('moreSources') }} <a routerLink="/search" [queryParams]="sourceQuery().trim() ? { q: sourceQuery().trim() } : {}">{{ i18n.t('expertSearch') }}</a>.</p>
+      @if (logicalModelId()) { <daca-info-notice class="source-notice">Wählen Sie eine weitere Datenquelle für das bestehende logische Modell.</daca-info-notice> }
+      <daca-info-notice class="source-notice"><strong>{{ i18n.t('notIngested') }}</strong> {{ i18n.t('structureNotice') }}</daca-info-notice>
+      <daca-info-notice class="source-notice">{{ i18n.t('moreSources') }} <a routerLink="/search" [queryParams]="sourceQuery().trim() ? { q: sourceQuery().trim() } : {}">{{ i18n.t('expertSearch') }}</a> {{ i18n.t('moreSourcesDomains') }} <a routerLink="/domains">{{ i18n.t('moreSourcesDomainLink') }}</a>{{ i18n.t('moreSourcesOwners') }}</daca-info-notice>
       @if (notice()) { <p class="daca-alert is-success" role="status">{{ notice() }}</p> }
       @if (error()) { <p class="daca-alert is-error" role="alert">{{ error() }} <button class="daca-button is-secondary" type="button" (click)="load()">{{ i18n.t('retry') }}</button></p> }
       <div class="source-import-action"><daca-physical-csv-import /><daca-structure-inventory-audit /></div>
@@ -45,10 +47,10 @@ interface PhysicalSchemaGroup { name: string; tables: readonly PhysicalTable[]; 
           @for (source of filteredSources(); track source.id) {
             <article class="source-card" [attr.data-source-id]="source.id" [class.is-archived]="source.lifecycle === 'archived'">
               <header><img [src]="providerIcon(source)" alt=""><span class="connection-state"><i></i>{{ source.lifecycle === 'archived' ? i18n.t('archivedInventory') : source.connectorType === 'csv' ? i18n.t('metadataImported') : i18n.t('connected') }}</span></header>
-              <h3>{{ source.name }}</h3><p>{{ source.connectorType === 'csv' ? sourceDescription(source) : source.description || sourceDescription(source) }}</p><p class="source-type-label">{{ source.connectorType === 'csv' ? i18n.t('structureInventory') : i18n.t('boundSource') }}</p>
+              <h3>{{ source.name }}</h3><p>{{ source.connectorType === 'csv' ? sourceDescription(source) : source.description || sourceDescription(source) }}</p><p class="source-type-label">{{ i18n.t(physicalCategoryKey(source.connectorType)) }}</p>
               <dl><div><dt>{{ i18n.t('responsibility') }}</dt><dd>{{ source.ownerName }}</dd></div><div><dt>{{ i18n.t('catalogPath') }}</dt><dd><code>{{ sourcePath(source) }}</code></dd></div><div><dt>{{ i18n.t('dataStatus') }}</dt><dd>{{ source.lifecycle === 'archived' ? i18n.t('archivedInventory') : source.latestSnapshotId ? i18n.t(source.connectorType === 'csv' ? 'metadataImported' : 'structureImported') : i18n.t('notIngested') }}</dd></div></dl>
               <div class="capabilities"><span>{{ i18n.t('metadataSearch') }}</span><span>{{ i18n.t('databases') }}</span><span>{{ i18n.t('schemas') }}</span><span>{{ i18n.t('tables') }}</span></div>
-              <footer>@if(source.connectorType === 'csv'){<a class="daca-button is-secondary" [routerLink]="['/physical-models', source.id]" [queryParams]="logicalModelId() ? {logicalModelId: logicalModelId()} : {}">{{ i18n.t('openInventory') }}</a>}@else{<daca-source-card-actions [source]="source" [logicalModelId]="logicalModelId()" [importAllowed]="canImport(source)" [importing]="importingSourceId() === source.id" (importRequested)="importSource(source)" (returned)="accessReturned()" />}</footer>@if(source.connectorType === 'csv'){<daca-structure-inventory-actions [source]="source" (changed)="inventoryChanged($event)" />}
+              <footer><daca-source-card-actions [source]="source" [logicalModelId]="logicalModelId()" [importAllowed]="canImport(source)" [importing]="importingSourceId() === source.id" (importRequested)="importSource(source)" (returned)="accessReturned()" (inventoryChanged)="inventoryChanged($event)" /></footer>
             </article>
           } @empty { @if (!loading()) { <p>{{ i18n.t('noSources') }}</p> } }
         </div>
@@ -56,17 +58,17 @@ interface PhysicalSchemaGroup { name: string; tables: readonly PhysicalTable[]; 
       <daca-returned-sources [refresh]="accessRefresh()" />
     } @else if (selectedSource(); as source) {
       <nav class="model-breadcrumb" aria-label="Brotkrümelnavigation"><a routerLink="/physical-models" [queryParams]="logicalModelId() ? { logicalModelId: logicalModelId() } : {}">Sichtbare Datenquellen</a><span aria-hidden="true">›</span><strong>{{ source.name }}</strong></nav>
-      <section class="daca-page-heading detail-heading"><div><p class="daca-eyebrow">{{ source.connectorType === 'csv' ? i18n.t('structureInventory') : i18n.t('boundSource') }}</p><h1>{{ source.name }}</h1><p>Strukturmetadaten durchsuchen – Datenzeilen werden in dieser Ansicht nie geladen.</p></div><a class="back-link" routerLink="/physical-models" [queryParams]="logicalModelId() ? { logicalModelId: logicalModelId() } : {}">← Sichtbare Datenquellen</a></section>
+      <section class="daca-page-heading detail-heading"><div><p class="daca-eyebrow">{{ i18n.t(physicalCategoryKey(source.connectorType)) }}</p><h1>{{ source.name }}</h1><p>Strukturmetadaten durchsuchen – Datenzeilen werden in dieser Ansicht nie geladen.</p></div><a class="back-link" routerLink="/physical-models" [queryParams]="logicalModelId() ? { logicalModelId: logicalModelId() } : {}">← Sichtbare Datenquellen</a></section>
       @if (notice()) { <p class="daca-alert is-success" role="status">{{ notice() }}</p> }
       @if (error()) { <p class="daca-alert is-error" role="alert">{{ error() }}</p> }
       <daca-source-access-actions [source]="source" (returned)="accessReturned()" />
       <section class="connection-summary"><img [src]="providerIcon(source)" alt=""><div><span>{{ source.connectorType === 'csv' ? i18n.t('structureInventory') : i18n.t('connected') }}</span><strong>{{ source.name }}</strong><code>{{ sourcePath(source) }}</code></div><b><i></i>{{ source.lifecycle === 'archived' ? i18n.t('archivedInventory') : source.connectorType === 'csv' ? i18n.t('metadataImported') : 'Online' }} · {{ activeSnapshot() ? 'Struktur importiert' : 'Nicht ingestiert' }}</b></section>
       @if(source.connectorType === 'csv'){
         <div class="inventory-detail-actions"><daca-structure-inventory-actions [source]="source" (changed)="inventoryChanged($event)" /><daca-structure-inventory-audit /></div>
-        @if(source.lifecycle === 'archived'){<p class="daca-alert is-info" role="status">Dieses Strukturinventar ist archiviert. Seine Modelle und bestehenden Verknüpfungen bleiben lesbar.</p>}
+        @if(source.lifecycle === 'archived'){<daca-info-notice class="source-notice">Dieses Strukturinventar ist archiviert. Seine Modelle und bestehenden Verknüpfungen bleiben lesbar.</daca-info-notice>}
       }
-      @if (sourceSnapshotLoading()) { <div class="no-snapshot" aria-live="polite">Snapshot-Metadaten werden geladen …</div> } @else if (activeSnapshot(); as snapshot) {
-        @if (snapshot.id !== latestSnapshotFor(source.id)?.id) { <p class="history-banner">Historischer Snapshot {{ snapshot.revision }}. Ableitungen bleiben exakt auf diese Version gepinnt. <button type="button" (click)="showLatest(source.id)">Zum neuesten Snapshot</button></p> }
+      @if (sourceSnapshotLoading()) { <div class="no-snapshot" aria-live="polite">Metadaten der physischen Repräsentation/Deklaration werden geladen …</div> } @else if (activeSnapshot(); as snapshot) {
+        @if (snapshot.id !== latestSnapshotFor(source.id)?.id) { <p class="history-banner">{{ physicalCategoryLabel(snapshot.sourceType) }} · historische Revision {{ snapshot.revision }}. Ableitungen bleiben exakt auf diese Version gepinnt. <button type="button" (click)="showLatest(source.id)">Zur neuesten Revision</button></p> }
         <div class="explorer-layout">
           <nav class="object-tree" aria-label="Datenbank-, Schema- und Objekthierarchie">
             <header><div><p class="daca-eyebrow">Read-only</p><h2>Struktur</h2></div><strong>{{ snapshot.tables.length }} Elemente</strong></header>
@@ -89,8 +91,8 @@ interface PhysicalSchemaGroup { name: string; tables: readonly PhysicalTable[]; 
           @if (selectedTable(); as table) {<daca-physical-object-detail [table]="table" [snapshot]="snapshot" [source]="source">@if(logicalModelId() && source.lifecycle !== 'archived'){<button class="daca-button" type="button" (click)="deriveOrAttach(snapshot, table)">Mit Modell verbinden</button>}</daca-physical-object-detail>} @else {<article class="object-detail detail-empty"><h2>Objekt auswählen</h2><p>Wählen Sie links eine Tabelle, View oder ein Parquet-Objekt.</p></article>}
 
         </div>
-        <details class="snapshot-history"><summary>Snapshot-Historie ({{ sourceHistory().length }})</summary><div>@for (historic of sourceHistory(); track historic.id) { <article><span><strong>Snapshot {{ historic.revision }}</strong><small>{{ dateLabel(historic.importedAt) }} · {{ historic.driftCount ? historic.driftCount + ' Änderungen' : 'kein Drift' }}</small></span><span><button type="button" (click)="showSnapshot(historic.id)">Snapshot ansehen</button><a [routerLink]="['/mappings']" [queryParams]="{ physicalSnapshotId: historic.id }">Mappings</a></span></article> }</div></details>
-      } @else { <div class="no-snapshot"><h2>Noch kein Snapshot</h2><p>Importieren Sie die Strukturmetadaten, bevor Sie Tabellen durchsuchen.</p><button class="daca-button" type="button" [disabled]="!identity.canEditModels()" (click)="importSource(source)">Metadaten importieren</button></div> }
+        <details class="snapshot-history"><summary>Revisionshistorie ({{ sourceHistory().length }})</summary><div>@for (historic of sourceHistory(); track historic.id) { <article><span><strong>{{ physicalCategoryLabel(historic.sourceType) }} · Revision {{ historic.revision }}</strong><small>{{ dateLabel(historic.importedAt) }} · {{ historic.driftCount ? historic.driftCount + ' Änderungen' : 'kein Drift' }}</small></span><span><button type="button" (click)="showSnapshot(historic.id)">Revision ansehen</button><a [routerLink]="['/mappings']" [queryParams]="{ physicalSnapshotId: historic.id }">Mappings</a></span></article> }</div></details>
+      } @else { <div class="no-snapshot"><h2>Noch keine physische Repräsentation/Deklaration</h2><p>Importieren Sie die Strukturmetadaten, bevor Sie Tabellen durchsuchen.</p><button class="daca-button" type="button" [disabled]="!identity.canEditModels()" (click)="importSource(source)">Metadaten importieren</button></div> }
     }
   `,
   styles: [`
@@ -120,6 +122,8 @@ interface PhysicalSchemaGroup { name: string; tables: readonly PhysicalTable[]; 
   `],
 })
 export class PhysicalAssetsComponent {
+  readonly physicalCategoryLabel = physicalCategoryLabel;
+  readonly physicalCategoryKey=physicalCategoryKey;
   readonly identity = inject(DemoIdentityService); readonly i18n = inject(CatalogI18nService); private readonly api = inject(DataModelsApiService); private readonly route = inject(ActivatedRoute); private readonly router = inject(Router);
   readonly sources = signal<readonly PhysicalSource[]>([]); readonly snapshots = signal<readonly PhysicalSnapshot[]>([]); readonly snapshotSummaries = signal<readonly PhysicalSnapshot[]>([]); readonly mappings = signal<readonly AssetMapping[]>([]); readonly sourceQuery = signal(''); readonly sourceType = signal(''); readonly sourceOwner = signal(''); readonly selectedSourceId = signal<string | null>(null); readonly selectedSnapshotId = signal<string | null>(null); readonly selectedTableId = signal<string | null>(null); readonly menuTableId = signal<string | null>(null); readonly linkedModelTooltipTableId = signal<string | null>(null); readonly derivingTableId = signal<string | null>(null); readonly loading = signal(true); readonly sourceSnapshotLoading = signal(false); readonly error = signal<string | null>(null); readonly notice = signal<string | null>(null); readonly importingSourceId = signal<string | null>(null); readonly logicalModelId = signal<string | null>(null);
   private sourceLoadGeneration = 0;
@@ -170,7 +174,7 @@ export class PhysicalAssetsComponent {
   showLatest(sourceId: string): void { const snapshot = this.latestSnapshotFor(sourceId); if (snapshot) this.showSnapshot(snapshot.id); }
   showSnapshot(snapshotId: string): void { const loaded = this.snapshots().find((item) => item.id === snapshotId); if (loaded) { this.selectedSnapshotId.set(snapshotId); this.selectedTableId.set(null); this.loadMappings([loaded]); return; } this.loadSnapshot(snapshotId); }
   private loadSnapshot(snapshotId: string): void { const generation=this.sourceLoadGeneration; this.sourceSnapshotLoading.set(true); this.api.loadPhysicalSnapshot(snapshotId).pipe(finalize(() => this.sourceSnapshotLoading.set(false))).subscribe({ next: (snapshot) => { if(generation!==this.sourceLoadGeneration)return; this.snapshots.set([snapshot]); this.loadMappings([snapshot]); this.selectedSnapshotId.set(snapshot.id); this.selectedTableId.set(this.route.snapshot.queryParamMap.get('snapshotId') === snapshot.id ? this.route.snapshot.queryParamMap.get('tableId') : null); }, error: (error: Error) => this.error.set(error.message) }); }
-  importSource(source: PhysicalSource): void { this.importingSourceId.set(source.id); this.error.set(null); const variant = source.latestSnapshotId ? 'drift' : 'baseline'; this.api.importPhysicalSource(source.id, source.revision, source.connectorType === 'fixture' ? variant : undefined).pipe(finalize(() => this.importingSourceId.set(null))).subscribe({ next: ({ body }) => { this.notice.set(`Snapshot ${body.revision} wurde importiert. ${body.driftCount ? 'Drift wurde erkannt.' : 'Keine Strukturänderung erkannt.'}`); this.selectedSourceId.set(source.id); this.selectedSnapshotId.set(body.id); this.load(); }, error: (error: Error) => this.error.set(error.message) }); }
+  importSource(source: PhysicalSource): void { this.importingSourceId.set(source.id); this.error.set(null); const variant = source.latestSnapshotId ? 'drift' : 'baseline'; this.api.importPhysicalSource(source.id, source.revision, source.connectorType === 'fixture' ? variant : undefined).pipe(finalize(() => this.importingSourceId.set(null))).subscribe({ next: ({ body }) => { this.notice.set(`${physicalCategoryLabel(body.sourceType)} (Revision ${body.revision}) wurde importiert. ${body.driftCount ? 'Drift wurde erkannt.' : 'Keine Strukturänderung erkannt.'}`); this.selectedSourceId.set(source.id); this.selectedSnapshotId.set(body.id); this.load(); }, error: (error: Error) => this.error.set(error.message) }); }
   deriveOrAttach(snapshot: PhysicalSnapshot, table: PhysicalTable): void { this.menuTableId.set(null); if (this.logicalModelId()) { void this.router.navigate(['/models', this.logicalModelId(), 'mappings'], { queryParams: { physicalSnapshotId: snapshot.id, physicalTableId: table.id, suggest: '1' } }); return; } this.derivingTableId.set(table.id); this.error.set(null); this.api.quickDeriveLogicalModel(table.id).pipe(finalize(() => this.derivingTableId.set(null))).subscribe({ next: ({ body }) => void this.router.navigate(['/models', body.id, 'mappings'], { queryParams: { physicalSnapshotId: snapshot.id, physicalTableId: table.id, editModel: '1' } }), error: (error: Error) => this.error.set(error.message || 'Das logische Modell konnte nicht abgeleitet werden.') }); }
   linkedModelMappings(snapshot: PhysicalSnapshot, table: PhysicalTable): readonly AssetMapping[] { const columnIds = new Set(table.columns.map((column) => column.id)); return this.mappings().filter((mapping) => mapping.physicalSnapshotId === snapshot.id && mapping.physicalColumnIds.some((columnId) => columnIds.has(columnId))); }
   referencedLogicalModel(snapshot: PhysicalSnapshot, table: PhysicalTable): AssetMapping | null { return [...this.linkedModelMappings(snapshot, table)].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] ?? null; }

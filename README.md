@@ -1,15 +1,96 @@
 # BIT DaCa
 
+Release **0.3.2** brings personal domain exploration with related object layers, saved and
+shared search Views, physical-first model derivation and consistent physical-instance menus,
+Lineage access logs, ALDS domain proposals and synthetic ROHS CPS examples. The release popup
+summarizes these changes; the searchable feature history preserves 0.2.1 and older notes.
+
+The domain network offers a private, PostgreSQL-backed canvas view for every active user:
+add existing domains across departments, move/hide cards, and switch related products (default),
+terms, logical models and physical representations/declarations. Domain cards show their Owner;
+foreign-department cards show department/office codes in gray and remain read-only. Shared
+typed relationships still require source-domain ownership or deputy responsibility.
+The synthetic [ROHS CPS scenario](docs/domains-and-glossary.md#rohs-cps-poc) includes selectable
+Marcello Hebeisa and Matteo Duca, scoped to EFD–BIT–PS–CPS, with a linked catalog of telemetry
+and analytics metadata. No production system connection or data access is provisioned.
+Local demo identity checks finish before the route transaction begins. Request sessions borrow
+a database connection only on their first query, retaining trusted transaction-local audit actors
+without holding pool slots while waiting for a handler thread.
+
+The shared small loading indicator draws its ring and arc as a 20 px SVG, keeping the spinner
+visible without border styling and using the current theme color. Domain register/network
+loading is browser-checked for actual visible geometry and motion, including reduced motion.
+
+Physical representation/declaration menus can remove a specific current domain membership.
+The version-checked action updates canvas and bindings immediately after confirmation by the API,
+preserving other domains, mappings and the logical model. It is also available in a physical-only
+Mapping workspace. The separator immediately after the preserved-bindings hint is removed.
+
+Lineage edges offer owner-only **Zugriffsprotokolle** in a native new tab. The page separates
+actual person/machine read receipts from grants, with outcome/period/type filters and pagination.
+Both capability flags and direct API reads resolve the current resource Data Owner; other users,
+including deputies, cannot read the logs. The configured sample HTTP PEP reports completed reads
+and denials through a trusted internal endpoint. External/direct PostgreSQL execution needs its
+own reporter; missing receipts never prove non-use. See [lineage details](docs/lineage-explorer.md).
+
+Domain canvas menus group object actions and named semantic searches before general model searches;
+the blank canvas starts with **Domäne erstellen …**. New domains appear as personal proposal cards
+until the proposed owner's office ALDS or mandated deputy approves, excluding the requester.
+Direct active creation is blocked. Domain/register/form loading uses the shared small spinner.
+
+Blue informational notices on the visible-sources page have a small close button at the right.
+Dismissal is local to the mounted page and resets on reload; it is not saved as a preference.
+The discovery hint links to expert search and business domains and suggests contacting domain owners.
+
+Expert search offers **personal Views**: save the current search and filters, edit or delete
+private presets, and share a frozen filter copy with selected users. Recipients receive an
+in-app task/notification and can adopt their own independent View. Later source changes do not
+synchronize. See [personal search Views](docs/expert-search.md#personal-search-views).
+
+The [lineage explorer](docs/lineage-explorer.md) uses compact cards with 2 px corners and a subtle
+hover lift, pulsing light bands along the flow, wrapped titles, semantic type colors,
+spaced relationship labels and directional ice-blue impulses. Shared glossary tooltips explain
+the legend; interactive object summaries expose owner, exact URN, optional description and a
+new-tab detail link. Referenced assets without their own catalog record remain clearly labelled.
+
+Physical-instance UI terminology consistently uses **Physische Repräsentation** for connected
+structures and **Physische Deklaration** for CSV inventories. Loading, mapping dialogs, bindings,
+source history and derivation use **Revision** for version numbers; see the
+[terminology reference](docs/logical-models-i14y-mapping.md#ui-terminology).
+
+The Mapping canvas labels logical models, connected **physical representations**, and CSV
+**physical declarations** explicitly. Bindings, canvas headers, physical search and field choices
+use each object's own system/schema/name (for example `SAP.CSV.VIBDBU`), even when an inventory
+contains multiple systems. Canvas background actions offer model searches and creation with matching outline icons;
+term/domain searches are reserved for actual model cards. Canvas and binding cards share one grouped actions menu, including
+source navigation in a new tab and semantic searches prefilled with the object name in new tabs. CSV source
+cards use the same three-dot pattern for opening, archiving/restoring and confirmed deletion.
+Physical menus start with source navigation followed immediately by drawing removal and its
+non-destructive hint. Domain actions, named semantic searches and general model searches follow
+in separate groups. General logical/physical model search results open in new tabs.
+Mapping status legends and counters explain valid, review and broken states through the shared
+hover/focus tooltips, with faint wavy underlines.
+Selecting a logical counterpart for Mapping remains a dedicated action in the current workspace.
+The common object-search dialog shows qualified physical names and readable source/type labels;
+its keyboard-accessible origin tooltip exposes owner, import time, revision and exact source/object IDs.
+
 Release **0.2.1** brings context/focus expert search with previews, direct Mapping entry and
 private recent work, synchronized physical bindings, own-office semantic filters and footer
 version information. The searchable release history retains the 0.2.0 notes.
 Physical metadata imports have a bounded 60-second request budget so a longer drift check
 does not prematurely report an unavailable API after eight seconds.
 
-Domains and terminology offer **Nur amtseigene anzeigen** in card and network views.
+Domains and terminology enable **Nur amtseigene anzeigen** by default in card and network views.
+The checkbox sits beside the card search, stacking below on mobile. Explicit All choices remain
+in the URL as `ownOffice=0` across views and semantic tabs.
 The filter uses the current user's office and its subordinate units with trusted object
 responsibilities, independently of a term's domain classification. Tooltips explain the scope;
 filtering preserves shared graph data and local drafts. See [office filtering](docs/domains-and-glossary.md#own-office-display-filter).
+
+The data-model overview defaults its department filter to the signed-in user's department.
+Users can explicitly choose All or another department; Reset filters restores their own department.
+Profile loading and identity changes update this default without overwriting deliberate choices
+on model refreshes. A known user department stays selectable even if it has no models.
 
 The logical-to-physical workspace tab is **Mapping** in every application language. Mapping
 actions, headings and status messages use the same term; plural references use **Mappings**.
@@ -20,8 +101,10 @@ and icons. Existing catalog tooltips explain each search context on hover and ke
 
 **Mapping-Arbeitsplatz** now opens a selection page instead of an arbitrary first model.
 Selecting a logical model opens its mapping immediately. Selecting a physical object opens
-that representation directly in the canvas, with its logical counterpart selectable there.
-No additional **Mapping öffnen** confirmation is needed. Small loading spinners accompany
+that representation directly in the canvas, with an existing logical counterpart selectable there
+or a new logical model derivable through the full standard editor. The latter is only persisted
+after completing and saving model metadata and field decisions; its physical links remain intact.
+No additional **Mapping öffnen** confirmation is needed. The model overview also shows the shared small spinner while loading. Small loading spinners accompany
 independent model, physical-detail and recent-work reads. Five
 **Letzte Mapping-Arbeiten** let the current user resume model, physical object and view;
 PostgreSQL keeps a bounded private history across sessions, separate from unsaved drafts.
@@ -40,7 +123,9 @@ refreshes every five seconds while visible and on focus; local edits pause repla
 displayed state so unsaved work survives.
 
 Catalog and Control Plane show their version, Co-Design credit (V, armasuisse, ASTRA, ESTV and BIT)
-and **Neu in dieser Version** in the page footer. The version area scrolls with the page and
+and **Neu in dieser Version** in the page footer. Co-designers are mentioned only once, in the
+version area; the translated catalog footer description contains no duplicate credit.
+The version area scrolls with the page and
 stacks below the footer text on small screens. The redundant current-version status is omitted; available PWA updates still
 offer their notification and confirmation dialog.
 
@@ -115,7 +200,8 @@ change does not introduce an appointment UI.
 In term and domain networks, hold a card for 180 ms, then drag the red point onto free canvas
 space to **create** or **search** in a modal. Quick drags still reposition cards. The gesture's
 search inserts a reference/visible card and prepares a local relationship; general context search
-continues to open objects. **Vom Canvas entfernen** only changes the shared layout after Save.
+continues to open objects. **Vom Canvas entfernen** changes only presentation after Save:
+the personal domain-network view, or the existing shared term-network layout.
 Assigned object owners/deputies can confirm **Im Katalog löschen**, which immediately retires the object while
 retaining its history/references. Right-click a connection to change its type or remove it locally.
 Apply migration `0041_semantic_graph_visibility`. New term proposals retain domain-owner approval.
@@ -232,6 +318,9 @@ original six feature entries in the searchable archive. Migration 0036 adds inve
 ## Physical models from CSV
 
 In **Datenmodelle** or **Sichtbare Datenquellen**, choose **Strukturinventar aus CSV laden**.
+The dialog offers a full-width CSV drop area and the standard **Datei auswählen** / **Datei wechseln**
+button. Name and responsible organization use compact, aligned standard fields; detailed format
+help is collapsed initially. Intro and preview identify physical models as **Physische Repräsentation**.
 On the source page, this action sits below the information notices, immediately before the source register.
 Select a semicolon-delimited structure inventory (UTF-8 or Windows-1252, up to 2 MiB), inspect
 the searchable table/field preview and choose your responsible modeling organization. **Importieren**
@@ -746,7 +835,7 @@ The root [`VERSION`](VERSION) file is the sole DaCa release-version source. The 
 keeps the first-party Node and Python package metadata and lockfiles, service runtime constants,
 the shared UI version constant, focused OpenAPI documents, and OpenShift image pins synchronized.
 Do not edit those derived release surfaces individually.
-Release 0.2.1 lists the search, Mapping, office filter and footer improvements in the catalog feature
+Release 0.3.2 lists domain exploration, Views, Mapping, Lineage and ROHS CPS improvements in the catalog feature
 history; previous release notes remain searchable there. The control plane shares the version
 without presenting catalog-only changes as its own features.
 
@@ -760,7 +849,7 @@ Prepare a release with a strict `X.Y.Z` version. The command first refuses an in
 repository, then updates all managed surfaces and validates the result:
 
 ```powershell
-npm run version:bump -- 0.2.1
+npm run version:bump -- 0.3.2
 ```
 
 The footer version information in both web applications opens a
@@ -878,7 +967,7 @@ the left uses the logical field’s left port and the physical column’s right 
 left/right representations use both logical ports. Drag logical and physical card headers
 to arrange the canvas, or use arrow keys on a focused header (Shift for larger steps). Connections
 follow their field ports. Clicking or opening the context menu on a physical card offers
-**Darstellung der physischen Repräsentation entfernen**; this hides its drawing and connections
+**Darstellung dieser Physischen Repräsentation/Deklaration löschen**; this hides its drawing and connections
 without deleting bindings or mappings or creating an unsaved draft. Selecting it in the
 representation list restores the card. Layout and visibility survive Graph/Table/Drift switches
 within the workspace; they reset when the workspace is reloaded. New representations are added

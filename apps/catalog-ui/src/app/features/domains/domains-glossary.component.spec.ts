@@ -128,14 +128,17 @@ async function render() {
 describe('DomainsGlossaryComponent term lifecycle proposals', () => {
   afterEach(() => TestBed.resetTestingModule());
 
-  it('disables activation without an office and never falls back to all offices for an active URL filter',async()=>{
+  it('keeps the default scope empty without an office and allows explicitly clearing it',async()=>{
     const {fixture, api, identity}=await render(),component=fixture.componentInstance;
+    api.loadSemanticGraph.mockClear();
     identity.user.update(user=>({...user,office:''}));fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.office-filter input').disabled).toBe(true);
-    component.ownOfficeOnly.set(true);fixture.detectChanges();
+    expect(component.ownOfficeOnly()).toBe(true);
+    const checkbox=fixture.nativeElement.querySelector('.office-filter input') as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);expect(checkbox.disabled).toBe(false);
     expect(component.filteredDomains()).toEqual([]);expect(component.filteredTerms()).toEqual([]);
     expect(api.loadSemanticGraph).not.toHaveBeenCalled();
-    expect(fixture.nativeElement.querySelector('.office-filter input').disabled).toBe(false);
+    checkbox.click();fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();
+    expect(component.ownOfficeOnly()).toBe(false);expect(checkbox.disabled).toBe(true);
   });
 
   it('filters by trusted independent object scope and combines it with text search', async () => {
@@ -143,7 +146,8 @@ describe('DomainsGlossaryComponent term lifecycle proposals', () => {
     // The scoped term belongs to a foreign domain: classification is not office ownership.
     component.terms.set([{...TERM, domains: [MOBILITY]}, {...TERM, id: 'foreign', preferredLabel: 'Fremd', domains: [DEFENCE]}]);
     const checkbox = fixture.nativeElement.querySelector('.office-filter input') as HTMLInputElement;
-    checkbox.click(); fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
+    expect(checkbox.closest('.semantic-filter-row')?.querySelector('.semantic-search')).not.toBeNull();
+    expect(checkbox.checked).toBe(true);
     expect(component.ownOfficeOnly()).toBe(true);
     expect(api.loadSemanticGraph).toHaveBeenCalledWith('organizations', 'bazg');
     expect(component.filteredDomains().map(item => item.id)).toEqual([DEFENCE.id]);
@@ -154,13 +158,18 @@ describe('DomainsGlossaryComponent term lifecycle proposals', () => {
     checkbox.click(); fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
     expect(component.filteredDomains()).toHaveLength(2);
     expect(component.filteredTerms()[0].id).toBe('foreign');
+    expect((fixture.nativeElement.querySelector('a[href^="/domains/terminology"]') as HTMLAnchorElement).search).toContain('ownOffice=0');
+    component.tab.set('terms');fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('.office-filter input')).toHaveLength(1);
+    expect(fixture.nativeElement.querySelector('.office-filter input').checked).toBe(false);
+    expect(fixture.nativeElement.querySelector('.semantic-filter-row .semantic-search input')).not.toBeNull();
   });
 
   it('shows a spinner, retains an empty scope on failure and cancels reads across identities', async () => {
     const {fixture, api, identity} = await render(), component = fixture.componentInstance;
     const pending = new Subject<SemanticGraphState>();
     api.loadSemanticGraph.mockReturnValueOnce(pending);
-    component.ownOfficeOnly.set(true); fixture.detectChanges();
+    component.loadOfficeScope(); fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.office-filter .small-spinner')).not.toBeNull();
     expect(component.filteredDomains()).toEqual([]);
     api.loadSemanticGraph.mockReturnValueOnce(throwError(() => new Error('offline')));
@@ -240,8 +249,8 @@ describe('DomainsGlossaryComponent term lifecycle proposals', () => {
 
     expect(navigation?.getAttribute('role')).toBeNull();
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
-      '/domains',
-      '/domains/terminology',
+      '/domains?ownOffice=1',
+      '/domains/terminology?ownOffice=1',
       '/domains/concepts',
       '/domains/themes',
       '/domains/governance',
@@ -279,6 +288,7 @@ describe('DomainsGlossaryComponent term lifecycle proposals', () => {
   it('finds terms by labels and their own owners, and domains by owners or deputies', async () => {
     const { fixture } = await render();
     const component = fixture.componentInstance;
+    component.ownOfficeOnly.set(false);
     component.query.set('  sIbILLA  ');
     expect(component.filteredDomains()).toEqual([DEFENCE]);
     component.query.set('Sandro Wenger');

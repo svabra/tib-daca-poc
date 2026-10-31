@@ -1419,6 +1419,9 @@ class WorkflowTask(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    search_view_share_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("search_view_shares.id", ondelete="CASCADE"), index=True
+    )
     task_type: Mapped[str] = mapped_column(String(64), nullable=False)
     task_kind: Mapped[str] = mapped_column(String(32), nullable=False, default="action")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")
@@ -2903,6 +2906,58 @@ class AssetMappingLogicalField(Base):
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     role: Mapped[str] = mapped_column(String(50), nullable=False, default="source")
+
+
+class SearchView(Base):
+    """A private filter preset; it confers no catalog or data access."""
+
+    __tablename__ = "search_views"
+    __table_args__ = (
+        CheckConstraint("revision >= 1", name="ck_search_view_revision"),
+        Index("ix_search_view_owner", "owner_user_id", "updated_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    owner_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    configuration: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class SearchViewShare(Base):
+    """Immutable sent content plus recipient-owned acceptance/dismissal state."""
+
+    __tablename__ = "search_view_shares"
+    __table_args__ = (
+        UniqueConstraint("source_view_id", "source_revision", "recipient_user_id", name="uq_search_view_share_revision"),
+        CheckConstraint("sender_user_id <> recipient_user_id", name="ck_search_view_share_other_user"),
+        CheckConstraint("source_revision >= 1", name="ck_search_view_share_revision"),
+        CheckConstraint("accepted_at IS NULL OR dismissed_at IS NULL", name="ck_search_view_share_decision"),
+        Index("ix_search_view_share_recipient", "recipient_user_id", "sent_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    sender_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id", ondelete="CASCADE"), nullable=False)
+    recipient_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id", ondelete="CASCADE"), nullable=False)
+    source_view_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("search_views.id", ondelete="SET NULL"))
+    source_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    message: Mapped[str] = mapped_column(String(1000), nullable=False, default="")
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    accepted_view_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("search_views.id", ondelete="SET NULL"))
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DomainNetworkView(Base):
+    """Private domain-network presentation; never grants catalog editing or data access."""
+    __tablename__ = "domain_network_views"
+    __table_args__ = (CheckConstraint("revision >= 1", name="ck_domain_network_view_revision"),)
+    user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id", ondelete="CASCADE"), primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    configuration: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
 class PhysicalSourceAccessState(Base):

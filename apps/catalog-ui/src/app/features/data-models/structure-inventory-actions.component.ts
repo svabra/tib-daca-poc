@@ -10,13 +10,13 @@ export type InventoryAction = 'archive' | 'restore' | 'delete';
   selector: 'daca-structure-inventory-actions', standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (source().inventoryManageable) {
+    @if (showActions() && source().inventoryManageable) {
       <div class="actions"><button type="button" (click)="open(source().lifecycle === 'archived' ? 'restore' : 'archive', $event)">{{ source().lifecycle === 'archived' ? 'Wiederherstellen' : 'Archivieren' }}</button><button type="button" class="danger" (click)="open('delete', $event)">Löschen</button></div>
     }
     <dialog #dialog [attr.aria-labelledby]="'inventory-action-title-' + source().id" (cancel)="cancel($event)" (close)="restoreFocus()">
       <p class="daca-eyebrow">Strukturinventar</p><h2 [id]="'inventory-action-title-' + source().id">{{ label() }}</h2><p><strong>{{ source().name }}</strong></p>
       @switch(action()) {
-        @case('archive') {<p>Das Inventar wird aus der aktiven Auswahl genommen. Seine Modelle, Snapshots und bestehenden Verknüpfungen bleiben erhalten. Über „Archivierte Inventare anzeigen“ kann es später wiederhergestellt werden.</p>}
+        @case('archive') {<p>Das Inventar wird aus der aktiven Auswahl genommen. Seine physischen Deklarationen, Revisionen und bestehenden Verknüpfungen bleiben erhalten. Über „Archivierte Inventare anzeigen“ kann es später wiederhergestellt werden.</p>}
         @case('restore') {<p>Das Inventar und seine Modelle werden wieder in der aktiven Auswahl angezeigt.</p>}
         @case('delete') {<p>Das Inventar und seine importierten Strukturen werden endgültig gelöscht. Bestehende Modellverknüpfungen oder historische Mappings verhindern das Löschen; in diesem Fall ist Archivieren möglich.</p>}
       }
@@ -29,6 +29,7 @@ export type InventoryAction = 'archive' | 'restore' | 'delete';
 })
 export class StructureInventoryActionsComponent {
   readonly source = input.required<PhysicalSource>();
+  readonly showActions = input(true);
   readonly changed = output<{action: InventoryAction; name: string}>();
   readonly action = signal<InventoryAction>('archive');
   readonly busy = signal(false);
@@ -41,8 +42,11 @@ export class StructureInventoryActionsComponent {
   private trigger: HTMLElement | null = null;
   label(): string { return this.action() === 'archive' ? 'Inventar archivieren' : this.action() === 'restore' ? 'Inventar wiederherstellen' : 'Inventar endgültig löschen'; }
   open(action: InventoryAction, event: Event): void {
-    if (!this.source().inventoryManageable) return;
-    this.trigger = event.currentTarget as HTMLElement; this.action.set(action); this.error.set('');
+    this.openFrom(action, event.currentTarget as HTMLElement);
+  }
+  openFrom(action: InventoryAction, trigger: HTMLElement): void {
+    if (this.busy() || !this.source().inventoryManageable) return;
+    this.trigger = trigger; this.action.set(action); this.error.set('');
     this.dialog()?.nativeElement.showModal();
   }
   cancel(event?: Event): void { if(this.busy()){event?.preventDefault();return;} this.dialog()?.nativeElement.close(); }

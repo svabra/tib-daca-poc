@@ -2,19 +2,78 @@ import { UserPreferencesService } from '../../core/user-preferences.service';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
-import { DomainSummary, SemanticGraphState } from '../../core/catalog.models';
+import { DomainChangeRequest, DomainSummary, DomainNetworkObject, DomainNetworkView, SemanticGraphState } from '../../core/catalog.models';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 import { DomainNetworkComponent } from './domain-network.component';
 
 const DOMAINS=['a','b','c'].map(id=>({id,preferredLabel:'Domäne '+id,definition:'Fachlicher Bereich '+id,status:'active',updatedAt:'2026-10-28T00:00:00Z'} as DomainSummary));
 describe('DomainNetworkComponent',()=>{
-  let graph:SemanticGraphState;
-  const api={loadDomainChangeRequests:()=>of([]),loadDomains:()=>of(DOMAINS),loadSemanticGraph:()=>of(structuredClone(graph)),saveSemanticGraph:vi.fn((_kind:string,value:{positions:SemanticGraphState['positions'];relations?:SemanticGraphState['relations'];hiddenNodeIds?:string[]})=>{graph={...graph,revision:graph.revision+1,positions:value.positions,hiddenNodeIds:value.hiddenNodeIds,relations:value.relations??graph.relations};return of(structuredClone(graph));})};
-  beforeEach(()=>{graph={revision:0,positions:{},relations:[],canEditLayout:true,canEditRelations:true};vi.clearAllMocks();TestBed.configureTestingModule({imports:[DomainNetworkComponent],providers: [{provide:UserPreferencesService,useValue:{language:signal('de')}},provideRouter([]),{provide:CatalogApiService,useValue:api},{provide:DemoIdentityService,useValue:{userId:signal('editor')}}]});});
+  let graph:SemanticGraphState;let personal:DomainNetworkView;
+  const api={loadDomainNetworkView:vi.fn(()=>of(structuredClone(personal))),saveDomainNetworkView:vi.fn((value:DomainNetworkView)=>{personal={...structuredClone(value),revision:value.revision+1};return of(structuredClone(personal));}),loadDomainNetworkObjects:vi.fn(()=>of({items:[] as DomainNetworkObject[],truncated:false})),loadGlossaryTerms:()=>of([]),loadDomainChangeRequests:vi.fn(()=>of([] as DomainChangeRequest[])),loadDomains:vi.fn(()=>of(DOMAINS)),loadSemanticGraph:()=>of(structuredClone(graph)),saveSemanticGraph:vi.fn((_kind:string,value:{positions:SemanticGraphState['positions'];relations?:SemanticGraphState['relations'];hiddenNodeIds?:string[]})=>{graph={...graph,revision:graph.revision+1,positions:value.positions,hiddenNodeIds:value.hiddenNodeIds,relations:value.relations??graph.relations};return of(structuredClone(graph));})};
+  beforeEach(()=>{personal={revision:0,configuration:{schemaVersion:1,addedDomainIds:[],hiddenDomainIds:[],positions:{},visibleKinds:['product']}};graph={revision:0,positions:{},relations:[],canEditLayout:true,canEditRelations:true};vi.clearAllMocks();TestBed.configureTestingModule({imports:[DomainNetworkComponent],providers: [{provide:UserPreferencesService,useValue:{language:signal('de')}},provideRouter([]),{provide:CatalogApiService,useValue:api},{provide:DemoIdentityService,useValue:{userId:signal('editor'),users:signal([])}}]});});
   afterEach(()=>TestBed.resetTestingModule());
   function render(){const fixture=TestBed.createComponent(DomainNetworkComponent);fixture.detectChanges();return fixture;}
+  it('lets readers pin a foreign domain through the picker despite the own-office filter',async()=>{
+    graph.canEditLayout=false;graph.canEditRelations=false;
+    const fixture=render(),component=fixture.componentInstance;
+    component.domains.update(items=>items.map(item=>item.id==='b'?{...item,foreignDepartment:true,departmentCodes:['EFD'],officeCodes:['BIT'],ownerName:'Marcello Hebeisa',deputyOwnerName:'Matteo Duca'}:item));
+    fixture.componentRef.setInput('visibleDomainIds',['a']);fixture.detectChanges();
+    component.canvasAction('search');await component.selectDomain({id:'b',label:'Domäne b',description:'',route:[]});fixture.detectChanges();
+    expect(component.nodes().map(node=>node.id)).toEqual(['a','b']);
+    const foreign=fixture.nativeElement.querySelector('[data-domain-id="b"]');
+    expect(foreign.classList.contains('is-foreign')).toBe(true);expect(foreign.textContent).toContain('EFD · BIT');expect(foreign.textContent).toContain('Marcello Hebeisa');
+    expect(component.canSource('b')).toBe(false);expect(component.canLayout()).toBe(true);
+    await component.save();expect(personal.configuration.addedDomainIds).toContain('b');expect(api.saveSemanticGraph).not.toHaveBeenCalled();
+    fixture.destroy();const reloaded=render();reloaded.componentRef.setInput('visibleDomainIds',['a']);reloaded.detectChanges();expect(reloaded.componentInstance.nodes().some(node=>node.id==='b')).toBe(true);
+  });
+  it('switches prefetched object layers immediately and opens members in new tabs',()=>{
+    const fixture=render(),component=fixture.componentInstance;
+    component.objects.set(['product','term','logical','physical'].map(kind=>({key:kind+':1',id:'1',kind:kind as 'product'|'term'|'logical'|'physical',label:kind,description:'Beschreibung',ownerName:'Owner',urn:'urn:daca:test:'+kind,route:['/models','1'],params:{},domainIds:['a','b']})));
+    fixture.detectChanges();expect(fixture.nativeElement.querySelectorAll('.domain-asset')).toHaveLength(1);
+    const requests=api.loadDomainNetworkObjects.mock.calls.length;
+    component.toggleKind('term');component.toggleKind('logical');component.toggleKind('physical');fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('.domain-asset')).toHaveLength(4);expect(component.assetEdges()).toHaveLength(8);
+    expect([...fixture.nativeElement.querySelectorAll('.domain-asset')].every((element:any)=>element.target==='_blank')).toBe(true);
+    expect(api.loadDomainNetworkObjects.mock.calls).toHaveLength(requests);
+  });
+  it('keeps the existing automatic network stable when a large domain is placed manually',async()=>{
+    graph.relations=[{sourceId:'a',targetId:'c',relationType:'related'}];
+    const fixture=render(),component=fixture.componentInstance;
+    fixture.componentRef.setInput('visibleDomainIds',['a','c']);fixture.detectChanges();
+    const objects:DomainNetworkObject[]=Array.from({length:50},(_,index)=>({key:'product:'+index,id:String(index),kind:'product',label:'Produkt '+index,description:'',ownerName:'Owner',urn:'urn:daca:test:'+index,route:[],params:{},domainIds:['b']}));component.objects.set(objects);api.loadDomainNetworkObjects.mockReturnValueOnce(of({items:objects,truncated:false}));
+    const before=component.nodes().map(node=>({id:node.id,x:node.x,y:node.y}));
+    fixture.nativeElement.querySelector('.semantic-graph').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:900,clientY:400}));component.canvasAction('search');
+    await component.selectDomain({id:'b',label:'Domäne b',description:'',route:[]});
+    expect(component.nodes().filter(node=>node.id!=='b').map(node=>({id:node.id,x:node.x,y:node.y}))).toEqual(before);
+    expect(component.assetNodes()).toHaveLength(50);
+  });
+  it('shows the shared spinner for the entire network request',()=>{
+    const domains=new Subject<DomainSummary[]>();api.loadDomains.mockReturnValueOnce(domains);
+    const fixture=render();expect(fixture.nativeElement.querySelector('.small-spinner')).not.toBeNull();
+    domains.next(DOMAINS);domains.complete();fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.small-spinner')).toBeNull();
+  });
+
+  it('starts a personal proposal from the blank canvas without creating an active domain or shared layout',async()=>{
+    graph.canEditLayout=false;graph.canCreateDomains=false;
+    const fixture=render(),component=fixture.componentInstance,root=fixture.nativeElement as HTMLElement;
+    root.querySelector('.semantic-graph')!.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:200,clientY:200}));fixture.detectChanges();
+    const items=[...root.querySelectorAll<HTMLElement>('.domain-context-menu [role=menuitem]')];
+    expect(items[0].textContent).toContain('Domäne erstellen');
+    expect(items.some(item=>item.textContent?.includes('Term suchen'))).toBe(false);
+    items[0].click();fixture.detectChanges();
+    expect(root.querySelector('daca-semantic-create-dialog')?.textContent).toContain('ALDS');
+    const request={id:'personal-request',status:'submitted',operation:'create',requesterUserId:'editor'} as DomainChangeRequest;
+    await component.created({kind:'domain',label:'Neue Fachdomäne',definition:'Persönlicher Vorschlag',request});fixture.detectChanges();
+    expect(component.domains()).toEqual(DOMAINS);expect(component.dirty()).toBe(false);
+    expect(root.querySelector('.is-pending')?.textContent).toContain('Neue Fachdomäne');
+    expect(api.saveSemanticGraph).not.toHaveBeenCalled();
+    fixture.destroy();api.loadDomainChangeRequests.mockReturnValueOnce(of([request]));
+    const reloaded=render();expect(reloaded.componentInstance.pendingCards()[0]?.id).toBe(request.id);
+    sessionStorage.removeItem('daca.domain-network.pending.v1:editor');
+  });
   it('filters visible nodes and edges without deleting positions, relations or a local draft', async()=>{
     graph.positions={'domain:a':{x:35,y:35},'domain:b':{x:400,y:35}};
     graph.relations=[{sourceId:'a',targetId:'b',relationType:'related'}];
@@ -108,12 +167,12 @@ describe('DomainNetworkComponent',()=>{
       expect(component.links()).toHaveLength(0);expect(component.connectionFeedback()).toContain('Ausgangsdomäne');expect(api.saveSemanticGraph).not.toHaveBeenCalled();
     }finally{component.hold.cancel();vi.useRealTimers();if(previous)Object.defineProperty(document,'elementsFromPoint',previous);else Reflect.deleteProperty(document,'elementsFromPoint');}
   });
-  it('stages positions and shares them only after explicit save',async()=>{
+  it('stages positions and saves them privately only after explicit save',async()=>{
     const fixture=render(),component=fixture.componentInstance,node=component.nodes()[0];
     component.nodeKey(node,new KeyboardEvent('keydown',{key:'ArrowRight'}));fixture.detectChanges();
     expect(component.layoutDirty()).toBe(true);expect(api.saveSemanticGraph).not.toHaveBeenCalled();await component.save();
-    expect(component.dirty()).toBe(false);expect(graph.positions['domain:a'].x).toBe(node.x+10);
-    fixture.destroy();expect(render().componentInstance.positions()).toEqual(graph.positions);
+    expect(component.dirty()).toBe(false);expect(personal.configuration.positions['domain:a'].x).toBe(node.x+10);expect(graph.positions).toEqual({});expect(api.saveSemanticGraph).not.toHaveBeenCalled();
+    fixture.destroy();expect(render().componentInstance.positions()).toEqual(personal.configuration.positions);
   });
   it('creates and deletes links locally, rejecting inverse duplicates and hierarchy cycles',()=>{
     const component=render().componentInstance;
@@ -125,9 +184,12 @@ describe('DomainNetworkComponent',()=>{
     component.editLink(0);component.deleteLink();expect(component.links()).toHaveLength(1);expect(api.saveSemanticGraph).not.toHaveBeenCalled();component.discard();expect(component.links()).toHaveLength(0);
   });
   it('keeps conflicting drafts and exposes object searches to readers',async()=>{
-    const fixture=render(),component=fixture.componentInstance;component.autoLayout();api.saveSemanticGraph.mockReturnValueOnce(throwError(()=>new Error('409')));await component.save();expect(component.dirty()).toBe(true);
+    const fixture=render(),component=fixture.componentInstance;component.autoLayout();api.saveDomainNetworkView.mockReturnValueOnce(throwError(()=>new Error('409')));await component.save();expect(component.dirty()).toBe(true);
     component.saved.set({...graph,canEditLayout:false,canEditRelations:false});component.openEdit({index:null,sourceId:'a',targetId:'b',relationType:'related'});expect(component.edit()).toBeNull();
     const root=fixture.nativeElement as HTMLElement;root.querySelector('.graph-node')!.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}));fixture.detectChanges();
-    expect([...root.querySelectorAll('.concept-context-menu button')].filter(button=>button.textContent?.includes('suchen und öffnen'))).toHaveLength(4);
+    expect([...root.querySelectorAll('.concept-context-menu [role=menuitem]')].filter(item=>item.textContent?.includes('suchen und öffnen'))).toHaveLength(4);
+    const links=[...root.querySelectorAll<HTMLAnchorElement>('.concept-context-menu a[href^="/domains"]')];
+    expect(links.every(link=>link.target==='_blank')).toBe(true);
+    expect(links.filter(link=>new URL(link.href).searchParams.has('q')).every(link=>new URL(link.href).searchParams.get('q')==='Domäne a')).toBe(true);
   });
 });

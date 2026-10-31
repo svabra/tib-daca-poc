@@ -150,9 +150,12 @@ def test_concept_layout_accepts_only_direct_active_domain_neighbors(client, sess
 
 def test_retired_domain_links_remain_readable_and_removable_without_blocking_other_edits(client, session_factory):
     domains, _ = prepare(session_factory)
-    created = client.post("/api/v1/domains", headers=headers("sibilla.micheli"), json={"ownerUserId": "sibilla.micheli", "deputyOwnerUserId": "sandro.wenger", "localizations": [{"language": "de", "preferredLabel": "Retirement graph fixture", "definition": "Synthetic fixture."}]})
-    assert created.status_code == 201, created.text
-    a, b, c = created.json()["id"], *domains[:2]
+    from daca_catalog.main import _create_domain
+    with session_factory() as session:
+        created = _create_domain(session, {"ownerUserId": "sibilla.micheli", "deputyOwnerUserId": "sandro.wenger", "localizations": [{"language": "de", "preferredLabel": "Retirement graph fixture", "definition": "Synthetic fixture."}]})
+        a = str(created.id)
+        session.commit()
+    b, c = domains[:2]
     path = "/api/v1/semantic-graphs/domains"
     old = {"sourceId": a, "targetId": b, "relationType": "related"}
     assert client.put(path, headers=headers("sibilla.micheli"), json={"revision": 0, "positions": {}, "relations": [old]}).status_code == 200

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
@@ -85,6 +85,12 @@ export class App {
 
   constructor() {
     this.session.restore();
+    const refreshMessages = () => {
+      if (this.session.activeUserId() && document.visibilityState === 'visible') this.api.refreshWorkflowTasks(true);
+    };
+    const messageTimer = setInterval(refreshMessages, 15000);
+    window.addEventListener('focus', refreshMessages);
+    inject(DestroyRef).onDestroy(() => { clearInterval(messageTimer); window.removeEventListener('focus', refreshMessages); });
     effect(() => {
       const route = this.routeUrl().split('?')[0];
       const language = this.preferences.language();
@@ -152,7 +158,7 @@ export class App {
       allDevices: ['Alle Geräte', 'Tous les appareils', 'Tutti i dispositivi', 'All devices'],
       light: ['Heller Modus', 'Mode clair', 'Modalità chiara', 'Light mode'],
       dark: ['Dunkler Modus', 'Mode sombre', 'Modalità scura', 'Dark mode'],
-      footerText: ['DaCa · Zentraler Datenkatalog · Proof of Concept. Teil der Data Platform BIT. Im Co-Design mit ESTV, V, BK, BFS und weiteren Ämtern erarbeitet.', 'DaCa · Catalogue de données central · Preuve de concept. Fait partie de la plateforme de données de l’OFIT. Conçu avec l’AFC, la Défense, la ChF, l’OFS et d’autres offices.', 'DaCa · Catalogo centrale dei dati · Prova di concetto. Parte della piattaforma dati dell’UFIT. Sviluppato con AFC, Difesa, CaF, UST e altri uffici.', 'DaCa · Central Data Catalog · Proof of concept. Part of the BIT data platform. Co-designed with the FTA, Defence, Federal Chancellery, FSO and other offices.'],
+      footerText: ['DaCa · Zentraler Datenkatalog · Proof of Concept. Teil der Data Platform BIT.', 'DaCa · Catalogue de données central · Preuve de concept. Fait partie de la plateforme de données de l’OFIT.', 'DaCa · Catalogo centrale dei dati · Prova di concetto. Parte della piattaforma dati dell’UFIT.', 'DaCa · Central Data Catalog · Proof of concept. Part of the BIT data platform.'],
     };
     return labels[key]?.[({ de: 0, fr: 1, it: 2, en: 3 })[this.preferences.language()]] ?? key;
   }

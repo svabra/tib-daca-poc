@@ -65,7 +65,7 @@ export class MappingMatrixComponent {
   readonly facade=inject(MappingDraftFacade);
   mappingsFor(fieldId:string):readonly AssetMapping[]{return this.facade.activeMappings().filter((mapping)=>mapping.logicalFieldVersionIds.includes(fieldId));}
   openCount():number{return this.facade.logicalFields().filter((field)=>!this.facade.mappedFieldIds().has(field.id)).length;}
-  columnLabel(id:string):string{return this.facade.physicalColumns().find((column)=>column.id===id)?.qualifiedName??`Nicht im aktuellen Snapshot (${id})`;}
+  columnLabel(id:string):string{return this.facade.physicalColumns().find((column)=>column.id===id)?.qualifiedName??`Nicht in der aktuellen physischen Repräsentation/Deklaration (${id})`;}
   statusLabel(status:MappingStatus):string{return MAPPING_STATUS_LABELS[status];}
   actionLabel(status:MappingStatus):string{return status==='draft'?'Bearbeiten':status==='broken'?'Auflösen':'Details';}
   actionAriaLabel(status:MappingStatus,fieldName:string):string{return `${this.actionLabel(status)} des Mappings für ${fieldName}`;}

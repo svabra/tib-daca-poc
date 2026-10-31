@@ -1,3 +1,4 @@
+import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { MappingDraftFacade } from './mapping-draft.facade';
 import { MappingGraphComponent } from './mapping-graph.component';
@@ -7,7 +8,7 @@ describe('MappingGraphComponent field context menu', () => {
   afterEach(() => TestBed.resetTestingModule());
 
   it('shows shared positions but prevents a reader from moving cards',()=>{
-    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade]});
+    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade,provideRouter([])]});
     const facade=TestBed.inject(MappingDraftFacade);
     facade.initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,FALLBACK_MAPPINGS,null,undefined,{revision:2,positions:{logical:{x:150,y:90}}});
     const fixture=TestBed.createComponent(MappingGraphComponent);fixture.detectChanges();
@@ -19,7 +20,7 @@ describe('MappingGraphComponent field context menu', () => {
   });
 
   it('offers scoped field actions by right click and removes only the selected link', () => {
-    TestBed.configureTestingModule({ imports: [MappingGraphComponent], providers: [MappingDraftFacade] });
+    TestBed.configureTestingModule({ imports: [MappingGraphComponent], providers: [MappingDraftFacade,provideRouter([])] });
     const facade = TestBed.inject(MappingDraftFacade);
     facade.initialize(FALLBACK_LOGICAL_MODEL, FALLBACK_PHYSICAL_SNAPSHOT, FALLBACK_MAPPINGS, null);
     const fixture = TestBed.createComponent(MappingGraphComponent);
@@ -51,7 +52,7 @@ describe('MappingGraphComponent field context menu', () => {
   });
 
   it('opens line actions by right click and keyboard, explains mapping types, and removes only the selected relation',()=>{
-    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade]});
+    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade,provideRouter([])]});
     const facade=TestBed.inject(MappingDraftFacade);facade.initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,FALLBACK_MAPPINGS,null);
     const fixture=TestBed.createComponent(MappingGraphComponent);fixture.componentRef.setInput('canManage',true);fixture.detectChanges();
     const root=fixture.nativeElement as HTMLElement,edge=root.querySelector('[data-edge-mapping-id="mapping-org-id"]')!;
@@ -73,7 +74,7 @@ describe('MappingGraphComponent field context menu', () => {
   });
 
   it('keeps line actions read-only for a viewer and cancels endpoint dragging without modifying a mapping',()=>{
-    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade]});
+    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade,provideRouter([])]});
     const facade=TestBed.inject(MappingDraftFacade);facade.initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,FALLBACK_MAPPINGS,null);
     const fixture=TestBed.createComponent(MappingGraphComponent);fixture.detectChanges();
     const root=fixture.nativeElement as HTMLElement,edge=root.querySelector('[data-edge-mapping-id="mapping-org-id"]')!;
@@ -92,7 +93,7 @@ describe('MappingGraphComponent field context menu', () => {
   });
 
   it('routes document pointer moves and releases to the selected line endpoint',()=>{
-    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade]});
+    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade,provideRouter([])]});
     const facade=TestBed.inject(MappingDraftFacade);facade.initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,FALLBACK_MAPPINGS,null);
     const fixture=TestBed.createComponent(MappingGraphComponent);fixture.componentRef.setInput('canManage',true);fixture.detectChanges();
     const root=fixture.nativeElement as HTMLElement;
@@ -108,7 +109,7 @@ describe('MappingGraphComponent field context menu', () => {
   });
 
   it('does not open mutation actions for a viewer', () => {
-    TestBed.configureTestingModule({ imports: [MappingGraphComponent], providers: [MappingDraftFacade] });
+    TestBed.configureTestingModule({ imports: [MappingGraphComponent], providers: [MappingDraftFacade,provideRouter([])] });
     TestBed.inject(MappingDraftFacade).initialize(FALLBACK_LOGICAL_MODEL, FALLBACK_PHYSICAL_SNAPSHOT, FALLBACK_MAPPINGS, null);
     const fixture = TestBed.createComponent(MappingGraphComponent);
     fixture.detectChanges();
@@ -123,7 +124,7 @@ describe('MappingGraphComponent field context menu', () => {
     expect(TestBed.inject(MappingDraftFacade).pendingLogicalFieldId()).toBeNull();
   });
   it('opens the canvas action by mouse and keyboard and renders separate source cards', () => {
-    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade]});
+    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade,provideRouter([])]});
     const facade=TestBed.inject(MappingDraftFacade);
     facade.initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,[],null);
     const table={...FALLBACK_PHYSICAL_SNAPSHOT.tables[0],id:'parquet-table',name:'vehicle.parquet',kind:'parquet' as const};
@@ -142,8 +143,20 @@ describe('MappingGraphComponent field context menu', () => {
     expect(root.querySelector('.canvas-context-menu')).toBeNull();
   });
 
+
+  it('opens semantic searches for the logical model title in new tabs without source navigation',()=>{
+    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade,provideRouter([])]});
+    const title='Geb\u00e4ude & Portfolio';
+    TestBed.inject(MappingDraftFacade).initialize({...FALLBACK_LOGICAL_MODEL,title:{...FALLBACK_LOGICAL_MODEL.title,de:title}},FALLBACK_PHYSICAL_SNAPSHOT,[],null);
+    const fixture=TestBed.createComponent(MappingGraphComponent);fixture.detectChanges();const root=fixture.nativeElement as HTMLElement;
+    root.querySelector('.logical-node>header')!.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}));fixture.detectChanges();
+    const links=[...root.querySelectorAll<HTMLAnchorElement>('.canvas-context-menu a[href*="?q="]')];
+    expect(links).toHaveLength(2);expect(links.every(link=>link.target==='_blank'&&new URL(link.href).searchParams.get('q')===title&&link.querySelector('img'))).toBe(true);
+    expect(root.querySelector('.canvas-context-menu')?.textContent).not.toContain('Datenquelle \u00f6ffnen');
+  });
+
   it('moves cards by dragging and keyboard, keeps layout between graph mounts, and hides only their drawing', () => {
-    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade]});
+    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade,provideRouter([])]});
     const facade=TestBed.inject(MappingDraftFacade);
     facade.initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,FALLBACK_MAPPINGS,null);
     const fixture=TestBed.createComponent(MappingGraphComponent);fixture.componentRef.setInput('canManage',true);fixture.detectChanges();
@@ -175,7 +188,7 @@ describe('MappingGraphComponent field context menu', () => {
   });
 
   it('does not open drawing actions while connecting a physical column and cancels an interrupted drag',()=>{
-    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade]});
+    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade,provideRouter([])]});
     const facade=TestBed.inject(MappingDraftFacade);facade.initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,FALLBACK_MAPPINGS,null);
     const fixture=TestBed.createComponent(MappingGraphComponent);fixture.componentRef.setInput('canManage',true);fixture.detectChanges();
     const root=fixture.nativeElement as HTMLElement,card=root.querySelector<HTMLElement>('.physical-representation')!,id=card.dataset['representationTableId']!;
@@ -190,7 +203,7 @@ describe('MappingGraphComponent field context menu', () => {
   });
 
   it('uses facing ports for simultaneous left and right representations and switches back after movement',()=>{
-    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade]});
+    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade,provideRouter([])]});
     const facade=TestBed.inject(MappingDraftFacade);facade.initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,FALLBACK_MAPPINGS,null);
     const fixture=TestBed.createComponent(MappingGraphComponent);fixture.detectChanges();
     facade.moveCanvasNode('logical',{x:450,y:15});
@@ -216,7 +229,7 @@ describe('MappingGraphComponent field context menu', () => {
   });
 
   it('offers fullscreen as a canvas plus and keeps the title specific to the logical model',()=>{
-    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade]});
+    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade,provideRouter([])]});
     TestBed.inject(MappingDraftFacade).initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,[],null);
     const fixture=TestBed.createComponent(MappingGraphComponent);fixture.detectChanges();
     const root=fixture.nativeElement as HTMLElement,toggle=vi.fn();fixture.componentInstance.toggleFullscreen.subscribe(toggle);
@@ -229,7 +242,7 @@ describe('MappingGraphComponent field context menu', () => {
   });
 
   it('offers assignment only without a domain and opens assigned domains from both model headers',()=>{
-    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade]});
+    TestBed.configureTestingModule({imports:[MappingGraphComponent],providers:[MappingDraftFacade,provideRouter([])]});
     const facade=TestBed.inject(MappingDraftFacade),unassigned={...FALLBACK_LOGICAL_MODEL,dataDomain:{id:'',displayName:'Keine Domäne zugeordnet'}};
     facade.initialize(unassigned,FALLBACK_PHYSICAL_SNAPSHOT,[],null);
     const fixture=TestBed.createComponent(MappingGraphComponent);fixture.componentRef.setInput('canManage',true);fixture.detectChanges();
@@ -247,7 +260,7 @@ describe('MappingGraphComponent field context menu', () => {
     expect(root.querySelector<HTMLAnchorElement>('.canvas-context-menu a')?.getAttribute('href')).toBe('/domains/domain-personal');
     expect(root.querySelector('.canvas-context-menu')?.textContent).not.toContain('Domäne zuordnen');
     root.querySelector('.physical-representation')!.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}));fixture.detectChanges();
-    expect(root.querySelector<HTMLAnchorElement>('.representation-context-menu a')?.getAttribute('target')).toBe('_blank');
+    expect(root.querySelector<HTMLAnchorElement>('.representation-context-menu a[href^="/domains/"]')?.getAttribute('target')).toBe('_blank');
     expect(root.querySelector('.physical-representation .model-domain')?.textContent).toContain('Personal');
     expect(root.querySelector('.logical-node .model-domain')?.textContent).toContain('Personal');
   });
@@ -258,7 +271,7 @@ describe('MappingGraphComponent field context menu', () => {
 describe('MappingGraphComponent hold-to-connect', () => {
   afterEach(() => { vi.useRealTimers(); TestBed.resetTestingModule(); });
   function setup() {
-    TestBed.configureTestingModule({imports: [MappingGraphComponent], providers: [MappingDraftFacade]});
+    TestBed.configureTestingModule({imports: [MappingGraphComponent], providers: [MappingDraftFacade,provideRouter([])]});
     const facade=TestBed.inject(MappingDraftFacade);
     facade.initialize(FALLBACK_LOGICAL_MODEL,FALLBACK_PHYSICAL_SNAPSHOT,[],null);
     const fixture=TestBed.createComponent(MappingGraphComponent);

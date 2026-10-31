@@ -370,6 +370,24 @@ describe('LogicalModelEditorComponent contracts',()=>{
     expect(router.navigate).toHaveBeenCalledWith(['/models',FALLBACK_LOGICAL_MODEL.id,'mappings'],{queryParams:{physicalSnapshotId:FALLBACK_PHYSICAL_SNAPSHOT.id,physicalTableId:FALLBACK_PHYSICAL_SNAPSHOT.tables[0].id}});
   });
 
+
+  it.each(['csv','s3'] as const)('opens %s origins in the complete editable form without a create request',type=>{
+    const snapshot={...FALLBACK_PHYSICAL_SNAPSHOT,sourceType:type,databaseName:'OtherSystem',tables:[{...FALLBACK_PHYSICAL_SNAPSHOT.tables[0],databaseName:'SAP',schemaName:'CSV',name:'VIBDBU'}]};
+    vi.spyOn(TestBed.inject(DataModelsApiService),'loadPhysicalSnapshot').mockReturnValue(of(snapshot));
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);
+    fixture.componentRef.setInput('physicalSnapshotId',snapshot.id);fixture.componentRef.setInput('physicalTableId',snapshot.tables[0].id);fixture.detectChanges();TestBed.tick();fixture.detectChanges();
+    const root=fixture.nativeElement as HTMLElement,component=fixture.componentInstance;
+    expect(root.querySelectorAll('.model-detail-tabs [role=tab]')).toHaveLength(3);
+    expect(root.querySelector('textarea[formcontrolname=descriptionDe]')).not.toBeNull();
+    expect(component.form.controls.dataset.controls.descriptionDe.enabled).toBe(true);
+    expect(root.querySelector('.derived-origin')?.textContent).toContain('SAP.CSV.VIBDBU');
+    if(type==='csv')expect(root.querySelector('.derived-origin')?.textContent).toContain('Aus physischer Deklaration');
+    component.form.controls.dataset.controls.descriptionDe.setValue('Eigene fachliche Beschreibung');
+    component.fields.at(0).controls.name.setValue('fachliche_nummer');
+    expect(component.fields.at(0).controls.physicalColumnId.value).toBe(snapshot.tables[0].columns[0].id);
+    expect(component.form.controls.dataset.controls.descriptionDe.value).toBe('Eigene fachliche Beschreibung');
+    expect(deriveLogicalModel).not.toHaveBeenCalled();expect(createLogicalModel).not.toHaveBeenCalled();
+  });
   it('shows a clear duplicate-identifier problem, focuses the field, and retains safe support details',async()=>{
     createLogicalModel.mockReturnValue(throwError(()=>new ModelingApiError(
       'conflict',409,'Dieser Identifier wird bereits von einem anderen logischen Modell verwendet.',

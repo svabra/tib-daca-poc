@@ -1,25 +1,34 @@
 <button #trigger class="daca-button is-secondary csv-import-trigger" type="button" [disabled]="!identity.canEditModels()" (click)="open()">Strukturinventar aus CSV laden</button>
 <dialog #dialog aria-labelledby="csv-import-title" (cancel)="close($event)" (close)="restoreFocus()">
   <header><div><p class="daca-eyebrow">Strukturimport</p><h2 id="csv-import-title">Strukturinventar aus CSV laden</h2></div><button type="button" aria-label="Import abbrechen" [disabled]="saving()" (click)="close()">×</button></header>
-  <p>Ein Strukturinventar mit Tabellen und Feldern als physische Modelle erfassen. Nach dem Import öffnet sich der Struktur-Explorer mit allen importierten Tabellen.</p>
-  <p class="help">Semikolon-CSV mit den Spalten Tabelle, Feldname und Datentyp; weitere Angaben wie System, Datenobjekt, Länge, Kurzbeschreibung, Kommentar, Klassifizierung, Dezimalstellen und Werteliste bleiben erhalten. UTF-8 und Windows-1252, maximal 2 MiB. Systemnamen bilden die Gliederung; es wird keine Live-Verbindung eingerichtet.</p>
+  <p>Ein Strukturinventar mit Tabellen und Feldern als physische Modelle (Physische Repräsentation) erfassen. Nach dem Import öffnet sich der Struktur-Explorer mit allen importierten Tabellen.</p>
+  <div class="csv-drop-zone" role="group" aria-label="CSV-Datei laden" [class.is-dragging]="dragging()" [class.is-disabled]="saving()" [attr.aria-busy]="reading()" (dragover)="dragOver($event)" (dragleave)="dragLeave($event)" (drop)="dropFile($event)">
+    <img class="csv-file-icon" src="/assets/catalog-search/file-spreadsheet.svg" width="32" height="32" alt="">
+    <div class="csv-drop-copy">
+      <strong>{{ dragging() ? 'CSV-Datei hier ablegen' : 'CSV-Datei hierher ziehen' }}</strong>
+      <span id="csv-file-help">Eine CSV-Datei · maximal 2 MiB · UTF-8 oder Windows-1252</span>
+      @if(filename()){<span class="selected-file">{{ filename() }}</span>}
+    </div>
+    <button class="daca-button is-secondary csv-file-select" type="button" [disabled]="saving()" aria-describedby="csv-file-help" (click)="fileInput.click()">{{ filename() ? 'Datei wechseln' : 'Datei auswählen' }}</button>
+    <input #fileInput class="csv-file-input" type="file" accept=".csv,text/csv" hidden [disabled]="saving()" (change)="selectFile($event)">
+  </div>
   <div class="import-inputs">
-    <label class="csv-drop-zone" [class.is-dragging]="dragging()" (dragover)="dragOver($event)" (dragleave)="dragLeave($event)" (drop)="dropFile($event)"><span>CSV-Datei</span><small>CSV hierher ziehen oder Datei auswählen</small><input #fileInput type="file" accept=".csv,text/csv" [disabled]="saving()" (change)="selectFile($event)">@if(filename()){<span class="selected-file">{{ filename() }}</span>}</label>
     <label>Name des Strukturinventars<input type="text" maxlength="255" [ngModel]="name()" (ngModelChange)="name.set($event)" [disabled]="saving()"></label>
     <label>Verantwortliche Organisation<select [ngModel]="scopeId()" (ngModelChange)="scopeId.set($event)" [disabled]="saving()">@for (scope of scopes(); track scope.id) {<option [value]="scope.id">{{ scope.department }} · {{ scope.label }}</option>}</select></label>
   </div>
+  <details class="csv-format-help"><summary>Hinweise zum CSV-Format</summary><p class="help">Semikolon-CSV mit den Spalten Tabelle, Feldname und Datentyp; weitere Angaben wie System, Datenobjekt, Länge, Kurzbeschreibung, Kommentar, Klassifizierung, Dezimalstellen und Werteliste bleiben erhalten. Systemnamen bilden die Gliederung; es wird keine Live-Verbindung eingerichtet.</p></details>
   @if (!scopes().length) {<p class="daca-alert is-warning">Für diese Identität ist keine zuweisbare Modellierungsorganisation verfügbar.</p>}
   @if (error()) {<p class="daca-alert is-error" role="alert">{{ error() }}</p>}
   @if (reading()) {<p role="status">Datei wird geprüft …</p>}
   @if (preview(); as preview) {
-    <p class="preview-count" role="status">{{ preview.tableCount }} physische Modelle · {{ preview.fieldCount }} eindeutige Felder · {{ preview.rowCount }} CSV-Einträge · {{ preview.encoding }}</p>
+    <p class="preview-count" role="status">{{ preview.tableCount }} physische Modelle (Physische Repräsentation) · {{ preview.fieldCount }} eindeutige Felder · {{ preview.rowCount }} CSV-Einträge · {{ preview.encoding }}</p>
     <details class="import-warnings" open><summary>Importhinweise ({{ preview.warnings.length }})</summary><ul>@for (warning of preview.warnings; track $index) {<li>{{ warning }}</li>}</ul></details>
     <div class="preview-layout">
       <nav aria-label="Tabellen im CSV"><label>Tabellen suchen<input type="search" [ngModel]="query()" (ngModelChange)="query.set($event)" placeholder="System oder Tabellenname"></label>
         <div class="table-list">@for (table of tables(); track table.stableKey) {<button type="button" [class.is-selected]="selectedKey() === table.stableKey" [attr.aria-pressed]="selectedKey() === table.stableKey" (click)="selectTable(table)"><small>{{ table.system }}</small><strong>{{ table.name }}</strong><span>{{ table.columns.length }} Felder</span></button>} @empty {<p>Keine passende Tabelle.</p>}</div>
       </nav>
       @if (selectedTable(); as table) {
-        <section class="table-preview" aria-labelledby="csv-table-name"><p class="daca-eyebrow">{{ table.system }} · Physisches Modell</p><h3 id="csv-table-name">{{ table.name }}</h3><p>{{ table.comment }}</p>
+        <section class="table-preview" aria-labelledby="csv-table-name"><p class="daca-eyebrow">{{ table.system }} · Physisches Modell (Physische Repräsentation)</p><h3 id="csv-table-name">{{ table.name }}</h3><p>{{ table.comment }}</p>
           <div class="daca-table-wrap" tabindex="0" role="region" [attr.aria-label]="'Felder von ' + table.name"><table class="daca-table"><thead><tr><th>Feld</th><th>Originaltyp</th><th>Normalisiert</th><th>Länge (CSV)</th><th>Dezimalstellen (CSV)</th><th>Beschreibung</th><th>Werteliste</th><th>Klassifizierung</th></tr></thead><tbody>@for (column of table.columns; track column.name) {<tr><th scope="row">{{ column.name }}</th><td>{{ column.importMetadata.records?.[0]?.['Datentyp'] || 'Nicht angegeben' }}</td><td>{{ column.normalizedDataType }}</td><td>{{ column.importMetadata.records?.[0]?.['Länge'] || '–' }}</td><td>{{ column.importMetadata.records?.[0]?.['Dezimalstellen'] || '–' }}</td><td class="description">{{ column.comment || '–' }}</td><td>{{ column.importMetadata.records?.[0]?.['Werteliste'] || '–' }}</td><td>{{ column.importMetadata.records?.[0]?.['Klassifizierung'] || '–' }}</td></tr>}</tbody></table></div>
           @if (table.importMetadata.recordsWithoutField?.length) {<p class="help">{{ table.importMetadata.recordsWithoutField?.length }} zusätzliche Tabellenhinweise ohne Feldnamen bleiben erhalten.</p>}
         </section>

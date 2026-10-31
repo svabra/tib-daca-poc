@@ -11,6 +11,8 @@ import {
   DomainAuditEvent,
   DomainGlossaryFixtureState,
   DomainSummary,
+  DomainNetworkView,
+  DomainNetworkObject,
   SemanticGraphState,
   DomainModelMemberships,
   GovernanceSubmission,
@@ -22,6 +24,7 @@ import {
   IdentityGroupDetail,
   IdentityGroupSummary,
   LineageEdge,
+  LineageAccessPage,
   LineageNode,
   OwnedAccessConsumer,
   PolicyDefinition,
@@ -114,6 +117,7 @@ type LineageWire = {
     relationType: string;
     transformation?: string | null;
     state: string;
+    canViewAccessLogs?: boolean;
   }>;
 };
 type ProvenanceWire = {
@@ -141,14 +145,15 @@ export type PolicyWire = {
 };
 
 type ConceptLocalizationWire = { language: string; preferredLabel: string; alternativeLabels?: string[]; definition: string; normalizedLabel: string };
-type DomainWire = { canTransferOwnership?: boolean; canEditMetadata?: boolean; id: string; urn: string; originCatalogId: string; revision: number; lifecycle: 'active' | 'retired'; ownerUserId: string; deputyOwnerUserId: string; preferredLabel: string; localizations: ConceptLocalizationWire[]; productCount: number; termCount: number; updatedAt: string };
+type DomainWire = { departmentCodes?:string[];officeCodes?:string[];foreignDepartment?:boolean;ownerName?:string;deputyOwnerName?:string; canTransferOwnership?: boolean; canEditMetadata?: boolean; id: string; urn: string; originCatalogId: string; revision: number; lifecycle: 'active' | 'retired'; ownerUserId: string; deputyOwnerUserId: string; preferredLabel: string; localizations: ConceptLocalizationWire[]; productCount: number; termCount: number; updatedAt: string };
 type GlossaryTermWire = { ownerUserId?: string | null; deputyOwnerUserId?: string | null; id: string; urn: string; originCatalogId: string; revision: number; lifecycle: 'active' | 'retired'; preferredLabel: string; localizations: ConceptLocalizationWire[]; domainIds: string[]; relations: Array<{ id: string; relation: GlossaryTermSummary['relations'][number]['relationType']; targetTermId: string | null; targetUri: string | null; targetLabel: string }>; updatedAt: string };
 type ProposalReviewWire = { canDecide?: boolean; domainId: string; proposalRevision: number; ownerUserId: string; status: 'pending' | 'approved' | 'rejected'; decisionComment: string | null; decidedAt: string | null; updatedAt: string };
 type ProposalWire = Omit<GlossaryTermProposal, 'requesterName' | 'reviews'> & { reviews: ProposalReviewWire[] };
 
 export interface WorkflowTaskWire {
   id: string;
-  taskType: 'metadata_quality' | 'access_governance' | 'access_request_review' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed' | 'publication_approval' | 'governance_correction' | 'service_level_approval' | 'source_access_review' | 'physical_source_access_review' | 'domain_change_review' | 'domain_change_decision' | 'glossary_term_review' | 'glossary_term_collaboration' | 'glossary_term_decision' | 'logical_model_review' | 'logical_model_changes_requested' | 'logical_mapping_inconsistency' | 'logical_mapping_investigation';
+  searchViewShareId?: string | null;
+  taskType: 'search_view_shared' | 'metadata_quality' | 'access_governance' | 'access_request_review' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed' | 'publication_approval' | 'governance_correction' | 'service_level_approval' | 'source_access_review' | 'physical_source_access_review' | 'domain_change_review' | 'domain_change_decision' | 'glossary_term_review' | 'glossary_term_collaboration' | 'glossary_term_decision' | 'logical_model_review' | 'logical_model_changes_requested' | 'logical_mapping_inconsistency' | 'logical_mapping_investigation';
   kind?: 'action' | 'collaboration' | 'information';
   taskKind?: 'action' | 'collaboration' | 'information';
   status: 'open' | 'in_progress' | 'completed';
@@ -386,6 +391,12 @@ export class CatalogApiService {
       );
   }
 
+  loadDomainNetworkView():Observable<DomainNetworkView>{return this.http.get<DomainNetworkView>(`/api/v1/domain-network/view`,{headers:this.identity.headers()});}
+  saveDomainNetworkView(value:DomainNetworkView):Observable<DomainNetworkView>{return this.http.put<DomainNetworkView>(`/api/v1/domain-network/view`,value,{headers:this.identity.headers()});}
+  loadDomainNetworkObjects(ids:readonly string[]):Observable<{items:DomainNetworkObject[];truncated:boolean}>{
+    if(!ids.length)return of({items:[],truncated:false});
+    return forkJoin(Array.from({length:Math.ceil(ids.length/200)},(_,index)=>this.http.get<{items:DomainNetworkObject[];truncated:boolean}>(`/api/v1/domain-network/objects`,{headers:this.identity.headers(),params:{domain_id:ids.slice(index*200,index*200+200)}}))).pipe(map(pages=>({items:[...pages.flatMap(page=>page.items).reduce((items,item)=>{const existing=items.get(item.key);items.set(item.key,existing?{...existing,domainIds:[...new Set([...existing.domainIds,...item.domainIds])]}:item);return items;},new Map<string,DomainNetworkObject>()).values()],truncated:pages.some(page=>page.truncated)})));
+  }
   loadSemanticGraph(kind:'domains'|'concepts'|'organizations',domainId?:string):Observable<SemanticGraphState>{
     return this.http.get<SemanticGraphState>(`/api/v1/semantic-graphs/${kind}${domainId?'/'+encodeURIComponent(domainId):''}`,{headers:this.identity.headers()});
   }
@@ -662,15 +673,16 @@ export class CatalogApiService {
     });
   }
 
-  refreshWorkflowTasks(): void {
+  refreshWorkflowTasks(background = false): void {
+    if (background && this.workflowTasksLoading()) return;
     const refreshGeneration = ++this.workflowTasksRefreshGeneration;
-    this.workflowTasksLoading.set(true);
-    this.workflowTasksError.set(null);
+    if (!background) { this.workflowTasksLoading.set(true); this.workflowTasksError.set(null); }
     this.http.get<WorkflowTaskWire[]>('/api/v1/tasks/mine', { headers: this.identity.headers() })
       .pipe(timeout(3000))
       .subscribe({
         next: (tasks) => {
           if (refreshGeneration !== this.workflowTasksRefreshGeneration) return;
+          this.workflowTasksError.set(null);
           this.workflowTaskState.set(tasks.map((task) => ({ ...task, kind: task.taskType === 'glossary_term_collaboration' ? 'collaboration' : task.taskKind ?? task.kind ?? 'action' })));
           this.workflowTasksLoading.set(false);
         },
@@ -732,23 +744,28 @@ export class CatalogApiService {
     }).pipe(
       timeout(3000),
       map(({ lineage, provenance }) => {
-        const nodeUrns = new Set<string>();
+        const nodeUrns = new Set<string>([lineage.productUrn]);
         for (const edge of lineage.edges) {
           nodeUrns.add(edge.sourceUrn);
           nodeUrns.add(edge.targetUrn);
         }
         const nodes: LineageNode[] = [...nodeUrns].map((urn) => {
+          const product = urn === lineage.productUrn ? this.productState() : this.productsState().find(item => item.globalId === urn);
           const kind: LineageNode['kind'] = urn === lineage.productUrn
             ? 'product'
+            : /:(?:transform|transformation)(?::|-)/i.test(urn) ? 'transform'
             : lineage.edges.some((edge) => edge.targetUrn === lineage.productUrn && edge.sourceUrn === urn)
               ? 'source'
               : 'consumer';
           return {
             id: urn,
-            label: urn === lineage.productUrn ? this.productState().title : this.urnLabel(urn),
-            detail: urn === lineage.productUrn ? this.productState().description : `Catalog resource ${urn}`,
+            urn,
+            owner: product ? this.identity.users().find(user => user.id === product.ownerUserId)?.displayName ?? product.owner : null,
+            productId: product?.id,
+            label: product?.title ?? this.urnLabel(urn),
+            detail: product?.description ?? '',
             kind,
-            catalog: urn.includes(':sg:') ? 'Kanton St. Gallen' : urn.includes(':estv:') ? 'ESTV' : 'External catalog',
+            catalog: product?.originCatalog || (urn.includes(':sg:') ? 'Kanton St. Gallen' : urn.includes(':estv:') ? 'ESTV' : 'External catalog'),
           };
         });
         const edges: LineageEdge[] = lineage.edges.map((edge) => ({
@@ -757,6 +774,7 @@ export class CatalogApiService {
           target: edge.targetUrn,
           label: edge.relationType,
           state: edge.state === 'active' ? 'verified' : 'declared',
+          canViewAccessLogs: edge.canViewAccessLogs === true,
         }));
         const events: ProvenanceEvent[] = provenance.map((event) => ({
           id: event.id,
@@ -770,6 +788,11 @@ export class CatalogApiService {
       }),
       catchError(() => of({ nodes: FALLBACK_NODES, edges: FALLBACK_EDGES, provenance: FALLBACK_PROVENANCE })),
     );
+  }
+
+  loadLineageAccessEvents(productId: string, edgeId: string, params: Record<string, string>): Observable<LineageAccessPage> {
+    return this.http.get<LineageAccessPage>(`/api/v1/data-products/${encodeURIComponent(productId)}/lineage/${encodeURIComponent(edgeId)}/access-events`,
+      {headers: this.identity.headers(), params}).pipe(timeout(10000));
   }
 
   loadProductQuality(productId: string): Observable<ProductQualityWorkspace> {
@@ -1055,11 +1078,12 @@ export class CatalogApiService {
     const deputy = this.identity.users().find((user) => user.id === item.deputyOwnerUserId);
     const preferred = item.localizations.find((label) => label.language.toLocaleLowerCase() === 'de') ?? item.localizations[0];
     return {
+      departmentCodes:item.departmentCodes??[],officeCodes:item.officeCodes??[],foreignDepartment:item.foreignDepartment===true,
       id: item.id, urn: item.urn, originCatalogId: item.originCatalogId, revision: item.revision,
       canTransferOwnership: item.canTransferOwnership === true, canEditMetadata: item.canEditMetadata === true, status: item.lifecycle, preferredLabel: item.preferredLabel, definition: preferred?.definition ?? '',
       labels: item.localizations.map((label) => ({ language: label.language, preferredLabel: label.preferredLabel, alternativeLabels: label.alternativeLabels ?? [], definition: label.definition })),
-      ownerUserId: item.ownerUserId, ownerName: owner?.displayName ?? item.ownerUserId, ownerOrganization: owner?.organization ?? 'Organisation nicht verfügbar',
-      deputyOwnerUserId: item.deputyOwnerUserId, deputyOwnerName: deputy?.displayName ?? item.deputyOwnerUserId, deputyOwnerOrganization: deputy?.organization ?? 'Organisation nicht verfügbar',
+      ownerUserId: item.ownerUserId, ownerName: item.ownerName || owner?.displayName || item.ownerUserId, ownerOrganization: owner?.organization ?? 'Organisation nicht verfügbar',
+      deputyOwnerUserId: item.deputyOwnerUserId, deputyOwnerName: item.deputyOwnerName || deputy?.displayName || item.deputyOwnerUserId, deputyOwnerOrganization: deputy?.organization ?? 'Organisation nicht verfügbar',
       productCount: item.productCount, termCount: item.termCount, updatedAt: item.updatedAt,
     };
   }

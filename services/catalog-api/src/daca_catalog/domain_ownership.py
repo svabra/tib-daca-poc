@@ -28,14 +28,19 @@ def domain_organization_ids(session, domain):
         CatalogObjectResponsibility.provenance == "domain-handover",
     ).limit(1)):
         return set()
+    return person_organization_ids(session, domain.owner_user_id)
+
+
+def person_organization_ids(session, user_id):
+    """Trusted current primary scope; expired membership never falls back to directory data."""
     today = utc_now().date()
     history = list(session.scalars(select(FederalPersonMembership).where(
-        FederalPersonMembership.user_id == domain.owner_user_id,
+        FederalPersonMembership.user_id == user_id,
         FederalPersonMembership.is_primary.is_(True),
     )))
     if history:
         return {row.organization_id for row in history if row.valid_from <= today and (row.valid_to is None or row.valid_to >= today)}
-    directory = session.get(IdentityDirectoryEntry, domain.owner_user_id)
+    directory = session.get(IdentityDirectoryEntry, user_id)
     if directory and directory.active and directory.source == "federal" and directory.organization_id:
         return {directory.organization_id}
     return set()

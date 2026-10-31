@@ -7,6 +7,7 @@
       <button type="button" data-search-mode="focus" [attr.aria-pressed]="mode()==='focus'" aria-controls="search-workspace" (click)="setMode('focus')"><daca-search-icon name="list-search"/><span><strong>{{i18n.t('searchFocusMode')}}</strong><small>{{i18n.t('searchFocusSubtitle')}}</small></span></button>
     </div>
   </header>
+  <daca-search-views [configuration]="viewConfiguration()" [activeId]="activeViewId()" [sharedViewId]="sharedViewId()" [organizations]="organizations()" [organizationLabels]="data.organizationLabels()" [domains]="domains()" (applied)="applyView($event)" (activeLoaded)="restoreView($event)" (sharedClosed)="closeSharedView()"/>
 
   <form class="search-form" role="search" (submit)="$event.preventDefault()">
     <div class="search-input-row"><div class="search-input-field"><label class="daca-sr-only" for="expert-search-input">{{i18n.t('searchTerm')}}</label><span class="expert-search-control"><daca-search-icon name="search"/><input id="expert-search-input" type="search" maxlength="200" autocomplete="off" [placeholder]="i18n.t('searchPlaceholder')" [value]="query()" (input)="updateQuery($any($event.target).value)" aria-describedby="expert-search-hint">@if(query()){<button type="button" [attr.aria-label]="i18n.t('clearSearch')" (click)="clearQuery()"><daca-search-icon name="x"/></button>}</span></div><button class="search-filter-button" type="button" aria-controls="search-filter-panel" [attr.aria-expanded]="filterOpen()" (click)="filterOpen.set(!filterOpen())"><daca-search-icon name="adjustments-horizontal"/>{{i18n.t('searchFilters')}}@if(filterCount()){<span>({{filterCount()}})</span>}</button></div>
@@ -35,7 +36,7 @@
     }
 
     <section class="search-results" aria-labelledby="expert-search-results-title" [attr.aria-busy]="data.loading()||api.loading()">
-      <header class="search-results-header"><h2 id="expert-search-results-title" aria-live="polite">{{searchReady()?i18n.t('searchMatches',{count:results().length}):i18n.t('enterSearch')}}</h2><label class="search-sort"><span class="daca-sr-only">{{i18n.t('searchSort')}}</span><select [value]="sort()" (change)="sort.set($any($event.target).value)"><option value="relevance">{{i18n.t('searchRelevance')}}</option><option value="name">{{i18n.t('searchName')}}</option></select></label></header>
+      <header class="search-results-header"><h2 id="expert-search-results-title" aria-live="polite">{{searchReady()?i18n.t('searchMatches',{count:results().length}):i18n.t('enterSearch')}}</h2><label class="search-sort"><span class="daca-sr-only">{{i18n.t('searchSort')}}</span><select [value]="sort()" (change)="setSort($any($event.target).value)"><option value="relevance">{{i18n.t('searchRelevance')}}</option><option value="name">{{i18n.t('searchName')}}</option></select></label></header>
       @if(mode()==='focus'){
         <nav class="search-kind-strip" [attr.aria-label]="i18n.t('searchAll')"><button type="button" [attr.aria-pressed]="selectedKind()==='all'" [dacaTooltip]="kindExplanation('all')" (click)="selectKind('all')">{{i18n.t('all')}} <span>{{matches().length}}</span></button>@for(kind of kinds;track kind){<button type="button" [attr.aria-pressed]="selectedKind()===kind" [attr.data-search-kind]="kind" [dacaTooltip]="kindExplanation(kind)" (click)="selectKind(kind)">{{kindLabel(kind,true)}} <span>{{counts()[kind]}}</span></button>}</nav>
       }

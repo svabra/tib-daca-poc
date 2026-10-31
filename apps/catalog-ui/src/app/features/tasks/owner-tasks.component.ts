@@ -235,6 +235,7 @@ export class OwnerTasksComponent {
 
   taskLabel(value: string): string {
     return ({
+      search_view_shared: 'View erhalten',
       metadata_quality: 'Qualität',
       access_governance: 'Governance',
       simulation_quality_alert: 'Qualitätsalarm',
@@ -260,6 +261,7 @@ export class OwnerTasksComponent {
   }
 
   taskRoute(task: { taskType: string; dataProductId: string | null; governanceSubmissionId?: string | null; domainChangeRequestId?: string | null; glossaryTermProposalId?: string | null; logicalModelReviewId?: string | null; logicalModelId?: string | null }): unknown[] {
+    if (task.taskType === 'search_view_shared') return ['/search'];
     if (task.taskType.startsWith('logical_mapping_') && task.logicalModelId) return ['/models', task.logicalModelId, 'mappings'];
     if (task.taskType === 'logical_model_review' && task.logicalModelReviewId) return ['/model-reviews', task.logicalModelReviewId];
     if (task.taskType === 'logical_model_changes_requested' && task.logicalModelReviewId) return ['/model-reviews', task.logicalModelReviewId];
@@ -277,7 +279,8 @@ export class OwnerTasksComponent {
     this.api.acknowledgeTask(taskId).subscribe({ error: () => this.decisionError.set('Die Information konnte nicht bestätigt werden.') });
   }
 
-  taskQueryParams(task: { taskType: string; serviceLevelRevisionId?: string | null }): Record<string, string> | null {
+  taskQueryParams(task: { taskType: string; serviceLevelRevisionId?: string | null; searchViewShareId?: string | null }): Record<string, string> | null {
+    if (task.taskType === 'search_view_shared' && task.searchViewShareId) return {sharedView: task.searchViewShareId};
     return task.taskType === 'service_level_approval' && task.serviceLevelRevisionId
       ? { review: task.serviceLevelRevisionId }
       : null;

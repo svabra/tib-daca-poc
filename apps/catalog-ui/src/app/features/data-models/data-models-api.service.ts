@@ -199,6 +199,9 @@ export class DataModelsApiService {
     return this.identitySafe(this.http.post<PhysicalDomainState>(`/api/v1/physical-tables/${encodeURIComponent(tableId)}/domain-assignment`,{dataDomainId:domainId,physicalDomainTargets:[target]},{headers:this.identity.headers()}));
   }
   loadPhysicalDomains(tableId:string):Observable<PhysicalDomainState>{return this.identitySafe(this.http.get<PhysicalDomainState>(`/api/v1/physical-tables/${encodeURIComponent(tableId)}/domains`,{headers:this.identity.headers()}));}
+  removePhysicalDomain(tableId:string,domainId:string,target:PhysicalDomainTarget):Observable<PhysicalDomainState>{
+    return this.identitySafe(this.http.delete<PhysicalDomainState>(`/api/v1/physical-tables/${encodeURIComponent(tableId)}/domain-assignments/${encodeURIComponent(domainId)}`,{body:target,headers:this.identity.headers()}));
+  }
   loadDomainCandidates(modelId:string):Observable<readonly {snapshot:PhysicalSnapshot;table:PhysicalTable;persisted:boolean}[]>{
     return this.listRepresentations(modelId).pipe(switchMap((items)=>{
       const ids=[...new Set(items.map((item)=>item.physicalSnapshotId))];

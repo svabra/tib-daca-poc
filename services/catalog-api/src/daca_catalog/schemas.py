@@ -455,6 +455,7 @@ class LineageEdgeResponse(ApiModel):
     transformation: str | None
     state: str
     created_at: datetime
+    can_view_access_logs: bool = False
 
 
 class LineageResponse(ApiModel):
@@ -1313,6 +1314,11 @@ class DomainDraft(ApiModel):
 
 
 class DomainResponse(ApiModel):
+    department_codes: list[str] = Field(default_factory=list)
+    office_codes: list[str] = Field(default_factory=list)
+    foreign_department: bool = False
+    owner_name: str = ""
+    deputy_owner_name: str = ""
     can_transfer_ownership: bool = False
     can_edit_metadata: bool = False
     id: uuid.UUID
@@ -1522,6 +1528,7 @@ class SemanticSuggestionResponse(ApiModel):
 class WorkflowTaskResponse(ApiModel):
     id: uuid.UUID
     task_type: Literal[
+        "search_view_shared",
         "metadata_quality",
         "access_governance",
         "access_request_review",
@@ -1547,6 +1554,7 @@ class WorkflowTaskResponse(ApiModel):
     status: Literal["open", "in_progress", "completed"]
     task_kind: Literal["action", "information"] = "action"
     assignee_user_id: str
+    search_view_share_id: uuid.UUID | None = None
     data_product_id: uuid.UUID | None
     access_request_id: uuid.UUID | None
     simulation_event_id: uuid.UUID | None = None

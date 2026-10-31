@@ -12,6 +12,9 @@ They use the shared BIT/Swiss federal design package and live/fallback-labelled 
 
 The lineage canvas intentionally supports horizontal touch/trackpad exploration on narrow screens
 so labels remain readable instead of shrinking the full graph to illegible text.
+The current implementation uses wrapped cards, semantic colors, shared hover summaries and
+directional impulses; see [lineage behavior and validation](../lineage-explorer.md). The captures
+above are historical references; current test captures are written under ignored `output/ui-regression/`.
 
 ## Logical-model and mapping references
 

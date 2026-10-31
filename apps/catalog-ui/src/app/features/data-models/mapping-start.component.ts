@@ -1,3 +1,4 @@
+import { physicalCategoryKey } from './physical-representation-labels';
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, ElementRef, inject, signal, untracked, ViewChild } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -7,19 +8,22 @@ import { DemoIdentityService } from '../../core/demo-identity.service';
 import { SearchIconComponent } from '../search/search-icon.component';
 import { LoadingIndicatorComponent } from '../../shared/loading-indicator.component';
 import { DataModelsApiService } from './data-models-api.service';
-import { LogicalModelSummary, PhysicalSnapshot, PhysicalTable, RecentMappingWorkspace } from './data-models.models';
+import { LogicalModelSummary, PhysicalDomainState, PhysicalSnapshot, PhysicalTable, RecentMappingWorkspace } from './data-models.models';
+import { DomainAssignmentChoice, ModelDomainDialogComponent } from './model-domain-dialog.component';
 import { RepresentationPickerComponent } from './representation-picker.component';
 import { MappingDraftFacade } from './mapping-draft.facade';
 import { MappingGraphComponent } from './mapping-graph.component';
 
 @Component({
   selector:'daca-mapping-start',standalone:true,changeDetection:ChangeDetectionStrategy.OnPush,
-  imports:[RouterLink,DatePipe,SearchIconComponent,RepresentationPickerComponent,LoadingIndicatorComponent,MappingGraphComponent],
+  imports:[RouterLink,DatePipe,SearchIconComponent,RepresentationPickerComponent,LoadingIndicatorComponent,MappingGraphComponent,ModelDomainDialogComponent],
   providers:[MappingDraftFacade],
   templateUrl:'./mapping-start.component.html',styleUrl:'./mapping-start.component.css',
 })
 export class MappingStartComponent {
   readonly i18n=inject(CatalogI18nService);
+  readonly physicalCategoryKey=physicalCategoryKey;
+  readonly canDeriveLogical=computed(()=>!!this.physical()&&this.identity.canEditModels()&&!this.physicalLoading()&&!this.opening()&&!this.checking());
   private readonly api=inject(DataModelsApiService);
   private readonly identity=inject(DemoIdentityService);
   private readonly router=inject(Router);
@@ -50,6 +54,29 @@ export class MappingStartComponent {
   readonly error=signal('');
   readonly historyError=signal(false);
   readonly selectionNotice=signal('');
+  readonly domainOpen=signal(false);readonly domainBusy=signal(false);readonly domainError=signal<string|null>(null);
+  readonly canManageDomains=computed(()=>this.identity.canEditModels()&&this.physical()?.table.domainAssignable!==false);
+  openPhysicalDomainDialog():void{
+    const item=this.physical();if(!item||!this.canManageDomains()||this.domainBusy())return;
+    this.domainOpen.set(true);this.domainBusy.set(true);this.domainError.set(null);const generation=this.generation;
+    this.api.loadPhysicalDomains(item.table.id).subscribe({next:state=>{if(generation!==this.generation)return;this.updateDomains(state);this.domainBusy.set(false);},error:(error:Error)=>{if(generation!==this.generation)return;this.domainBusy.set(false);this.domainError.set(error.message);}});
+  }
+  assignPhysicalDomain(choice:DomainAssignmentChoice):void{
+    const item=this.physical(),target=choice.physicalDomainTargets.find(entry=>entry.physicalTableId===item?.table.id);
+    if(!item||!target||!this.canManageDomains()||this.domainBusy())return;
+    this.domainBusy.set(true);this.domainError.set(null);const generation=this.generation;
+    this.api.assignPhysicalDomain(item.table.id,choice.domainId,target).subscribe({next:state=>{if(generation!==this.generation)return;this.updateDomains(state);this.domainBusy.set(false);this.domainOpen.set(false);},error:(error:Error)=>{if(generation!==this.generation)return;this.domainBusy.set(false);this.domainError.set(error.message);}});
+  }
+  removePhysicalDomain(tableId:string,domainId:string):void{
+    const item=this.physical();if(!item||item.table.id!==tableId||!item.table.domainVersion||!this.canManageDomains()||this.domainBusy())return;
+    this.domainBusy.set(true);this.error.set('');const generation=this.generation;
+    this.api.removePhysicalDomain(tableId,domainId,{physicalTableId:tableId,physicalSnapshotId:item.snapshot.id,expectedDomainVersion:item.table.domainVersion}).subscribe({next:state=>{if(generation!==this.generation)return;this.updateDomains(state);this.domainBusy.set(false);this.facade.announcement.set('Domänenzuordnung entfernt.');},error:(error:Error)=>{if(generation!==this.generation)return;this.domainBusy.set(false);this.error.set(error.message+' Die Domänenzuordnung wurde nicht entfernt.');}});
+  }
+  private updateDomains(state:PhysicalDomainState):void{
+    const item=this.physical();if(!item)return;
+    this.facade.updatePhysicalDomains(item.snapshot.sourceId,item.table.stableKey,state);
+    this.physical.set({...item,table:{...item.table,...state},snapshot:{...item.snapshot,tables:item.snapshot.tables.map(table=>table.stableKey===item.table.stableKey?{...table,...state}:table)}});
+  }
   private generation=0;
   private compatibilityToken=0;
   private modelPickerTrigger:HTMLElement|null=null;
@@ -69,6 +96,7 @@ export class MappingStartComponent {
   }
   load():void{
     const generation=++this.generation;++this.compatibilityToken;
+    this.domainOpen.set(false);this.domainBusy.set(false);this.domainError.set(null);
     this.models.set([]);this.recent.set([]);this.selectedModel.set(null);this.physical.set(null);this.facade.clear();
     this.logicalOpen.set(false);this.physicalOpen.set(false);this.checking.set(false);this.selectionNotice.set('');
     this.initialPhysicalSnapshot.set(null);
@@ -96,6 +124,13 @@ export class MappingStartComponent {
   choosePhysical(value:{snapshot:PhysicalSnapshot;table:PhysicalTable}):void{
     if(this.opening())return;this.physicalOpen.set(false);this.opening.set(true);const generation=this.generation;
     void this.router.navigate(['/mappings/physical',value.snapshot.id,value.table.id]).then(ok=>{if(generation===this.generation&&!ok){this.opening.set(false);this.selectionNotice.set(this.i18n.t('mappingStartOpenError'));}},()=>{if(generation===this.generation){this.opening.set(false);this.selectionNotice.set(this.i18n.t('mappingStartOpenError'));}});
+  }
+  deriveLogical(tableId=this.physical()?.table.id):void{
+    const physical=this.physical();if(!physical||tableId!==physical.table.id||!this.canDeriveLogical())return;
+    const generation=this.generation;this.logicalOpen.set(false);this.opening.set(true);this.selectionNotice.set('');
+    void this.router.navigate(['/models/new'],{queryParams:{physicalSnapshotId:physical.snapshot.id,physicalTableId:physical.table.id}}).then(ok=>{
+      if(generation===this.generation&&!ok){this.opening.set(false);this.selectionNotice.set(this.i18n.t('mappingStartOpenError'));}
+    },()=>{if(generation===this.generation){this.opening.set(false);this.selectionNotice.set(this.i18n.t('mappingStartOpenError'));}});
   }
   closePhysical():void{this.physicalOpen.set(false);setTimeout(()=>this.physicalTrigger?.nativeElement.focus(),0);}
   search(event:Event):void{this.query.set((event.target as HTMLInputElement).value);this.limit.set(8);}

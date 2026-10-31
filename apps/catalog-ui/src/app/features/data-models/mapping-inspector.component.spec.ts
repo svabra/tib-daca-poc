@@ -56,7 +56,7 @@ describe('MappingInspectorComponent workflow actions', () => {
       physicalColumnIds: ['removed-column'],
     });
 
-    expect(root.textContent).toContain('Nicht im aktuellen Snapshot (removed-column)');
+    expect(root.textContent).toContain('Nicht in der aktuellen physischen Repräsentation/Deklaration (removed-column)');
     const repair = [...root.querySelectorAll<HTMLButtonElement>('.inspector-actions button')]
       .find((button) => button.textContent?.includes('auflösen'))!;
     repair.click();

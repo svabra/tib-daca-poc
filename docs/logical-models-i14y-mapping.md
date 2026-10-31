@@ -1,11 +1,54 @@
 # Logical models, I14Y concepts, physical models, and mappings
 
+## Remove an explicit physical domain membership
+
+The common representation/declaration menu offers **Domänenzuordnung entfernen** whenever the
+object has an explicit membership and the current editor can manage domains. With multiple
+memberships each action names its domain and removes only that one. This is shared by canvas
+cards, the physical-bindings area and physical-only Mapping entry. The latter also supports the
+existing assignment dialog, so an unassigned object can be assigned again without a logical model.
+The horizontal separator immediately after the preserved-bindings/mappings hint is omitted.
+
+`DELETE /api/v1/physical-tables/:tableId/domain-assignments/:domainId` accepts the existing
+PhysicalDomainTarget shape (physicalTableId, physicalSnapshotId, expectedDomainVersion). It locks
+the same PhysicalSource as assignment, rechecks source access plus Data Owner/Data Steward scope,
+validates active source/object/revision, and rejects a stale domainVersion with 409. Only the
+requested source/stable-object-key/domain row is removed; other memberships, logical domain,
+model revisions, bindings, mapping content and imported structure stay intact. Current membership
+remains snapshot-independent. Removal appends a `physical-domain-assignment` / `removed` audit
+with source, stable key and domain identifiers. No SQL schema migration is needed.
+
+The UI uses the current displayed version and updates every representation of the same
+source/stable key only after success, preserving unsaved mapping work. Busy guards prevent
+duplicate actions. Errors keep the membership visible; stale state must be reloaded before a
+new explicit attempt. Existing near-real-time workspace refresh observes committed removals.
+
+Validation includes all 592 frontend tests, eight domain-assignment API cases and the
+`physical-domain-removal` Edge flow. Browser evidence covers the missing separator, binding and
+canvas labels, committed reload state, physical-only removal/reassignment and unchanged mapping
+data. The browser restores its original membership; assignment/removal audit history remains.
+
+The CSV structure-import dialog labels physical models as **Physische Repräsentation**. A broad
+drop area accepts a single CSV or opens file selection through the standard button. Choosing a
+replacement and dropping files use the same validation, preview and cancellation path. Name and
+organization sit in a separate row of standard-height fields, stacking on narrow screens.
+Detailed format help is collapsed initially. Dropping a file does not save metadata; the explicit
+**Importieren** action remains required after preview and scope selection.
+
 Physical source metadata imports use a bounded 60-second client request budget, independently
 of the ordinary eight-second reads. Revision and identity checks remain in force. The source
 stays in its loading state until confirmed success or a failure, including longer drift checks;
 the browser regression checks the success notice before verifying the new immutable snapshot.
 
 ## UI terminology
+
+Physical-instance UI text uses **Physische Repräsentation** for connected sources and
+**Physische Deklaration** for CSV imports, including loading and empty states, Mapping selection,
+bindings, object details, history and help. Where both kinds can occur, name both. Version numbers
+and historical imports are labelled **Revision** and **Revisionshistorie**. Do not call physical
+instances Snapshot in user-facing copy. Internal `PhysicalSnapshot`, route/query keys and immutable
+IDs remain compatibility details. Review/group snapshots are separate concepts. New generated
+derivation prose uses Revision; existing authored descriptions are not rewritten.
 
 **Mapping** is the language-independent name for the logical-to-physical workspace section,
 including DE/FR/IT/EN. Use **Mapping hinzufügen**, **Mapping bearbeiten**, **Mapping übernehmen**
@@ -569,6 +612,14 @@ The production adapter reads only PostgreSQL `information_schema` and `pg_catalo
 transaction.  Its DSN is a server-side secret and is never accepted by an API payload.  The
 deterministic fixture adapter implements the same port and is the default for the PoC.
 
+Blue source-page guidance uses the shared `InfoNoticeComponent`: each notice has a small close
+button inside its upper-right corner, with a localized accessible label. Dismissal is independent
+per mounted notice and survives filtering/data refresh, but resets when the page is recreated or
+reloaded. No local/session storage or database setting is written. The discovery text links to
+expert search (retaining the current source query) and business domains and recommends asking
+domain owners directly. Copy and close labels support DE/FR/IT/EN. Errors and warnings retain
+their existing behavior.
+
 The source register treats one catalog path as one technical system instance. Active duplicate
 registrations of that path are consolidated without merging their historical snapshots or mappings;
 separate instances of the same connector type remain separate. Users can search the register by
@@ -697,8 +748,18 @@ Hidden representations, editor panels and canvas controls are omitted. Connectio
 the left uses the logical field’s left port and the physical column’s right port. Simultaneous
 left/right representations use both logical ports. Drag logical and physical card headers
 to arrange the canvas, or use arrow keys on a focused header (Shift for larger steps). Connections
-follow their field ports. Clicking or opening the context menu on a physical card offers
-**Darstellung der physischen Repräsentation entfernen**; this hides its drawing and connections
+follow their field ports.
+
+The graph legend and toolbar counters have shared glossary tooltips on hover and keyboard focus,
+indicated by faint wavy underlines. **Gültig** means technical validation found no blocking errors;
+**Prüfen** includes draft and review-pending mappings, requiring review of fields, types and rules;
+**Gebrochen** describes mappings invalidated by physical structure changes and asks for repair
+against the current representation/declaration followed by validation.
+Keyboard-focused hints reposition when scrolling keeps their trigger visible; leaving the viewport
+closes them. Pointer-only hints retain their usual close-on-scroll behavior.
+
+Clicking or opening the context menu on a physical card offers
+**Darstellung dieser Physischen Repräsentation/Deklaration löschen**; this hides its drawing and connections
 without deleting bindings or mappings or creating an unsaved draft. Selecting it in the
 representation list restores the card. Layout and visibility survive Graph/Table/Drift switches
 within the workspace; they reset when the workspace is reloaded. New representations are added
@@ -1029,3 +1090,81 @@ the existing responsible domain owners still approve the proposals. Open proposa
 current author reload as an explicitly pending preview with review links. If one of several
 term submissions fails, already submitted proposals are retained and only remaining drafts
 are retried. No new terminology store is introduced; shared presentation uses the separate semantic_graph_states table.
+
+
+### Physical object identity and shared actions
+
+Canvas headers use **Logisches Modell**, **Physische Repräsentation**, and for CSV inventories
+**Physische Deklaration**. Each physical card displays its qualified object name. A snapshot
+can span several databases/systems; always prefer `table.databaseName` over the snapshot's
+legacy first-database summary when composing system/schema/object names. The same helper is
+used in binding labels, field choices, physical searches, object selection and new derivation
+defaults. This repairs the SAP.CSV.VIBDBU display without rewriting persisted mappings or IDs.
+
+Binding cards expose the same shared menu as canvas cards, by three dots or right click.
+Physical menus begin with source navigation in a new tab, scoped to snapshot and object, with
+an external-link icon and accessible hint. Drawing removal follows immediately, with the hint that
+bindings and mappings remain persisted. Separators then group physical-first counterpart selection/
+derivation when applicable and domain assignment/copy/open, followed by name-prefilled term/domain
+searches, and finally general logical/physical model search. Empty domain/action groups are omitted.
+Model result links open in new tabs and retain physical snapshot/object parameters.
+Logical model menus omit source navigation and prefill semantic searches with the logical model
+title. Open physical menus defer background refresh to keep their target stable.
+
+Choosing a logical counterpart in physical-first Mapping is explicitly separate from general
+model search: **Logisches Modell auswählen** keeps the physical context and performs compatibility
+checks in the current workspace; general **suchen und öffnen** searches open their targets in a new
+tab. The common catalog browser's new-tab input never changes explicit selection mode used by
+semantic graph connections. Native anchors support keyboard activation and browser link actions.
+
+
+The source register identifies CSV inventories as declarations and connected sources as physical
+representations. All source cards use the accessible three-dot menu. CSV archive/restore/delete
+retain their existing permission checks, explicit confirmation, revision checks and audit path.
+Read-only users retain navigation without write actions. Cancelling restores focus to the trigger.
+
+
+The common physical-object search also uses qualified names and explicitly labels the source,
+category and provider. An origin info tooltip adds owner/import/revision and exact IDs, allowing
+same-named inventories to be distinguished without filling result rows with URNs. Technical IDs
+remain searchable and selection retains the exact source/snapshot/object navigation target.
+
+
+The logical-model overview reuses the catalog's small blue loading indicator during collection
+reads, retaining the localized loading message and the existing success/error lifecycle.
+
+
+Canvas background/logical-header menus place adding a physical representation first for writable
+models. Separators group creation and model searches; semantic/domain actions belong to model cards. Small outline icons
+(plus, schema, object, book, hierarchy) supplement visible labels; source and removal actions in
+physical binding/canvas menus use the same vocabulary. Icons are decorative for assistive
+technology; permissions, keyboard focus order, search targets and local-draft behavior remain.
+
+
+### Derive from the physical Mapping entry
+
+`/mappings/physical/:snapshotId/:tableId` offers choosing an existing logical model or deriving a
+new one. Both actions are available in the logical placeholder (also on mobile), the physical
+card context menu and the blank-canvas menu. Explicit logical counterpart selection in this mode opens the scoped model
+selector and keeps the current physical object through the existing compatibility check.
+
+Derivation navigates to `/models/new?physicalSnapshotId=...&physicalTableId=...`, reusing the full
+standard logical-model editor. No quick-derive request or draft write happens on opening. Source
+fields supply editable suggestions and retain stable physical column IDs through renaming/removal.
+Users complete description, ownership, domain, classification, business objects and concept decisions.
+Explicit Save calls the existing derive-logical-model endpoint; successful creation returns to the
+new model's Mapping workspace with the same physical context. Permissions and existing domain
+propagation confirmation remain enforced. Blank-canvas menus never perform semantic searches;
+term/domain searches require a named model card. No persistence shape is added.
+
+
+### Default department in the model overview
+
+The overview defaults to `DemoIdentityService.user().department`, normalized to the department
+code. The explicit All/other-department choice remains available and survives model refreshes
+and unrelated profile updates. Reset filters restores the signed-in user's department. A linked
+filter resets on identity or department changes; filters from a previous identity are cleared.
+The own department remains an option even if no model belongs to it. Until the directory resolves
+the signed-in identity the overview retains its loading indicator; it does not show a fallback
+user's collection. Profiles without a department retain All as the fallback. This changes initial
+presentation only, not catalog visibility or authorization; no filter preference is persisted.

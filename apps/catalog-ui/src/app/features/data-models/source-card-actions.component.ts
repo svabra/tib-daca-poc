@@ -1,3 +1,4 @@
+import { StructureInventoryActionsComponent, InventoryAction } from './structure-inventory-actions.component';
 import { afterNextRender, ChangeDetectionStrategy, Component, ElementRef, effect, HostListener, inject, Injector, input, output, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CatalogI18nService } from '../../core/catalog-i18n.service';
@@ -7,7 +8,7 @@ import { SourceAccessActionsComponent } from './source-access-actions.component'
 
 @Component({
   selector: 'daca-source-card-actions', standalone: true,
-  imports: [RouterLink, SourceAccessActionsComponent],
+  imports: [RouterLink, SourceAccessActionsComponent, StructureInventoryActionsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <button #trigger class="source-actions-trigger" type="button" aria-haspopup="menu"
@@ -20,12 +21,21 @@ import { SourceAccessActionsComponent } from './source-access-actions.component'
       <div #menu class="source-actions-menu" role="menu" [id]="'source-actions-' + source().id"
         [attr.aria-label]="i18n.t('sourceActions', {name: source().name})" (keydown)="menuKeydown($event)">
         <a role="menuitem" tabindex="-1" [routerLink]="['/physical-models', source().id]"
-          [queryParams]="logicalModelId() ? {logicalModelId: logicalModelId()} : {}" (click)="close()">{{ i18n.t('openSource') }}</a>
-        <button role="menuitem" tabindex="-1" type="button" [disabled]="importing() || !importAllowed()" (click)="importSource()">{{ i18n.t(importing() ? 'importing' : source().latestSnapshotId ? 'reimport' : 'importMetadata') }}</button>
-        @if(source().canRelinquishAccess){<button role="menuitem" tabindex="-1" type="button" (click)="returnAccess()">{{ i18n.t('returnSourceAccess') }}</button>}
+          [queryParams]="logicalModelId() ? {logicalModelId: logicalModelId()} : {}" (click)="close()">{{ i18n.t(source().connectorType === 'csv' ? 'openInventory' : 'openSource') }}</a>
+        @if(source().connectorType === 'csv'){
+          @if(source().inventoryManageable){
+            <button role="menuitem" tabindex="-1" type="button" (click)="inventoryAction(source().lifecycle === 'archived' ? 'restore' : 'archive')">{{ i18n.t(source().lifecycle === 'archived' ? 'restoreInventory' : 'archiveInventory') }}</button>
+            <button role="menuitem" tabindex="-1" type="button" class="danger" (click)="inventoryAction('delete')">{{ i18n.t('deleteInventory') }}</button>
+          }
+        }@else{
+          <button role="menuitem" tabindex="-1" type="button" [disabled]="importing() || !importAllowed()" (click)="importSource()">{{ i18n.t(importing() ? 'importing' : source().latestSnapshotId ? 'reimport' : 'importMetadata') }}</button>
+          @if(source().canRelinquishAccess){<button role="menuitem" tabindex="-1" type="button" (click)="returnAccess()">{{ i18n.t('returnSourceAccess') }}</button>}
+        }
       </div>
     }
-    <daca-source-access-actions [source]="source()" [showTrigger]="false" (returned)="returned.emit()" />
+    @if(source().connectorType === 'csv'){
+      <daca-structure-inventory-actions [source]="source()" [showActions]="false" (changed)="inventoryChanged.emit($event)" />
+    }@else{<daca-source-access-actions [source]="source()" [showTrigger]="false" (returned)="returned.emit()" />}
   `,
   styles: [`
     :host{position:relative;display:inline-block;margin-inline-start:auto;align-self:flex-end}
@@ -36,6 +46,7 @@ import { SourceAccessActionsComponent } from './source-access-actions.component'
     .source-actions-menu{position:absolute;z-index:30;right:0;bottom:calc(100% + .4rem);width:min(19rem,calc(100vw - 4rem));padding:.25rem 0;border:1px solid var(--daca-border-strong);background:var(--daca-surface,#fff);box-shadow:0 8px 24px #102a3b33}
     .source-actions-menu a,.source-actions-menu button{box-sizing:border-box;display:flex;align-items:center;width:100%;min-height:40px;margin:0;border:0;padding:.65rem .8rem;background:transparent;color:var(--daca-blue);font-family:inherit;font-size:.66rem;font-weight:700;line-height:1.4;text-align:left;text-decoration:none;cursor:pointer}
     .source-actions-menu :is(a,button):not(:disabled):hover,.source-actions-menu :is(a,button):focus-visible{background:var(--daca-blue-soft,#edf5fa)}
+    .source-actions-menu button.danger{color:var(--daca-red-dark)}
     .source-actions-menu button:disabled{color:var(--daca-muted);cursor:not-allowed}
   `],
 })
@@ -46,6 +57,7 @@ export class SourceCardActionsComponent {
   readonly importing = input(false);
   readonly importRequested = output<void>();
   readonly returned = output<void>();
+  readonly inventoryChanged = output<{action:InventoryAction;name:string}>();
   readonly menuOpen = signal(false);
   readonly i18n = inject(CatalogI18nService);
   private readonly identity = inject(DemoIdentityService);
@@ -54,6 +66,8 @@ export class SourceCardActionsComponent {
   private readonly trigger = viewChild.required<ElementRef<HTMLButtonElement>>('trigger');
   private readonly menu = viewChild<ElementRef<HTMLElement>>('menu');
   private readonly access = viewChild(SourceAccessActionsComponent);
+  private readonly inventory = viewChild(StructureInventoryActionsComponent);
+  inventoryAction(action:InventoryAction):void{this.close();this.inventory()?.openFrom(action,this.trigger().nativeElement);}
 
   constructor() { effect(() => { this.identity.userId(); this.menuOpen.set(false); }); }
 

@@ -1,3 +1,4 @@
+import { physicalObjectName } from './physical-representation-labels';
 import { ChangeDetectionStrategy, Component, effect, ElementRef, inject, input, output, signal, computed, viewChild } from '@angular/core';
 import { DataModelsApiService } from './data-models-api.service';
 import { LogicalModelSummary, PhysicalSnapshot, PhysicalSource, PhysicalTable } from './data-models.models';
@@ -15,9 +16,9 @@ import { LoadingIndicatorComponent } from '../../shared/loading-indicator.compon
         <label>Quelle suchen<input autofocus type="search" [value]="query()" (input)="query.set(value($event))"></label>
         <label>Quellentyp<select [value]="sourceType()" (change)="sourceType.set(value($event))"><option value="">Alle</option><option value="postgresql">PostgreSQL</option><option value="s3">S3 / Parquet</option><option value="csv">Strukturinventar</option></select></label>
         @if(loadingSources()){<daca-loading-indicator label="Datenquellen werden geladen …"/>}
-        <div class="source-options">@for(source of filteredSources();track source.id){<button type="button" [class.is-selected]="selectedSource()?.id===source.id" [disabled]="!canAttach(source)" [title]="canAttach(source)?source.catalogPath:disabledReason(source)" (click)="selectSource(source)"><strong>{{ source.name }}</strong><small>{{ source.catalogPath }}</small>@if(!canAttach(source)){<small>{{ disabledReason(source) }}</small>}</button>}@empty{@if(!loadingSources()){<p>Keine passende Datenquelle.</p>}}</div>
+        <div class="source-options">@for(source of filteredSources();track source.id){<button type="button" [attr.data-source-id]="source.id" [class.is-selected]="selectedSource()?.id===source.id" [disabled]="!canAttach(source)" [title]="canAttach(source)?source.catalogPath:disabledReason(source)" (click)="selectSource(source)"><strong>{{ source.name }}</strong><small>{{ source.catalogPath }}</small>@if(!canAttach(source)){<small>{{ disabledReason(source) }}</small>}</button>}@empty{@if(!loadingSources()){<p>Keine passende Datenquelle.</p>}}</div>
         @if(loadingSnapshot()){<daca-loading-indicator label="Struktur wird geladen …"/>}
-        @if(snapshot();as snapshot){<label>Objekt suchen<input type="search" [value]="objectQuery()" (input)="objectQuery.set(value($event))"></label><div class="object-tree"><strong>{{ snapshot.databaseName }}</strong>@for(schema of schemas();track schema){<details open><summary>{{ schema }}</summary>@for(table of tablesFor(schema);track table.id){<button type="button" [class.is-selected]="selectedTable()?.id===table.id" (click)="chooseTable(table)"><small>{{ table.kind==='parquet'?'Parquet':table.kind==='view'?'View':table.kind==='materialized_view'?'Materialized View':'Tabelle' }}</small><strong>{{ table.name }}</strong></button>}</details>}</div>}
+        @if(snapshot();as snapshot){<label>Objekt suchen<input type="search" [value]="objectQuery()" (input)="objectQuery.set(value($event))"></label><div class="object-tree"><strong>{{ snapshot.sourceName }}</strong>@for(schema of schemas();track schema){<details open><summary>{{ schema }}</summary>@for(table of tablesFor(schema);track table.id){<button type="button" [attr.data-physical-table-id]="table.id" [class.is-selected]="selectedTable()?.id===table.id" (click)="chooseTable(table)"><small>{{ table.kind==='parquet'?'Parquet':table.kind==='view'?'View':table.kind==='materialized_view'?'Materialized View':'Tabelle' }}</small><strong>{{ physicalObjectName(snapshot,table) }}</strong></button>}</details>}</div>}
       </nav>@if(!selectionOnly()){<section class="picker-inspection" aria-label="Objektinspektion">@if(selectedTable();as table){@if(snapshot();as snapshot){@if(selectedSource();as source){<daca-physical-object-detail [table]="table" [snapshot]="snapshot" [source]="source" />}}}@else{<p>Wählen Sie eine Datenquelle und eine Tabelle, View oder ein Parquet-Objekt.</p>}</section>}</div>
       <footer><button class="daca-button is-secondary" type="button" (click)="closed.emit()">Abbrechen</button>@if(!selectionOnly()){<button class="daca-button" type="button" [disabled]="!selectedTable()||loadingSnapshot()" (click)="attach()">Hinzufügen</button>}</footer>
     </dialog>
@@ -27,6 +28,7 @@ import { LoadingIndicatorComponent } from '../../shared/loading-indicator.compon
   `],
 })
 export class RepresentationPickerComponent {
+  readonly physicalObjectName=physicalObjectName;
   readonly model=input<LogicalModelSummary|null>(null);
   readonly selectionOnly=input(false);
   readonly initialSnapshot=input<PhysicalSnapshot|null>(null);
@@ -43,7 +45,7 @@ export class RepresentationPickerComponent {
   private requestToken=0;
   readonly filteredSources=computed(()=>this.sources().filter((source)=>(!this.sourceType()||source.connectorType===this.sourceType()||(this.sourceType()==='postgresql'&&source.connectorType==='fixture'))&&[source.name,source.catalogPath,source.ownerName].join(' ').toLocaleLowerCase('de-CH').includes(this.query().toLocaleLowerCase('de-CH'))));
   readonly schemas=computed(()=>[...new Set(this.filteredTables().map((table)=>table.schemaName))]);
-  private readonly filteredTables=computed(()=>(this.snapshot()?.tables??[]).filter((table)=>[table.schemaName,table.name,table.storageLocation??''].join(' ').toLocaleLowerCase('de-CH').includes(this.objectQuery().toLocaleLowerCase('de-CH'))));
+  private readonly filteredTables=computed(()=>(this.snapshot()?.tables??[]).filter((table)=>[table.databaseName,table.schemaName,table.name,table.storageLocation??''].join(' ').toLocaleLowerCase('de-CH').includes(this.objectQuery().toLocaleLowerCase('de-CH'))));
   constructor(){effect(()=>{const dialog=this.dialog()?.nativeElement;if(dialog&&!dialog.open)dialog.showModal();});effect(()=>{this.model();this.loadSources();});}
   value(event:Event):string{return(event.target as HTMLInputElement).value;}
   canAttach(source:PhysicalSource):boolean{const model=this.model();return source.representationAttachable ?? ((!model||source.office===model.office&&source.department===model.department)&&source.lifecycle!=='archived'&&Boolean(source.latestSnapshotId)&&['fixture','postgresql','s3','csv'].includes(source.connectorType));}

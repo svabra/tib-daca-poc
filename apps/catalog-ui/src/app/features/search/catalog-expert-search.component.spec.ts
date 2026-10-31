@@ -1,13 +1,15 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { UserPreferencesService } from '../../core/user-preferences.service';
 import { FALLBACK_PRODUCT } from '../../core/catalog.seed';
 import { CatalogExpertSearchComponent } from './catalog-expert-search.component';
 import { CatalogSearchDataService } from './catalog-search-data.service';
 import { CatalogSearchAsset, productSearchAsset } from './catalog-search.models';
+import { DemoIdentityService } from '../../core/demo-identity.service';
+import { EMPTY_SEARCH_VIEW, SearchView, SearchViewsApiService } from './search-views-api.service';
 
 describe('Catalog expert search modes and shared preview',()=>{
   afterEach(()=>{TestBed.resetTestingModule();vi.useRealTimers();});
@@ -17,7 +19,9 @@ describe('Catalog expert search modes and shared preview',()=>{
     const query=new BehaviorSubject(convertToParamMap(params));
     const data={assets:signal(assets),organizationLabels:signal(new Map<string,string>()),loading:signal(false),partial:signal(false),reload:vi.fn()};
     await TestBed.configureTestingModule({imports:[CatalogExpertSearchComponent],providers:[
-      provideRouter([]),{provide:CatalogApiService,useValue:{loading:signal(false)}},
+      provideRouter([]),{provide:CatalogApiService,useValue:{loading:signal(false),refreshWorkflowTasks:vi.fn()}},
+      {provide:DemoIdentityService,useValue:{userId:signal('search-tester'),users:signal([])}},
+      {provide:SearchViewsApiService,useValue:{list:()=>of([]),inbox:()=>of([])}},
       {provide:UserPreferencesService,useValue:{language:signal('de')}},
       {provide:ActivatedRoute,useValue:{queryParamMap:query,snapshot:{queryParamMap:query.value}}},
     ]}).overrideComponent(CatalogExpertSearchComponent,{set:{providers:[{provide:CatalogSearchDataService,useValue:data}]}}).compileComponents();
@@ -34,6 +38,23 @@ describe('Catalog expert search modes and shared preview',()=>{
     expect(root.querySelector('[data-search-group="table:table"]')).not.toBeNull();
     expect(root.querySelectorAll('[data-search-key="field:egid"]')).toHaveLength(1);
     expect(root.querySelector('.search-preview')).toBeNull();
+  });
+
+  it('applies every saved filter and supports a filter-only view without a search phrase',async()=>{
+    const {component,navigate,fixture}=await setup({});
+    const view:SearchView={id:'view',ownerUserId:'search-tester',name:'Gebäude-Felder',description:'',revision:1,createdAt:'',updatedAt:'',
+      configuration:{...EMPTY_SEARCH_VIEW,mode:'focus',kind:'field',organization:'armasuisse',domain:'domain',status:'active',connection:'metadata',sort:'name'}};
+    component.applyView(view);fixture.detectChanges();
+    expect(component.query()).toBe('');expect(component.searchReady()).toBe(true);expect(component.results()).toEqual([field]);
+    expect(component.mode()).toBe('focus');expect(component.sort()).toBe('name');
+    expect(navigate).toHaveBeenLastCalledWith([],expect.objectContaining({queryParams:expect.objectContaining({view:'view',q:'',kind:'field',organization:'armasuisse',domain:'domain',status:'active',connection:'metadata',sort:'name'})}));
+    component.applyView(null);expect(component.activeViewId()).toBeNull();expect(component.searchReady()).toBe(false);
+  });
+
+  it('does not overwrite an explicitly modified search when restoring a selected view',async()=>{
+    const {component}=await setup({q:'Gebäude',view:'view',kind:'field'});
+    component.restoreView({id:'view',configuration:{...EMPTY_SEARCH_VIEW,query:'andere Suche'}} as SearchView);
+    expect(component.query()).toBe('Gebäude');expect(component.selectedKind()).toBe('field');
   });
 
   it('uses a generic context for tables and S3 objects, with distinct result and preview types',async()=>{

@@ -51,13 +51,13 @@ describe('mapping interaction modes', () => {
       .toBe('M 372 148 C 407 148, 613 247, 648 247');
   });
 
-  it('shows the physical data owner and canonical catalog path in the snapshot card', () => {
+  it('shows the physical data owner and qualified object name in the snapshot card', () => {
     const fixture = TestBed.createComponent(MappingGraphComponent);
     fixture.detectChanges();
 
     const snapshotCard = fixture.nativeElement.querySelector('.physical-representation > header') as HTMLElement;
     expect(snapshotCard.textContent).toContain('Data Ownerin: Christian Spider');
-    expect(snapshotCard.textContent).toContain('postgresql://hr_core/');
+    expect(snapshotCard.textContent).toContain('hr_core.public.org_unit');
     const providerIcon = snapshotCard.querySelector('img') as HTMLImageElement;
     expect(providerIcon.alt).toBe('PostgreSQL');
     expect(providerIcon.src).toContain('/assets/providers/postgresql.svg');

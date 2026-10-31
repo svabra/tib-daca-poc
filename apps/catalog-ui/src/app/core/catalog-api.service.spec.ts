@@ -157,6 +157,25 @@ describe('CatalogApiService identity refresh', () => {
     expect(api.policyUsingFallback()).toBe(false);
   });
 
+  it('preserves lineage URNs and flow direction and enriches only known product metadata', () => {
+    const api = TestBed.inject(CatalogApiService), http = TestBed.inject(HttpTestingController);
+    flushRefresh(requestsFor(http, 'kassandra.valdata'), 'Lineage product', 'Inbox', 'Task');
+    flushProductDetail(requestsFor(http, 'kassandra.valdata'), 'Lineage product');
+    const product = api.product();
+    let result: {nodes: readonly import('./catalog.models').LineageNode[]; edges: readonly import('./catalog.models').LineageEdge[]} | undefined;
+    api.loadLineage().subscribe(value => result = value);
+    http.expectOne(`/api/v1/data-products/${product.id}/lineage`).flush({productUrn: product.globalId, edges: [
+      {id: 'from', sourceUrn: 'urn:test:source', targetUrn: product.globalId, relationType: 'derived-from', state: 'active'},
+      {id: 'to', sourceUrn: product.globalId, targetUrn: 'urn:test:consumer', relationType: 'consumed-by', state: 'inferred'},
+    ]});
+    http.expectOne(`/api/v1/data-products/${product.id}/provenance`).flush([]);
+    expect(result?.nodes.find(node => node.id === product.globalId)).toMatchObject({urn: product.globalId, productId: product.id, label: 'Lineage product', owner: product.owner});
+    expect(result?.nodes.find(node => node.id === 'urn:test:source')).toMatchObject({owner: null, detail: '', kind: 'source'});
+    expect(result?.nodes.find(node => node.id === 'urn:test:consumer')?.kind).toBe('consumer');
+    expect(result?.edges[0]).toMatchObject({source: 'urn:test:source', target: product.globalId});
+    expect(result?.edges[1]).toMatchObject({source: product.globalId, target: 'urn:test:consumer'});
+  });
+
   it('discards a product detail response that belongs to the previous identity', () => {
     const api = TestBed.inject(CatalogApiService);
     const http = TestBed.inject(HttpTestingController);

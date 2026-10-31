@@ -46,6 +46,12 @@ class CdpClient {
       if(args.get('--trace') && message.method==='Runtime.exceptionThrown')console.log('Browser exception:',JSON.stringify(message.params.exceptionDetails));
       if(args.get('--trace')&&message.method==='Network.requestWillBeSent'&&message.params.request.url.includes('/api/v1/'))console.log('Browser read:',new Date().toISOString(),message.params.request.url);
       if(message.method==='Fetch.requestPaused'){
+        if(this.deferReadPaths){
+          if(this.deferReadPaths.has(new URL(message.params.request.url).pathname)){
+            (this.deferredGenericReads??=[]).push({requestId:message.params.requestId,sessionId:message.sessionId,path:new URL(message.params.request.url).pathname});
+          }else void this.call('Fetch.continueRequest',{requestId:message.params.requestId},message.sessionId);
+          return;
+        }
         if(this.deferLogicalReads&&new URL(message.params.request.url).pathname==='/api/v1/logical-models'){
           (this.deferredLogicalReads??=[]).push({requestId:message.params.requestId,sessionId:message.sessionId});return;
         }
@@ -403,6 +409,8 @@ async function csvPhysicalModelsFlow() {
     await evaluate("document.querySelector('.csv-import-trigger').focus({preventScroll:true})");
     await clickText('.csv-import-trigger', 'CSV');
     await waitFor("document.querySelector('daca-physical-csv-import dialog')?.open", 'CSV dialog did not open');
+    invariant(await evaluate("(()=>{const fields=[...document.querySelectorAll('.import-inputs input,.import-inputs select')].map(input=>input.getBoundingClientRect());return fields.length===2&&fields.every(rect=>rect.height>=40&&rect.height<=56)&&Math.abs(fields[0].top-fields[1].top)<1&&getComputedStyle(document.querySelector('.csv-file-input')).display==='none'&&!!document.querySelector('.csv-file-select');})()"),'CSV upload does not use a custom file button and aligned compact fields');
+    await capturePageSegmentScreenshot('daca-physical-csv-import dialog[open]','csv-upload-desktop-empty.png');
     if (!suppliedFile) await setControls({'daca-physical-csv-import .import-inputs select':'vbs-verteidigung'});
     if (drop) {
       const point = await evaluate("(()=>{const r=document.querySelector('.csv-drop-zone').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()");
@@ -420,6 +428,13 @@ async function csvPhysicalModelsFlow() {
   }
   try {
     await selectFile(true);
+    invariant(await evaluate("document.querySelector('.preview-count').textContent.includes('physische Modelle (Physische Repräsentation)')"),'physical representation explanation missing');
+    await capturePageSegmentScreenshot('daca-physical-csv-import dialog[open]','csv-upload-desktop-preview.png');
+    await setViewport(390,844);await settleFrames();
+    await evaluate("document.querySelector('daca-physical-csv-import dialog').scrollTop=0");
+    invariant(await evaluate("(()=>{const dialog=document.querySelector('daca-physical-csv-import dialog'),zone=document.querySelector('.csv-drop-zone').getBoundingClientRect(),button=document.querySelector('.csv-file-select').getBoundingClientRect();return dialog.scrollWidth<=dialog.clientWidth+1&&button.left>=zone.left&&button.right<=zone.right;})()"),'CSV upload overflows its mobile dialog');
+    await captureScreenshot('csv-upload-mobile-preview.png');
+    await setViewport(1440,900);await settleFrames();
     await pressKey('Escape','Escape',27);
     await waitFor("!document.querySelector('daca-physical-csv-import dialog')?.open && document.activeElement?.classList.contains('csv-import-trigger')", 'Escape did not cancel CSV preview and restore focus');
     invariant(expectStatus(await api(actor, '/api/v1/physical-sources'), 200, 'source list after cancel').body.items.length === initialSources, 'CSV cancellation persisted a source');
@@ -456,15 +471,17 @@ async function csvPhysicalModelsFlow() {
     if (!suppliedFile) {
       // Exercise lifecycle actions only on this run's synthetic inventory.
       await navigate('/physical-models', actor);
-      const card = `.source-card:has(a[href="/physical-models/${sourceId}"])`;
-      await waitFor(`document.querySelector(${JSON.stringify(card)})?.innerText.includes('Strukturinventar')`, 'Inventory terminology missing');
-      await clickText(`${card} daca-structure-inventory-actions button`, 'Archivieren');
+      const card = `.source-card[data-source-id="${sourceId}"]`;
+      await waitFor(`document.querySelector(${JSON.stringify(card)})?.innerText.includes('Physische Deklaration')`, 'Inventory terminology missing');
+      await clickText(`${card} .source-actions-trigger`, '');
+      await clickText(`${card} .source-actions-menu button`, 'Archivieren');
       await waitFor("document.querySelector('daca-structure-inventory-actions dialog[open]')", 'Archive confirmation missing');
       await clickText('daca-structure-inventory-actions dialog[open] footer button', 'Inventar archivieren');
       await waitFor(`!document.querySelector(${JSON.stringify(card)})`, 'Archived inventory remained in active register');
       await evaluate("document.querySelector('.archive-toggle input').click()");
       await waitFor(`document.querySelector(${JSON.stringify(card)})?.classList.contains('is-archived')`, 'Archive filter did not expose inventory');
       await capturePageSegmentScreenshot('.source-register', 'structure-inventory-archived.png');
+      await openSourceCardMenu(sourceId);
       await clickText(`${card} a`, 'Inventar öffnen');
       await waitFor(`document.querySelector('.inventory-detail-actions') && document.querySelectorAll('.table-row').length===${expected.tableCount}`, 'Archived inventory inspection unavailable');
       await clickText('.table-select', 'Gebäude / Bauwerke');
@@ -475,10 +492,12 @@ async function csvPhysicalModelsFlow() {
       await waitFor("!document.querySelector('daca-structure-inventory-actions dialog[open]') && [...document.querySelectorAll('.inventory-detail-actions button')].some(b=>b.textContent==='Archivieren')", 'Inventory restoration failed');
       await navigate('/physical-models', actor);
       await waitFor(`document.querySelector(${JSON.stringify(card)})`, 'Restored inventory absent from active register');
-      await clickText(`${card} daca-structure-inventory-actions button`, 'Löschen');
+      await clickText(`${card} .source-actions-trigger`, '');
+      await clickText(`${card} .source-actions-menu button`, 'Löschen');
       await clickText('daca-structure-inventory-actions dialog[open] footer button', 'Abbrechen');
       invariant(expectStatus(await api(actor, '/api/v1/physical-sources'), 200, 'inventory after cancelled deletion').body.items.some(s=>s.id===sourceId), 'Cancel deleted inventory');
-      await clickText(`${card} daca-structure-inventory-actions button`, 'Löschen');
+      await clickText(`${card} .source-actions-trigger`, '');
+      await clickText(`${card} .source-actions-menu button`, 'Löschen');
       await clickText('daca-structure-inventory-actions dialog[open] footer button', 'Inventar endgültig löschen');
       await waitFor(`!document.querySelector(${JSON.stringify(card)})`, 'Deleted inventory remained in register');
       await navigate('/physical-models', actor);
@@ -1214,7 +1233,7 @@ async function physicalFirstFlow() {
     'list mappings across both physical representations',
   ).body.items;
   invariant(new Set(mappings.map((mapping) => mapping.physicalSnapshotId)).size === 2, 'logical model is not linked to two physical representations');
-  invariant(await evaluate("document.querySelectorAll('.representation-list > button').length >= 2"), 'mapping workspace does not list both physical representations');
+  invariant(await evaluate("document.querySelectorAll('.representation-list .representation-select').length >= 2"), 'mapping workspace does not list both physical representations');
   await navigate(mappingPath, 'christian.man');
   await waitFor("document.querySelectorAll('.physical-representation').length >= 2", 'saved representations did not survive reload');
   await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:2,y:2},sessionId);
@@ -1311,7 +1330,7 @@ async function physicalFirstFlow() {
   const savedLayout=expectStatus(await api('christian.man',`/api/v1/logical-models/${modelId}/canvas-layout`),200,'read shared canvas').body;
   invariant(savedLayout.revision===1&&Object.entries(savedLayout.positions).every(([key,point])=>point.x===sharedPositions[key].x&&point.y===sharedPositions[key].y),'saved canvas positions differ from the draft');
   await evaluate(`document.querySelector('[data-representation-table-id="${beforeDrag.id}"] .physical-table-title').click()`);
-  await clickText('.representation-context-menu button','Darstellung der physischen Repräsentation entfernen');
+  await clickText('.representation-context-menu button','Darstellung dieser Physischen Repräsentation/Deklaration löschen');
   await waitFor(`document.querySelector('[data-representation-table-id="${beforeDrag.id}"]')===null`,'remove drawing did not hide its card');
   invariant(await evaluate("document.querySelector('.draft-save-action>button').disabled"),'removing a drawing dirtied persisted mappings');
   invariant(await evaluate(`!document.querySelector('[data-representation-id="${beforeDrag.id}"]')`),'hidden representation remained in the physical bindings');
@@ -1596,7 +1615,7 @@ async function domainAssignmentFlow(physical) {
   await navigate(route,'christian.man');
   await waitFor("document.querySelectorAll('.physical-representation .model-domain').length===2&&[...document.querySelectorAll('.model-domain')].every((label)=>!label.textContent.includes('Keine Domäne'))",'domain labels did not survive reload');
   await evaluate(`document.querySelector('[data-representation-table-id="${pgId}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:250}))`);
-  invariant(await evaluate(`document.querySelector('.representation-context-menu a')?.getAttribute('href')==='/domains/${domainId}'&&document.querySelector('.representation-context-menu a')?.target==='_blank'`),'assigned physical domain cannot be opened');
+  invariant(await evaluate(`document.querySelector('.representation-context-menu a[href^=\"/domains/\"]')?.getAttribute('href')==='/domains/${domainId}'&&document.querySelector('.representation-context-menu a[href^=\"/domains/\"]')?.target==='_blank'`),'assigned physical domain cannot be opened');
   await evaluate("document.querySelector('.logical-node>header').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:250,clientY:200}))");
   invariant(await evaluate(`document.querySelector('.canvas-context-menu a')?.getAttribute('href')==='/domains/${domainId}'`),'assigned logical domain cannot be opened');
   await capturePageSegmentScreenshot('.mapping-shell','model-domain-assigned-1440x900.png');
@@ -1629,6 +1648,16 @@ async function personnelOntologyFlow() {
   console.log('PASS personnel ontology and searchable domain models');
 }
 
+async function approveTestDomainRequest(request, reviewer='christian.man') {
+  const approved=expectStatus(await api(reviewer,`/api/v1/domain-change-requests/${request.id}/decision`,{method:'POST',etag:`"${request.revision}"`,body:{decision:'approve',comment:'Synthetic UI test: scoped ALDS approval.'}}),200,'approve only synthetic domain request').body;
+  return expectStatus(await api(reviewer,`/api/v1/domains/${approved.targetDomainId}`),200,'read approved synthetic domain').body;
+}
+
+async function createApprovedTestDomain(actor,payload) {
+  const request=expectStatus(await api(actor,'/api/v1/domain-change-requests',{method:'POST',body:{operation:'create',payload}}),201,'submit only synthetic domain').body;
+  return approveTestDomainRequest(request);
+}
+
 async function semanticGestureFlow() {
   await navigate('/domains','christian.man');
   const suffix=Date.now(),domains=[],globalPath='/api/v1/semantic-graphs/domains';
@@ -1649,13 +1678,13 @@ async function semanticGestureFlow() {
     await waitFor(`document.querySelector(${JSON.stringify(root+' .canvas-drop-menu')})!==null`,'blank drop did not open create/search actions');
   }
   try {
-    for(const label of ['A','B'])domains.push(expectStatus(await api('sibilla.micheli','/api/v1/domains',{method:'POST',body:{ownerUserId:'sibilla.micheli',deputyOwnerUserId:'sandro.wenger',localizations:[{language:'de',preferredLabel:`Gesture ${label} ${suffix}`,definition:'Synthetic gesture domain.'}]}}),201,'create isolated gesture domain').body);
+    for(const label of ['A','B'])domains.push(await createApprovedTestDomain('sibilla.micheli',{ownerUserId:'sibilla.micheli',deputyOwnerUserId:'sandro.wenger',localizations:[{language:'de',preferredLabel:`Gesture ${label} ${suffix}`,definition:'Synthetic gesture domain.'}]}));
     const [domainA,domainB]=domains,a=await createTerm(domainA.id,`Ausgang ${suffix}`),b=await createTerm(domainB.id,`Referenz ${suffix}`),route=`/domains/${domainA.id}`;
     await navigate(route,'christian.man');await waitFor("document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'",'gesture term graph did not load');
     await evaluate("document.querySelector('.network-editor').requestFullscreen=undefined;document.querySelector('.network-editor .fullscreen-toggle').click()");
     await holdToBlank(`[data-term-id="${a}"] p`);
     await clickText('.canvas-drop-menu button','Begriff suchen');await waitFor("document.querySelector('.object-browser-backdrop input')!==null",'term selection modal missing');
-    await setControls({'.object-browser-backdrop input':`Referenz ${suffix}`});await waitFor(`[...document.querySelectorAll('.object-browser-backdrop li button')].some(button=>button.textContent.includes('Referenz ${suffix}'))`,'reference search result missing');await clickText('.object-browser-backdrop li button',`Referenz ${suffix}`);
+    await setControls({'.object-browser-backdrop input':`Referenz ${suffix}`});await waitFor(`[...document.querySelectorAll('.object-browser-backdrop .object-result')].some(button=>button.textContent.includes('Referenz ${suffix}'))`,'reference search result missing');await clickText('.object-browser-backdrop .object-result',`Referenz ${suffix}`);
     await waitFor(`document.querySelector('.relation-dialog')?.getAttribute('data-target-id')==='${b}'`,'term search did not select a connection target');
     await clickText('.relation-dialog button','Entwurf übernehmen');
     await clickText('.layout-actions button','Layout speichern');await waitFor("document.querySelector('.layout-actions button')?.disabled&&document.querySelector('.layout-actions button')?.textContent.trim()==='Layout speichern'&&document.querySelector('.network-editor [role=status]')?.textContent.includes('Layout für alle gespeichert')",'reference layout did not save');
@@ -1707,11 +1736,23 @@ async function semanticGestureFlow() {
     invariant(await evaluate("getComputedStyle(document.querySelector('.concept-context-menu [role=menuitem]')).fontSize==='14px'"),'domain context menu is not using the shared compact font');
     await clickText('.concept-context-menu button','Verbindung l\u00f6schen');
     await holdToBlank(`[data-domain-id="${domainA.id}"] p`,'.domain-network');await clickText('.canvas-drop-menu button','Domäne suchen');await waitFor("document.querySelector('.object-browser-backdrop input')!==null",'domain selection modal missing');
-    await setControls({'.object-browser-backdrop input':domainB.preferredLabel});await waitFor(`[...document.querySelectorAll('.object-browser-backdrop li button')].some(button=>button.textContent.includes(${JSON.stringify(domainB.preferredLabel)}))`,'domain target search result missing');await clickText('.object-browser-backdrop li button',domainB.preferredLabel);await waitFor("document.querySelector('.relation-dialog')!==null",'domain search did not prepare a relation');await clickText('.relation-dialog button','Entwurf übernehmen');await clickText('.draft-actions button','Netz speichern');await waitFor("document.querySelector('.domain-network .draft-actions button')?.disabled&&document.querySelector('.domain-network .draft-actions button')?.textContent.trim()==='Netz speichern'",'domain selection relation did not save');lastWritten=expectStatus(await api('sibilla.micheli',globalPath),200,'read selected domain relation').body;
+    await setControls({'.object-browser-backdrop input':domainB.preferredLabel});await waitFor(`[...document.querySelectorAll('.object-browser-backdrop .object-result')].some(button=>button.textContent.includes(${JSON.stringify(domainB.preferredLabel)}))`,'domain target search result missing');await clickText('.object-browser-backdrop .object-result',domainB.preferredLabel);await waitFor("document.querySelector('.relation-dialog')!==null",'domain search did not prepare a relation');await clickText('.relation-dialog button','Entwurf übernehmen');await clickText('.draft-actions button','Netz speichern');await waitFor("document.querySelector('.domain-network .draft-actions button')?.disabled&&document.querySelector('.domain-network .draft-actions button')?.textContent.trim()==='Netz speichern'",'domain selection relation did not save');lastWritten=expectStatus(await api('sibilla.micheli',globalPath),200,'read selected domain relation').body;
     await holdToBlank(`[data-domain-id="${domainA.id}"] p`,'.domain-network');await clickText('.canvas-drop-menu button','Neue Domäne erstellen');await waitFor("document.querySelector('.create-backdrop input[name=label]')!==null",'domain creation modal missing');
-    await setControls({'.create-backdrop input[name=label]':`Erstellt ${suffix}`,'.create-backdrop textarea[name=definition]':'Synthetic created domain.','.create-backdrop select[name=owner]':'sibilla.micheli','.create-backdrop select[name=deputy]':'sandro.wenger'});await clickText('.create-backdrop button','Domäne erstellen');
-    await waitFor("document.querySelector('.domain-network .relation-dialog')!==null",'new domain did not prepare its relation');const createdDomain=expectStatus(await api('sibilla.micheli',`/api/v1/domains?q=${encodeURIComponent(`Erstellt ${suffix}`)}`),200,'find only created domain fixture').body.find(domain=>domain.preferredLabel===`Erstellt ${suffix}`);invariant(createdDomain,'domain modal did not create a catalog domain');domains.push(createdDomain);await clickText('.relation-dialog button','Entwurf übernehmen');await clickText('.draft-actions button','Netz speichern');await waitFor("document.querySelector('.domain-network .draft-actions button')?.disabled&&document.querySelector('.domain-network .draft-actions button')?.textContent.trim()==='Netz speichern'",'created domain layout did not save');lastWritten=expectStatus(await api('sibilla.micheli',globalPath),200,'read created domain graph').body;await captureScreenshot('domain-created-from-canvas.png');
-    await evaluate(`document.querySelector('[data-domain-id="${domainB.id}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);await clickText('.concept-context-menu button','Vom Canvas entfernen');await clickText('.draft-actions button','Netz speichern');await waitFor("document.querySelector('.domain-network .draft-actions button')?.disabled&&document.querySelector('.domain-network .draft-actions button')?.textContent.trim()==='Netz speichern'",'domain hide did not save');
+    await setControls({'.create-backdrop input[name=label]':`Erstellt ${suffix}`,'.create-backdrop textarea[name=definition]':'Synthetic created domain.','.create-backdrop select[name=owner]':'sibilla.micheli','.create-backdrop select[name=deputy]':'sandro.wenger'});await clickText('.create-backdrop button','ALDS-Freigabe');
+    await waitFor("document.querySelector('.domain-network .is-pending')",'new domain did not remain a personal proposal');
+    const pending=expectStatus(await api('sibilla.micheli','/api/v1/domain-change-requests'),200,'read synthetic domain request').body.find(item=>item.status==='submitted'&&item.reviewPayload.localizations.some(label=>label.preferredLabel===`Erstellt ${suffix}`));
+    invariant(pending,'domain modal did not submit its proposal');
+    const createdDomain=await approveTestDomainRequest(pending);domains.push(createdDomain);
+    await navigate('/domains/network','sibilla.micheli');
+    await waitFor(`document.querySelector('[data-domain-id="${createdDomain.id}"]')`,'approved domain did not enter the canvas');
+    await evaluate(`document.querySelector('[data-domain-id="${domainA.id}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);
+    await clickText('.concept-context-menu button','Neue Domänenbeziehung');
+    await evaluate(`document.querySelector('[data-domain-id="${createdDomain.id}"]').click()`);
+    await waitFor("document.querySelector('.relation-dialog')",'approved domain did not offer an explicit relation');
+    await clickText('.relation-dialog button','Entwurf übernehmen');await clickText('.draft-actions button','Netz speichern');
+    await waitFor("document.querySelector('.domain-network .draft-actions button')?.disabled&&document.querySelector('.domain-network .draft-actions button')?.textContent.trim()==='Netz speichern'",'approved domain layout did not save');
+    lastWritten=expectStatus(await api('sibilla.micheli',globalPath),200,'read created domain graph').body;await captureScreenshot('domain-created-from-canvas.png');
+    await evaluate(`document.querySelector('[data-domain-id="${domainB.id}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);await clickText('.concept-context-menu button','Darstellung dieser Domäne entfernen');await clickText('.draft-actions button','Netz speichern');await waitFor("document.querySelector('.domain-network .draft-actions button')?.disabled&&document.querySelector('.domain-network .draft-actions button')?.textContent.trim()==='Netz speichern'",'domain hide did not save');
     invariant(expectStatus(await api('sibilla.micheli',`/api/v1/domains/${domainB.id}`),200,'read hidden domain').body.lifecycle==='active','hiding a domain retired it');
     await clickText('.hidden-nodes button',domainB.preferredLabel);await clickText('.draft-actions button','Netz speichern');await waitFor("document.querySelector('.domain-network .draft-actions button')?.disabled&&document.querySelector('.domain-network .draft-actions button')?.textContent.trim()==='Netz speichern'",'restored domain did not save');lastWritten=expectStatus(await api('sibilla.micheli',globalPath),200,'read restored domain layout').body;
     await navigate(route,'sibilla.micheli');await waitFor("document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'",'neighbor canvas did not load');
@@ -1723,8 +1764,8 @@ async function semanticGestureFlow() {
     await capturePageSegmentScreenshot('.network-editor','concept-linked-domains.png');
     await clickText('.canvas-options button','Direkt verbundene');await waitFor("document.querySelectorAll('.graph-node.is-domain').length===1",'neighbor domains did not hide');
     await navigate('/domains/network','sibilla.micheli');await waitFor(`document.querySelector('[data-domain-id="${createdDomain.id}"]')!==null`,'domain canvas did not reload');
-    await evaluate('window.confirm=()=>false');await evaluate(`document.querySelector('[data-domain-id="${createdDomain.id}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);await clickText('.concept-context-menu button','Im Katalog löschen');invariant(expectStatus(await api('sibilla.micheli',`/api/v1/domains/${createdDomain.id}`),200,'read canceled domain deletion').body.lifecycle==='active','canceled domain deletion changed the catalog');
-    await evaluate('window.confirm=()=>true');await evaluate(`document.querySelector('[data-domain-id="${createdDomain.id}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);await clickText('.concept-context-menu button','Im Katalog löschen');await waitFor(`!document.querySelector('[data-domain-id="${createdDomain.id}"]')`,'confirmed domain deletion left an active card');
+    await evaluate('window.confirm=()=>false');await evaluate(`document.querySelector('[data-domain-id="${createdDomain.id}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);await clickText('.concept-context-menu button','Domäne im Katalog stilllegen');invariant(expectStatus(await api('sibilla.micheli',`/api/v1/domains/${createdDomain.id}`),200,'read canceled domain deletion').body.lifecycle==='active','canceled domain deletion changed the catalog');
+    await evaluate('window.confirm=()=>true');await evaluate(`document.querySelector('[data-domain-id="${createdDomain.id}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);await clickText('.concept-context-menu button','Domäne im Katalog stilllegen');await waitFor(`!document.querySelector('[data-domain-id="${createdDomain.id}"]')`,'confirmed domain deletion left an active card');
     console.log('PASS canvas gestures: held red point, create/search modals, reference membership, hide/restore, line actions and confirmed catalog deletion');
   } finally {
     if(lastWritten){const current=expectStatus(await api('sibilla.micheli',globalPath),200,'read gesture graph cleanup').body,positions={...current.positions},owned=new Set(domains.map(domain=>domain.id));for(const [key,value]of Object.entries(lastWritten.positions))if(JSON.stringify(current.positions[key])===JSON.stringify(value)){if(key in baseline.positions)positions[key]=baseline.positions[key];else delete positions[key];}for(const id of owned)delete positions[`domain:${id}`];expectStatus(await api('sibilla.micheli',globalPath,{method:'PUT',body:{revision:current.revision,positions,hiddenNodeIds:(current.hiddenNodeIds??[]).filter(key=>!owned.has(key.slice(7))),relations:current.relations.filter(link=>!owned.has(link.sourceId)&&!owned.has(link.targetId))}}),200,'remove only gesture graph fixtures');}
@@ -1738,7 +1779,7 @@ async function semanticGestureFlow() {
 async function domainRelationTypesFlow(){
   const actor='sibilla.micheli';await navigate('/domains/network',actor,1440,1000);
   await waitFor("location.pathname==='/domains'&&new URLSearchParams(location.search).get('view')==='network'&&document.querySelector('.domain-network .graph-canvas')",'legacy network link did not open the embedded domain view');
-  invariant(await evaluate("document.querySelectorAll('h1').length===1&&!document.querySelector('.semantic-tabs a[href=\"/domains/network\"]')&&document.querySelector('.semantic-tabs [aria-current=page]')?.getAttribute('href')==='/domains'"),'domain network still has a separate tab or duplicate page heading');
+  invariant(await evaluate("document.querySelectorAll('h1').length===1&&!document.querySelector('.semantic-tabs a[href=\"/domains/network\"]')&&new URL(document.querySelector('.semantic-tabs [aria-current=page]')?.href??location.href).pathname==='/domains'"),'domain network still has a separate tab or duplicate page heading');
   await clickText('.domain-view-switch button','Kacheln');
   await waitFor("!document.querySelector('daca-domain-network')&&document.querySelector('.domain-card')&&!new URLSearchParams(location.search).has('view')",'domain cards view did not open');
   await clickText('.domain-view-switch button','Dom\u00e4nennetz');
@@ -1754,7 +1795,7 @@ async function domainRelationTypesFlow(){
       await clickText('.concept-context-menu button','Neue Dom\u00e4nenbeziehung');
       const target=await evaluate(`(()=>{const node=[...document.querySelectorAll('.graph-node[data-domain-id]')].find(node=>node.dataset.domainId!==${JSON.stringify(source)});node.click();return node.dataset.domainId;})()`);
       await waitFor("document.querySelector('.relation-dialog')!==null",'new draft relationship editor missing');
-      await clickText('.relation-dialog button','Entwurf \u00fcbernehmen');index=0;
+      await clickText('.relation-dialog button','Entwurf \u00fcbernehmen');index=await evaluate("Number([...document.querySelectorAll('[data-domain-link]')].at(-1).getAttribute('data-domain-link'))");
     }
     for(const [type,label] of [['interfacesWith','hat eine fachliche Schnittstelle zu'],['overlapsWith','hat \u00dcberschneidungen mit']]){
       await evaluate(`document.querySelector('[data-domain-link="${index}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:350}))`);
@@ -1766,7 +1807,7 @@ async function domainRelationTypesFlow(){
       await captureScreenshot(`domain-relation-${type}-dialog.png`);
       await clickText('.relation-dialog button','Entwurf \u00fcbernehmen');
       await waitFor(`[...document.querySelectorAll('.graph-relationship text')].some(text=>text.textContent===${JSON.stringify(label)})&&!document.querySelector('.relation-dialog')`,'selected relationship label did not appear in the graph');
-      index=await evaluate("document.querySelectorAll('[data-domain-link]').length-1");
+      index=await evaluate("Number([...document.querySelectorAll('[data-domain-link]')].at(-1).getAttribute('data-domain-link'))");
     }
     await evaluate("window.__domainViewConfirm=window.confirm;window.confirm=()=>false");
     try { await clickText('.domain-view-switch button','Kacheln'); await settleFrames(); } finally { await evaluate("window.confirm=window.__domainViewConfirm;delete window.__domainViewConfirm"); }
@@ -1785,7 +1826,7 @@ async function domainTransferFlow(){
   invariant(defence&&estate,'domain handover preview requires the existing domains');
   let mocked=false;
   for(const [actor,domain,allowed,width] of [['sibilla.micheli',estate,true,1440],['christian.spider',estate,true,1440],['christian.man',defence,true,390],['sandro.wenger',defence,true,1440],['thomas.kriegli',defence,false,1440],['christian.spider',defence,false,1440]]){
-    await navigate('/domains',actor,width,900);
+    await navigate('/domains?ownOffice=0',actor,width,900);
     const baseline=expectStatus(await api(actor,'/api/v1/domains/'+domain.id),200,'read handover baseline').body;
     invariant(baseline.canTransferOwnership===allowed,'server handover rights are incorrect');
     const card=`.domain-card[data-domain-id="${domain.id}"]`;
@@ -1856,7 +1897,7 @@ async function domainMetadataFlow(){
 
 async function semanticOwnOfficeFlow(){
   for(const actor of ['christian.spider','sibilla.micheli']){
-    await navigate('/domains/terminology?view=network',actor,1440,1000);
+    await navigate('/domains/terminology?view=network&ownOffice=0',actor,1440,1000);
     await waitFor("document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'",'office context did not load');
     const office=await evaluate("document.querySelector('.organization-choice select').value");
     invariant(office,'current identity has no resolved office');
@@ -1864,6 +1905,9 @@ async function semanticOwnOfficeFlow(){
     const domainGraph=expectStatus(await api(actor,'/api/v1/semantic-graphs/domains'),200,'read shared domains graph').body;
     for(const [route,kind,allowed] of [['/domains/terminology','term',scope.scopeTermIds],['/domains','domain',scope.scopeDomainIds]]){
       await navigate(route,actor,1440,1000);
+      await waitFor("document.querySelector('.office-filter input')?.checked&&!document.querySelector('.office-filter .small-spinner')",'own-office filter is not active by default');
+      invariant(await evaluate("(()=>{const search=document.querySelector('.semantic-search input').getBoundingClientRect(),filter=document.querySelector('.office-filter label').getBoundingClientRect();return filter.left>=search.right&&Math.abs(filter.top-search.top)<8;})()"),'Office checkbox is not next to its search field');
+      await navigate(route+'?ownOffice=0',actor,1440,1000);
       const baseline=await evaluate("[...document.querySelectorAll('.semantic-grid>article')].map(card=>card.dataset.domainId??card.dataset.termId).sort()");
       await evaluate("document.querySelector('.office-filter input').click()");
       const expected=baseline.filter(id=>allowed.includes(id)).sort();
@@ -1876,6 +1920,11 @@ async function semanticOwnOfficeFlow(){
       await waitFor("document.querySelector('[role=tooltip]')!==null",'office filter tooltip did not open on keyboard focus');
       await captureScreenshot(`own-office-${actor}-${kind}-cards.png`);
       await evaluate("document.querySelector('.office-filter input').blur()");
+      await setViewport(390,844);await settleFrames();
+      invariant(await evaluate("(()=>{const search=document.querySelector('.semantic-search input').getBoundingClientRect(),filter=document.querySelector('.office-filter label').getBoundingClientRect();return filter.top>=search.bottom&&filter.right<=innerWidth;})()"),'Mobile checkbox does not stack below search');
+      await evaluate("document.querySelector('.semantic-filter-row').scrollIntoView({block:'center',behavior:'instant'})");
+      await captureScreenshot(`own-office-${actor}-${kind}-mobile-search.png`);
+      await setViewport(1440,1000);
       await clickText('.term-view-switch button',kind==='domain'?'Domänennetz':'Termnetz');
       await waitFor(kind==='domain'?"document.querySelector('.domain-network')!==null":"document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'",'filtered network did not load');
       const selector=kind==='domain'?'.domain-network [data-domain-id]':'.network-editor [data-node-id]';
@@ -1889,10 +1938,12 @@ async function semanticOwnOfficeFlow(){
       await captureScreenshot(`own-office-${actor}-${kind}-mobile.png`);
       await setViewport(1440,1000);
       await evaluate("document.querySelector('.office-filter input').click()");
-      await waitFor("!location.search.includes('ownOffice=1')",'clearing own-office filter did not update the URL');
+      await waitFor("location.search.includes('ownOffice=0')",'clearing own-office filter did not update the URL');
       if(kind==='term')invariant(await evaluate("!!document.querySelector('.organization-choice')"),'organization selector did not return');
       await clickText('.term-view-switch button','Kacheln');
       await waitFor(`document.querySelectorAll('.semantic-grid>article').length===${baseline.length}`,'clearing filter lost catalog cards');
+      const other=kind==='domain'?'/domains/terminology':'/domains';
+      invariant(await evaluate(`document.querySelector('.semantic-tabs a[href^="${other}"]')?.getAttribute('href').includes('ownOffice=0')`),'Explicit All was not retained in the other semantic tab link');
     }
     invariant(JSON.stringify(expectStatus(await api(actor,'/api/v1/semantic-graphs/domains'),200,'verify domain graph unchanged').body)===JSON.stringify(domainGraph),'filtering changed the shared domain graph');
     invariant(JSON.stringify(expectStatus(await api(actor,'/api/v1/semantic-graphs/organizations/'+office),200,'verify office graph unchanged').body)===JSON.stringify(scope),'filtering changed the office graph');
@@ -1923,11 +1974,11 @@ async function semanticOwnerSearchFlow(){
 
 async function organizationTermNetworkFlow(){
   for(const [actor,organizationId] of [['christian.spider','vbs-armasuisse-immobilien'],['sibilla.micheli','vbs-verteidigung']]){
-    await navigate('/domains/terminology?view=network',actor,1440,1000);
+    await navigate('/domains/terminology?view=network&ownOffice=0',actor,1440,1000);
     await waitFor("document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'",'organization term network did not load');
     invariant(await evaluate(`document.querySelector('.organization-choice select')?.value===${JSON.stringify(organizationId)}`),'term network default did not follow the current modeling organization: '+JSON.stringify(await evaluate("({selected:document.querySelector('.organization-choice select')?.value,scope:document.querySelector('.scope-description')?.textContent,body:document.body.innerText.slice(0,600)})")));
     // Reload the existing cookie/local identity without the demoUser bootstrap shortcut.
-    await navigate('/domains/terminology?view=network',null,1440,1000);
+    await navigate('/domains/terminology?view=network&ownOffice=0',null,1440,1000);
     await waitFor(`document.querySelector('.network-editor')?.getAttribute('aria-busy')==='false'&&document.querySelector('.organization-choice select')?.value===${JSON.stringify(organizationId)}`,'existing session did not reload its organization network');
     invariant(expectStatus(await api(actor,'/api/v1/session'),200,'read restored session').body.userId===actor,'reload changed the active person');
     const graph=expectStatus(await api(actor,'/api/v1/semantic-graphs/organizations/'+organizationId),200,'read expected organization graph').body;
@@ -2034,7 +2085,7 @@ async function domainConnectionGestureFlow() {
 
 async function domainCardActionsFlow() {
   // This flow reads existing catalog metadata and opens/cancels dialogs only.
-  const actor='sibilla.micheli';await navigate('/domains',actor);
+  const actor='sibilla.micheli';await navigate('/domains?ownOffice=0',actor);
   const domains=expectStatus(await api(actor,'/api/v1/domains'),200,'read domains for card checks').body;
   const owned=domains.filter(domain=>domain.ownerUserId===actor||domain.deputyOwnerUserId===actor);
   const domain=owned.find(domain=>domain.preferredLabel==='Verteidigung')??owned[0];invariant(domain,'card preview needs an existing owned domain');
@@ -2059,11 +2110,11 @@ async function domainCardActionsFlow() {
   const point=await evaluate(`(()=>{const header=document.querySelector('${card} .domain-card-heading');header.scrollIntoView({block:'center',behavior:'instant'});const r=header.getBoundingClientRect();return{x:r.left+8,y:r.top+8};})()`);
   await settleFrames();await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',buttons:1,clickCount:1},sessionId);await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',buttons:0,clickCount:1},sessionId);
   await waitFor(`location.pathname==='/domains/${domain.id}'&&document.querySelector('daca-domain-detail h1')!==null`,'clicking the heading padding did not open the domain');
-  await navigate('/domains',actor);await waitFor(`document.querySelector('${card} .domain-card-heading')!==null`,'heading link did not reload');
+  await navigate('/domains?ownOffice=0',actor);await waitFor(`document.querySelector('${card} .domain-card-heading')!==null`,'heading link did not reload');
   await evaluate(`document.querySelector('${card} .domain-card-heading').focus()`);await pressKey('Enter','Enter',13);
   await waitFor(`location.pathname==='/domains/${domain.id}'`,'domain heading cannot be opened with Enter');
   const otherActor=['kassandra.valdata','noemie.rochat','christian.man'].find(id=>![domain.ownerUserId,domain.deputyOwnerUserId].includes(id));
-  await navigate('/domains',otherActor);await waitFor(`document.querySelector('${card} .domain-actions-trigger')!==null`,'other-owner card did not load');
+  await navigate('/domains?ownOffice=0',otherActor);await waitFor(`document.querySelector('${card} .domain-actions-trigger')!==null`,'other-owner card did not load');
   await clickText(card+' .domain-actions-trigger','');
   invariant(await evaluate(`!document.querySelector('${card} [data-domain-action=edit]')&&!document.querySelector('${card} [data-domain-action=retire]')&&document.querySelector('${card} [role=menuitem][href]')!==null`),'domain menu changed object permission visibility');
   console.log('PASS domain cards: one action trigger, existing menu actions, edit dialog, Escape focus, mobile fit, padded header click, Enter and object permissions; no object writes');
@@ -2086,12 +2137,59 @@ async function governanceInformationFlow() {
   console.log('PASS Information: object roles, LDS/ALDS reference, complete 19-row RACI, normalized text search, empty results and reset');
 }
 
+async function domainExplorationFlow() {
+  const actor='marcello.hebeisa',other='matteo.duca',viewPath='/api/v1/domain-network/view',graphPath='/api/v1/semantic-graphs/domains';
+  await navigate('/domains?view=network',actor);
+  const baseline=expectStatus(await api(actor,viewPath),200,'read private exploration baseline').body;
+  const otherBaseline=expectStatus(await api(other,viewPath),200,'read deputy view baseline').body;
+  const shared=expectStatus(await api(actor,graphPath),200,'read shared graph baseline').body;
+  try {
+    expectStatus(await api(actor,viewPath,{method:'PUT',body:{revision:baseline.revision,configuration:{schemaVersion:1,addedDomainIds:[],hiddenDomainIds:[],positions:{},visibleKinds:['product']}}}),200,'set deterministic personal view');
+    await navigate('/domains?view=network',actor);
+    await waitFor("document.querySelectorAll('.domain-network [data-domain-id]').length===2&&document.querySelectorAll('.domain-asset').length===2",'CPS domains and default products did not appear');
+    console.log('CHECK domain-exploration default CPS domains/products loaded');
+    invariant(await evaluate("[...document.querySelectorAll('.domain-owner')].every(node=>node.textContent.includes('Marcello Hebeisa'))"),'domain Owner not visible');
+    invariant(await evaluate("document.querySelectorAll('.object-layers input:checked').length===1&&document.querySelector('.object-layers input').checked"),'data products are not the default layer');
+    await capturePageSegmentScreenshot('.domain-network','domain-exploration-products.png',1440,1100);
+    await evaluate("document.querySelectorAll('.object-layers input').forEach(input=>{if(!input.checked)input.click();})");
+    await waitFor("document.querySelectorAll('.domain-asset').length===16",'all four object layers did not appear immediately');
+    console.log('CHECK domain-exploration all object layers loaded');
+    invariant(await evaluate("document.querySelectorAll('[data-asset-kind=physical]').length===4&&[...document.querySelectorAll('.domain-asset')].every(link=>link.target==='_blank')"),'physical structures or new-tab links missing');
+    await evaluate("(()=>{const canvas=document.querySelector('.domain-network .semantic-graph');canvas.scrollIntoView({block:'start',behavior:'instant'});const r=canvas.getBoundingClientRect();canvas.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:r.right-220,clientY:r.top+110}));})()");
+    await clickText('.domain-context-menu button','Domäne suchen und einfügen');
+    await waitFor("document.querySelector('.object-browser-backdrop input')",'existing-domain picker missing');
+    await setControls({'.object-browser-backdrop input':'Immobilienmanagement VBS'});
+    await waitFor("[...document.querySelectorAll('.object-browser-backdrop .object-result')].some(item=>item.textContent.includes('Immobilienmanagement VBS'))",'foreign department domain unavailable');
+    await clickText('.object-browser-backdrop .object-result','Immobilienmanagement VBS');
+    await waitFor("document.querySelectorAll('.domain-network .graph-node.is-foreign').length===1",'foreign domain hidden by own-office filter');
+    invariant(await evaluate("document.querySelector('.graph-node.is-foreign .foreign-scope').textContent.includes('VBS')&&document.querySelector('.graph-node.is-foreign .foreign-scope').textContent.trim()!=='VBS'"),'foreign domain lacks trusted department/office codes');
+    await evaluate("document.querySelector('.graph-node.is-foreign').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:650,clientY:650}))");
+    invariant(await evaluate("[...document.querySelectorAll('.domain-context-menu button')].find(item=>item.textContent.includes('Neue Domänenbeziehung')).disabled"),'foreign domain relationship is editable');
+    await pressKey('Escape','Escape',27);
+    await clickText('.domain-network .draft-actions button','Netz speichern');
+    await waitFor("document.querySelector('.domain-network .draft-actions button').disabled&&document.querySelector('.domain-network .draft-actions button').textContent.trim()==='Netz speichern'",'private view did not save');
+    const saved=expectStatus(await api(actor,viewPath),200,'read saved private view').body;
+    invariant(saved.configuration.visibleKinds.length===4&&saved.configuration.addedDomainIds.length===1,'private additions/layers missing');
+    invariant(JSON.stringify(expectStatus(await api(other,viewPath),200,'verify private isolation').body)===JSON.stringify(otherBaseline),'deputy private view changed');
+    invariant(JSON.stringify(expectStatus(await api(actor,graphPath),200,'verify shared graph isolation').body)===JSON.stringify(shared),'private exploration changed shared graph');
+    await navigate('/domains?view=network',actor);
+    await waitFor("document.querySelectorAll('.object-layers input:checked').length===4&&document.querySelector('.graph-node.is-foreign')&&document.querySelectorAll('[data-asset-kind=physical]').length===4",'private view did not survive reload');
+    await capturePageSegmentScreenshot('.domain-network','domain-exploration-all-layers.png',1440,1200);
+    invariant(cdp.runtimeExceptions.length===0,`Domain exploration raised browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+    console.log('PASS domain-exploration: CPS Owner, default products, all four immediate layers, cross-department picker, gray read-only domain, private PG persistence, shared/deputy isolation and native new-tab links');
+  } finally {
+    const current=expectStatus(await api(actor,viewPath),200,'read private view cleanup').body;
+    expectStatus(await api(actor,viewPath,{method:'PUT',body:{revision:current.revision,configuration:baseline.configuration}}),200,'restore only test personal view');
+  }
+}
+
 async function domainNetworkFlow() {
   await navigate('/domains','sibilla.micheli');
   const path='/api/v1/semantic-graphs/domains',baseline=expectStatus(await api('sibilla.micheli',path),200,'read domain graph baseline').body;
+  const viewPath='/api/v1/domain-network/view',personalBaseline=expectStatus(await api('sibilla.micheli',viewPath),200,'read personal layout baseline').body;
   const domains=[],suffix=Date.now();let lastWritten=null;
   try {
-    for(const label of ['Teilbereich','Gesamtbereich'])domains.push(expectStatus(await api('sibilla.micheli','/api/v1/domains',{method:'POST',body:{ownerUserId:'sibilla.micheli',deputyOwnerUserId:'sandro.wenger',localizations:[{language:'de',preferredLabel:`Netz QA ${label} ${suffix}`,definition:'Synthetische UI-Testdomäne.'}]}}),201,'create only synthetic network domain').body);
+    for(const label of ['Teilbereich','Gesamtbereich'])domains.push(await createApprovedTestDomain('sibilla.micheli',{ownerUserId:'sibilla.micheli',deputyOwnerUserId:'sandro.wenger',localizations:[{language:'de',preferredLabel:`Netz QA ${label} ${suffix}`,definition:'Synthetische UI-Testdomäne.'}]}));
     const [source,target]=domains;
     await navigate('/domains/network','sibilla.micheli');
     await waitFor(`document.querySelector('[data-domain-id="${source.id}"]')!==null`,'domain network cards missing');
@@ -2102,11 +2200,11 @@ async function domainNetworkFlow() {
     await waitFor(`parseFloat(document.querySelector('[data-domain-id="${source.id}"]').style.left)===${before.x}`,'discard did not restore the shared layout');
     await evaluate(`document.querySelector('[data-domain-id="${source.id}"] header').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}))`);
     await clickText('.domain-network .draft-actions button','Netz speichern');
-    await waitFor("document.querySelector('.domain-network [role=status]')?.textContent.includes('für alle gespeichert')",'domain layout did not save');
-    lastWritten=expectStatus(await api('sibilla.micheli',path),200,'read saved domain positions').body;
-    invariant(lastWritten.positions[`domain:${source.id}`].y===before.y+10,'domain position differs from saved draft');
+    await waitFor("document.querySelector('.domain-network [role=status]')?.textContent.includes('Ansicht gespeichert')",'domain layout did not save');
+    const personalSaved=expectStatus(await api('sibilla.micheli',viewPath),200,'read saved personal positions').body;
+    invariant(personalSaved.configuration.positions[`domain:${source.id}`].y===before.y+10,'domain position differs from private draft');
     const other=expectStatus(await api('christian.man',path),200,'read domain graph as another person').body;
-    invariant(JSON.stringify(other.positions)===JSON.stringify(lastWritten.positions),'domain layout is personal instead of shared');
+    invariant(JSON.stringify(other.positions)===JSON.stringify(baseline.positions),'private layout leaked to another user');
     invariant(await evaluate(`!document.querySelector('[data-domain-id="${source.id}"] .ontology-port')`),'unconnected domain retained a connection port');
     await evaluate(`document.querySelector('[data-domain-id="${source.id}"] header').dispatchEvent(new KeyboardEvent('keydown',{key:'F10',shiftKey:true,bubbles:true,cancelable:true}))`);
     await clickText('.domain-network .concept-context-menu button','Neue Domänenbeziehung');
@@ -2121,30 +2219,35 @@ async function domainNetworkFlow() {
     invariant(lastWritten.relations.some(link=>link.sourceId===source.id&&link.targetId===target.id&&link.relationType==='partOf'),'domain relation is not persisted');
     await evaluate(`document.querySelector('[data-domain-id="${source.id}"]').scrollIntoView({block:'center',inline:'nearest',behavior:'instant'})`);
     await captureScreenshot('shared-domain-network.png');
-    await navigate('/domains/network','christian.man');await waitFor(`document.querySelector('[data-domain-id="${source.id}"]')!==null`,'shared graph did not reload');
+    await navigate('/domains?view=network&ownOffice=0','christian.man');await waitFor(`document.querySelector('[data-domain-id="${source.id}"]')!==null`,'shared graph did not reload');
     await evaluate(`document.querySelector('[data-domain-id="${source.id}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:300}))`);
     await waitFor("document.querySelector('.domain-network .concept-context-menu')!==null",'domain context menu missing');
-    invariant(await evaluate("[...document.querySelectorAll('.domain-network .concept-context-menu button')].filter(button=>button.textContent.includes('suchen und öffnen')).length===4"),'domain context lacks one of the four object searches');
-    await clickText('.domain-network .concept-context-menu button','Domäne suchen und öffnen');
+    invariant(await evaluate("[...document.querySelectorAll('.domain-network .concept-context-menu [role=menuitem]')].filter(button=>button.textContent.includes('suchen und öffnen')).length===4"),'domain context lacks one of the four object searches');
+    await clickText('.domain-network .concept-context-menu button','Logisches Modell suchen und öffnen');
     await waitFor("document.querySelector('.object-browser-backdrop input')!==null",'catalog search modal missing');
     for(const label of ['Terme','Logische Modelle','Physische Modelle']){
       await clickText('.object-browser-backdrop nav button',label);
-      await waitFor("document.querySelectorAll('.object-browser-backdrop li button').length>0&&!document.querySelector('.object-browser-backdrop [role=alert]')",`${label} are not accessible through the common search`);
+      await waitFor("document.querySelectorAll('.object-browser-backdrop .object-result').length>0&&!document.querySelector('.object-browser-backdrop [role=alert]')",`${label} are not accessible through the common search`);
     }
     await captureScreenshot('catalog-object-search.png');
     await clickText('.object-browser-backdrop nav button','Domänen');
-    await waitFor("document.querySelectorAll('.object-browser-backdrop li button').length>0",'domain search results missing');
+    await waitFor("document.querySelectorAll('.object-browser-backdrop .object-result').length>0",'domain search results missing');
     await evaluate(`(() => {const input=document.querySelector('.object-browser-backdrop input');input.value=${JSON.stringify(target.preferredLabel)};input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
-    await clickText('.object-browser-backdrop li button',target.preferredLabel);
-    await waitFor(`document.querySelector('h1')?.textContent===${JSON.stringify(target.preferredLabel)}`,'search did not open the selected domain');
+    const newTargets=new Set((await cdp.call('Target.getTargets')).targetInfos.map(target=>target.targetId));
+    await clickText('.object-browser-backdrop .object-result',target.preferredLabel);
+    let opened;const until=Date.now()+8000;
+    while(!opened&&Date.now()<until){opened=(await cdp.call('Target.getTargets')).targetInfos.find(tab=>!newTargets.has(tab.targetId)&&new URL(tab.url||'about:blank').pathname===`/domains/${target.id}`);if(!opened)await sleep(100);}
+    invariant(opened,'general search did not open its domain result in a new tab');await cdp.call('Target.closeTarget',{targetId:opened.targetId});
+    await navigate(`/domains/${target.id}`,'christian.man');
     await evaluate("document.querySelector('.network-editor .semantic-graph').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:300}))");
     await clickText('.concept-context-menu button','Domäne suchen und öffnen');
-    await waitFor("document.querySelectorAll('.object-browser-backdrop li button').length>0",'domain-to-domain navigation search missing');
+    await waitFor("document.querySelectorAll('.object-browser-backdrop .object-result').length>0",'domain-to-domain navigation search missing');
     await evaluate(`(() => {const input=document.querySelector('.object-browser-backdrop input');input.value=${JSON.stringify(source.preferredLabel)};input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
-    await clickText('.object-browser-backdrop li button',source.preferredLabel);
+    await clickText('.object-browser-backdrop .object-result',source.preferredLabel);
     await waitFor(`document.querySelector('h1')?.textContent===${JSON.stringify(source.preferredLabel)}`,'same-route domain navigation retained the previous domain');
-    console.log('PASS semantic networks: shared layouts, local drafts, discard, hierarchy, four object searches and domain-to-domain navigation');
+    console.log('PASS semantic networks: private layouts, shared relations, local drafts, discard, hierarchy, four object searches and domain-to-domain navigation');
   } finally {
+    const personalCurrent=expectStatus(await api('sibilla.micheli',viewPath),200,'read private layout cleanup').body;expectStatus(await api('sibilla.micheli',viewPath,{method:'PUT',body:{revision:personalCurrent.revision,configuration:personalBaseline.configuration}}),200,'restore test personal layout');
     if(lastWritten){
       const current=expectStatus(await api('sibilla.micheli',path),200,'read graph for isolated fixture cleanup').body,positions={...current.positions},owned=new Set(domains.map(domain=>domain.id));
       for(const [key,value] of Object.entries(lastWritten.positions))if(JSON.stringify(current.positions[key])===JSON.stringify(value)){if(key in baseline.positions)positions[key]=baseline.positions[key];else delete positions[key];}
@@ -2159,7 +2262,7 @@ async function domainNetworkFlow() {
 async function conceptNetworkEditingFlow() {
   await navigate('/domains','christian.man');
   const suffix=Date.now();
-  const domain=expectStatus(await api('sibilla.micheli','/api/v1/domains',{method:'POST',body:{ownerUserId:'sibilla.micheli',deputyOwnerUserId:'sandro.wenger',localizations:[{language:'de',preferredLabel:`Begriffsnetz QA ${suffix}`,definition:'Isolierte synthetische Testdomäne für den Begriffsnetz-Editor.'}]}}),201,'create isolated concept network domain');
+  const domain={body:await createApprovedTestDomain('sibilla.micheli',{ownerUserId:'sibilla.micheli',deputyOwnerUserId:'sandro.wenger',localizations:[{language:'de',preferredLabel:`Begriffsnetz QA ${suffix}`,definition:'Isolierte synthetische Testdomäne für den Begriffsnetz-Editor.'}]})};
   const approve=async(proposal)=>{let result=proposal;for(const review of proposal.reviews)result=expectStatus(await api(review.ownerUserId,`/api/v1/glossary/term-proposals/${proposal.id}/reviews/${review.domainId}/decision`,{method:'POST',etag:`"${proposal.revision}"`,body:{decision:'approve',comment:'Synthetische Editorprüfung.'}}),200,'approve synthetic concept change').body;return result;};
   const create=async(label,relations=[])=>{const proposal=expectStatus(await api('christian.man','/api/v1/glossary/term-proposals',{method:'POST',body:{operation:'create',payload:{domainIds:[domain.body.id],localizations:[{language:'de',preferredLabel:label,definition:`Synthetischer Begriff ${label}.`}],relations}}}),201,'create synthetic concept proposal').body;return(await approve(proposal)).targetTermId;};
   try {
@@ -2672,16 +2775,16 @@ async function mappingStartFlow(){
   invariant(table,'Selected physical object is missing');
   await evaluate("document.querySelector('.mapping-start-choice:nth-child(2) button').click()");
   await waitFor("document.querySelector('.representation-dialog[open] .source-options button')!==null",'physical-first picker did not open');
-  await setControls({'.representation-dialog nav input':source.name});
-  await clickText('.source-options button',source.name);
+  await waitFor(`document.querySelector('.source-options button[data-source-id=\"${source.id}\"]')&&!document.querySelector('.source-options button[data-source-id=\"${source.id}\"]').disabled`,'Selected physical source is not available');
+  await evaluate(`document.querySelector('.source-options button[data-source-id=\"${source.id}\"]').click()`);
   await waitFor("document.querySelector('.object-tree button')!==null",'physical source did not load');
-  await evaluate(`(()=>{const button=[...document.querySelectorAll('.object-tree button')].find(item=>item.querySelector('strong')?.textContent.trim()===${JSON.stringify(table.name)});if(!button)throw new Error('Physical object not listed');button.click();})()`);
+  await evaluate(`(()=>{const button=document.querySelector('.object-tree [data-physical-table-id=\"${table.id}\"]');if(!button)throw new Error('Physical object not listed');button.click();})()`);
   const physicalRoute=`/mappings/physical/${binding.physicalSnapshotId}/${table.id}`;
   await waitFor(`location.pathname===${JSON.stringify(physicalRoute)}&&!!document.querySelector('.mapping-physical-workspace [data-representation-table-id="${table.id}"]')`,'physical selection did not open its canvas immediately');
   invariant(await evaluate("!!document.querySelector('.logical-placeholder')&&!document.querySelector('[data-logical-field-id]')&&!document.querySelector('.mapping-start-action button')"),'Physical entry invented a logical model or requires another confirmation');
   await capturePageSegmentScreenshot('daca-mapping-start','mapping-physical-open.png',1440,1000);
   await navigate(physicalRoute,actor,390,844);
-  invariant(await evaluate("document.documentElement.scrollWidth<=innerWidth+1&&getComputedStyle(document.querySelector('.mapping-physical-add')).display!=='none'"),'Physical entry overflows mobile or hides counterpart selection');
+  invariant(await evaluate("document.documentElement.scrollWidth<=innerWidth+1&&getComputedStyle(document.querySelector('.logical-placeholder')).display!=='none'&&!!document.querySelector('.derive-logical')"),'Physical entry overflows mobile or hides counterpart selection');
   invariant(await evaluate("(()=>{const r=document.querySelector('.physical-representation').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;})()"),'Mobile physical object leaves the viewport');
   await captureScreenshot('mapping-physical-mobile.png');
   await setViewport(1440,900);
@@ -2733,9 +2836,9 @@ async function mappingLiveRefreshFlow(){
   invariant(await evaluate(sameCards),'Bindings differ from the graph before hiding');
   const originalCount=await evaluate("document.querySelectorAll('.physical-representation').length");
   const tableId=await evaluate("document.querySelector('.physical-representation').dataset.representationTableId");
-  await evaluate("(()=>{const card=document.querySelector('.physical-representation');card.scrollIntoView({block:'center',behavior:'instant'});const rect=card.getBoundingClientRect();card.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:rect.left+20,clientY:rect.top+20}));})()");
+  await evaluate("(()=>{const card=document.querySelector('.physical-representation');card.querySelector('header').scrollIntoView({block:'center',behavior:'instant'});const rect=card.querySelector('header').getBoundingClientRect();card.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:rect.left+20,clientY:rect.top+20}));})()");
   await waitFor("document.querySelector('.representation-context-menu')!==null",'representation context menu did not open');
-  await clickText('.representation-context-menu button','Darstellung der physischen Repräsentation entfernen');
+  await clickText('.representation-context-menu button','Darstellung dieser Physischen Repräsentation/Deklaration löschen');
   await waitFor(sameCards,'Binding list retained a hidden graph card');
   invariant(await evaluate(`!document.querySelector('[data-representation-id="${tableId}"]')`),'Hidden card is still a binding');
   await clickText('.representation-actions button','Ausgeblendete einblenden');
@@ -2774,9 +2877,632 @@ async function mappingLiveRefreshFlow(){
   await evaluate("document.querySelector('.representation-panel').scrollIntoView({behavior:'instant'})");
   await captureScreenshot('mapping-bindings-mobile.png');
   invariant(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),'Bindings overflow the mobile page');
-  invariant(await evaluate("[...document.querySelectorAll('.representation-list>button>strong')].every(label=>{const range=document.createRange();range.selectNodeContents(label);const text=range.getBoundingClientRect(),card=label.parentElement.getBoundingClientRect();return text.left>=card.left&&text.right<=card.right+1;})"),'Physical representation names overlap neighbouring cards');
+  invariant(await evaluate("[...document.querySelectorAll('.representation-list .representation-select>strong')].every(label=>{const range=document.createRange();range.selectNodeContents(label);const text=range.getBoundingClientRect(),card=label.parentElement.getBoundingClientRect();return text.left>=card.left&&text.right<=card.right+1;})"),'Physical representation names overlap neighbouring cards');
   invariant(await evaluate(sameCards),'Mobile bindings differ from graph');
   console.log(`PASS mapping-live-refresh: shared visibility, restore, connection labels, automatic removal/restoration, mobile; simulated removal detected in ${removalMs}ms`);
+}
+
+async function modelDepartmentDefaultFlow() {
+  await navigate('/models','christian.spider');
+  await waitFor("document.querySelector('.model-filters select')?.value==='VBS'",'Model overview did not default to the signed-in department');
+  invariant(await evaluate("[...document.querySelectorAll('.model-row-title>div>span')].every(label=>label.textContent.trim().startsWith('VBS /'))"),'Another department is displayed by default');
+  await captureScreenshot('models-own-department-desktop.png');
+  await setControls({'.model-filters select':''});
+  invariant(await evaluate("document.querySelector('.model-filters select').value===''") ,'All departments cannot be selected explicitly');
+  await clickText('.model-filters header button','Filter zurücksetzen');
+  await waitFor("document.querySelector('.model-filters select').value==='VBS'",'Reset did not restore the user department');
+  await navigate('/models','christian.spider',390,844);
+  invariant(await evaluate("document.querySelector('.model-filters select').value==='VBS'&&document.documentElement.scrollWidth<=innerWidth+1"),'Fresh/mobile model overview lost its department default or overflows');
+  await evaluate("document.querySelector('.model-filters').scrollIntoView({block:'start',behavior:'instant'})");
+  await captureScreenshot('models-own-department-mobile.png');
+  invariant(cdp.runtimeExceptions.length===0,`Department filtering raised browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+  console.log('PASS model-department-default: own department on entry, filtered rows, explicit All, reset, fresh page and mobile');
+}
+
+async function physicalDerivationEntryFlow() {
+  for(const type of ['csv','s3']){
+    const actor=type==='csv'?'mirjam.keller':'christian.man';
+    await navigate('/mappings',actor);
+    const sources=expectStatus(await api(actor,'/api/v1/physical-sources'),200,'read derivation origins').body.items;
+    const source=type==='csv'?sources.find(item=>item.id==='b7b19a5e-5e5f-50f8-93ac-ab9c92db86eb'):sources.find(item=>item.adapterType==='s3'&&item.latestSnapshotId);
+    invariant(source?.latestSnapshotId,`No ${type} origin available`);
+    const snapshot=expectStatus(await api(actor,`/api/v1/physical-snapshots/${source.latestSnapshotId}`),200,'read derivation structure').body;
+    const tables=snapshot.databases.flatMap(database=>database.schemas.flatMap(schema=>schema.tables));
+    const table=type==='csv'?tables.find(item=>item.name==='VIBDBU'):tables.find(item=>item.kind==='parquet'&&item.columns.length>=2);
+    invariant(table?.columns.length>=2,`No suitable ${type} data structure`);
+    const route=`/mappings/physical/${source.latestSnapshotId}/${table.id}`;
+    const before=expectStatus(await api(actor,'/api/v1/logical-models'),200,'models before local derivation').body.items.map(item=>item.id).sort();
+    cdp.interceptedTransfers=[];cdp.mockTransferResponse={status:503,body:{detail:'Synthetic save rejection: preserve this local derivation form.'}};
+    // Capture the real save payload without creating test models or changing physical sources.
+    await cdp.call('Fetch.enable',{patterns:[{urlPattern:'*/api/v1/physical-tables/*/*derive-logical-model',requestStage:'Request'}]},sessionId);
+    try {
+      await navigate(route,actor,390,844);
+      invariant(await evaluate("document.documentElement.scrollWidth<=innerWidth+1&&getComputedStyle(document.querySelector('.logical-placeholder')).display!=='none'&&!!document.querySelector('.derive-logical')"),'Mobile physical entry hides logical choices');
+      await captureScreenshot(`derive-${type}-mobile.png`);
+      await setViewport(1440,900);await settleFrames();
+      await evaluate("(()=>{const canvas=document.querySelector('.graph-canvas'),region=document.querySelector('.graph-scroll');document.querySelector('.mapping-physical-workspace').scrollIntoView({block:'start',behavior:'instant'});region.scrollTop=0;const r=region.getBoundingClientRect();canvas.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:r.left+350,clientY:r.top+100}));})()");
+      await waitFor("document.querySelector('.canvas-context-menu')",'Physical canvas menu unavailable');
+      const canvasItems=await evaluate("[...document.querySelectorAll('.canvas-context-menu [role=menuitem]')].map(item=>item.textContent.trim())");
+      invariant(canvasItems[0]==='Logisches Modell ableiten'&&!canvasItems.some(text=>/^(Term|Domäne) suchen/.test(text)),'Blank canvas offers inappropriate semantic searches or omits derivation');
+      await captureScreenshot(`derive-${type}-canvas-menu.png`);
+      await clickText('.canvas-context-menu button','Logisches Modell auswählen');
+      await waitFor("document.querySelector('#mapping-model-query')",'Logical search did not stay in the physical entry');
+      invariant(await evaluate(`location.pathname===${JSON.stringify(route)}`),'Logical search discarded the physical selection');
+      await clickText('.mapping-start-picker header button','Schliessen');
+      await evaluate("(()=>{const card=document.querySelector('.physical-representation');const r=card.getBoundingClientRect();card.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:r.left+20,clientY:r.top+30}));})()");
+      await waitFor("document.querySelector('.representation-context-menu')",'Physical card actions unavailable');
+      await clickText('.representation-context-menu button','Logisches Modell ableiten');
+      await waitFor("location.pathname==='/models/new'&&document.querySelector('.derived-origin')&&document.querySelector('textarea[formcontrolname=descriptionDe]')",'Derivation did not open the complete model form');
+      invariant(cdp.interceptedTransfers.length===0,'Opening derivation created data before explicit Save');
+      invariant(await evaluate(`new URL(location.href).searchParams.get('physicalSnapshotId')===${JSON.stringify(source.latestSnapshotId)}&&new URL(location.href).searchParams.get('physicalTableId')===${JSON.stringify(table.id)}&&document.querySelectorAll('.model-detail-tabs [role=tab]').length===3`),'Derivation lost its origin or omitted standard model tabs');
+      const title=`Mapping derivation ${type} ${Date.now()}`,description=`User-authored ${type} logical model description.`;
+      await setControls({'input[formcontrolname=titleDe]':title,'textarea[formcontrolname=descriptionDe]':description,'input[formcontrolname=identifiers]':`DERIVE-${type}-${Date.now()}`});
+      await waitFor("document.querySelector('select[formcontrolname=dataOwnerId]')?.options.length>1",'Draft owner selection unavailable');
+      await evaluate("(()=>{const select=document.querySelector('select[formcontrolname=dataOwnerId]');select.value=[...select.options].find(option=>option.value).value;select.dispatchEvent(new Event('change',{bubbles:true}));})()");
+      await capturePageSegmentScreenshot('daca-logical-model-editor',`derive-${type}-full-model-form.png`,1440,1000);
+      await clickText('.model-detail-tabs button','Logische Entitäten und Felder');
+      while(await evaluate("document.querySelectorAll('.field-table tbody tr').length>2"))await evaluate("[...document.querySelectorAll('.field-table tbody .remove-field')].at(-1).click()");
+      for(let index=0;index<2;index++){
+        await evaluate(`document.querySelectorAll('.field-select')[${index}].click()`);
+        await waitFor("[...document.querySelectorAll('.field-list select[formcontrolname=entityBusinessObjectVersionId],.field-list select[formcontrolname=businessObjectVersionId]')].length===2&&[...document.querySelectorAll('.field-list select[formcontrolname=entityBusinessObjectVersionId],.field-list select[formcontrolname=businessObjectVersionId]')].every(select=>[...select.options].some(option=>option.value))",'Business object choices unavailable');
+        await evaluate("(()=>{for(const select of document.querySelectorAll('.field-list select[formcontrolname=entityBusinessObjectVersionId],.field-list select[formcontrolname=businessObjectVersionId]')){select.value=[...select.options].find(option=>option.value).value;select.dispatchEvent(new Event('change',{bubbles:true}));}})()");
+        await setControls({'.field-list input[formcontrolname=name]':`logical_field_${index}`,'.field-list select[formcontrolname=conceptMode]':'none'});
+      }
+      await clickText('button[type=submit]','Als Entwurf speichern');
+      await waitFor("document.querySelector('.save-problem')",'Save failure did not preserve the full local form');
+      invariant(cdp.interceptedTransfers.length===1,'Derivation did not use exactly one explicit save');
+      const request=cdp.interceptedTransfers[0],payload=JSON.parse(request.postData);
+      invariant(new URL(request.url).pathname===`/api/v1/physical-tables/${table.id}/derive-logical-model`,'Save used quick derivation or the wrong physical object');
+      invariant(payload.logicalModel.localizations.some(item=>item.title===title&&item.description===description),'Edited logical metadata was omitted from Save');
+      invariant(payload.fieldMappings.length===2&&payload.fieldMappings.every((mapping,index)=>mapping.physicalColumnId===table.columns[index].id&&mapping.logicalFieldName===`logical_field_${index}`),'Renaming/removing fields lost physical binding identity');
+      invariant(await evaluate(`document.querySelector('textarea[formcontrolname=descriptionDe]').value===${JSON.stringify(description)}&&location.pathname==='/models/new'`),'Rejected Save lost user-authored metadata');
+      const after=expectStatus(await api(actor,'/api/v1/logical-models'),200,'models after rejected save').body.items.map(item=>item.id).sort();
+      invariant(JSON.stringify(before)===JSON.stringify(after),'Derivation preview unexpectedly persisted a model');
+      console.log(`PASS ${type} physical derivation: canvas/card actions, mobile choices, scoped logical search, complete editable form, renamed/removed field bindings, explicit save payload and retained draft`);
+    } finally {
+      await cdp.call('Fetch.disable',{},sessionId);delete cdp.mockTransferResponse;
+    }
+  }
+  invariant(cdp.runtimeExceptions.length===0,`Physical derivation raised browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+}
+
+// Uses unique temporary Views; cleanup preserves immutable message history and audit records.
+async function personalSearchViewsFlow() {
+  const sender='christian.man',recipient='kassandra.valdata',prefix=`UI-Test View ${Date.now()}`;
+  const viewsPath='/api/v1/me/search-views',sharesPath='/api/v1/me/search-view-shares';
+  let sourceId,shareId,copyId;
+  const actions=async(text)=>{await evaluate("document.querySelector('details.view-actions').open=true");await clickText('.view-action-list button',text);};
+  try {
+    await navigate('/search?q=Gebäude&kind=structure&connection=metadata&mode=focus&sort=name',sender);
+    await waitFor("!document.querySelector('daca-search-views .view-select select').disabled",'Personal views did not load');
+    await clickText('daca-search-views .view-toolbar-button','Neue View');
+    await waitFor("document.querySelector('.view-dialog[open] input[name=name]')",'Create View modal missing');
+    await setControls({'.view-dialog input[name=name]':prefix,'.view-dialog textarea[name=description]':'Temporäre Browserprüfung'});
+    await captureScreenshot('search-view-create-desktop.png');
+    await clickText('.view-dialog footer button','Speichern');
+    await waitFor(`!document.querySelector('.view-dialog')&&document.querySelector('.view-select select').selectedOptions[0]?.textContent===${JSON.stringify(prefix)}`,'Created View was not selected');
+    sourceId=await evaluate("document.querySelector('.view-select select').value");
+    let saved=expectStatus(await api(sender,`${viewsPath}/${sourceId}`),200,'read newly created view').body;
+    invariant(saved.configuration.query==='Gebäude'&&saved.configuration.mode==='focus'&&saved.configuration.kind==='structure'&&saved.configuration.connection==='metadata'&&saved.configuration.sort==='name','Saving lost existing search filters');
+    await actions('Bearbeiten');await waitFor("document.querySelector('.view-dialog input[name=query]')",'Edit View filters missing');
+    await setControls({'.view-dialog input[name=name]':prefix+' geteilt','.view-dialog input[name=query]':'VIBDBU'});
+    await clickText('.view-dialog footer button','Speichern');
+    await waitFor("!document.querySelector('.view-dialog')&&document.querySelector('#expert-search-input').value==='VIBDBU'",'Editing a View did not apply its filters');
+    saved=expectStatus(await api(sender,`${viewsPath}/${sourceId}`),200,'read edited view').body;
+    invariant(saved.revision===2,'View edit did not increment its revision');
+    await actions('Teilen');await waitFor("document.querySelector('.view-dialog input[name=personQuery]')",'Recipient picker missing');
+    await setControls({'.view-dialog input[name=personQuery]':'Kassandra'});
+    await waitFor("document.querySelectorAll('.view-recipients input').length===1",'Recipient search did not narrow the directory');
+    await evaluate("document.querySelector('.view-recipients input').click()");
+    await setControls({'.view-dialog textarea[name=message]':'UI-Test: unabhängige Kopie, wird nach der Prüfung entfernt.'});
+    await captureScreenshot('search-view-share-desktop.png');
+    await clickText('.view-dialog footer button','View senden');
+    await waitFor("!document.querySelector('.view-dialog')&&document.querySelector('.view-feedback')?.textContent.includes('versendet')",'Sharing did not confirm delivery');
+    const received=expectStatus(await api(recipient,sharesPath),200,'read recipient view messages').body.find(item=>item.snapshot.name===prefix+' geteilt'&&item.senderUserId===sender);
+    invariant(received,'Sharing did not create a recipient-private message');shareId=received.id;
+    const frozen=JSON.stringify(received.snapshot.configuration);
+    await actions('Bearbeiten');await setControls({'.view-dialog input[name=query]':'Nachträglich geändert'});
+    await clickText('.view-dialog footer button','Speichern');await waitFor("!document.querySelector('.view-dialog')",'Second source edit did not finish');
+    await actions('Löschen');await waitFor("document.querySelector('.view-dialog')?.textContent.includes('Geteilte')||document.querySelector('.view-dialog')?.textContent.includes('geteilte')",'Delete confirmation did not explain preserved copies');
+    await clickText('.view-dialog footer button','Abbrechen');
+    invariant(expectStatus(await api(sender,`${viewsPath}/${sourceId}`),200,'read cancelled View deletion').body.id===sourceId,'Cancelling deleted the View');
+    await actions('Löschen');await clickText('.view-dialog footer button','Löschen');
+    await waitFor("!document.querySelector('.view-dialog')&&document.querySelector('.view-select select').value===''",'Original View was not deleted');
+    invariant(JSON.stringify(expectStatus(await api(recipient,`${sharesPath}/${shareId}`),200,'read sent copy after source deletion').body.snapshot.configuration)===frozen,'Sent filters changed with the original');
+    sourceId=null;
+    await navigate('/tasks',recipient);
+    const messageLink=`.owner-task-card a[href="/search?sharedView=${shareId}"]`;
+    await waitFor(`document.querySelector(${JSON.stringify(messageLink)})`,'Recipient notification did not link to the View');
+    await evaluate(`document.querySelector(${JSON.stringify(messageLink)}).click()`);
+    await waitFor(`document.querySelector('.view-dialog[open] .received-name')?.textContent===${JSON.stringify(prefix+' geteilt')}`,'Notification did not open the sent copy');
+    await setViewport(390,844);await settleFrames();
+    invariant(await evaluate("(()=>{const box=document.querySelector('.view-dialog').getBoundingClientRect();return box.left>=0&&box.right<=innerWidth&&box.top>=0&&box.bottom<=innerHeight;})()"),'Review popup overflows mobile viewport');
+    await captureScreenshot('search-view-receive-mobile.png');
+    await setControls({'.view-dialog input[name=adoptedName]':prefix+' Kopie'});
+    await clickText('.view-dialog footer button','Als eigene View übernehmen');
+    await waitFor("!document.querySelector('.view-dialog')&&document.querySelector('#expert-search-input').value==='VIBDBU'",'Adoption used the changed origin instead of the sent filters');
+    copyId=await evaluate("document.querySelector('.view-select select').value");
+    const adopted=expectStatus(await api(recipient,`${viewsPath}/${copyId}`),200,'read independent adopted view').body;
+    invariant(adopted.ownerUserId===recipient&&JSON.stringify(adopted.configuration)===frozen,'Adoption did not create an independent exact filter copy');
+    invariant(!expectStatus(await api(recipient,'/api/v1/tasks/mine'),200,'read completed View notification').body.some(task=>task.searchViewShareId===shareId),'Adoption left an open message');
+    await setViewport(1440,900);await settleFrames();await captureScreenshot('search-view-adopted-desktop.png');
+    await setControls({'#expert-search-input':''});
+    await actions('Aktuelle Filter übernehmen');
+    await waitFor("!document.querySelector('.view-modified')",'Current filters were not saved to the private copy');
+    await navigate(`/search?view=${copyId}`,recipient,390,844);
+    await waitFor(`document.querySelector('.view-select select')?.value===${JSON.stringify(copyId)}&&document.querySelector('[data-search-mode=focus]')?.getAttribute('aria-pressed')==='true'`,'Private View did not persist across a fresh page');
+    invariant(await evaluate("document.querySelector('#expert-search-input').value===''&&!document.querySelector('.search-empty h3')?.textContent.includes('Zeichen')&&new URL(location.href).searchParams.has('q')"),'Filter-only View did not support an empty search phrase');
+    await captureScreenshot('search-view-filter-only-mobile.png');
+    await actions('Löschen');await clickText('.view-dialog footer button','Löschen');await waitFor("!document.querySelector('.view-dialog')",'Deleting the own copy failed');copyId=null;
+    invariant(cdp.runtimeExceptions.length===0,`Views raised browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+    console.log('PASS personal search Views: create/edit/filter capture, recipient modal, notification link, immutable sent copy after source change/deletion, adoption, independent update, persisted filter-only mode, delete/cancel and mobile');
+  } finally {
+    // Clean up only exact test-owned names and pending messages; preserve append-only audit and message history.
+    for(const actor of [sender,recipient]){
+      const remaining=expectStatus(await api(actor,viewsPath),200,'list owned test Views for cleanup').body.filter(view=>view.name.startsWith(prefix));
+      for(const view of remaining)expectStatus(await api(actor,`${viewsPath}/${view.id}`,{method:'DELETE',etag:`"${view.revision}"`}),204,'delete only browser test View');
+    }
+    const pending=expectStatus(await api(recipient,sharesPath),200,'read pending test messages for cleanup').body.filter(item=>item.senderUserId===sender&&item.snapshot.name.startsWith(prefix));
+    for(const item of pending)expectStatus(await api(recipient,`${sharesPath}/${item.id}/dismiss`,{method:'POST',body:{}}),204,'dismiss only browser test message');
+  }
+}
+
+// Read-only UI checks: actual SVG motion, native new tabs, hover/focus and mobile overflow.
+async function lineageExplorerFlow() {
+  const productId='11111111-1111-4111-8111-111111111111';
+  await navigate(`/products/${productId}/lineage`,'kassandra.valdata');
+  await setViewport(1920,1080);
+  await waitFor("document.querySelector('.lineage-node[data-kind=consumer]')&&document.querySelector('.lineage-node[data-kind=product]')?.textContent.includes('ESTV')",'Live lineage graph did not load');
+  await evaluate("document.querySelector('.lineage-toolbar').scrollIntoView({block:'start',behavior:'instant'})");
+  invariant(await evaluate(`(()=>{const nodes=[...document.querySelectorAll('.lineage-node')],labels=[...document.querySelectorAll('.flow-label')];return labels.every(label=>{const a=label.getBoundingClientRect();return nodes.every(node=>{const b=node.getBoundingClientRect();return a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom;});})&&nodes.every(node=>node.querySelector('.lineage-node-title').scrollWidth<=node.querySelector('.lineage-node-title').clientWidth+1);})()`),'Lineage card text or edge labels overlap');
+  invariant(await evaluate("getComputedStyle(document.querySelector('[data-kind=consumer]')).borderTopColor===getComputedStyle(document.querySelector('.lineage-legend .is-consumer')).backgroundColor"),'Consumer does not match its green legend');
+  invariant(await evaluate("[...document.querySelectorAll('.lineage-edge')].every(path=>path.getAttribute('marker-end')==='url(#lineage-arrow)')"),'Flow arrows missing');
+  invariant(await evaluate("[...document.querySelectorAll('.lineage-node')].every(node=>{const style=getComputedStyle(node);return node.offsetWidth===208&&node.offsetHeight===112&&style.borderRadius==='2px';})"),'Lineage cards lost their compact size or angular corners');
+  const pulseState=()=>evaluate("[...document.querySelectorAll('.flow-pulse .pulse-core')].slice(0,3).map(p=>({offset:parseFloat(getComputedStyle(p).strokeDashoffset),opacity:parseFloat(getComputedStyle(p.parentElement).opacity)}))");
+  const before=await pulseState();
+  await sleep(180);
+  const after=await pulseState();
+  invariant(after.filter((value,index)=>value.offset<before[index].offset-1).length>=2,'Ice-blue light bands are not travelling in the source-to-target direction');
+  invariant(after.some((value,index)=>Math.abs(value.opacity-before[index].opacity)>.02),'Light bands do not pulse');
+  await evaluate("document.querySelector('[data-kind=source]').focus()");await sleep(240);
+  invariant(await evaluate("(()=>{const style=getComputedStyle(document.querySelector('[data-kind=source]'));return style.outlineStyle==='none'&&new DOMMatrixReadOnly(style.transform).m42===-2;})()"),'Card interaction must move the existing border without an extra outline');
+  await pressKey('Escape','Escape',27);await evaluate('document.activeElement.blur()');
+  await captureScreenshot('lineage-desktop.png');
+  for(const [term,expected] of [['Verified','Zertifikat dieser Quelle verfügbar'],['Declared','Quelle wurde durch den Data Owner manuell deklariert']]){
+    await evaluate(`[...document.querySelectorAll('.legend-term')].find(button=>button.textContent===${JSON.stringify(term)}).focus()`);
+    await waitFor(`document.querySelector('.daca-glossary-tooltip[role=tooltip]')?.textContent===${JSON.stringify(expected)}`,'Lineage term explanation missing');
+    await pressKey('Escape','Escape',27);
+  }
+  await evaluate("document.querySelector('[data-kind=product]').focus()");
+  await waitFor("document.querySelector('.lineage-summary a')",'Product hover summary missing');
+  invariant(await evaluate("(()=>{const box=document.querySelector('.lineage-summary');return box.textContent.includes('Data Owner')&&box.textContent.includes('URN')&&box.querySelector('code').textContent.startsWith('urn:')&&!box.querySelector('code').textContent.startsWith('urn:daca:lineage:urn:')&&box.querySelector('a').target==='_blank';})()"),'Product summary metadata or native new-tab link missing');
+  await captureScreenshot('lineage-product-summary.png');
+  await pressKey('Tab','Tab',9);
+  invariant(await evaluate("document.activeElement===document.querySelector('.lineage-summary a')"),'Cannot reach summary link with Tab');
+  const href=await evaluate('document.activeElement.href');
+  const targets=new Set((await cdp.call('Target.getTargets')).targetInfos.map(target=>target.targetId));
+  await evaluate('document.activeElement.click()');
+  let popup;const deadline=Date.now()+8000;
+  while(!popup&&Date.now()<deadline){popup=(await cdp.call('Target.getTargets')).targetInfos.find(target=>target.type==='page'&&!targets.has(target.targetId)&&target.url===href);if(!popup)await sleep(100);}
+  invariant(popup,'Summary did not open the product in a new tab');
+  invariant(await evaluate(`location.pathname==='/products/${productId}/lineage'`),'Summary replaced the original diagram');
+  await cdp.call('Target.closeTarget',{targetId:popup.targetId});await cdp.call('Page.bringToFront',{},sessionId);
+  await pressKey('Escape','Escape',27);
+  await cdp.call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]},sessionId);
+  invariant(await evaluate("getComputedStyle(document.querySelector('.flow-pulse')).display==='none'"),'Reduced motion preference ignored');
+  await evaluate("document.querySelector('[data-kind=source]').focus()");
+  invariant(await evaluate("getComputedStyle(document.querySelector('[data-kind=source]')).transform==='none'"),'Reduced motion must also disable card movement');
+  await pressKey('Escape','Escape',27);await evaluate('document.activeElement.blur()');
+  await cdp.call('Emulation.setEmulatedMedia',{features:[]},sessionId);
+  await setViewport(390,844);await settleFrames();
+  invariant(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),'Lineage page overflows mobile viewport');
+  await evaluate("document.querySelector('.lineage-canvas').scrollIntoView({block:'center',behavior:'instant'});document.querySelector('.lineage-canvas').scrollLeft=0");
+  await captureScreenshot('lineage-mobile.png');
+  await evaluate("(()=>{const node=document.querySelector('[data-kind=consumer]');node.scrollIntoView({block:'center',inline:'center',behavior:'instant'});node.focus();})()");
+  await waitFor("document.querySelector('.lineage-summary a')",'Mobile reference summary missing');
+  invariant(await evaluate("(()=>{const box=document.querySelector('.daca-glossary-tooltip').getBoundingClientRect();return box.left>=0&&box.right<=innerWidth&&box.top>=0&&box.bottom<=innerHeight;})()"),'Mobile summary is outside viewport');
+  const referenceUrl=await evaluate("document.querySelector('.lineage-summary a').href");
+  const referenceUrn=await evaluate("document.querySelector('[data-kind=consumer]').dataset.nodeId");
+  await captureScreenshot('lineage-mobile-consumer-summary.png');
+  await navigate(referenceUrl,'kassandra.valdata');
+  await waitFor(`document.querySelector('.lineage-detail h3')?.textContent===document.querySelector('[data-node-id="${referenceUrn}"] .lineage-node-title')?.textContent&&document.querySelector('[data-kind=consumer]')?.getAttribute('aria-pressed')==='true'`,'Reference deep link lost its selected consumer');
+  invariant(cdp.runtimeExceptions.length===0,`Lineage raised browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+  console.log('PASS lineage-explorer: labels, semantic colors, glossary tooltips, moving impulses, keyboard summaries, native new tab, exact reference, reduced motion and mobile');
+}
+
+async function lineageAccessFlow() {
+  const owner='kassandra.valdata',reader='mirjam.keller',product='11111111-1111-4111-8111-111111111111';
+  const edge='31111111-1111-4111-8111-222222222222',route=`/products/${product}/lineage`,logs=`${route}/${edge}/access-events`;
+  const endpoint=`/api/v1/data-products/${product}/lineage/${edge}/access-events`;
+  const openEdge=async()=>{
+    await waitFor(`document.querySelector('[data-edge-id="${edge}"]')`,'Live lineage edge missing');
+    await evaluate(`(()=>{const path=document.querySelector('[data-edge-id="${edge}"]');path.scrollIntoView({block:'center',inline:'center',behavior:'instant'});const r=path.getBoundingClientRect();path.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:Math.min(innerWidth-20,r.left+r.width/2),clientY:r.top+r.height/2}));})()`);
+    await waitFor("document.querySelector('.lineage-edge-menu')",'Edge context menu missing');await settleFrames();
+  };
+  await navigate(route,owner);
+  // These are actual calls through OPA and forced RLS, not fixture access events.
+  const person=await evaluate("(async()=>{const r=await fetch('/sample-api/api/v1/estv/tax-statistics',{headers:{'X-DaCa-User':'kanton-st-gallen'}});return {status:r.status,problem:r.ok?null:await r.json()};})()");
+  invariant(person.status===200,`Live PEP person read failed: ${JSON.stringify(person)}`);
+  const machine=await evaluate("(async()=>{const r=await fetch('/sample-api/api/v1/estv/tax-statistics',{headers:{'X-DaCa-Machine':'svc-estv-cantonal-tax-dashboard'}});return r.status;})()");
+  invariant(machine===200||machine===403,`Live machine decision was unavailable: ${machine}`);
+  const receipts=expectStatus(await api(owner,endpoint),200,'read actual access receipts').body;
+  invariant(receipts.items.some(item=>item.subjectId==='kanton-st-gallen'&&item.subjectType==='person'&&item.outcome==='success'),'Real person read was not reported');
+  invariant(receipts.items.some(item=>item.subjectId==='svc-estv-cantonal-tax-dashboard'&&item.subjectType==='machine'&&item.outcome===(machine===200?'success':'denied')),'Real machine outcome was not reported');
+  invariant(expectStatus(await api(reader,endpoint),403,'deny non-owner direct API').body.items===undefined,'Denied API leaked receipts');
+  await openEdge();
+  invariant(await evaluate("document.activeElement===document.querySelector('.lineage-edge-menu a')"),'Owner menu did not focus its action');
+  await captureScreenshot('lineage-owner-edge-menu.png');
+  const href=await evaluate("document.querySelector('.lineage-edge-menu a').href");
+  const existing=new Set((await cdp.call('Target.getTargets')).targetInfos.map(item=>item.targetId));
+  await evaluate("document.querySelector('.lineage-edge-menu a').click()");
+  let popup;const until=Date.now()+10000;
+  while(!popup&&Date.now()<until){popup=(await cdp.call('Target.getTargets')).targetInfos.find(item=>item.type==='page'&&!existing.has(item.targetId)&&item.url===href);if(!popup)await sleep(100);}
+  invariant(popup,'Access logs did not open a native new tab');
+  invariant(await evaluate(`location.pathname===${JSON.stringify(route)}`),'Opening logs replaced the lineage diagram');
+  const parent=sessionId;
+  try{
+    sessionId=(await cdp.call('Target.attachToTarget',{targetId:popup.targetId,flatten:true})).sessionId;
+    await cdp.call('Runtime.enable',{},sessionId);await cdp.call('Page.enable',{},sessionId);
+    await cdp.call('Page.setLifecycleEventsEnabled',{enabled:true},sessionId);
+    await cdp.call('Emulation.setFocusEmulationEnabled',{enabled:true},sessionId);
+    await cdp.call('Network.setBypassServiceWorker',{bypass:true},sessionId);
+    await setViewport(1440,900);
+    await waitFor("document.querySelector('.access-results tbody')?.textContent.includes('kanton-st-gallen')",'New-tab access log page lost the owner identity or receipt');
+    await evaluate("document.querySelector('daca-lineage-access').scrollIntoView({block:'start',behavior:'instant'})");
+    await settleFrames();await captureScreenshot('lineage-access-owner-desktop.png');
+    await setControls({'select[name=outcome]':'','select[name=subject]':'machine'});
+    await waitFor("document.querySelector('.access-results tbody')?.textContent.includes('svc-estv-cantonal-tax-dashboard')",'Machine filter did not show the actual receipt');
+    invariant(await evaluate("!document.querySelector('.access-results tbody').textContent.includes('kanton-st-gallen')"),'Machine filter retained person data');
+    await setViewport(390,844);await settleFrames();
+    invariant(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),'Access log page overflows mobile');
+    await evaluate("document.querySelector('.access-results').scrollIntoView({block:'center',behavior:'instant'})");
+    await captureScreenshot('lineage-access-mobile.png');
+    cdp.deferReadPaths=new Set([endpoint]);cdp.deferredGenericReads=[];
+    await cdp.call('Fetch.enable',{patterns:[{urlPattern:`*${endpoint}*`}]},sessionId);
+    await cdp.call('Page.navigate',{url:href},sessionId);
+    await waitFor("document.querySelector('daca-lineage-access .small-spinner')",'Access page spinner missing');
+    await captureScreenshot('lineage-access-spinner.png');
+    cdp.deferReadPaths.delete(endpoint);
+    for(const pending of cdp.deferredGenericReads??[])await cdp.call('Fetch.continueRequest',{requestId:pending.requestId},pending.sessionId);
+    await cdp.call('Fetch.disable',{},sessionId);delete cdp.deferReadPaths;cdp.deferredGenericReads=[];
+    await waitFor("document.querySelector('.access-results tbody')",'Receipts did not return after loading');
+  }finally{
+    sessionId=parent;await cdp.call('Target.closeTarget',{targetId:popup.targetId});await cdp.call('Page.bringToFront',{},sessionId);
+  }
+  await navigate(route,reader);await openEdge();
+  invariant(await evaluate("document.querySelector('.lineage-edge-menu button')?.disabled&&!document.querySelector('.lineage-edge-menu a')"),'Non-owner edge menu was not greyed out');
+  await captureScreenshot('lineage-reader-edge-disabled.png');
+  await pressKey('Escape','Escape',27);
+  await navigate(logs,reader);
+  await waitFor("document.querySelector('daca-lineage-access [role=alert]')?.textContent.includes('Nur der aktuelle Data Owner')",'Direct URL was not denied');
+  invariant(await evaluate("!document.querySelector('.access-results')&&!document.body.textContent.includes('svc-estv-cantonal-tax-dashboard')"),'Denied page leaked previous receipts');
+  await captureScreenshot('lineage-access-denied.png');
+  invariant(cdp.runtimeExceptions.length===0,`Access logs raised browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+  console.log('PASS lineage-access: actual PEP person/machine receipts, strict owner API, edge menu, native new tab, filters, mobile, spinner, disabled non-owner menu and denied direct URL');
+}
+
+async function domainLoadingIndicatorsFlow() {
+  const route='/domains?view=network',register='/api/v1/domains',network='/api/v1/semantic-graphs/domains';
+  await navigate(route,'mirjam.keller');
+  await cdp.call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]},sessionId);
+  cdp.deferReadPaths=new Set([register,network]);cdp.deferredGenericReads=[];
+  const release=async path=>{
+    cdp.deferReadPaths.delete(path);
+    const queued=cdp.deferredGenericReads.filter(item=>item.path===path);
+    cdp.deferredGenericReads=cdp.deferredGenericReads.filter(item=>item.path!==path);
+    for(const pending of queued)await cdp.call('Fetch.continueRequest',{requestId:pending.requestId},pending.sessionId);
+  };
+  const visible=async selector=>evaluate(`(()=>{const svg=document.querySelector(${JSON.stringify(selector)}),style=svg&&getComputedStyle(svg),rect=svg?.getBoundingClientRect();return !!svg&&svg.tagName.toLowerCase()==='svg'&&svg.clientWidth===20&&svg.clientHeight===20&&rect.width>=14&&rect.height>=14&&rect.top>=0&&rect.bottom<=innerHeight&&style.display!=='none'&&style.visibility==='visible'&&Number(style.opacity)>0&&svg.querySelector('path')?.getTotalLength()>5&&getComputedStyle(svg.querySelector('path')).stroke!=='none'&&svg.closest('[role=status]')?.textContent.trim().length>0;})()`);
+  try{
+    await cdp.call('Fetch.enable',{patterns:[{urlPattern:'*/api/v1/domains*'},{urlPattern:'*/api/v1/semantic-graphs/domains'}]},sessionId);
+    await cdp.call('Page.navigate',{url:new URL(route,baseUrl).href},sessionId);
+    await waitFor("document.querySelector('.semantic-state svg.small-spinner')",'Register SVG spinner missing');
+    invariant(await visible('.semantic-state .small-spinner'),'Register spinner is present but not visibly rendered');
+    await captureScreenshot('domain-register-visible-spinner.png');await release(register);
+    const selector='daca-domain-network .small-spinner';
+    await waitFor(`document.querySelector(${JSON.stringify(selector)})`,'Network spinner missing');
+    invariant(await visible(selector),'Domain network spinner is present but not visibly rendered');
+    const before=await evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(selector)})).transform`);
+    await sleep(120);
+    invariant(before!==await evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(selector)})).transform`),'Domain network spinner does not rotate');
+    await captureScreenshot('domain-network-visible-spinner.png');
+    await cdp.call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]},sessionId);
+    invariant(await visible(selector),'Reduced motion hides the loading ring');
+    invariant(await evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(selector)})).animationName==='none'`),'Reduced motion still animates the spinner');
+    await evaluate("document.documentElement.dataset.dacaTheme='dark'");
+    invariant(await visible(selector),'Dark theme hides the loading ring');
+    await captureScreenshot('domain-network-static-dark-spinner.png');
+    await evaluate("document.documentElement.dataset.dacaTheme='light'");
+    await release(network);
+    await waitFor("document.querySelector('.domain-network .semantic-graph')&&!document.querySelector('daca-domain-network .small-spinner')",'Network spinner remained after the read completed');
+    invariant(cdp.runtimeExceptions.length===0,`Loading indicators raised browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+    console.log('PASS domain-loading-indicators: paused real register/network reads, visible 20px SVG geometry, actual rotation, static reduced-motion ring, dark theme and removal after completion');
+  }finally{
+    await cdp.call('Fetch.disable',{},sessionId);delete cdp.deferReadPaths;cdp.deferredGenericReads=[];
+    await cdp.call('Emulation.setEmulatedMedia',{features:[]},sessionId);
+  }
+}
+
+async function domainCanvasMobileLayoutFlow() {
+  for(const width of [390,360]){
+    await navigate('/domains?view=network','mirjam.keller',width,844);
+    const pageLayout=await evaluate("(()=>{const root=document.documentElement;return {width:innerWidth,clientWidth:root.clientWidth,scrollWidth:root.scrollWidth,overflow:[...document.querySelectorAll('body *')].filter(el=>el.getBoundingClientRect().right>root.clientWidth+1).slice(-18).map(el=>({tag:el.tagName,cls:el.className?.baseVal??el.className,width:el.getBoundingClientRect().width,right:el.getBoundingClientRect().right}))};})()");
+    invariant(pageLayout.scrollWidth<=pageLayout.clientWidth+1,`Domain page overflows: ${JSON.stringify(pageLayout)}`);
+    await evaluate("(()=>{const canvas=document.querySelector('.domain-network .semantic-graph');canvas.scrollIntoView({block:'center',behavior:'instant'});const r=canvas.getBoundingClientRect();canvas.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:r.right-25,clientY:Math.min(innerHeight-50,r.top+100)}));})()");
+    await waitFor("document.querySelector('.domain-context-menu')",'Mobile domain menu missing');await settleFrames();
+    invariant(await evaluate('document.documentElement.scrollWidth<=document.documentElement.clientWidth+1'),'Domain menu creates page overflow');
+    invariant(await evaluate("(()=>{const r=document.querySelector('.domain-context-menu').getBoundingClientRect();return r.left>=0&&r.right<=document.documentElement.clientWidth&&r.top>=0&&r.bottom<=innerHeight;})()"),'Domain menu leaves the layout viewport');
+    await captureScreenshot(`domain-menu-mobile-${width}.png`);await pressKey('Escape','Escape',27);
+  }
+  console.log('PASS domain-canvas-mobile-layout: locally scrolling tabs, no page overflow and bounded menus at 390px and 360px');
+}
+
+async function domainCanvasApprovalFlow() {
+  const creator='mirjam.keller',alds='christian.spider',name=`Canvas Approval QA ${Date.now()}`;
+  const route='/domains?view=network&ownOffice=1';let request,domain;
+  const release=async(path)=>{
+    cdp.deferReadPaths.delete(path);
+    const queued=(cdp.deferredGenericReads??[]).filter(item=>item.path===path);
+    cdp.deferredGenericReads=(cdp.deferredGenericReads??[]).filter(item=>item.path!==path);
+    for(const item of queued)await cdp.call('Fetch.continueRequest',{requestId:item.requestId},item.sessionId);
+  };
+  const finishDeferral=async()=>{await cdp.call('Fetch.disable',{},sessionId);delete cdp.deferReadPaths;cdp.deferredGenericReads=[];};
+  const openCardMenu=async()=>{
+    await evaluate("(()=>{const card=document.querySelector('.domain-network .graph-node[data-domain-id]');card.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});const r=card.getBoundingClientRect();card.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:r.left+25,clientY:r.top+25}));})()");
+    await waitFor("document.querySelector('.domain-context-menu')",'Domain card menu missing');await settleFrames();
+  };
+  const openBlankMenu=async()=>{
+    await evaluate("(()=>{const canvas=document.querySelector('.domain-network .semantic-graph');canvas.scrollIntoView({block:'center',behavior:'instant'});const r=canvas.getBoundingClientRect();canvas.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:r.right-45,clientY:Math.min(innerHeight-70,r.top+100)}));})()");
+    await waitFor("document.querySelector('.domain-context-menu')",'Blank domain canvas menu missing');await settleFrames();
+  };
+  try {
+    await navigate(route,creator);
+    const baseline=expectStatus(await api(creator,'/api/v1/semantic-graphs/domains'),200,'read shared domain layout').body;
+    cdp.deferReadPaths=new Set(['/api/v1/domains','/api/v1/semantic-graphs/domains']);cdp.deferredGenericReads=[];
+    await cdp.call('Fetch.enable',{patterns:[{urlPattern:'*/api/v1/domains*'},{urlPattern:'*/api/v1/semantic-graphs/domains'}]},sessionId);
+    await cdp.call('Page.navigate',{url:new URL(route,baseUrl).href},sessionId);
+    await waitFor("document.querySelector('.semantic-state .small-spinner')",'Semantic register spinner missing');
+    await captureScreenshot('domain-register-spinner.png');await release('/api/v1/domains');
+    await waitFor("document.querySelector('daca-domain-network .small-spinner')",'Domain network spinner missing');
+    await captureScreenshot('domain-network-spinner.png');await release('/api/v1/semantic-graphs/domains');await finishDeferral();
+    await waitFor("document.querySelector('.domain-network .graph-node[data-domain-id]')",'Own-office domain cards did not load');
+    await openCardMenu();
+    const menu=await evaluate("[...document.querySelectorAll('.domain-context-menu [role=menuitem]')].map(item=>({text:item.textContent.trim(),target:item.getAttribute('target'),href:item.getAttribute('href')}))");
+    invariant(menu[0].text==='Diese Domäne öffnen'&&menu.at(-3).text==='Darstellung dieser Domäne entfernen','Domain actions must start with open and end with removing its drawing before the general model searches');
+    invariant(await evaluate("document.querySelectorAll('.domain-context-menu hr').length===3"),'Domain card action groups missing');
+    const semantic=menu.filter(item=>/^(Term|Domäne) suchen und öffnen/.test(item.text));
+    invariant(semantic.length===2&&semantic.every(item=>item.target==='_blank'&&new URL(item.href,baseUrl).searchParams.get('q')),'Named semantic links must open in new tabs');
+    await captureScreenshot('domain-card-grouped-menu.png');await pressKey('End','End',35);
+    invariant(await evaluate("document.activeElement.textContent.includes('Physisches Modell')"),'Menu End navigation failed');await pressKey('Escape','Escape',27);
+    await openBlankMenu();
+    invariant(await evaluate("document.querySelector('.domain-context-menu [role=menuitem]').textContent.trim()==='Domäne erstellen …'&&!document.querySelector('.domain-context-menu').textContent.includes('Term suchen')"),'Blank canvas must start with creation without named semantic searches');
+    await captureScreenshot('domain-canvas-grouped-menu.png');
+    cdp.deferReadPaths=new Set(['/api/v1/domains']);cdp.deferredGenericReads=[];
+    await cdp.call('Fetch.enable',{patterns:[{urlPattern:'*/api/v1/domains*'}]},sessionId);
+    await clickText('.domain-context-menu button','Domäne erstellen');
+    await waitFor("document.querySelector('.create-backdrop .small-spinner')",'Domain form spinner missing');
+    await release('/api/v1/domains');await finishDeferral();
+    await waitFor("document.querySelector('.create-backdrop input[name=label]')",'Domain proposal form missing');
+    invariant(await evaluate("document.querySelector('.create-backdrop').textContent.includes('ALDS')"),'Domain form does not explain its approval requirement');
+    await setControls({'.create-backdrop input[name=label]':name,'.create-backdrop textarea[name=definition]':'Synthetic canvas approval check. Removed from active catalog after verification.','.create-backdrop select[name=owner]':'daniel.wenger','.create-backdrop select[name=deputy]':'eliane.rossi'});
+    await captureScreenshot('domain-canvas-approval-form.png');await clickText('.create-backdrop button','ALDS-Freigabe');
+    await waitFor(`document.querySelector('.domain-network .is-pending strong')?.textContent===${JSON.stringify(name)}`,'Submitted domain did not remain a personal proposal');
+    request=expectStatus(await api(creator,'/api/v1/domain-change-requests'),200,'read submitted canvas request').body.find(item=>item.requestedPayload.localizations?.some(label=>label.preferredLabel===name));
+    invariant(request?.status==='submitted'&&!request.targetDomainId,'Proposal activated before ALDS approval');
+    invariant(!expectStatus(await api(creator,`/api/v1/domains?q=${encodeURIComponent(name)}`),200,'check active domains before approval').body.length,'Pending domain is visible in the active catalog');
+    invariant(JSON.stringify(expectStatus(await api(creator,'/api/v1/semantic-graphs/domains'),200,'read layout after personal proposal').body)===JSON.stringify(baseline),'Personal proposal changed the shared graph');
+    const denied=await api('daniel.wenger',`/api/v1/domain-change-requests/${request.id}/decision`,{method:'POST',etag:`"${request.revision}"`,body:{decision:'approve',comment:'Expected denial: Owner is not the office ALDS.'}});
+    expectStatus(denied,403,'deny domain Owner approval');
+    await navigate(route,creator);
+    await waitFor(`document.querySelector('.domain-network .is-pending strong')?.textContent===${JSON.stringify(name)}`,'Personal proposal did not survive reload');
+    await setViewport(390,844);await openBlankMenu();
+    invariant(await evaluate("(()=>{const r=document.querySelector('.domain-context-menu').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight;})()"),'Domain menu overflows mobile viewport');
+    await captureScreenshot('domain-canvas-menu-mobile.png');await pressKey('Escape','Escape',27);
+    const tasks=expectStatus(await api(alds,'/api/v1/tasks/mine'),200,'read scoped ALDS tasks').body;
+    invariant(tasks.some(task=>task.domainChangeRequestId===request.id),'Canvas request did not notify the scoped ALDS');
+    await navigate('/domains/governance',alds);
+    await waitFor(`[...document.querySelectorAll('.governance-row')].some(row=>row.textContent.includes(${JSON.stringify(name)})&&[...row.querySelectorAll('button')].some(button=>button.textContent==='Genehmigen'))`,'ALDS cannot review the submitted domain');
+    await evaluate(`(()=>{const row=[...document.querySelectorAll('.governance-row')].find(row=>row.textContent.includes(${JSON.stringify(name)}));[...row.querySelectorAll('button')].find(button=>button.textContent==='Genehmigen').click();})()`);
+    await waitFor("document.body.innerText.includes('Domain-Antrag genehmigt.')",'ALDS approval did not complete');
+    const accepted=expectStatus(await api(creator,'/api/v1/domain-change-requests'),200,'read ALDS decision').body.find(item=>item.id===request.id);
+    invariant(accepted?.status==='approved'&&accepted.reviewerUserId===alds,'Wrong reviewer or decision persisted');
+    domain=expectStatus(await api(creator,`/api/v1/domains/${accepted.targetDomainId}`),200,'read ALDS-approved domain').body;
+    await navigate(route,creator);
+    await waitFor(`document.querySelector('[data-domain-id="${domain.id}"]')&&!document.querySelector('.domain-network .is-pending')`,'Approved domain did not replace the personal proposal');
+    invariant(domain.ownerUserId==='daniel.wenger','Approval changed the proposed object Owner');
+    await captureScreenshot('domain-approved-on-canvas.png');
+    await clickText('.domain-network .draft-actions button','Entwurf verwerfen');
+    invariant(cdp.runtimeExceptions.length===0,`Domain canvas raised browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+    console.log('PASS domain-canvas-approval: grouped card/blank menus, three loader stages, personal proposal and reload, no shared graph mutation, Owner denial, scoped ALDS task/UI approval, mobile menu bounds');
+  } finally {
+    if(cdp.deferReadPaths)await finishDeferral();
+    if(request&&!domain){const current=expectStatus(await api(creator,'/api/v1/domain-change-requests'),200,'read only test request for cleanup').body.find(item=>item.id===request.id);if(current?.status==='submitted')expectStatus(await api(alds,`/api/v1/domain-change-requests/${request.id}/decision`,{method:'POST',etag:`"${current.revision}"`,body:{decision:'reject',comment:'Cleanup of unique synthetic canvas test request.'}}),200,'reject only synthetic pending request');else if(current?.targetDomainId)domain=expectStatus(await api(creator,`/api/v1/domains/${current.targetDomainId}`),200,'read only approved test domain').body;}
+    if(domain?.lifecycle==='active')expectStatus(await api('daniel.wenger',`/api/v1/domains/${domain.id}/retire`,{method:'POST',etag:`"${domain.revision}"`,body:{}}),200,'retire only the unique test domain');
+  }
+}
+
+async function sourceInfoNoticesFlow() {
+  await navigate('/physical-models','mirjam.keller');
+  const visible="document.querySelectorAll('daca-info-notice:not([hidden])').length";
+  invariant(await evaluate(visible+'===2'),'Expected two dismissible source notices');
+  await setControls({'.source-search input':'VIBDBU'});
+  invariant(await evaluate("[...document.querySelectorAll('.source-notice a')].some(link=>link.getAttribute('href')==='/search?q=VIBDBU')"),'Expert search lost the source query');
+  invariant(await evaluate("[...document.querySelectorAll('.source-notice a')].some(link=>link.getAttribute('href')==='/domains')&&document.querySelectorAll('.source-notice')[1].textContent.includes('Owner')"),'Discovery text or domain link missing');
+  invariant(await evaluate("[...document.querySelectorAll('daca-info-notice')].every(notice=>{const box=notice.getBoundingClientRect(),button=notice.querySelector('.info-notice-close'),close=button.getBoundingClientRect();return button.getAttribute('aria-label')&&close.right<=box.right&&close.left>=box.right-45&&close.top>=box.top;})"),'Notice X must sit inside its right edge with an accessible label');
+  await captureScreenshot('source-info-notices-desktop.png');
+  await evaluate("document.querySelector('.info-notice-close').click()");
+  await waitFor(visible+'===1','Dismissing one notice affected another');
+  await evaluate("document.querySelector('daca-info-notice:not([hidden]) .info-notice-close').focus()");
+  await pressKey('Enter','Enter',13);
+  await waitFor(visible+'===0','Keyboard dismissal failed');
+  await evaluate("document.querySelector('.archive-toggle input').click()");
+  await waitFor("!document.body.innerText.includes('werden geladen')",'Source filter refresh did not finish');
+  invariant(await evaluate(visible+'===0'),'Data refresh reopened dismissed notices');
+  await navigate('/physical-models','mirjam.keller',390,844);
+  invariant(await evaluate(visible+'===2'),'Reload did not restore source notices');
+  invariant(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),'Source notices overflow on mobile');
+  await captureScreenshot('source-info-notices-mobile.png');
+  invariant(cdp.runtimeExceptions.length===0,`Source notices raised browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+  console.log('PASS source-info-notices: independent click/keyboard dismissal, refresh retention, reload reset, discovery links and mobile bounds');
+}
+
+async function mappingStatusTooltipsFlow() {
+  await navigate('/models/901c036e-f09c-425e-af89-e8daf0b95a37/mappings?view=graph','mirjam.keller');
+  await waitFor("document.querySelectorAll('.graph-legend>span[tabindex]').length===3",'Mapping legend did not load');
+  for(const group of ['.graph-legend','.mapping-counts']){
+    for(const [index,explanation] of ['erfolgreich validiert','Entwurf','Strukturänderung'].entries()){
+      await evaluate(`document.querySelectorAll('${group}>span')[${index}].focus()`);
+      await waitFor(`(()=>{const host=document.querySelectorAll('${group}>span')[${index}];return document.getElementById(host.getAttribute('aria-describedby'))?.textContent.includes(${JSON.stringify(explanation)});})()`,'Mapping status explanation missing');
+      if(group==='.graph-legend'&&index===2)await captureScreenshot('mapping-status-broken-tooltip.png');
+      await pressKey('Escape','Escape',27);await evaluate('document.activeElement.blur()');
+    }
+  }
+  await evaluate("document.querySelector('.graph-legend>span').dispatchEvent(new MouseEvent('mouseenter'))");
+  await waitFor("[...document.querySelectorAll('.daca-glossary-tooltip')].some(tooltip=>tooltip.textContent.includes('erfolgreich validiert'))",'Mapping legend hover tooltip missing');
+  await evaluate("document.querySelector('.graph-legend>span').dispatchEvent(new MouseEvent('mouseleave'))");
+  await pressKey('Escape','Escape',27);
+  invariant(cdp.runtimeExceptions.length===0,`Mapping tooltips raised browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+  console.log('PASS mapping-status-tooltips: all three legend statuses and toolbar counters, keyboard focus with auto-scroll, Escape and pointer hover');
+}
+
+async function physicalDomainRemovalFlow() {
+  const actor='mirjam.keller',modelId=args.get('--model-id')??'901c036e-f09c-425e-af89-e8daf0b95a37',route=`/models/${modelId}/mappings?view=graph`;
+  await navigate(route,actor);
+  await waitFor("[...document.querySelectorAll('.physical-qualified-name')].some(node=>node.textContent==='SAP.CSV.VIBDBU')",'CSV declaration not loaded');
+  const tableId=await evaluate("[...document.querySelectorAll('.physical-representation')].find(card=>card.querySelector('.physical-qualified-name')?.textContent==='SAP.CSV.VIBDBU').dataset.representationTableId");
+  const bindings=expectStatus(await api(actor,`/api/v1/logical-models/${modelId}/representations`),200,'read bindings').body.items;
+  const snapshotId=bindings.find(item=>item.physicalTableId===tableId).physicalSnapshotId;
+  const read=`/api/v1/physical-tables/${tableId}/domains`,assign=`/api/v1/physical-tables/${tableId}/domain-assignment`;
+  const original=expectStatus(await api(actor,read),200,'read original domains').body,chosen=original.dataDomains[0];
+  invariant(chosen,'This review fixture must have an assigned domain');
+  const removal=`/api/v1/physical-tables/${tableId}/domain-assignments/${chosen.id}`;
+  const mappingsPath=`/api/v1/asset-mappings?logicalModelId=${modelId}`,before=JSON.stringify(expectStatus(await api(actor,mappingsPath),200,'read baseline mappings').body);
+  const selector=`.physical-representation[data-representation-table-id="${tableId}"]`;
+  const openCard=async()=>{await evaluate(`(()=>{const card=document.querySelector(${JSON.stringify(selector)});card.scrollIntoView({block:'center',inline:'center',behavior:'instant'});const r=card.getBoundingClientRect();card.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:r.left+30,clientY:r.top+30}));})()`);await waitFor("document.querySelector('.representation-context-menu')",'Physical menu missing');};
+  const removeItem=async()=>{await evaluate("[...document.querySelectorAll('.representation-context-menu button')].find(button=>button.textContent.includes('Domänenzuordnung entfernen')).click()");await waitFor(`!document.querySelector(${JSON.stringify(selector+' .model-domain')}).textContent.includes(${JSON.stringify(chosen.displayName)})`,'Domain label did not update after removal');};
+  const restore=async()=>{
+    const state=expectStatus(await api(actor,read),200,'read restoration version').body;
+    if(!state.dataDomains.some(domain=>domain.id===chosen.id))expectStatus(await api(actor,assign,{method:'POST',body:{dataDomainId:chosen.id,physicalDomainTargets:[{physicalTableId:tableId,physicalSnapshotId:snapshotId,expectedDomainVersion:state.domainVersion}]}}),200,'restore only the removed fixture membership');
+  };
+  try{
+    const target={physicalTableId:tableId,physicalSnapshotId:snapshotId,expectedDomainVersion:original.domainVersion};
+    expectStatus(await api('daca-test-editor',removal,{method:'DELETE',body:target}),403,'deny unauthorized removal');
+    await evaluate(`(()=>{const trigger=document.querySelector('.representation-card:has([data-representation-id="${tableId}"]) .representation-menu-trigger');trigger.scrollIntoView({block:'center',behavior:'instant'});trigger.focus();})()`);await pressKey('ArrowDown','ArrowDown',40);
+    await waitFor("document.querySelector('.binding-context-menu')",'Binding actions unavailable');
+    invariant(await evaluate("document.querySelector('.binding-context-menu .menu-hint').nextElementSibling.tagName!=='HR'"),'Separator after the preserved-bindings hint remains');
+    await captureScreenshot('physical-domain-remove-binding.png');await removeItem();
+    const removed=expectStatus(await api(actor,read),200,'read removed domain').body;
+    invariant(JSON.stringify(removed.dataDomains.map(domain=>domain.id).sort())===JSON.stringify(original.dataDomains.filter(domain=>domain.id!==chosen.id).map(domain=>domain.id).sort()),'Removing one membership changed another');
+    invariant(JSON.stringify(expectStatus(await api(actor,mappingsPath),200,'mappings after removal').body)===before,'Domain removal changed mappings');
+    await navigate(route,actor);await waitFor(`document.querySelector(${JSON.stringify(selector+' .model-domain')})&&!document.querySelector(${JSON.stringify(selector+' .model-domain')}).textContent.includes(${JSON.stringify(chosen.displayName)})`,'Removal was not preserved on reload');
+    await captureScreenshot('physical-domain-removed-canvas.png');
+    const physicalRoute=`/mappings/physical/${snapshotId}/${tableId}`;
+    await navigate(physicalRoute,actor);await openCard();
+    if(original.dataDomains.length===1){
+      await clickText('.representation-context-menu button','Domäne zuordnen');
+      await waitFor(`document.querySelector('daca-model-domain-dialog option[value="${chosen.id}"]')&&!document.querySelector('daca-model-domain-dialog select')?.disabled`,'Physical-only assignment form unavailable');
+      await setControls({'.domain-select select':chosen.id});await clickText('daca-model-domain-dialog footer button','Zuordnen');
+      await waitFor(`!document.querySelector('daca-model-domain-dialog')&&document.querySelector(${JSON.stringify(selector+' .model-domain')}).textContent.includes(${JSON.stringify(chosen.displayName)})`,'Physical-only reassignment failed');
+    }else{await pressKey('Escape','Escape',27);await restore();await navigate(physicalRoute,actor);}
+    await openCard();await removeItem();
+    await captureScreenshot('physical-domain-removed-physical-start.png');
+    invariant(expectStatus(await api(actor,read),200,'read physical-only removal').body.dataDomains.every(domain=>domain.id!==chosen.id),'Physical-only removal did not persist');
+    invariant(JSON.stringify(expectStatus(await api(actor,mappingsPath),200,'final mapping guard').body)===before,'Physical-only removal changed mappings');
+    invariant(cdp.runtimeExceptions.length===0,`Domain removal raised browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+    console.log('PASS physical-domain-removal: scoped API, removed separator, binding/canvas update, persisted reload, physical-only remove/reassign and unchanged mappings; original membership restored');
+  }finally{await restore();}
+}
+
+async function physicalObjectActionsFlow() {
+  const actor='mirjam.keller',modelId=args.get('--model-id')??'901c036e-f09c-425e-af89-e8daf0b95a37';
+  await navigate(`/models/${modelId}/mappings?view=graph`,actor);
+  await waitFor("document.querySelector('.physical-qualified-name')",'Physical object did not load');
+  const identity=await evaluate("(()=>{const card=[...document.querySelectorAll('.physical-representation')].find(card=>card.querySelector('.physical-qualified-name')?.textContent==='SAP.CSV.VIBDBU');return card?{id:card.dataset.representationTableId,label:card.querySelector('.physical-qualified-name').textContent}:null;})()");
+  invariant(identity,'SAP.CSV.VIBDBU is missing from the multi-system inventory');
+  const mappingsPath=`/api/v1/asset-mappings?logicalModelId=${modelId}`;
+  const before=JSON.stringify(expectStatus(await api(actor,mappingsPath),200,'Mappings before menu review').body);
+  const binding=`.representation-card:has([data-representation-id="${identity.id}"])`;
+  invariant(await evaluate(`document.querySelector(${JSON.stringify(binding)})?.querySelector('strong').textContent==='SAP.CSV.VIBDBU'`),'Binding uses a different system prefix');
+  invariant(await evaluate(`document.querySelector(${JSON.stringify(binding)})?.textContent.includes('Physische Deklaration')`),'Binding declaration label missing');
+  invariant(await evaluate("document.querySelector('.logical-node>header>span').textContent==='Logisches Modell'"),'Logical model label missing');
+  await evaluate("(()=>{const canvas=document.querySelector('.graph-canvas');document.querySelector('.graph-scroll').scrollTop=0;document.querySelector('.mapping-shell').scrollIntoView({block:'start',behavior:'instant'});const r=canvas.getBoundingClientRect();canvas.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:r.left+450,clientY:r.top+80}));})()");
+  await waitFor("document.querySelector('.canvas-context-menu')",'Canvas menu unavailable for review');
+  await settleFrames();await captureScreenshot('canvas-grouped-actions-desktop.png');
+  await pressKey('Escape','Escape',27);
+  const openBinding=async()=>{
+    await evaluate(`(()=>{const button=document.querySelector(${JSON.stringify(binding+' .representation-menu-trigger')});button.scrollIntoView({block:'center',behavior:'instant'});button.focus();})()`);
+    await pressKey('ArrowDown','ArrowDown',40);
+    await waitFor("document.querySelector('.binding-context-menu')?.contains(document.activeElement)",'Binding menu did not receive keyboard focus');
+  };
+  await openBinding();
+  const menuItems=()=>evaluate("[...document.querySelectorAll('.representation-context-menu [role=menuitem]')].map(item=>({text:item.textContent.replace(' (neuer Tab)','').replace(' (Treffer in neuem Tab)','').trim(),href:item.getAttribute('href'),target:item.getAttribute('target')}))");
+  const bindingItems=await menuItems();
+  invariant(bindingItems[0].text==='Datenquelle öffnen','Source navigation must be first');
+  invariant(bindingItems[1].text==='Darstellung dieser Physischen Repräsentation/Deklaration löschen','Drawing removal must immediately follow source navigation');
+  const semantic=bindingItems.filter(item=>/^(Term|Domäne) suchen/.test(item.text));
+  invariant(semantic.length===2&&semantic.every(item=>item.target==='_blank'&&new URL(item.href,baseUrl).searchParams.get('q')==='VIBDBU'),'Semantic searches must open named queries in new tabs');
+  invariant(await evaluate("document.querySelectorAll('.binding-context-menu hr').length===2&&document.querySelectorAll('.binding-context-menu img[src$=\"external-link.svg\"]').length>=2"),'Menu groups or external-link icons missing');
+  await captureScreenshot('physical-binding-actions-desktop.png');
+  const sourceUrl=bindingItems[0].href;
+  await pressKey('Escape','Escape',27);
+  invariant(await evaluate(`document.activeElement===document.querySelector(${JSON.stringify(binding+' .representation-menu-trigger')})`),'Binding menu did not restore focus');
+  const originalTargets=new Set((await cdp.call('Target.getTargets')).targetInfos.map(target=>target.targetId));
+  await openBinding();await evaluate("document.querySelector('.binding-context-menu a').click()");
+  let sourceTab;const popupDeadline=Date.now()+8000;
+  while(!sourceTab&&Date.now()<popupDeadline){sourceTab=(await cdp.call('Target.getTargets')).targetInfos.find(target=>target.type==='page'&&!originalTargets.has(target.targetId)&&target.url===new URL(sourceUrl,baseUrl).href);if(!sourceTab)await sleep(100);}
+  invariant(sourceTab,'Source navigation did not open the exact source/snapshot/object in a new tab');
+  invariant(await evaluate(`location.pathname==='/models/${modelId}/mappings'`),'Source navigation replaced the mapping workspace');
+  await cdp.call('Target.closeTarget',{targetId:sourceTab.targetId});await cdp.call('Page.bringToFront',{},sessionId);
+  await evaluate(`(()=>{const card=document.querySelector('[data-representation-table-id="${identity.id}"]');card.querySelector('header').scrollIntoView({block:'center',behavior:'instant'});const rect=card.querySelector('header').getBoundingClientRect();card.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:rect.left+15,clientY:rect.top+15}));})()`);
+  await waitFor("document.querySelector('daca-mapping-graph .representation-context-menu')",'Canvas actions missing');
+  invariant(JSON.stringify(await menuItems())===JSON.stringify(bindingItems),'Canvas and binding menus differ');
+  await captureScreenshot('physical-canvas-actions-desktop.png');
+  await pressKey('Escape','Escape',27);
+  await openBinding();
+  if(bindingItems.some(item=>item.text==='Domäne des logischen Modells zuordnen')){
+    await clickText('.binding-context-menu button','Domäne des logischen Modells zuordnen');
+    await waitFor("document.querySelector('daca-model-domain-dialog dialog[open] select')?.disabled&&document.querySelector('daca-model-domain-dialog select').value!==''",'Copying domain bypassed the confirmation dialog');
+    invariant(await evaluate("document.querySelector('daca-model-domain-dialog select').value!==''"),'Logical model domain was not preselected');
+    await clickText('daca-model-domain-dialog footer button','Abbrechen');
+  }else await pressKey('Escape','Escape',27);
+  await openBinding();await clickText('.binding-context-menu button','Physisches Modell suchen und öffnen');
+  await waitFor("document.querySelector('.object-browser-backdrop .object-result')&&!document.querySelector('.object-browser-backdrop [role=alert]')",'Physical object search did not load');
+  await setControls({'.object-browser-backdrop input':'VIBDBU'});
+  invariant(await evaluate("[...document.querySelectorAll('.object-result')].some(button=>button.querySelector('strong').textContent==='SAP.CSV.VIBDBU'&&button.textContent.includes('Quelle: Gebäude · Physische Deklaration (CSV)'))"),'Physical search does not identify the CSV object origin');
+  invariant(await evaluate("[...document.querySelectorAll('.object-result')].some(button=>button.querySelector('strong').textContent==='daca_sample.public.VIBDBU'&&button.textContent.includes('Physische Repräsentation (PostgreSQL)'))"),'Physical search does not distinguish the connected object');
+  await evaluate("[...document.querySelectorAll('.object-result')].find(button=>button.querySelector('strong').textContent==='SAP.CSV.VIBDBU'&&button.textContent.includes('Quelle: Gebäude ·')).parentElement.querySelector('.provenance-info').focus()");
+  await waitFor("document.querySelector('.daca-glossary-tooltip.is-visible')?.textContent.includes('Quellen-ID:')&&document.querySelector('.daca-glossary-tooltip.is-visible').textContent.includes('Data Owner:')",'Origin details are not accessible by keyboard');
+  invariant(await evaluate(`location.pathname==='/models/${modelId}/mappings'`),'Origin inspection navigated away');
+  await settleFrames();await captureScreenshot('physical-search-origin-desktop.png');
+  async function openSearchHitInNewTab(selector,expectedPath){
+    const targets=new Set((await cdp.call('Target.getTargets')).targetInfos.map(target=>target.targetId));
+    const href=await evaluate(`document.querySelector(${JSON.stringify(selector)}).href`);
+    await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
+    let resultTab;const until=Date.now()+8000;
+    while(!resultTab&&Date.now()<until){resultTab=(await cdp.call('Target.getTargets')).targetInfos.find(target=>target.type==='page'&&!targets.has(target.targetId)&&target.url===href);if(!resultTab)await sleep(100);}
+    invariant(resultTab&&new URL(resultTab.url).pathname===expectedPath,'Model search did not open the selected target in a new tab');
+    invariant(await evaluate(`location.pathname==='/models/${modelId}/mappings'&&!document.querySelector('.object-browser-backdrop')`),'Model search replaced the original Mapping or retained the search modal');
+    await cdp.call('Target.closeTarget',{targetId:resultTab.targetId});await cdp.call('Page.bringToFront',{},sessionId);
+  }
+  await openSearchHitInNewTab(`.object-browser-backdrop a.object-result[href="${sourceUrl}"]`,new URL(sourceUrl,baseUrl).pathname);
+  await openBinding();await clickText('.binding-context-menu button','Logisches Modell suchen und öffnen');
+  await waitFor(`document.querySelector('.object-browser-backdrop a.object-result[href="/models/${modelId}"]')`,'Logical model search did not offer native new-tab result links');
+  await openSearchHitInNewTab(`.object-browser-backdrop a.object-result[href="/models/${modelId}"]`,`/models/${modelId}`);
+  await setViewport(390,844);await settleFrames();await openBinding();
+  invariant(await evaluate("(()=>{const r=document.querySelector('.binding-context-menu').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight;})()"),'Binding menu overflows mobile viewport');
+  await captureScreenshot('physical-binding-actions-mobile.png');
+  await pressKey('Escape','Escape',27);
+  invariant(JSON.stringify(expectStatus(await api(actor,mappingsPath),200,'Mappings after menu review').body)===before,'Menu review changed persisted mappings');
+  await navigate(sourceUrl,actor);
+  await waitFor("document.querySelector('daca-physical-object-detail h2')",'Source navigation did not load');
+  invariant(await evaluate(`location.search.includes('tableId=${identity.id}')&&document.querySelector('.detail-heading').textContent.includes('Physische Deklaration')`),'Source navigation lost the object or declaration category');
+  await navigate('/physical-models',actor);
+  const sourceId=new URL(sourceUrl,baseUrl).pathname.split('/').at(-1);
+  await openSourceCardMenu(sourceId);
+  invariant(await evaluate(`(()=>{const card=document.querySelector('[data-source-id="${sourceId}"]');return card.textContent.includes('Physische Deklaration')&&card.querySelectorAll('[role=menuitem]').length===3&&!card.querySelector('.actions');})()`),'CSV inventory actions are not in the shared menu');
+  await capturePageSegmentScreenshot('.source-grid','physical-source-actions-desktop.png',1440,900);
+  invariant(cdp.runtimeExceptions.length===0,`Physical menus raised browser errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+  console.log('PASS physical-object-actions: SAP prefix, categories, shared menu order, keyboard, new-tab queries, copy confirmation, source navigation, mobile, unchanged mappings');
 }
 
 try {
@@ -2801,7 +3527,7 @@ try {
   await cdp.call('Network.setCacheDisabled', { cacheDisabled: true }, sessionId);
   await cdp.call('Network.setBypassServiceWorker', { bypass: true }, sessionId);
 
-  if(args.get('--flow')==='mapping-release-tail'){await navigate('/models','christian.man');const physical=await physicalFirstFlow();await existingToExistingFlow(physical);await dataModelJourneyTen();await sourceAccessReturnFlow();await fieldMoveFlow();console.log('PASS focused Mapping release tail');} else if(args.get('--flow')==='semantic-own-office'){await semanticOwnOfficeFlow();} else if(args.get('--flow')==='mapping-start'){await mappingStartFlow();} else if(args.get('--flow')==='expert-search'){await expertSearchFlow();} else if(args.get('--flow')==='mapping-live-refresh'){await mappingLiveRefreshFlow();} else if(args.get('--flow')==='domain-transfer'){await domainTransferFlow();} else if(args.get('--flow')==='domain-metadata'){await domainMetadataFlow();} else if(args.get('--flow')==='semantic-owner-search'){await semanticOwnerSearchFlow();} else if(args.get('--flow')==='domain-relation-types'){await domainRelationTypesFlow();} else if(args.get('--flow')==='organization-term-network'){await organizationTermNetworkFlow();} else if(args.get('--flow')==='domain-connection-gesture'){await domainConnectionGestureFlow();} else if(args.get('--flow')==='domain-card-actions'){await domainCardActionsFlow();} else if(args.get('--flow')==='governance-information'){await governanceInformationFlow();} else if(args.get('--flow')==='semantic-gestures'){await semanticGestureFlow();} else if(args.get('--flow')==='domain-network'){await domainNetworkFlow();} else if(args.get('--flow')==='field-move'){await fieldMoveFlow();} else if(args.get('--flow')==='hold-connections'){await holdConnectionFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});} else if(args.get('--flow')==='source-access-return'){await sourceAccessReturnFlow();} else if(args.get('--flow')==='csv-import'){await csvPhysicalModelsFlow();} else if(args.get('--flow')==='inventory-representation'){await inventoryRepresentationFlow();} else if(args.get('--flow')==='concept-network'){await conceptNetworkEditingFlow();} else if(args.get('--flow')==='line-editing'){
+  if(args.get('--flow')==='domain-exploration'){await domainExplorationFlow();} else if(args.get('--flow')==='domain-loading-indicators'){await domainLoadingIndicatorsFlow();} else if(args.get('--flow')==='physical-domain-removal'){await physicalDomainRemovalFlow();} else if(args.get('--flow')==='lineage-access'){await lineageAccessFlow();} else if(args.get('--flow')==='domain-canvas-mobile-layout'){await domainCanvasMobileLayoutFlow();} else if(args.get('--flow')==='domain-canvas-approval'){await domainCanvasApprovalFlow();} else if(args.get('--flow')==='source-info-notices'){await sourceInfoNoticesFlow();} else if(args.get('--flow')==='mapping-status-tooltips'){await mappingStatusTooltipsFlow();} else if(args.get('--flow')==='personal-search-views'){await personalSearchViewsFlow();} else if(args.get('--flow')==='lineage-explorer'){await lineageExplorerFlow();} else if(args.get('--flow')==='model-department-default'){await modelDepartmentDefaultFlow();} else if(args.get('--flow')==='physical-derivation'){await physicalDerivationEntryFlow();} else if(args.get('--flow')==='physical-object-actions'){await physicalObjectActionsFlow();} else if(args.get('--flow')==='mapping-release-tail'){await navigate('/models','christian.man');const physical=await physicalFirstFlow();await existingToExistingFlow(physical);await dataModelJourneyTen();await sourceAccessReturnFlow();await fieldMoveFlow();console.log('PASS focused Mapping release tail');} else if(args.get('--flow')==='semantic-own-office'){await semanticOwnOfficeFlow();} else if(args.get('--flow')==='mapping-start'){await mappingStartFlow();} else if(args.get('--flow')==='expert-search'){await expertSearchFlow();} else if(args.get('--flow')==='mapping-live-refresh'){await mappingLiveRefreshFlow();} else if(args.get('--flow')==='domain-transfer'){await domainTransferFlow();} else if(args.get('--flow')==='domain-metadata'){await domainMetadataFlow();} else if(args.get('--flow')==='semantic-owner-search'){await semanticOwnerSearchFlow();} else if(args.get('--flow')==='domain-relation-types'){await domainRelationTypesFlow();} else if(args.get('--flow')==='organization-term-network'){await organizationTermNetworkFlow();} else if(args.get('--flow')==='domain-connection-gesture'){await domainConnectionGestureFlow();} else if(args.get('--flow')==='domain-card-actions'){await domainCardActionsFlow();} else if(args.get('--flow')==='governance-information'){await governanceInformationFlow();} else if(args.get('--flow')==='semantic-gestures'){await semanticGestureFlow();} else if(args.get('--flow')==='domain-network'){await domainNetworkFlow();} else if(args.get('--flow')==='field-move'){await fieldMoveFlow();} else if(args.get('--flow')==='hold-connections'){await holdConnectionFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});} else if(args.get('--flow')==='source-access-return'){await sourceAccessReturnFlow();} else if(args.get('--flow')==='csv-import'){await csvPhysicalModelsFlow();} else if(args.get('--flow')==='inventory-representation'){await inventoryRepresentationFlow();} else if(args.get('--flow')==='concept-network'){await conceptNetworkEditingFlow();} else if(args.get('--flow')==='line-editing'){
     invariant(args.get('--model-id')&&args.get('--snapshot-id'),'line-editing flow requires model-id and snapshot-id');
     await edgeEditingFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});
   } else {

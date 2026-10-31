@@ -1,10 +1,149 @@
 # Domains and business glossary
 
+## Personal domain-network exploration
+
+Every active user can use **Domäne suchen und einfügen …** on the canvas or a domain-card
+menu. The picker searches the entire domain register, including other offices/departments.
+An explicitly added domain remains visible even when **Nur amtseigene anzeigen** is checked.
+This does not change the catalog assignment, the own-office filter or any permissions.
+Domain cards display the Data Owner; the tooltip also names the deputy. Department/office
+codes come from active registry ancestry and trusted domain responsibilities, never label parsing.
+A domain outside the viewer's trusted department has a gray card with, for example, **EFD · BIT**;
+its metadata/relationship controls are read-only. Moving or hiding its drawing remains possible.
+
+Placement, hidden domains, explicit additions and visible object types are stored privately in
+`domain_network_views`, keyed by the authenticated user, with optimistic revision checks.
+Saving this view does not alter another user's layout. Existing shared layouts supply initial
+positions only. The four shared relationship types remain **verwandt mit**, **ist Unterdomäne von**,
+**hat eine fachliche Schnittstelle zu**, **hat Überschneidungen mit**. Source-domain Owners and
+deputies can stage and save these links for everyone. Inverse duplicates and hierarchy cycles
+are rejected; changing a personal view never grants relationship editing.
+
+Above the canvas, **Datenprodukte** is enabled by default. **Terme**, **Logische Modelle** and
+**Physische Repräsentationen/Deklarationen** can be selected independently. Authorized current
+metadata is prefetched, so switching layers displays objects immediately. A shared object appears
+once, connected to every visible assigned domain. These subtle membership lines are derived from
+existing catalog assignments, not new editable domain relationships. Cards open in native new
+tabs and show description, Owner and URN in the existing tooltip. Loading and retry states are
+explicit. The aggregate omits private products the actor cannot discover, inaccessible/returned
+physical sources and retired objects; it caps each response at 2000 objects and reports truncation.
+Request dependencies create lazy sessions without borrowing a connection while waiting for a
+handler thread. Identity validation finishes before route queries begin; trusted audit actors bind
+on each actual transaction. A single-connection regression verifies this without changing roles.
+
+Manually placed domain cards remain anchored and do not rearrange the existing automatic network,
+even when an added domain has many related objects. **Automatisch anordnen** explicitly resets
+the visible cards for a fresh arrangement.
+
+## Validation
+
+595 frontend tests pass, with PostgreSQL checks for private views,
+stale revisions, source-scope/privacy guards, foreign-domain write protection and idempotent CPS
+fixtures. The single-connection test checks lazy checkout and transaction-local audit identity.
+Browser flows `domain-exploration`, `domain-relation-types` and `domain-canvas-mobile-layout`
+check object layers, reload/isolation, contextual insertion, relation types and 390/360 px layouts.
+Current captures live in ignored `output/ui-regression/domain-exploration*` directories.
+
+## Datenprodukt
+
+Ein Datenprodukt besteht primär aus Daten, welche mehr Personen oder Maschinen konsumieren als
+lediglich der Data Owner und sein Stellvertreter. Es beschreibt den gemeinsamen Nutzen sowie
+Verantwortung, Qualität und kontrollierten Zugang. Eine Katalogzuordnung allein erteilt keinen
+Datenzugriff. Diese Definition steht auch im mehrsprachigen UI-Glossar.
+
+## ROHS CPS PoC
+
+The operator seed `rohs-cps-catalog-v1` provisions synthetic metadata under **EFD–BIT–PS–CPS**.
+For an existing runtime with `SEED_ON_STARTUP=false`, install only this scenario and refresh the
+system glossary with `docker compose exec catalog-api uv run python -m daca_catalog.rohs_cps_seed`.
+Do not rerun the full catalog seed to install this fixture.
+**Marcello Hebeisa** is Data Owner and **Matteo Duca** is deputy; both are selectable PoC personas
+with active primary unit memberships and narrowly scoped modeling/object responsibilities.
+The PS/CPS descendants are explicitly PoC units below the official BIT office. They use the
+existing `affiliated` registry category (no claim to be additional federal offices); nearest-office
+resolution remains **BIT**. Addresses use `example.invalid`.
+
+| Objects | Fixtures |
+| --- | --- |
+| Domains | ROHS Plattform-Telemetrie; ROHS Betriebsanalytik; a shared typed interface relationship |
+| Terms | ROHS Cluster, ROHS Namespace, Container-Ereignis, Service Level Objective, Error Budget, CPU-Auslastung |
+| Draft products | ROHS Container-Ereignisse; ROHS SLO & Kapazitätsanalyse, with domain/term memberships |
+| Declarations | Prometheus metric export; Grafana dashboard events, declared CSV structures |
+| Representations | PostgreSQL `rohs.observability.container_events`; S3 `rohs-poc-analytics/curated/platform_metrics.parquet` |
+| Logical drafts | One scoped model per physical structure, complete dataset metadata and direct field mappings |
+
+The structures describe detailed timestamp/cluster/namespace/pod/container/severity/trace metadata,
+metric samples and aggregated request/error/latency/CPU/SLO fields. They contain no real log rows,
+credentials, live config references or implicit access grants. Prometheus/Grafana are declared export
+metadata, not new protocol adapters. PG/S3 representations are synthetic imports with no live
+connection configured. Product delivery remains limited to the existing HTTP/REST and PostgreSQL
+architecture; no S3 data endpoint is introduced. A committed seed marker prevents restarts from
+recreating removed memberships, restoring revoked responsibilities or overwriting edited/retired
+objects. These operator-provisioned fixtures do not bypass the ALDS approval workflow for user
+domain proposals.
+
+## Domain canvas menus and ALDS creation approval
+
+The domain card menu follows the Mapping menus: open the domain in a new tab, grouped
+relationship/catalog actions, name-prefilled term/domain searches in new tabs, then remove its
+drawing (the catalog object remains). General logical/physical model search with native new-tab
+results follows after a separator. Outline
+icons and separators identify the groups. Source-owner permissions still govern relationship edits;
+domain placement is available to every active user in their personal view,
+and catalog retirement has its separate explicit confirmation. The blank canvas starts with
+**Domäne erstellen …**, followed by **Domäne suchen und einfügen …**, then general model searches.
+There is no name-based term/domain search on the blank canvas. Keyboard menus include anchors,
+focus the first enabled action and clamp/scroll within the viewport. The semantic tab bar scrolls
+locally on narrow screens, keeping the page and context menu within the available width.
+
+The register, domain network and semantic creation form use the shared small loading indicator
+until their reads complete, including failure. The existing retry/error behavior remains.
+The indicator draws an explicit SVG ring/arc with intrinsic 20 px dimensions, rather than relying
+on borders on an empty span. Theme blue and a fixed flex footprint preserve contrast and space;
+reduced motion stops rotation while retaining the ring and accessible status text. The read-only
+`domain-loading-indicators` browser flow pauses register/network reads and verifies actual visible
+geometry and rotation, not merely the presence of a spinner class.
+
+All domain creation now uses `POST /domain-change-requests` with operation `create`. The canvas
+shows only a personal **In Prüfung** proposal card and never places a pending domain or link in
+the shared graph. Readers may propose a domain even without shared-layout editing rights. The
+browser-session coordinate record keeps its existing v1 keys; `sourceId: ""` denotes creation
+without a source card. Domain data and decisions stay in PostgreSQL. On reload, pending cards
+are retained only for the requester's submitted requests; approved cards use the returned domain
+ID and previous position. Rejected proposals disappear. No card creates an automatic relationship.
+
+The original proposed owner's trusted current primary organization determines the office ALDS
+scope, including subordinate units. Expired primary memberships never fall back to directory
+profile strings. Only an active, current office ALDS/mandated deputy other than the requester
+may edit/approve/reject; object Owner, a profile `alds` label, department LDSD or a foreign ALDS
+does not suffice. No eligible other reviewer returns 409 without creating an orphan request.
+Review edits cannot move the owner outside that ALDS scope. `If-Match`/request row locks and
+active owner/deputy validation still apply. Only approval creates an active catalog domain.
+
+`POST /domains` is retained as a compatibility endpoint but rejects direct activation with 409.
+Domain metadata updates, transfers and retirement retain their existing guards. Existing pending
+create-review tasks are reconciled to live ALDS mandates on task/request reads, closing obsolete
+assignments and appending routing audit evidence. The requester's decision notification remains.
+The repeatable domain-governance PoC journey now uses Christian Man as the Defence ALDS reviewer.
+
+This changes workflow semantics without changing SQL tables or payload keys. The generated
+[catalog data model](data-model/catalog.md) documents the request/review contract.
+`canCreateDomains` in graph responses permits proposing a domain, not direct activation.
+Validation includes all 584 frontend tests, 58 relevant PostgreSQL API cases and the
+`domain-canvas-approval` Edge flow with actual cross-user ALDS approval and isolated cleanup.
+The read-only `domain-canvas-mobile-layout` flow checks tab/menu bounds at 390px and 360px.
+Unrelated metadata/retirement tests set up their catalog fixtures internally; creation-policy
+tests and browser fixture helpers use the actual request/ALDS workflow.
+
 ## Own-office display filter
 
-**Nur amtseigene anzeigen** is optional and initially off for domains and terms. It applies
-to cards and networks, combines with the existing card search, and remains in the URL as
-`ownOffice=1` across view changes and the two semantic tabs. The checkbox uses the shared
+**Nur amtseigene anzeigen** is enabled by default for domains and terms. On card views the
+checkbox sits immediately to the right of the search field, aligned with the input; on narrow
+screens it stacks below. In network views it remains directly below the view switch. It applies
+to cards and networks and combines with the existing card search. The URL carries `ownOffice=1`
+when active and explicitly `ownOffice=0` when disabled, preserving either choice across view
+changes, refreshes and the two semantic tabs. A fresh URL without this parameter starts enabled.
+The checkbox uses the shared
 catalog tooltip on hover or keyboard focus to explain the selected office and its subordinate
 units. Labels, tooltip, loading and failure messages support DE/FR/IT/EN.
 
@@ -13,7 +152,9 @@ organization term network. `GET /api/v1/semantic-graphs/organizations/{office}` 
 `scopeDomainIds` and `scopeTermIds` from trusted object responsibilities and active memberships.
 Explicit object organization takes precedence; terms retain their independent responsibility
 even when classified under a foreign domain. Broad editing mandates, display-name matching
-and a term's domain classification do not widen this filter. Missing office disables activation;
+and a term's domain classification do not widen this filter. A missing office leaves the default
+scope empty with an explanatory hint; users can explicitly clear the filter, then reactivation
+is disabled until an office is available;
 unavailable scope shows retry with no fallback to all objects. Identity changes cancel old reads.
 
 The term network follows the own office while enabled; its organization selector reappears
@@ -227,12 +368,12 @@ still navigates to the selected object. References outside the current domain ar
 
 New-term modals embed the existing multilingual glossary proposal form, preselecting this domain
 and a related-term reference to the source. Existing domain-owner approvals remain mandatory.
-Domain modals capture name/definition and distinct Data Owner/deputy; eligible owners create
-under their own ownership, while requests for another owner go to that proposed owner/deputy. The graph labels pending
+Domain modals capture name/definition and distinct Data Owner/deputy; all new domains require
+the scoped ALDS approval described above. The graph labels pending
 objects explicitly as personal proposals, not published terms/domains. Browser-session records
 under the acting identity retain pending card coordinates; proposal data comes from the approved
-request APIs and is never written into a shared layout. A directly created domain's relationship
-stays a separate local draft until **Netz speichern**.
+request APIs and is never written into a shared layout. Relationships between approved domains
+stay separate local drafts until **Netz speichern**.
 
 **Vom Canvas entfernen** adds a shared-layout hide marker, with no prompt. It preserves the
 catalog object, domain membership and semantic links. **Wieder einblenden** restores the card;
@@ -254,11 +395,12 @@ layout automatically. Unsaved layouts participate in navigation/unload warnings.
 
 The **Domänennetz** navigation entry opens `/domains/network`. It uses movable domain cards,
 ports, context menus, zoom, print, fullscreen, rewiring and a text alternative. **Netz speichern**
-publishes its local layout/link draft; deletion stays local until then, with no confirmation prompt.
-The backend returns separate `canEditLayout` and `canEditRelations` permissions. Catalog Data
-Owners, Data Stewards (including active modeling assignments) and explicitly assigned object
-roles may save a layout. Domain links require owner/deputy authority over each changed source
-domain. Preserving another owner's links during a save does not require authority to change them.
+stores the actor's personal presentation and publishes staged governed relationship changes;
+line deletion stays local until then, with no confirmation prompt. Any active user can save a
+personal view. The shared semantic-graph API retains its separate legacy layout authorization;
+the domain explorer sends unchanged shared positions when publishing relationships. Domain links
+require owner/deputy authority over each changed source domain, and foreign-department sources
+are read-only in this explorer. Preserving another owner's links does not require edit authority.
 Inactive identities cannot call these APIs.
 
 Four relationship types keep the domain vocabulary small:
@@ -485,3 +627,20 @@ update route is available from every accepted term to authorized users.
 The demo-auth-protected `/api/v1/poc/domain-glossary-fixture` prepare and reset actions affect only
 the synthetic vehicle product and its journey artifacts. The Catalog UI exposes them at
 `/poc-simulation/domain-glossary`; reset requires the exact confirmation text `DOMAIN-GLOSSARY`.
+
+
+### Physical origins in common object search
+
+The common search dialog used by semantic and Mapping canvases presents physical objects with
+fully qualified names, preferring each table's own system/database (for example SAP.CSV.VIBDBU)
+over the snapshot's first-database summary. The secondary line labels the named source and the
+physical category/provider, distinguishing CSV declarations from PostgreSQL/S3 representations.
+Technical URNs do not replace human-readable source names. A separate keyboard-accessible info
+button uses the shared catalog tooltip to show owner, import time/person, revision, catalog path,
+and exact source/object IDs. Those details remain searchable. Clicking the result still navigates
+to that source with its snapshot and table IDs; inspecting the tooltip never navigates.
+
+
+General logical/physical model searches open result targets through native new-tab
+anchors with external-link icons. The original Mapping remains open. Non-selection model results use this behavior by default; semantic connection searches still emit the chosen card and retain their existing draft
+behavior. The modal focus trap includes result links and origin-info buttons.

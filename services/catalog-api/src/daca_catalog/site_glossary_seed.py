@@ -66,10 +66,10 @@ _TERMS = (
     ),
     (
         "data-product", None,
-        {"de": ("Datenprodukt", "Beschriebenes und geregeltes Angebot zur Nutzung von Daten.", "Ein Datenprodukt verbindet Metadaten, Verantwortlichkeit, Qualitätsinformationen und freigegebene Endpunkte. Seine Daten bleiben durch die publizierte Zugriffspolitik geschützt."),
-         "fr": ("Produit de données", "Offre documentée et régie pour l'utilisation des données.", "Un produit de données associe métadonnées, responsabilités, informations de qualité et points d'accès approuvés. L'accès reste soumis à la politique publiée."),
-         "it": ("Prodotto dati", "Offerta documentata e regolata per l'utilizzo dei dati.", "Un prodotto dati unisce metadati, responsabilità, informazioni sulla qualità ed endpoint approvati. L'accesso resta soggetto alla politica pubblicata."),
-         "en": ("Data product", "Documented, governed offering for data use.", "A data product combines metadata, ownership, quality information and approved endpoints; access remains governed by published policy.")},
+        {"de": ("Datenprodukt", "Ein Datenprodukt besteht primär aus Daten, welche mehr Personen oder Maschinen konsumieren als lediglich der Data Owner und sein Stellvertreter.", "Ein Datenprodukt besteht primär aus Daten, welche mehr Personen oder Maschinen konsumieren als lediglich der Data Owner und sein Stellvertreter. Es verbindet Metadaten, Verantwortlichkeit, Qualitätsinformationen und beschriebene Zugänge. Die gemeinsame Nutzung ersetzt keine Freigabe; Daten bleiben durch die publizierte Zugriffspolitik geschützt."),
+         "fr": ("Produit de données", "Un produit de données est principalement constitué de données consommées par des personnes ou machines autres que le Data Owner et sa suppléance.", "Un produit de données est destiné à une consommation dépassant le seul Data Owner et sa suppléance. Il associe métadonnées, responsabilités, qualité et accès décrits. L'utilisation partagée ne remplace pas l'autorisation prévue par la politique publiée."),
+         "it": ("Prodotto dati", "Un prodotto dati consiste principalmente in dati utilizzati da persone o macchine oltre al Data Owner e al suo sostituto.", "Un prodotto dati è destinato a consumatori oltre al solo Data Owner e al suo sostituto. Unisce metadati, responsabilità, qualità e accessi descritti. L'utilizzo condiviso non sostituisce le autorizzazioni previste dalla politica pubblicata."),
+         "en": ("Data product", "A data product primarily consists of data consumed by people or machines beyond just the Data Owner and their deputy.", "A data product primarily consists of data consumed by people or machines beyond just the Data Owner and their deputy. It combines metadata, ownership, quality information and described access paths. Shared use does not replace authorization under the published access policy.")},
     ),
     (
         "daca", "DaCa",

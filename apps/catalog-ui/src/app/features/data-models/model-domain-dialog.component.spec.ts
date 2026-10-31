@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DomainSummary } from '../../core/catalog.models';
 import { ModelDomainDialogComponent } from './model-domain-dialog.component';
@@ -27,4 +27,16 @@ describe('model domain assignment dialog',()=>{
     expect(root.querySelectorAll('input:checked')).toHaveLength(1);
     component.confirm();expect(confirm).toHaveBeenCalledTimes(1);
   });
+  it('shows the copied logical domain after asynchronously loading select options',()=>{
+    const domains=new Subject<DomainSummary[]>();
+    TestBed.configureTestingModule({imports:[ModelDomainDialogComponent],providers:[{provide:CatalogApiService,useValue:{loadDomains:()=>domains}}]});
+    Object.defineProperty(HTMLDialogElement.prototype,'showModal',{configurable:true,value:function(this:HTMLDialogElement){this.setAttribute('open','');}});
+    const fixture=TestBed.createComponent(ModelDomainDialogComponent);
+    fixture.componentRef.setInput('targetName','SAP.CSV.VIBDBU');fixture.componentRef.setInput('initialDomainId','copied');fixture.componentRef.setInput('fixedDomain',true);fixture.componentRef.setInput('logical',false);fixture.detectChanges();
+    domains.next([{id:'copied',preferredLabel:'Immobilien',status:'active'} as DomainSummary]);fixture.detectChanges();
+    const select=fixture.nativeElement.querySelector('select') as HTMLSelectElement;
+    expect(select.value).toBe('copied');expect(select.disabled).toBe(true);
+    expect((fixture.nativeElement.querySelectorAll('footer button')[1] as HTMLButtonElement).disabled).toBe(false);
+  });
+
 });

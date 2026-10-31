@@ -1,3 +1,4 @@
+import { physicalObjectName } from './physical-representation-labels';
 import { compatibleType } from './mapping-types';
 import { computed, Injectable, signal } from '@angular/core';
 import {
@@ -94,7 +95,7 @@ export class MappingDraftFacade {
       schemaName: table.schemaName,
       qualifiedName: `${snapshot.sourceName} · #${snapshot.revision} · ` + (table.kind === 'parquet' && table.storageLocation
         ? `${table.storageLocation}#${column.name}`
-        : `${snapshot.databaseName}.${table.schemaName}.${table.name}.${column.name}`),
+        : `${physicalObjectName(snapshot,table)}.${column.name}`),
     }))),
   );
   readonly selectedField = computed(() => this.logicalFields().find((field) => field.id === this.selectedLogicalFieldId()) ?? null);
@@ -330,7 +331,7 @@ export class MappingDraftFacade {
       logicalFieldVersionIds: mapping.logicalFieldVersionIds.filter((id) => currentFieldIds.has(id)),
       physicalColumnIds: mapping.physicalColumnIds.filter((id) => currentColumnIds.has(id)),
     });
-    this.announcement.set(`Gebrochenes Mapping ausgewählt. Wählen Sie gültige Spalten aus Snapshot ${latest?.revision ?? 'aktuell'} und speichern Sie eine neue Entwurfsversion.`);
+    this.announcement.set(`Gebrochenes Mapping ausgewählt. Wählen Sie gültige Felder der physischen Repräsentation/Deklaration (Revision ${latest?.revision ?? 'aktuell'}) und speichern Sie eine neue Entwurfsversion.`);
   }
 
   closeEditor(restoreFocus = true): void {
@@ -395,7 +396,7 @@ export class MappingDraftFacade {
     const originalColumn=this.physicalColumns().find((item)=>item.id===columnId);
     const replacementColumn=this.physicalColumns().find((item)=>item.id===replacementId);
     if(side==='logical'&&!this.logicalFields().some((item)=>item.id===replacementId)||side==='physical'&&(!originalColumn||!replacementColumn||originalColumn.tableId!==replacementColumn.tableId||mapping.physicalSnapshotId!==replacementColumn.snapshotId)){
-      this.announcement.set('Linienende unverändert: Wählen Sie ein Feld im gleichen Modell und Snapshot.');return false;
+      this.announcement.set('Linienende unverändert: Wählen Sie ein Feld im gleichen Modell und in derselben Revision der physischen Repräsentation/Deklaration.');return false;
     }
     const logicalFieldVersionIds=side==='logical'?mapping.logicalFieldVersionIds.map((id)=>id===fieldId?replacementId:id):[...mapping.logicalFieldVersionIds];
     const physicalColumnIds=side==='physical'?mapping.physicalColumnIds.map((id)=>id===columnId?replacementId:id):[...mapping.physicalColumnIds];

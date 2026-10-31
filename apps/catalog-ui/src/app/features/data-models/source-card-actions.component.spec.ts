@@ -9,18 +9,18 @@ import { SourceCardActionsComponent } from './source-card-actions.component';
 
 describe('Source card actions menu', () => {
   afterEach(() => TestBed.resetTestingModule());
-  function setup(importAllowed=true) {
+  function setup(importAllowed=true,csv=false,manageable=true) {
     const identity={userId:signal('steward')};
-    const api={relinquishSourceAccess:vi.fn(()=>of(null))};
+    const api={relinquishSourceAccess:vi.fn(()=>of(null)),manageStructureInventory:vi.fn(()=>of(null))};
     TestBed.configureTestingModule({imports:[SourceCardActionsComponent],providers:[provideRouter([]),
       {provide:DemoIdentityService,useValue:identity},{provide:DataModelsApiService,useValue:api},
       {provide:CatalogI18nService,useValue:{t:(key:string,values?:Record<string,string>)=>({
         sourceActions:`Quellenaktionen für ${values?.['name']}`,openSource:'Quelle öffnen',reimport:'Neu importieren & Drift prüfen',
-        returnSourceAccess:'Berechtigungen zurückgeben',cancelSourceAccess:'Abbrechen',
+        openInventory:'Inventar öffnen',archiveInventory:'Archivieren',restoreInventory:'Wiederherstellen',deleteInventory:'Löschen',returnSourceAccess:'Berechtigungen zurückgeben',cancelSourceAccess:'Abbrechen',
       } as Record<string,string>)[key]??key}},
     ]});
     const fixture=TestBed.createComponent(SourceCardActionsComponent);
-    fixture.componentRef.setInput('source',{id:'source',name:'VIBDBU',latestSnapshotId:'snapshot',canRelinquishAccess:true});
+    fixture.componentRef.setInput('source',{id:'source',name:'VIBDBU',latestSnapshotId:'snapshot',canRelinquishAccess:true,connectorType:csv?'csv':'postgresql',inventoryManageable:manageable,revision:3});
     fixture.componentRef.setInput('importAllowed',importAllowed);fixture.componentRef.setInput('logicalModelId','model');
     fixture.detectChanges();TestBed.tick();
     const root=fixture.nativeElement as HTMLElement;const trigger=root.querySelector<HTMLButtonElement>('.source-actions-trigger')!;
@@ -65,4 +65,21 @@ describe('Source card actions menu', () => {
     (c.dialog.querySelector('footer button') as HTMLButtonElement).click();c.fixture.detectChanges();
     expect(c.dialog.open).toBe(false);expect(document.activeElement).toBe(c.trigger);
   });
+  it('offers inventory actions in the same three-dot menu and keeps the existing confirmation',()=>{
+    const c=setup(true,true);c.open();
+    expect([...c.root.querySelectorAll('[role=menuitem]')].map(item=>item.textContent?.trim())).toEqual(['Inventar \u00f6ffnen','Archivieren','L\u00f6schen']);
+    expect(c.root.querySelector('.actions')).toBeNull();
+    (c.root.querySelectorAll('[role=menuitem]')[2] as HTMLButtonElement).click();c.fixture.detectChanges();
+    expect(c.dialog.open).toBe(true);expect(c.api.manageStructureInventory).not.toHaveBeenCalled();
+    (c.dialog.querySelector('footer button') as HTMLButtonElement).click();c.fixture.detectChanges();
+    expect(c.dialog.open).toBe(false);expect(document.activeElement).toBe(c.trigger);
+    c.open();(c.root.querySelectorAll('[role=menuitem]')[1] as HTMLButtonElement).click();c.fixture.detectChanges();
+    (c.dialog.querySelectorAll('footer button')[1] as HTMLButtonElement).click();
+    expect(c.api.manageStructureInventory).toHaveBeenCalledExactlyOnceWith('source',3,'archive');
+  });
+  it('keeps CSV navigation available to readers without exposing archive or delete',()=>{
+    const c=setup(false,true,false);c.open();expect(c.root.querySelectorAll('[role=menuitem]')).toHaveLength(1);
+    c.component.inventoryAction('delete');c.fixture.detectChanges();expect(c.dialog.open).toBe(false);
+  });
+
 });

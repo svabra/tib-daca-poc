@@ -52,6 +52,14 @@ async function render(api = apiStub()) {
 describe('OwnerTasksComponent service-level workflow task', () => {
   afterEach(() => TestBed.resetTestingModule());
 
+  it('opens a private shared-View message in expert search with the exact recipient link',async()=>{
+    const {fixture}=await render(),component=fixture.componentInstance;
+    const task={taskType:'search_view_shared',dataProductId:null,searchViewShareId:'share-4'} as const;
+    expect(component.taskLabel(task.taskType)).toBe('View erhalten');
+    expect(component.taskRoute(task)).toEqual(['/search']);
+    expect(component.taskQueryParams(task)).toEqual({sharedView:'share-4'});
+  });
+
   it('links an SLA approval task directly to its assigned revision review', async () => {
     const { fixture } = await render();
     const component = fixture.componentInstance;

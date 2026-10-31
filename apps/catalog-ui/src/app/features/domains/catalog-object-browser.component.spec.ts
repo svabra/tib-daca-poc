@@ -6,6 +6,7 @@ import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 import { DataModelsApiService } from '../data-models/data-models-api.service';
 import { CatalogObjectBrowserComponent } from './catalog-object-browser.component';
+import { FALLBACK_PHYSICAL_SNAPSHOT } from '../data-models/mapping-fallback';
 
 describe('CatalogObjectBrowserComponent',()=>{
   const api={loadGlossaryTerms:()=>of([{id:'term',preferredLabel:'Grösse',definition:'Dimension'}]),loadDomains:()=>of([{id:'domain',preferredLabel:'Personal',definition:'Menschen'}])};
@@ -34,5 +35,39 @@ describe('CatalogObjectBrowserComponent',()=>{
     const fixture=TestBed.createComponent(CatalogObjectBrowserComponent);fixture.componentRef.setInput('selectionMode',true);fixture.detectChanges();const component=fixture.componentInstance;
     const navigate=vi.spyOn(TestBed.inject(Router),'navigate'),selected=vi.fn();component.selected.subscribe(selected);await component.open(component.results()[0]);
     expect(navigate).not.toHaveBeenCalled();expect(selected).toHaveBeenCalledWith(expect.objectContaining({id:'term'}));
+  });
+  it('renders model search hits as native new-tab links while preserving explicit selection mode',()=>{
+    const fixture=TestBed.createComponent(CatalogObjectBrowserComponent);
+    fixture.componentRef.setInput('initialKind','logical');fixture.detectChanges();
+    const root=fixture.nativeElement as HTMLElement,closed=vi.fn();fixture.componentInstance.closed.subscribe(closed);
+    const link=root.querySelector<HTMLAnchorElement>('a.object-result')!;
+    expect(link.getAttribute('href')).toBe('/models/logical');expect(link.target).toBe('_blank');expect(link.rel).toBe('noopener');
+    expect(link.querySelector('img[src$="external-link.svg"]')).not.toBeNull();
+    const navigate=vi.spyOn(TestBed.inject(Router),'navigate');
+    link.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));expect(navigate).not.toHaveBeenCalled();expect(closed).toHaveBeenCalledOnce();
+    fixture.componentRef.setInput('selectionMode',true);fixture.detectChanges();
+    expect(root.querySelector('a.object-result')).toBeNull();expect(root.querySelector('button.object-result')).not.toBeNull();
+  });
+  it('distinguishes equally named physical objects by system, source and declaration type',async()=>{
+    vi.spyOn(models,'listPhysicalSnapshots').mockReturnValueOnce(of([{id:'csv',sourceId:'inventory',revision:1},{id:'pg',sourceId:'database',revision:1}]));
+    const table={...FALLBACK_PHYSICAL_SNAPSHOT.tables[0],id:'csv-table',databaseName:'SAP',schemaName:'CSV',name:'VIBDBU'};
+    const csv={...FALLBACK_PHYSICAL_SNAPSHOT,id:'csv',sourceId:'inventory',sourceName:'Gebäude',databaseName:'ImmoGIS',sourceType:'csv' as const,catalogPath:'urn:daca:physical-source:inventory',dataOwnerName:'Daniel Wenger',tables:[table]};
+    const pg={...FALLBACK_PHYSICAL_SNAPSHOT,id:'pg',sourceId:'database',sourceName:'SAP Gebäudebestand',databaseName:'daca_sample',sourceType:'postgresql' as const,tables:[{...table,id:'pg-table',databaseName:'daca_sample',schemaName:'public'}]};
+    models.loadPhysicalSnapshot.mockReturnValueOnce(of(csv)).mockReturnValueOnce(of(pg));
+    const fixture=TestBed.createComponent(CatalogObjectBrowserComponent);fixture.componentRef.setInput('initialKind','physical');fixture.detectChanges();const component=fixture.componentInstance;
+    component.query.set('VIBDBU');fixture.detectChanges();
+    expect(component.results().map(item=>[item.label,item.description])).toEqual([
+      ['SAP.CSV.VIBDBU','Quelle: Gebäude · Physische Deklaration (CSV)'],
+      ['daca_sample.public.VIBDBU','Quelle: SAP Gebäudebestand · Physische Repräsentation (PostgreSQL)'],
+    ]);
+    const root=fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('.object-result')?.textContent).not.toContain('urn:daca:');
+    const info=root.querySelector<HTMLButtonElement>('.provenance-info')!;info.focus();
+    expect(document.querySelector('[role=tooltip]')?.textContent).toContain('Quellen-ID: inventory');
+    expect(document.querySelector('[role=tooltip]')?.textContent).toContain('Data Owner: Daniel Wenger');
+    info.blur();expect(document.querySelector('[role=tooltip]')).toBeNull();
+    component.query.set('urn:daca:physical-source:inventory');expect(component.results().map(item=>item.id)).toEqual(['csv-table']);
+    fixture.detectChanges();const originLink=root.querySelector<HTMLAnchorElement>('a.object-result')!;
+    expect(originLink.target).toBe('_blank');expect(originLink.getAttribute('href')).toBe('/physical-models/inventory?snapshotId=csv&tableId=csv-table');
   });
 });

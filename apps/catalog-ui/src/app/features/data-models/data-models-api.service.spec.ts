@@ -80,6 +80,18 @@ describe('DataModelsApiService', () => {
     expect(snapshot?.tables[0].columns[0].importMetadata?.records?.[0]['Klassifizierung']).toBe('Projektabhängig');
   });
 
+
+  it('retains each object system instead of assigning the first CSV system to all tables',()=>{
+    let snapshot: import('./data-models.models').PhysicalSnapshot | undefined;
+    api.loadPhysicalSnapshot('multi').subscribe(value=>snapshot=value);
+    http.expectOne('/api/v1/physical-snapshots/multi').flush({snapshot:{id:'multi',sourceId:'csv',sourceAdapterType:'csv'},databases:[
+      {name:'ImmoGIS',schemas:[{name:'CSV',tables:[{id:'gis',name:'Building',columns:[]}]}]},
+      {name:'SAP',schemas:[{name:'CSV',tables:[{id:'sap',name:'VIBDBU',columns:[]}]}]},
+    ]});
+    expect(snapshot?.databaseName).toBe('ImmoGIS');
+    expect(snapshot?.tables.map(table=>[table.id,table.databaseName,table.schemaName,table.name])).toEqual([['gis','ImmoGIS','CSV','Building'],['sap','SAP','CSV','VIBDBU']]);
+  });
+
   it('writes the separated logical aggregate using the canonical backend contract', () => {
     const value: LogicalModelWrite = { title:{de:'Mitarbeitende',fr:'',it:'',en:'Employees'},description:{de:'Fachliches Modell',fr:'',it:'',en:''},identifiers:['VBS-HR-1'],department:'VBS',office:'vbs-verteidigung',dataDomainId:'domain-personal',dataOwnerId:'christian.spider',deputyDataOwnerId:'sibilla.micheli',creator:{type:'application',applicationName:'HR-Core'},classification:'internal',dateCreated:'2026-09-07',entityName:'Mitarbeitende',conceptIds:[],fields:[{businessObject:'Mitarbeitende',entityName:'Mitarbeitende',name:'personalnummer',dataType:'xsd:string',length:12,shortDescription:'Personalnummer',comment:null,sourceSystem:null,classification:'internal',precision:null,decimalPlaces:null,nullable:false,minCount:1,maxCount:1,order:1,valueListConceptId:null,conceptIds:[],primaryConceptId:null}] };
     api.createLogicalModel(value).subscribe();

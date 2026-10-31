@@ -16,14 +16,14 @@
 @if(logicalOpen()){
   <section id="mapping-logical-picker" class="mapping-start-picker" aria-labelledby="mapping-logical-title" (keydown.escape)="closeLogical()"><header><h2 id="mapping-logical-title">{{i18n.t('mappingStartChooseLogical')}}</h2><button type="button" class="mapping-start-text" (click)="closeLogical()">{{i18n.t('mappingStartClose')}}</button></header><label for="mapping-model-query">{{i18n.t('mappingStartFindModel')}}</label><input #logicalQuery id="mapping-model-query" type="search" [value]="query()" (input)="search($event)">
     <div class="mapping-start-models">@for(model of matches().slice(0,limit());track model.id){<button type="button" [disabled]="checking()||opening()" (click)="chooseModel(model)"><span><strong>{{title(model)}}</strong><small>{{model.identifiers[0]}} · {{i18n.t('fieldsCount',{count:model.fieldCount})}}</small></span><span>{{i18n.t('openModel')}}</span></button>}@empty{<p>{{i18n.t('noModels')}}</p>}</div>
-    <footer>@if(matches().length>limit()){<button class="mapping-start-text" type="button" (click)="limit.update(increaseLimit)">{{i18n.t('mappingStartMoreModels')}}</button>}<a routerLink="/models/new">{{i18n.t('newLogicalModel')}}</a></footer>
+    <footer>@if(matches().length>limit()){<button class="mapping-start-text" type="button" (click)="limit.update(increaseLimit)">{{i18n.t('mappingStartMoreModels')}}</button>}@if(physical()){@if(canDeriveLogical()){<button class="mapping-start-text" type="button" (click)="deriveLogical()">{{i18n.t('mappingDeriveLogical')}}</button>}}@else{<a routerLink="/models/new">{{i18n.t('newLogicalModel')}}</a>}</footer>
   </section>
 }
 @if(physicalRoute()){
   @if(physical();as physical){
     <section class="mapping-physical-workspace daca-card" aria-label="Mapping-Arbeitsplatz">
-      <header><div><p class="daca-eyebrow">{{i18n.t('mappingStartPhysical')}}</p><strong>{{physical.snapshot.sourceName}}</strong></div><div><button class="daca-button mapping-physical-add" type="button" [disabled]="loading()||checking()||opening()" (click)="openLogical($event.currentTarget)">{{i18n.t('mappingStartChooseLogical')}}</button><button #physicalTrigger class="daca-button is-secondary" type="button" (click)="physicalOpen.set(true)">{{i18n.t('mappingStartChange')}}</button><a class="daca-button is-secondary" routerLink="/mappings">{{i18n.t('mappingStartBack')}}</a></div></header>
-      <daca-mapping-graph [physicalStart]="true" [logicalLoading]="loading()||checking()||opening()" [logicalSelectionLabel]="i18n.t('mappingStartChooseLogical')" [logicalSelectionHint]="i18n.t('mappingPhysicalIntro')" (selectLogical)="openLogical($event)"/>
+      <header><div><p class="daca-eyebrow">{{i18n.t(physicalCategoryKey(physical.snapshot.sourceType))}}</p><strong>{{physical.snapshot.sourceName}}</strong></div><div><button #physicalTrigger class="daca-button is-secondary" type="button" (click)="physicalOpen.set(true)">{{i18n.t('mappingStartChange')}}</button><a class="daca-button is-secondary" routerLink="/mappings">{{i18n.t('mappingStartBack')}}</a></div></header>
+      <daca-mapping-graph [physicalStart]="true" [canManageDomains]="canManageDomains()" [domainBusy]="domainBusy()" (assignDomain)="openPhysicalDomainDialog()" (removePhysicalDomain)="removePhysicalDomain($event.tableId,$event.domainId)" [canDeriveLogical]="canDeriveLogical()" [deriveLogicalLabel]="i18n.t('mappingDeriveLogical')" [logicalLoading]="loading()||checking()||opening()" [logicalSelectionLabel]="i18n.t('mappingStartChooseLogical')" [logicalSelectionHint]="i18n.t('mappingPhysicalIntro')" (selectLogical)="openLogical($event)" (deriveLogical)="deriveLogical($event)" (addRepresentation)="physicalOpen.set(true)"/>
     </section>
   }
 } @else {
@@ -34,3 +34,5 @@
   </section>
 }
 @if(physicalOpen()){<daca-representation-picker [model]="selectedModel()" [selectionOnly]="true" [initialSnapshot]="initialPhysicalSnapshot()" (closed)="closePhysical()" (added)="choosePhysical($event)"/>}
+
+@if(domainOpen()){<daca-model-domain-dialog [targetName]="physical()?.table?.name??''" [logical]="false" [physicalOptions]="facade.representations()" [busy]="domainBusy()" [error]="domainError()" (closed)="!domainBusy()&&domainOpen.set(false)" (confirmed)="assignPhysicalDomain($event)"/>}

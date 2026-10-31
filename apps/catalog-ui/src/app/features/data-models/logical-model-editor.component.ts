@@ -1,3 +1,4 @@
+import { physicalObjectName } from './physical-representation-labels';
 import { LogicalFieldMoveDialogComponent } from './logical-field-move-dialog.component';
 import { NgTemplateOutlet } from '@angular/common';
 import { DomainAssignmentChoice, ModelDomainDialogComponent } from './model-domain-dialog.component';
@@ -66,10 +67,10 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
     </nav>
     @if (derivedOrigin(); as origin) {
       <aside class="daca-card derived-origin" aria-label="Herkunft der Ableitung" [hidden]="activeTab()!=='model'">
-        <div><p class="daca-eyebrow">Physical-first</p><h2>Aus physischer Repräsentation vorbereitet</h2><p>Alle fachlichen Angaben bleiben editierbar. Umbenannte Felder behalten ihre physische Bindung; entfernte Felder werden nicht gemappt.</p></div>
-        <dl><div><dt>Quelle</dt><dd>{{ origin.source.name }}</dd></div><div><dt>Objekt</dt><dd><code>{{ origin.snapshot.databaseName }}.{{ origin.table.schemaName }}.{{ origin.table.name }}</code></dd></div><div><dt>Snapshot</dt><dd>{{ origin.snapshot.revision }} · <code>{{ origin.snapshot.id }}</code></dd></div></dl>
+        <div><p class="daca-eyebrow">Physical-first</p><h2>{{ origin.snapshot.sourceType==='csv'?'Aus physischer Deklaration vorbereitet':'Aus physischer Repräsentation vorbereitet' }}</h2><p>Alle fachlichen Angaben bleiben editierbar. Umbenannte Felder behalten ihre physische Bindung; entfernte Felder werden nicht gemappt.</p></div>
+        <dl><div><dt>Quelle</dt><dd>{{ origin.source.name }}</dd></div><div><dt>Objekt</dt><dd><code>{{ physicalObjectName(origin.snapshot,origin.table) }}</code></dd></div><div><dt>Revision</dt><dd>{{ origin.snapshot.revision }} · <code>{{ origin.snapshot.id }}</code></dd></div></dl>
       </aside>
-    } @else if (sourceSnapshotId()) { <p class="daca-alert" [hidden]="activeTab()!=='model'">Dieser Entwurf wurde aus dem physischen Snapshot <code>{{ sourceSnapshotId() }}</code> vorbereitet. Alle Vorschlagswerte bleiben editierbar.</p> }
+    } @else if (sourceSnapshotId()) { <p class="daca-alert" [hidden]="activeTab()!=='model'">Dieser Entwurf wurde aus der physischen Repräsentation/Deklaration <code>{{ sourceSnapshotId() }}</code> vorbereitet. Alle Vorschlagswerte bleiben editierbar.</p> }
     <section id="model-panel-status" role="tabpanel" aria-labelledby="model-tab-status" [hidden]="activeTab()!=='status'">
       @if (model(); as current) {
         <daca-dataset-summary [model]="current" />
@@ -181,6 +182,7 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
   `],
 })
 export class LogicalModelEditorComponent {
+  readonly physicalObjectName=physicalObjectName;
   readonly id = input<string>(); readonly sourceSnapshotId = input<string>();
   readonly physicalSnapshotId = input<string>(); readonly physicalTableId = input<string>();
   readonly mappingDraftsPending = input(false);
@@ -625,15 +627,15 @@ export class LogicalModelEditorComponent {
         const table = snapshot.tables.find((item) => item.id === tableId);
         const source = sources.find((item) => item.id === snapshot.sourceId);
         if (!table || !source) {
-          this.error.set('Snapshot und physisches Objekt passen nicht zusammen oder sind in diesem Organisationsscope nicht verfügbar.');
+          this.error.set('Physische Repräsentation/Deklaration und ausgewähltes Objekt passen nicht zusammen oder sind in diesem Organisationsscope nicht verfügbar.');
           return;
         }
         this.derivedOrigin.set({ source, snapshot, table });
         const isRealEstate = source.office === 'vbs-armasuisse-immobilien';
         this.form.controls.dataset.patchValue({
           titleDe: this.tableTitle(table),
-          descriptionDe: table.comment || `Fachlich zu prüfender Entwurf aus ${snapshot.databaseName}.${table.schemaName}.${table.name}.`,
-          identifiers: `derived:${table.stableKey || `${snapshot.databaseName}.${table.schemaName}.${table.name}`}:${snapshot.id}`,
+          descriptionDe: table.comment || `Fachlich zu prüfender Entwurf aus ${physicalObjectName(snapshot,table)}.`,
+          identifiers: `derived:${table.stableKey || physicalObjectName(snapshot,table)}:${snapshot.id}`,
           identifierMode: false,
           department: source.office.startsWith('vbs-') ? 'vbs' : source.department.toLocaleLowerCase('de-CH'),
           office: isRealEstate ? 'vbs-armasuisse' : source.office,
@@ -665,7 +667,7 @@ export class LogicalModelEditorComponent {
             minCount: column.nullable ? 0 : 1,
             maxCount: 1,
             classification: 'internal',
-            sourceSystem: `${source.name} · ${snapshot.databaseName}.${table.schemaName}.${table.name}`,
+            sourceSystem: `${source.name} · ${physicalObjectName(snapshot,table)}`,
             shortDescription: column.comment || `Technisches Feld ${column.name} aus ${table.name}.`,
             comment: column.comment || '',
             physicalColumnId: column.id,
