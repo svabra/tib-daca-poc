@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
 import pytest
-from daca_catalog.deputy_owners import default_deputy_owner
-from daca_catalog.models import DataProduct, DemoUser
+from daca_catalog.deputy_owners import default_deputy_owner, is_active_deputy
+from daca_catalog.models import (
+    DataProduct,
+    DemoUser,
+    FederalPersonMembership,
+    IdentityDirectoryEntry,
+)
 from daca_catalog.workflow_seed import seed_workflow_reference_data
 from sqlalchemy.exc import IntegrityError
 
@@ -30,9 +36,34 @@ def test_preferred_deputies_cover_product_and_source_owner_organizations(session
             deputy = session.get(DemoUser, deputy_id)
             assert owner is not None and deputy is not None
             assert deputy.id != owner.id
-            assert deputy.organization == owner.organization
+            assert is_active_deputy(owner, deputy, session)
             assert deputy.avatar_url
             assert "data_owner" in deputy.roles
+
+
+def test_deputy_uses_trusted_office_ancestry_not_profile_labels(session_factory):
+    with session_factory() as session:
+        owner = session.get(DemoUser, "kassandra.valdata")
+        deputy = session.get(DemoUser, "joel.ruod")
+        assert owner.organization != deputy.organization  # ESTV and ESTV BI
+        assert is_active_deputy(owner, deputy, session)
+        directory = session.get(IdentityDirectoryEntry, deputy.id)
+        directory.organization_id = "efd-efv"
+        deputy.organization = owner.organization  # An identical label grants no scope.
+        session.flush()
+        assert not is_active_deputy(owner, deputy, session)
+
+
+def test_expired_primary_membership_does_not_fall_back_to_directory(session_factory):
+    with session_factory() as session:
+        owner = session.get(DemoUser, "kassandra.valdata")
+        deputy = session.get(DemoUser, "joel.ruod")
+        session.add(FederalPersonMembership(
+            id=uuid.uuid4(), user_id=deputy.id, organization_id="efd-estv-bi",
+            is_primary=True, valid_from=date(2020, 1, 1), valid_to=date(2020, 12, 31),
+        ))
+        session.flush()
+        assert not is_active_deputy(owner, deputy, session)
 
 
 def test_resolver_falls_back_to_another_eligible_same_organization_owner(session_factory):

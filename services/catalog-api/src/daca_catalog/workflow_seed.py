@@ -834,7 +834,7 @@ def seed_workflow_reference_data(session: Session) -> bool:
             if product.deputy_owner_user_id
             else None
         )
-        if not is_active_deputy(owner, current_deputy) and not _owner_changed_after_baseline(session, product.id, "deputy_data_owner"):
+        if not is_active_deputy(owner, current_deputy, session) and not _owner_changed_after_baseline(session, product.id, "deputy_data_owner"):
             previous = product.deputy_owner_user_id
             assign_default_deputy_owner(session, product)
             if product.deputy_owner_user_id != previous:

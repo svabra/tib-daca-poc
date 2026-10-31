@@ -84,7 +84,9 @@ def test_defence_editors_can_derive_real_estate_models_with_scoped_roles(
             if item["userId"] == actor
             and item["organizationId"] == "vbs-armasuisse-immobilien"
             and item["role"] == "data_steward"
-            and item["primaryOrganizationId"] == MODELING_ORGANIZATION_ID
+            and item["primaryOrganizationId"] == (
+                "vbs-armasuisse" if actor == "christian.spider" else MODELING_ORGANIZATION_ID
+            )
         ]) == 1
         response = client.post(
             f"/api/v1/physical-tables/{table_id}/quick-derive-logical-model",

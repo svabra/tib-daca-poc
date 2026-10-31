@@ -48,25 +48,25 @@ def test_demo_users_and_fixture_seed_are_idempotent_and_persisted(client):
         user["id"]: (user["organization"], user["avatarUrl"])
         for user in users
     } == {
-        "ariane.keller": ("ESTV", "/assets/data-owners/ariane-keller.webp"),
+        "ariane.keller": ("EFD ESTV", "/assets/data-owners/ariane-keller.webp"),
         "beat.stalder": ("Kanton St. Gallen", "/assets/data-owners/beat-stalder.webp"),
-        "daniel.aebischer": ("EFV", "/assets/data-owners/daniel-aebischer.webp"),
-        "joel.ruod": ("ESTV", "/assets/data-owners/joel-ruod.webp"),
-        "kassandra.valdata": ("ESTV", "/assets/kassandra-valdata.webp"),
-        "lea.hofmann": ("BAZG", "/assets/data-owners/lea-hofmann.webp"),
+        "daniel.aebischer": ("EFD EFV", "/assets/data-owners/daniel-aebischer.webp"),
+        "joel.ruod": ("EFD ESTV BI", "/assets/data-owners/joel-ruod.webp"),
+        "kassandra.valdata": ("EFD ESTV", "/assets/kassandra-valdata.webp"),
+        "lea.hofmann": ("EFD BAZG", "/assets/data-owners/lea-hofmann.webp"),
         "lucien.morel": (
             "Kanton Neuchâtel",
             "/assets/data-owners/lucien-morel.webp",
         ),
         "noemie.rochat": ("Kanton Neuchâtel", "/assets/data-owners/noemie-rochat.webp"),
-        "sandro.wenger": ("BAZG", "/assets/data-owners/sandro-wenger.webp"),
+        "sandro.wenger": ("EFD BAZG", "/assets/data-owners/sandro-wenger.webp"),
         "sarah.brunner": (
             "Kanton St. Gallen",
             "/assets/data-owners/sarah-brunner.webp",
         ),
-        "sibilla.micheli": ("VBS", None),
-        "simone.wyss": ("EFV", "/assets/data-owners/simone-wyss.webp"),
-        "thomas.kriegli": ("ESTV", "/assets/data-owners/thomas-kriegli.webp"),
+        "sibilla.micheli": ("VBS GS", "/assets/data-owners/sibilla-micheli.webp"),
+        "simone.wyss": ("EFD EFV", "/assets/data-owners/simone-wyss.webp"),
+        "thomas.kriegli": ("EFD ESTV BI", "/assets/data-owners/thomas-kriegli.webp"),
     }
     products = client.get("/api/v1/data-products").json()["items"]
     assert products
@@ -100,7 +100,7 @@ def test_workflow_seed_reconciles_existing_demo_user_labels_and_portraits(sessio
         assert seed_workflow_reference_data(session) is True
         joel = session.get(DemoUser, "joel.ruod")
         assert joel is not None
-        assert joel.organization == "ESTV"
+        assert joel.organization == "EFD ESTV BI"
         assert joel.avatar_url == "/assets/data-owners/joel-ruod.webp"
 
 

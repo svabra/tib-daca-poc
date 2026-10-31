@@ -22,6 +22,13 @@ def prepare(session_factory):
         domain = session.scalar(select(Domain).where(Domain.owner_user_id == "sibilla.micheli", Domain.lifecycle == "active"))
         term = session.scalar(select(GlossaryTerm).join(CatalogObjectResponsibility, CatalogObjectResponsibility.glossary_term_id == GlossaryTerm.id).where(CatalogObjectResponsibility.user_id == domain.owner_user_id, CatalogObjectResponsibility.role == "data_owner", GlossaryTerm.lifecycle == "active"))
         assert domain and term
+        # Sibilla's home office is now GS-VBS. Bind this test object explicitly
+        # to Defence instead of inferring its scope from her former employment.
+        for row in session.scalars(select(CatalogObjectResponsibility).where(
+            CatalogObjectResponsibility.glossary_term_id == term.id,
+            CatalogObjectResponsibility.role == "data_owner",
+        )):
+            row.organization_id = "vbs-verteidigung"
         session.add(DemoUser(id="org-view-reader", display_name="Reader", organization="Demo", email="reader@example.test", roles=["data_consumer"], active=True))
         session.commit()
         return str(domain.id), str(term.id)

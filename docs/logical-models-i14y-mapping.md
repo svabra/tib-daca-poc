@@ -1,5 +1,7 @@
 # Logical models, I14Y concepts, physical models, and mappings
 
+Release regressions distinguish Christiano Stadello's primary armasuisse membership from his explicit Immobilien data-steward assignment. Domain-review handover tests update the canonical owner and concrete responsibility rows together, retaining the current deputy and rejecting the former owner. No modeling scope or approval permission is widened by a display-name change.
+
 Shared canvas actions retain compact 32px desktop buttons and a 44px minimum target on viewports up to 700px as well as coarse-pointer devices. This keeps Mapping save/create actions and fullscreen exits usable in narrow desktop windows and mobile layouts.
 
 Mapping canvas cards identify logical models with the shared orange type stripe and physical representations/declarations with the shared purple stripe. The same tokens are used for model cards embedded in domain canvases; organizations use navy, terms pink and products mustard throughout the corresponding diagrams. Existing field lists, connection handles, row-status colors and permission/save behavior remain intact. Primary model headers retain top stripes and the shared 2px card corners; the layout measurement still derives actual endpoint geometry after rendering.

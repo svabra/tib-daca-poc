@@ -124,7 +124,12 @@ def test_model_review_uses_current_domain_owner_and_deputy_not_the_historic_assi
     model, etag = submit_personnel(client, session_factory)
     with session_factory() as session:
         review = session.get(LogicalModelReview, uuid.UUID(model["reviewId"]))
-        session.get(Domain, review.domain_id).owner_user_id = "lawrence.hill"
+        domain = session.get(Domain, review.domain_id)
+        from daca_catalog.domain_ownership import domain_organization_ids, replace_domain_owners
+        scopes = domain_organization_ids(session, domain)
+        domain.owner_user_id = "lawrence.hill"
+        # A real handover replaces the canonical pair and concrete role rows.
+        replace_domain_owners(session, domain, scopes)
         session.commit()
     path = f"/api/v1/logical-model-reviews/{model['reviewId']}"
     assert client.post(path+"/decision", headers={"X-DaCa-User": "christian.spider", "If-Match": etag}, json={"decision": "reject", "comment": "Stale role"}).status_code == 403

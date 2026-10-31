@@ -29,9 +29,8 @@ describe('Catalog runtime version overlay', () => {
     const dialog = fixture.nativeElement.querySelector('.daca-feature-dialog') as HTMLDialogElement;
     expect(dialog.hasAttribute('open')).toBe(true);
     expect(dialog.textContent).toContain(`V${DACA_VERSION}`);
-    expect(dialog.textContent).toContain('Datenbahnen und gemeinsame Karten in Lineage');
-    expect(dialog.textContent).toContain('Data-Highways als Lichtband');
-    expect(dialog.textContent).toContain('Objekte mit Auswahlrahmen gemeinsam verschieben');
+    expect(dialog.textContent).toContain('Stellvertretung innerhalb desselben Amts erhalten');
+    expect(dialog.textContent).not.toContain('Data-Highways als Lichtband');
     expect(dialog.textContent).not.toContain('Pers\u00f6nliche Such-Views speichern und teilen');
     expect(dialog.textContent).not.toContain('Expertensuche nach Kontext oder Fokus');
     expect(dialog.textContent).not.toContain('Domänen an andere Personen abtreten');

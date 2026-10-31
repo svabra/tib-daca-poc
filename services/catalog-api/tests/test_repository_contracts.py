@@ -181,7 +181,7 @@ def test_postgres_compatibility_checks_domain_glossary_tables_by_name() -> None:
         assert f"('{table}')" in workflow
 
 
-def test_poc_guide_ships_twenty_nine_optimized_webp_screenshots() -> None:
+def test_poc_guide_ships_thirty_optimized_webp_screenshots() -> None:
     image_dir = ROOT / "apps/catalog-ui/public/assets/poc-guide"
     images = sorted(image_dir.glob("*.webp"))
     expected_consumer_journey_images = {
@@ -201,12 +201,13 @@ def test_poc_guide_ships_twenty_nine_optimized_webp_screenshots() -> None:
         "journey-08-domain-register.webp",
         "journey-08-semantic-suggestions.webp",
         "journey-09-glossary-review.webp",
+        "journey-09-sibilla-profile.webp",
     }
 
     assert expected_consumer_journey_images <= {path.name for path in images}
     assert expected_renewal_journey_images <= {path.name for path in images}
     assert expected_semantic_journey_images <= {path.name for path in images}
-    assert len(images) == 29
+    assert len(images) == 30
     assert sum(path.stat().st_size for path in images) < 2_250_000
     for path in images:
         header = path.read_bytes()[:12]

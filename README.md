@@ -1,5 +1,7 @@
 # BIT DaCa
 
+Release 0.3.5 repairs automatic deputy selection after the PoC organization updates. Federal subdivisions resolve to their nearest active office through trusted memberships/directory IDs, so ESTV BI remains within ESTV without granting rights across EFD offices. Expired primary memberships cannot fall back to stale directory labels. PostgreSQL release tests now use the confirmed personas, hierarchical display labels, explicit object scopes and transactional domain handovers.
+
 Shared canvas actions retain compact 32px desktop buttons and a 44px minimum target on viewports up to 700px as well as coarse-pointer devices. This keeps Mapping save/create actions and fullscreen exits usable in narrow desktop windows and mobile layouts.
 
 Lineage product cards use the normal theme surface even when selected, matching domain-network product cards. The footer displays the actual Data Owner instead of the catalog identifier, and the accessible card name includes Data Owner. Missing ownership remains explicitly unknown; catalog identity is still available in the shared summary and selected-object details.

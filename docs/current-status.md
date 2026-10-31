@@ -1,5 +1,7 @@
 # Current status
 
+Release 0.3.5 fixes the PostgreSQL compatibility failures that blocked the 0.3.4 image pipeline. Automatic deputy eligibility uses the trusted nearest-office hierarchy rather than matching profile strings: Joel Ruod in ESTV BI remains eligible for Kassandra's ESTV products; other EFD offices and expired memberships remain excluded. The seed no longer alternates between Joel and a fallback deputy. Regression fixtures reflect current organization labels, Sibilla's GS-VBS profile, Christiano's armasuisse membership, explicitly scoped term ownership and complete domain handovers. The external PoC/OpenShift rollout remains deferred.
+
 Shared canvas actions retain compact 32px desktop buttons and a 44px minimum target on viewports up to 700px as well as coarse-pointer devices. This keeps Mapping save/create actions and fullscreen exits usable in narrow desktop windows and mobile layouts.
 
 Lineage product cards use the normal theme surface even when selected, matching domain-network product cards. The footer displays the actual Data Owner instead of the catalog identifier, and the accessible card name includes Data Owner. Missing ownership remains explicitly unknown; catalog identity is still available in the shared summary and selected-object details.

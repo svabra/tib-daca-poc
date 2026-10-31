@@ -2,7 +2,7 @@ import { DacaFeatureLocale, DacaFeatureScope } from './feature-list';
 import { DACA_VERSION } from './version';
 
 // A version bump must supply new customer-facing notes before the UI can build.
-const CURRENT_RELEASE_VERSION: typeof DACA_VERSION = '0.3.4';
+const CURRENT_RELEASE_VERSION: typeof DACA_VERSION = '0.3.5';
 
 export interface DacaReleaseFeature {
   readonly title: string;
@@ -242,9 +242,14 @@ export function dacaReleaseHistory(scope: DacaFeatureScope, locale: DacaFeatureL
   const currentControlPlaneFeatures: readonly DacaReleaseFeature[] = [...controlPlaneFeatures, locale === 'de'
     ? { title: 'Version im Footer nachschlagen', description: 'Versionsnummer, Neuerungen und Co-Design-Hinweis stehen im Footer und verdecken keine Inhalte. ASTRA und ESTV sind in den Co-Design-Angaben ergänzt.', tags: ['Updates', 'Bedienung', 'Co-Design'] }
     : { title: 'Find version information in the footer', description: 'Version, release notes and Co-Design credits sit in the footer without covering content. ASTRA and ESTV are included in the credits.', tags: ['Updates', 'Usability', 'Co-Design'] }];
-  const latest: DacaRelease = { version: CURRENT_RELEASE_VERSION, features: scope === 'catalog' ? catalogFeatures : controlPlaneFeatures };
+  const patchFeatures: readonly DacaReleaseFeature[] = locale === 'de' ? [
+    { title: 'Stellvertretung innerhalb desselben Amts erhalten', description: 'ESTV BI wird über die vertrauenswürdige Organisationshierarchie der ESTV zugeordnet. Joel bleibt gültiger Stellvertreter; andere Ämter und abgelaufene Zugehörigkeiten bleiben ausgeschlossen. Wiederholte PoC-Seeds behalten die Zuordnung.', tags: ['Datenprodukte', 'Berechtigungen', 'PoC'] },
+  ] : [
+    { title: 'Preserve deputy ownership within an office', description: 'Trusted organizational ancestry places ESTV BI within ESTV. Joel remains an eligible deputy; other offices and expired memberships stay excluded. Repeated PoC seeds retain the assignment.', tags: ['Data products', 'Permissions', 'PoC'] },
+  ];
+  const latest: DacaRelease = { version: CURRENT_RELEASE_VERSION, features: scope === 'catalog' ? patchFeatures : controlPlaneFeatures };
   const historical = scope === 'catalog' ? CATALOG_HISTORY : CONTROL_PLANE_HISTORY;
-  return [latest, { version: '0.3.2', features: scope === 'catalog' ? catalog032Features : controlPlaneFeatures }, { version: '0.2.1', features: scope === 'catalog' ? catalog21Features : currentControlPlaneFeatures }, { version: '0.2.0', features: scope === 'catalog' ? catalog20Features : controlPlaneFeatures }, { version: '0.1.32', features: scope === 'catalog' ? catalog32Features : controlPlaneFeatures }, { version: '0.1.31', features: scope === 'catalog' ? catalog31Features : controlPlaneFeatures }, { version: '0.1.30', features: scope === 'catalog' ? previousCatalogFeatures : controlPlaneFeatures }, ...historical.map((item) => ({ version: item.version, features: [localizedFeature(item, locale)] }))];
+  return [latest, { version: '0.3.4', features: scope === 'catalog' ? catalogFeatures : controlPlaneFeatures }, { version: '0.3.2', features: scope === 'catalog' ? catalog032Features : controlPlaneFeatures }, { version: '0.2.1', features: scope === 'catalog' ? catalog21Features : currentControlPlaneFeatures }, { version: '0.2.0', features: scope === 'catalog' ? catalog20Features : controlPlaneFeatures }, { version: '0.1.32', features: scope === 'catalog' ? catalog32Features : controlPlaneFeatures }, { version: '0.1.31', features: scope === 'catalog' ? catalog31Features : controlPlaneFeatures }, { version: '0.1.30', features: scope === 'catalog' ? previousCatalogFeatures : controlPlaneFeatures }, ...historical.map((item) => ({ version: item.version, features: [localizedFeature(item, locale)] }))];
 }
 
 export function searchDacaReleases(scope: DacaFeatureScope, locale: DacaFeatureLocale, query: string): readonly DacaRelease[] {

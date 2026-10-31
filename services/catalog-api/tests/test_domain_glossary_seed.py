@@ -22,7 +22,7 @@ def test_domain_glossary_reference_seed_is_graph_ready_and_idempotent(session_fa
     with session_factory() as session:
         sibilla = session.get(DemoUser, "sibilla.micheli")
         assert sibilla is not None
-        assert sibilla.organization == "VBS"
+        assert sibilla.organization == "VBS GS-VBS"
         assert "data_owner" in sibilla.roles
         assert "domain_register_owner" not in sibilla.roles
 

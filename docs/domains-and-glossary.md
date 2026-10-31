@@ -1,5 +1,7 @@
 # Domains and business glossary
 
+The PostgreSQL release regressions model organizational views using explicit object responsibility scopes. A person's current employment (for example Sibilla in GS-VBS) does not imply that a test term belongs to Defence. Domain handover fixtures replace both the canonical owner pair and the active concrete owner rows through the same ownership helper as the transfer transaction; a column-only update is not a complete handover.
+
 Domain-network asset cards and lineage now share `daca-canvas-object` in the design system: the same left type stripe, icon/caption, title, metadata typography and compact padding. Domain placement, links, object-layer toggles and editing permissions remain unchanged.
 
 
