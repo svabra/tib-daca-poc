@@ -8,6 +8,7 @@ import { CatalogApiService } from './core/catalog-api.service';
 import { DemoIdentityService } from './core/demo-identity.service';
 import { UserPreferencesService } from './core/user-preferences.service';
 import { DemoSessionService } from './core/demo-session.service';
+import { catalogNotifications } from './core/catalog-notifications';
 
 @Component({
   selector: 'daca-root',
@@ -45,6 +46,9 @@ import { DemoSessionService } from './core/demo-session.service';
       (themeToggle)="preferences.toggleTheme()"
       notificationHref="/tasks"
       [notificationCount]="notificationCount()"
+      [notifications]="notifications()"
+      [notificationsLoading]="notificationsLoading()"
+      [notificationsError]="notificationsError()"
       [subtitleBelow]="true"
       [navigation]="navigation()"
     >
@@ -69,7 +73,10 @@ export class App {
   readonly identity = inject(DemoIdentityService);
   readonly session = inject(DemoSessionService);
   readonly preferences = inject(UserPreferencesService);
-  readonly notificationCount = computed(() => this.api.workflowTasks().length + this.api.ownerAccessRequests().length);
+  readonly notifications = computed(() => catalogNotifications(this.api.workflowTasks(),this.api.ownerAccessRequests()));
+  readonly notificationsLoading = computed(() => this.api.workflowTasksLoading() || this.api.ownerAccessRequestLoading());
+  readonly notificationsError = computed(() => !!this.api.workflowTasksError() || !!this.api.ownerAccessRequestError());
+  readonly notificationCount = computed(() => this.notifications().length);
   private readonly navigationDefinition: readonly DacaNavigationItem[] = [
     { label: 'Startseite', path: '/', exact: true },
     { label: 'Meine Datenprodukte', path: '/products' },
@@ -87,11 +94,15 @@ export class App {
   constructor() {
     this.session.restore();
     const refreshMessages = () => {
-      if (this.session.activeUserId() && document.visibilityState === 'visible') this.api.refreshWorkflowTasks(true);
+      if (this.session.activeUserId() && document.visibilityState === 'visible') {
+        this.api.refreshWorkflowTasks(true);
+        this.api.refreshOwnerAccessRequestInbox(true);
+      }
     };
     const messageTimer = setInterval(refreshMessages, 15000);
     window.addEventListener('focus', refreshMessages);
-    inject(DestroyRef).onDestroy(() => { clearInterval(messageTimer); window.removeEventListener('focus', refreshMessages); });
+    document.addEventListener('visibilitychange',refreshMessages);
+    inject(DestroyRef).onDestroy(() => { clearInterval(messageTimer); window.removeEventListener('focus', refreshMessages); document.removeEventListener('visibilitychange',refreshMessages); });
     effect(() => {
       const route = this.routeUrl().split('?')[0];
       const language = this.preferences.language();

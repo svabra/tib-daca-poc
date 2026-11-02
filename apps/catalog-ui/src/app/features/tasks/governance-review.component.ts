@@ -1,3 +1,4 @@
+import { AccessEndDatePipe } from '../../shared/access-end-date.pipe';
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnDestroy, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -11,7 +12,7 @@ import { GovernanceDeploymentPoller } from './governance-deployment-poller';
 @Component({
   selector: 'daca-governance-review',
   standalone: true,
-  imports: [DatePipe, RouterLink, StatusBadgeComponent],
+  imports: [AccessEndDatePipe, DatePipe, RouterLink, StatusBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="daca-page-heading">
@@ -120,7 +121,7 @@ import { GovernanceDeploymentPoller } from './governance-deployment-poller';
                     <div class="owner-task-main">
                       <div><span>{{ subjectTypeLabel(grant.subject.type) }}</span><code>{{ grant.subject.id }}</code></div>
                       <h3>{{ grant.subject.id }}</h3>
-                      <p>{{ formatProtocols(grant.protocols) }} · <code>{{ formatActions(grant.actions) }}</code> · Variante {{ variantLabel(grant.dataVariant) }} · {{ grant.validFrom }} bis {{ grant.validUntil }}</p>
+                      <p>{{ formatProtocols(grant.protocols) }} · <code>{{ formatActions(grant.actions) }}</code> · Variante {{ variantLabel(grant.dataVariant) }} · {{ grant.validFrom }} bis {{ grant.validUntil | accessEndDate }}</p>
                       <p><strong>Zeitfenster:</strong> {{ formatWeeklyAvailability(grant.weeklyAvailability ?? null) }}</p>
                       <p><strong>KOBY / MCP:</strong> {{ grant.metadataChannels?.kobyMcp ? 'aktiviert' : 'deaktiviert' }} <span aria-hidden="true">·</span> <strong>I14Y:</strong> {{ grant.metadataChannels?.i14y ? 'aktiviert' : 'deaktiviert' }} <span aria-hidden="true">·</span> <strong>Mitgliedersnapshot:</strong> {{ grant.groupSnapshot?.memberIds?.length ?? 'Nicht anwendbar' }}</p>
                     </div>

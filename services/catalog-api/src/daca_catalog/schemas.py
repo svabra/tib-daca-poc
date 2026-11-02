@@ -244,7 +244,7 @@ class AccessRequestCreate(ApiModel):
     requested_protocol: Literal["http", "postgresql", "both"]
     requested_variant: Literal["original", "modified", "either"]
     valid_from: date
-    valid_until: date
+    valid_until: date | None
     contact_email: str = Field(min_length=5, max_length=320)
     notes: str | None = Field(default=None, max_length=2000)
     conditions_accepted: Literal[True]
@@ -266,7 +266,7 @@ class AccessRequestCreate(ApiModel):
 
     @model_validator(mode="after")
     def valid_consumer_and_period(self) -> AccessRequestCreate:
-        if self.valid_until < self.valid_from:
+        if self.valid_until is not None and self.valid_until < self.valid_from:
             raise ValueError("validUntil must be on or after validFrom")
         if self.consumer_type == "machine":
             if self.machine_id is None or not self.machine_id.strip():
@@ -299,7 +299,7 @@ class AccessRequestResponse(ApiModel):
     requested_protocol: Literal["http", "postgresql", "both"]
     requested_variant: Literal["original", "modified", "either"]
     valid_from: date
-    valid_until: date
+    valid_until: date | None
     notes: str | None
     status: AccessRequestStatus
     fulfillment_subject_type: Literal["person", "machine", "group"] | None = None
@@ -1542,6 +1542,9 @@ class WorkflowTaskResponse(ApiModel):
         "metadata_quality",
         "access_governance",
         "access_request_review",
+        "access_request_approved",
+        "access_request_granted",
+        "access_request_rejected",
         "simulation_quality_alert",
         "simulation_discoverability_alert",
         "simulation_isbo_restriction",

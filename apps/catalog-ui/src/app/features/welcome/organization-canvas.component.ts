@@ -2,6 +2,7 @@ import { OrganizationCardContentComponent } from '../../shared/organization-card
 import { catalogCopy } from '../../core/catalog-localization';
 import { CATALOG_COPY } from '../../core/catalog-copy';
 import { HttpClient } from '@angular/common/http';
+import { NgTemplateOutlet } from '@angular/common';
 import { afterNextRender, afterRenderEffect, ChangeDetectionStrategy, Component, computed, DestroyRef, effect, ElementRef, HostListener, inject, Injector, signal, untracked, viewChild, viewChildren } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -35,11 +36,19 @@ type Position = { x: number; y: number };
 let organizationCanvasSequence = 0;
 
 @Component({
-  selector: 'daca-organization-canvas', standalone: true, imports: [OrganizationCardContentComponent,CanvasSelectionDirective,RouterLink, TooltipDirective, SearchIconComponent],
+  selector: 'daca-organization-canvas', standalone: true, imports: [NgTemplateOutlet,OrganizationCardContentComponent,CanvasSelectionDirective,RouterLink, TooltipDirective, SearchIconComponent],
+  host: {'[class.is-bit-power-ready]':'bitPowerHeld()'},
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './organization-canvas.component.html', styleUrls: ['./organization-canvas.component.css', '../../shared/data-highway.css', '../../shared/canvas-context-menu.css','../../shared/canvas-controls.css'],
 })
 export class OrganizationCanvasComponent {
+  readonly bitPowerHeld = signal(false);
+  @HostListener('document:keyup', ['$event'])
+  bitPowerKeyUp(event:KeyboardEvent):void { this.bitPowerHeld.set(event.ctrlKey); }
+  @HostListener('window:blur') clearBitPower():void { this.bitPowerHeld.set(false); }
+  @HostListener('document:visibilitychange') hideBitPower():void {
+    if(document.visibilityState!=='visible')this.clearBitPower();
+  }
   readonly packetTailId = `org-highway-tail-${++organizationCanvasSequence}`;
   readonly organizationCard=ORGANIZATION_CARD;
   readonly organizationBoundary=ORGANIZATION_BOUNDARY;
@@ -284,6 +293,13 @@ export class OrganizationCanvasComponent {
     });
   }
   enter(node: OrganizationNode): void { this.cancelDrag(); this.focusId.set(node.id); this.closeMenu(); this.recenter(); }
+  organizationViewUrl(node:OrganizationNode|null):string { return '/?organization='+encodeURIComponent(node?.id??'all'); }
+  homeViewUrl():string { return '/?organization='+encodeURIComponent(this.data()?.homeId??'all'); }
+  openViewFromMenu(event:MouseEvent,action:'enter'|'home'|'overview',node?:OrganizationNode):void {
+    if(event.ctrlKey||event.metaKey||event.shiftKey||event.button!==0){this.closeMenu();return;}
+    event.preventDefault();
+    if(action==='home')this.home();else if(action==='overview')this.overview();else if(node)this.enter(node);
+  }
   overview(): void { this.cancelDrag(); this.focusId.set(null); this.closeMenu(); this.recenter(); }
   home(): void { this.cancelDrag(); this.focusId.set(this.data()?.homeId ?? null); this.closeMenu(); this.recenter(); }
   private loadView(generation = this.generation): void {
@@ -357,6 +373,7 @@ export class OrganizationCanvasComponent {
     try { target.setPointerCapture(event.pointerId); } catch { /* Synthetic pointer events may not support capture. */ }
   }
   @HostListener('document:pointermove', ['$event']) moveDrag(event: PointerEvent): void {
+    this.bitPowerHeld.set(event.ctrlKey);
     const drag = this.drag, bounds = this.stage()?.nativeElement.getBoundingClientRect();
     if (!drag || drag.pointerId !== event.pointerId || !bounds?.width || !bounds.height) return;
     const dx = event.clientX - drag.start.x, dy = event.clientY - drag.start.y;
@@ -389,6 +406,7 @@ export class OrganizationCanvasComponent {
   }
   private recenter(): void { afterNextRender(() => { this.centerViewport(true); this.measureChildren(); }, { injector: this.injector }); }
   @HostListener('document:keydown', ['$event']) trapFocus(event: KeyboardEvent): void {
+    this.bitPowerHeld.set(event.ctrlKey);
     if (!this.fullscreen() || event.key !== 'Tab') return;
     const root = this.explorer()?.nativeElement;
     const elements = [...(root?.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),summary,[tabindex="0"]') ?? [])].filter(element => {

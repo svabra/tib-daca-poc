@@ -1,5 +1,35 @@
 # Current status
 
+New-tab indicators now occupy a permanent 16px column on eligible navigation links, including
+object-search results. Control changes visibility only; link-label widths, wrapping and row
+heights remain stable. Local actions and downloads still have no indicator column.
+
+All context menus use normal native links with a Control-only new-tab indicator from the shared shell/design system. Captured keyboard/pointer events track Control, with cleanup on release, blur and visibility loss. Router links retain Angular navigation/unsaved-change guards for normal clicks and native browser new tabs for Control-click. Local commands, checkboxes, disabled actions and downloads have no new-tab indicator. Organization drill-down/home/overview and physical referenced-model actions now expose real URLs; search dialogs keep explicit selection local and use ordinary navigation links for results.
+
+Verified with 722 Catalog UI and six Control Plane UI tests, a static audit of 100 menu items,
+and the `context-menu-navigation` browser flow. The browser checks actual new tabs with exact
+URLs, unchanged source pages, normal in-tab routing without document reload, and Control-click
+on the local data-landscape visibility filter without opening a tab. Browser screenshots cover
+the same menu with and without Control.
+
+BIT's data-landscape organization box reveals three to four fine, short yellow lightning bolts on Control + hover. Four staggered channels alternate eight branching shapes in a 0.48-second cycle; each discharge disappears after roughly 0.2 seconds. The compact 8% perimeter and corresponding silhouette mask keep sparks close to the edge, behind the card and off its text. Office, satellite, focused BIT and fullscreen views share the effect. Key release, pointer leave, window blur and hidden documents clear it. Reduced motion shows four static bolts. It changes no layout anchors or catalog state.
+
+Requester decision notifications close the previous gap where only the owner received a request task. Persistent information tasks distinguish approval pending technical activation, effective grant (original/modified), and rejection. The bell links to the exact personal request under Data & Usage, which reloads on decision changes and supports acknowledgement. Old decisions are reconciled recipient-privately; final grant backfill additionally requires current published policy coverage and confirmed deployments. Acknowledged messages do not return.
+
+Verified with requester-isolation/idempotency tests, existing renewal/governance checks and the real-browser `requester-decision` flow against local OPA and PostgreSQL. The browser keeps the requester page and message panel open through approval and activation, opens the exact request, checks mobile layout and confirms acknowledgement survives reload. Its isolated synthetic policy is revoked and its product retired afterwards; ordinary catalog policies are untouched.
+
+Access-request confirmations include a responsive Data Owner contact card with portrait, name, organization and Teams link. The shared owner resolver uses the assigned owner's directory email for Teams, including after an ownership change; missing contact data remains explicit.
+
+Initial product-access requests support an explicit indefinite end-date option. API clients send `validUntil: null`; omission, malformed dates and bounded end dates before the start remain invalid. Migration `0048_open_ended_access_requests` makes the request column nullable and preserves finite renewal requirements. Receipts, history, Owner review and grant displays label indefinite validity without exposing the existing technical policy ceiling. Approval/fulfillment matching and request evidence map null to the same ceiling used by OPA/PostgreSQL projections; publication and revocation keep their existing rules.
+
+Verified locally with the complete frontend suite, three additional request-review context tests, PostgreSQL request/owner/approval cases and the production Catalog UI build. The real-browser `product-access-request` flow passes with live arrival of a second request in an already-open notification panel, deduplication, visible mobile header controls, contained mobile panel, owner review/decision and requester history. Synthetic requests are closed after the check; their audit evidence is retained.
+
+On signed-in screens up to 480px wide, the external federal-authorities link is hidden and long profile names truncate so the bell, language, theme, documentation and settings controls remain inside the viewport. The mobile notification panel uses the available layout width, including scrollbar space.
+
+The header notification bell is always visible for signed-in users and opens a DAAIF-style panel of individual workflow messages. Request/task entries are deduplicated, ordered newest first and linked to the matching request in Tasks. Empty/loading/error states, five UI languages, mobile layout, Escape/outside closing and actor-change closing are supported. Both inbox and workflow reads refresh in the background every 15 seconds and on focus/visibility changes. Opening a normal product request now shows its number/context and resolves the requester through the trusted identity directory; dates, requested protocol and modified variant are preserved. Missing/mismatched request context or unknown identities cannot activate a grant.
+
+Product overview access requests now have a visible heading action above the status badge, including narrow screens and a 44px minimum target. It reuses `/products/:id/access-request` and the same trusted responsibility projection as the context menu/form; responsible users and a not-yet-loaded product have no request action. The dedicated `product-access-request` browser flow checks form submission, persisted request, owner-only task notification, bell/inbox navigation, access-setting review, rejection and requester history. No persistence schema or policy-publication behavior changes are introduced.
+
 Release **0.3.6** prepares the external-organization placement fix and verified ROHS CPS fixture delivery for publication. Canonical package/runtime versions, service-worker metadata, focused OpenAPI documents and the three OpenShift image pins use 0.3.6. Latest DE/EN release notes cover the boundary fix and PoC backfill, while 0.3.5 remains in the searchable archive. The external PoC runtime has not been changed from this workstation.
 
 ROHS CPS delivery is verified against the published Catalog API 0.3.5 image in isolated PostgreSQL 18.4 with the PoC's `daca_catalog` schema and a non-superuser role: startup creates both synthetic draft products and the scoped backfill is idempotent. These use cases are independent of the hosting container platform. [The PoC runbook](../k8s/README.md#rohs-cps-example-metadata-in-the-poc) documents the Catalog API pod Terminal command and search verification without active-only filtering. The remote PoC's actual image and data state have not been inspected from this workstation.

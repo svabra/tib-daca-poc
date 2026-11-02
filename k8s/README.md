@@ -1,5 +1,11 @@
 # DaCa OpenShift presentation stack
 
+An API image containing migration `0048_open_ended_access_requests` upgrades the existing
+request column to support an explicit null end date before serving. Initial requests may
+be indefinite; renewals retain a finite end date. The migration preserves existing requests
+and refuses downgrade while unbounded requests exist. No manual data rewrite or database
+reset is required. See [the Catalog data model](../docs/data-model/catalog.md).
+
 The **0.3.6** release pins Catalog UI, Catalog API and Sample Data Product to matching
 0.3.6 images. Wait for the image-publication workflow to succeed before applying these
 manifests. This release includes the external-organization placement fix and the verified

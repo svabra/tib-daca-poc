@@ -89,7 +89,7 @@ describe('PhysicalAssetsComponent DAAIF source explorer', () => {
     fixture.componentInstance.showLinkedModelTooltip(table.id); fixture.detectChanges(); expect(indicator?.getAttribute('data-tooltip-open')).toBe('true');
     fixture.componentInstance.hideLinkedModelTooltip(table.id); fixture.detectChanges(); expect(indicator?.getAttribute('data-tooltip-open')).toBe('false');
     fixture.componentInstance.toggleMenu(table.id); fixture.detectChanges(); const referencedModelItem = [...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('[role="menuitem"]')][1];
-    expect(referencedModelItem.disabled).toBe(false); const router = TestBed.inject(Router); const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true); fixture.componentInstance.openReferencedLogicalModel(FALLBACK_PHYSICAL_SNAPSHOT, table);
+    expect(referencedModelItem.tagName).toBe('A'); expect(referencedModelItem.getAttribute('href')).toContain('/models/'+FALLBACK_LOGICAL_MODEL.id+'/mappings'); const router = TestBed.inject(Router); const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true); fixture.componentInstance.openReferencedLogicalModel(FALLBACK_PHYSICAL_SNAPSHOT, table);
     expect(navigate).toHaveBeenCalledWith(['/models', FALLBACK_LOGICAL_MODEL.id, 'mappings'], { queryParams: { physicalSnapshotId: FALLBACK_PHYSICAL_SNAPSHOT.id, physicalTableId: table.id } });
   });
 

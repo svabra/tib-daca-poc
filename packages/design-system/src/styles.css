@@ -561,8 +561,12 @@ a { color: var(--daca-blue); }
 
 @media (max-width: 480px) {
   .daca-authority-inner.has-user { justify-content: space-between; gap: 0; padding-inline: 12px; }
-  .daca-authority-inner.has-user .daca-authority-link { display: flex; }
-  .daca-authority-user { margin-left: auto; padding-inline: 4px; }
+  .daca-authority-inner.has-user .daca-authority-link { display: none; }
+  .daca-authority-user { flex:1 1 0; min-width:0; margin-left:0; padding-inline:4px; overflow:hidden; }
+  .daca-authority-user strong { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .daca-authority-user .daca-profile-avatar,.daca-authority-user .daca-user-avatar-fallback { flex-shrink:0; }
+  .daca-authority-inner daca-notification-menu { flex:0 0 32px; }
+  .daca-header-language,.daca-header-theme,.daca-header-documentation,.daca-header-settings { flex-shrink:0; }
   .daca-header-action { margin-inline: 2px; padding-inline: 4px; }
   .daca-header-language select { padding-inline: 4px; }
   .daca-user-switcher { min-width: 0; }
@@ -712,4 +716,10 @@ html body [role="menu"] :is([role="menuitem"], [role="menuitemcheckbox"], [role=
   cursor: default;
 }
 html body [role="menu"] [role="separator"] { margin: 4px 6px; border: 0; border-top: 1px solid var(--daca-border, #d1d9df); }
+/* Reserve the icon column even when hidden, so Control never reflows menu text. */
+html.daca-control-held { --daca-context-link-indicator:visible; }
+html body :is([role="menu"] a[role="menuitem"],a[data-context-navigation]):not([download]):not([aria-disabled="true"]):not([href^="#"]):not([href^="mailto:"]):not([href^="tel:"])[href]::after {
+  content:""; display:inline-block; flex:0 0 16px; width:16px; height:16px; margin-inline-start:auto; background:currentColor; visibility:var(--daca-context-link-indicator,hidden);
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/%3E%3C/svg%3E") center/contain no-repeat;
+}
 @media (pointer: coarse) { html body [role="menu"] :is([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]) { min-height: 44px !important; } }

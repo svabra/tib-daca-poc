@@ -491,7 +491,7 @@ export interface AccessRequestSubmission {
   requestedProtocol: 'http' | 'postgresql' | 'both';
   requestedVariant: 'original' | 'modified' | 'either';
   validFrom: string;
-  validUntil: string;
+  validUntil: string | null;
   contactEmail: string;
   notes: string | null;
   conditionsAccepted: true;

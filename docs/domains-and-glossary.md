@@ -1,5 +1,13 @@
 # Domains and business glossary
 
+All context-menu navigation follows the shared Control-click convention: no permanent
+new-tab icon or forced new-tab target; hold Control to reveal the indicator on navigable
+links. An always-reserved 16px icon column prevents text wrapping and row-height changes
+when Control is pressed or released; only icon visibility changes. Normal clicks use the current tab, while Control-click retains native browser
+navigation. Object searches open a local picker whose navigation results follow the same
+rule. Filters, relationship edits, ownership/retirement dialogs and explicit selection
+commands remain local, with no new-tab indicator. Disabled options and downloads are excluded.
+
 The PostgreSQL release regressions model organizational views using explicit object responsibility scopes. A person's current employment (for example Sibilla in GS-VBS) does not imply that a test term belongs to Defence. Domain handover fixtures replace both the canonical owner pair and the active concrete owner rows through the same ownership helper as the transfer transaction; a column-only update is not a complete handover.
 
 Domain-network asset cards and lineage now share `daca-canvas-object` in the design system: the same left type stripe, icon/caption, title, metadata typography and compact padding. Domain placement, links, object-layer toggles and editing permissions remain unchanged.

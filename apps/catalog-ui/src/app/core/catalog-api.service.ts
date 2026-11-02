@@ -164,7 +164,7 @@ type ProposalWire = Omit<GlossaryTermProposal, 'requesterName' | 'reviews'> & { 
 export interface WorkflowTaskWire {
   id: string;
   searchViewShareId?: string | null;
-  taskType: 'search_view_shared' | 'metadata_quality' | 'access_governance' | 'access_request_review' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed' | 'publication_approval' | 'governance_correction' | 'service_level_approval' | 'source_access_review' | 'physical_source_access_review' | 'domain_change_review' | 'domain_change_decision' | 'glossary_term_review' | 'glossary_term_collaboration' | 'glossary_term_decision' | 'logical_model_review' | 'logical_model_changes_requested' | 'logical_mapping_inconsistency' | 'logical_mapping_investigation';
+  taskType: 'search_view_shared' | 'metadata_quality' | 'access_governance' | 'access_request_review' | 'access_request_approved' | 'access_request_granted' | 'access_request_rejected' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed' | 'publication_approval' | 'governance_correction' | 'service_level_approval' | 'source_access_review' | 'physical_source_access_review' | 'domain_change_review' | 'domain_change_decision' | 'glossary_term_review' | 'glossary_term_collaboration' | 'glossary_term_decision' | 'logical_model_review' | 'logical_model_changes_requested' | 'logical_mapping_inconsistency' | 'logical_mapping_investigation';
   kind?: 'action' | 'collaboration' | 'information';
   taskKind?: 'action' | 'collaboration' | 'information';
   status: 'open' | 'in_progress' | 'completed';
@@ -687,10 +687,10 @@ export class CatalogApiService {
     }).pipe(timeout(3000));
   }
 
-  refreshOwnerAccessRequestInbox(): void {
+  refreshOwnerAccessRequestInbox(background = false): void {
+    if(background && this.ownerAccessRequestLoading())return;
     const refreshGeneration = ++this.ownerInboxRefreshGeneration;
-    this.ownerAccessRequestLoading.set(true);
-    this.ownerAccessRequestError.set(null);
+    if(!background){this.ownerAccessRequestLoading.set(true);this.ownerAccessRequestError.set(null);}
     this.loadOwnerAccessRequestInbox().subscribe({
       next: (requests) => {
         if (refreshGeneration !== this.ownerInboxRefreshGeneration) return;

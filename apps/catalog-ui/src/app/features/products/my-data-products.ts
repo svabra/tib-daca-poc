@@ -208,7 +208,7 @@ export function resolvedDataOwner(
     organization: personOrganizationLabel(canonicalUser.organization),
     avatarUrl: canonicalUser.avatarUrl,
     ...(canonicalUser.phone ? { phone: canonicalUser.phone } : {}),
-    teamsUrl: metadataOwner?.teamsUrl ?? teamsChatUrl(canonicalUser.email),
+    teamsUrl: teamsChatUrl(canonicalUser.email),
   };
 }
 

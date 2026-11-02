@@ -39,6 +39,7 @@ from .access_renewals import (
 from .access_renewals import (
     reset_fixture as reset_access_renewal_fixture,
 )
+from .access_request_notifications import notify_access_request_status, reconcile_requester_messages
 from .control_people import assign_default_control_person, is_active_publication_approver
 from .database import default_session_factory, get_session, identity_session
 from .deputy_owners import assign_default_deputy_owner
@@ -814,6 +815,7 @@ def finalize_policy_activation(
             task.status = "completed"
             task.completed_at = utc_now()
             task.updated_at = utc_now()
+        notify_access_request_status(session, pending_request, product)
     quality_task_open = session.scalar(
         select(WorkflowTask.id).where(
             WorkflowTask.data_product_id == product.id,
@@ -855,7 +857,7 @@ def access_request_is_covered_by_policy(
             continue
         if grant.get("validFrom") != access_request.valid_from.isoformat():
             continue
-        if grant.get("validUntil") != access_request.valid_until.isoformat():
+        if grant.get("validUntil") != access_request.policy_valid_until.isoformat():
             continue
         if grant.get("dataVariant") != access_request.granted_variant:
             continue
@@ -4429,6 +4431,12 @@ def create_router() -> APIRouter:
 
     @router.get("/tasks/mine", response_model=list[WorkflowTaskResponse], tags=["workflow"])
     def list_my_tasks(session: SessionDep, actor: ActorDep) -> list[WorkflowTask]:
+        reconcile_requester_messages(session, actor, lambda request, product: (
+            (policy := active_published_policy(session, product)) is not None
+            and request.decision_policy_revision_id == policy.id
+            and policy_is_fully_deployed(session, policy)
+            and access_request_is_covered_by_policy(request, policy.definition)
+        ))
         reconcile_group_membership_tasks(session, actor)
         _sync_domain_creation_reviews(session)
         session.commit()
@@ -5928,6 +5936,7 @@ def create_router() -> APIRouter:
                 task.status = "completed"
                 task.completed_at = utc_now()
                 task.updated_at = utc_now()
+            notify_access_request_status(session, access_request, product)
             audit(
                 session,
                 "access-request",
@@ -6014,7 +6023,7 @@ def create_router() -> APIRouter:
             "actions": ["data.read"],
             "protocols": grant_protocols,
             "validFrom": access_request.valid_from.isoformat(),
-            "validUntil": access_request.valid_until.isoformat(),
+            "validUntil": access_request.policy_valid_until.isoformat(),
             "dataVariant": body.granted_variant,
         }
         grants = [

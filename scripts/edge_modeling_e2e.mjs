@@ -355,6 +355,18 @@ async function clickText(selector, text) {
   invariant(clicked, `Could not activate ${selector} containing “${text}”`);
 }
 
+async function controlClick(selector, text = null) {
+  const element=`[...document.querySelectorAll(${JSON.stringify(selector)})].find(item=>${text===null?'true':`item.textContent.includes(${JSON.stringify(text)})`})`;
+  await waitFor(`${element}!==undefined`,'Control-click target missing: '+selector);
+  await evaluate(`${element}.scrollIntoView({block:'center',behavior:'instant'})`);await settleFrames();
+  const point=await evaluate(`(()=>{const r=${element}.getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+r.height/2};})()`);
+  await cdp.call('Input.dispatchKeyEvent',{type:'rawKeyDown',key:'Control',code:'ControlLeft',windowsVirtualKeyCode:17,modifiers:2},sessionId);
+  await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...point,modifiers:2},sessionId);
+  await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',buttons:1,modifiers:2,clickCount:1},sessionId);
+  await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',buttons:0,modifiers:2,clickCount:1},sessionId);
+  await cdp.call('Input.dispatchKeyEvent',{type:'keyUp',key:'Control',code:'ControlLeft',windowsVirtualKeyCode:17,modifiers:0},sessionId);
+}
+
 async function openSourceCardMenu(sourceId) {
   const selector = JSON.stringify(`.source-card[data-source-id="${sourceId}"] .source-actions-trigger`);
   await waitFor(`document.querySelector(${selector}) !== null`, 'source actions trigger unavailable');
@@ -1624,7 +1636,7 @@ async function domainAssignmentFlow(physical) {
   await navigate(route,'christian.man');
   await waitFor("document.querySelectorAll('.physical-representation .model-domain').length===2&&[...document.querySelectorAll('.model-domain')].every((label)=>!label.textContent.includes('Keine Domäne'))",'domain labels did not survive reload');
   await evaluate(`document.querySelector('[data-representation-table-id="${pgId}"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:350,clientY:250}))`);
-  invariant(await evaluate(`document.querySelector('.representation-context-menu a[href^=\"/domains/\"]')?.getAttribute('href')==='/domains/${domainId}'&&document.querySelector('.representation-context-menu a[href^=\"/domains/\"]')?.target==='_blank'`),'assigned physical domain cannot be opened');
+  invariant(await evaluate(`document.querySelector('.representation-context-menu a[href^=\"/domains/\"]')?.getAttribute('href')==='/domains/${domainId}'&&!document.querySelector('.representation-context-menu a[href^=\"/domains/\"]')?.target`),'assigned physical domain cannot be opened');
   await evaluate("document.querySelector('.logical-node>header').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:250,clientY:200}))");
   invariant(await evaluate(`document.querySelector('.canvas-context-menu a')?.getAttribute('href')==='/domains/${domainId}'`),'assigned logical domain cannot be opened');
   await capturePageSegmentScreenshot('.mapping-shell','model-domain-assigned-1440x900.png');
@@ -2607,7 +2619,7 @@ async function domainNetworkFlow() {
     await waitFor("document.querySelectorAll('.object-browser-backdrop .object-result').length>0",'domain search results missing');
     await evaluate(`(() => {const input=document.querySelector('.object-browser-backdrop input');input.value=${JSON.stringify(target.preferredLabel)};input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
     const newTargets=new Set((await cdp.call('Target.getTargets')).targetInfos.map(target=>target.targetId));
-    await clickText('.object-browser-backdrop .object-result',target.preferredLabel);
+    await controlClick('.object-browser-backdrop .object-result',target.preferredLabel);
     let opened;const until=Date.now()+8000;
     while(!opened&&Date.now()<until){opened=(await cdp.call('Target.getTargets')).targetInfos.find(tab=>!newTargets.has(tab.targetId)&&new URL(tab.url||'about:blank').pathname===`/domains/${target.id}`);if(!opened)await sleep(100);}
     invariant(opened,'general search did not open its domain result in a new tab');await cdp.call('Target.closeTarget',{targetId:opened.targetId});
@@ -3521,7 +3533,7 @@ async function lineageAccessFlow() {
   await captureScreenshot('lineage-owner-edge-menu.png');
   const href=await evaluate("document.querySelector('.lineage-edge-menu a').href");
   const existing=new Set((await cdp.call('Target.getTargets')).targetInfos.map(item=>item.targetId));
-  await evaluate("document.querySelector('.lineage-edge-menu a').click()");
+  await controlClick('.lineage-edge-menu a');
   let popup;const until=Date.now()+10000;
   while(!popup&&Date.now()<until){popup=(await cdp.call('Target.getTargets')).targetInfos.find(item=>item.type==='page'&&!existing.has(item.targetId)&&item.url===href);if(!popup)await sleep(100);}
   invariant(popup,'Access logs did not open a native new tab');
@@ -3658,7 +3670,7 @@ async function domainCanvasApprovalFlow() {
     invariant(menu[0].text==='Diese Domäne öffnen'&&menu.at(-3).text==='Darstellung dieser Domäne entfernen','Domain actions must start with open and end with removing its drawing before the general model searches');
     invariant(await evaluate("document.querySelectorAll('.domain-context-menu hr').length===3"),'Domain card action groups missing');
     const semantic=menu.filter(item=>/^(Term|Domäne) suchen und öffnen/.test(item.text));
-    invariant(semantic.length===2&&semantic.every(item=>item.target==='_blank'&&new URL(item.href,baseUrl).searchParams.get('q')),'Named semantic links must open in new tabs');
+    invariant(semantic.length===2&&semantic.every(item=>!item.target&&new URL(item.href,baseUrl).searchParams.get('q')),'Named semantic links must open in new tabs');
     await captureScreenshot('domain-card-grouped-menu.png');await pressKey('End','End',35);
     invariant(await evaluate("document.activeElement.textContent.includes('Physisches Modell')"),'Menu End navigation failed');await pressKey('Escape','Escape',27);
     await openBlankMenu();
@@ -3827,14 +3839,14 @@ async function physicalObjectActionsFlow() {
   invariant(bindingItems[0].text==='Datenquelle öffnen','Source navigation must be first');
   invariant(bindingItems[1].text==='Darstellung dieser Physischen Repräsentation/Deklaration löschen','Drawing removal must immediately follow source navigation');
   const semantic=bindingItems.filter(item=>/^(Term|Domäne) suchen/.test(item.text));
-  invariant(semantic.length===2&&semantic.every(item=>item.target==='_blank'&&new URL(item.href,baseUrl).searchParams.get('q')==='VIBDBU'),'Semantic searches must open named queries in new tabs');
-  invariant(await evaluate("document.querySelectorAll('.binding-context-menu hr').length===2&&document.querySelectorAll('.binding-context-menu img[src$=\"external-link.svg\"]').length>=2"),'Menu groups or external-link icons missing');
+  invariant(semantic.length===2&&semantic.every(item=>!item.target&&new URL(item.href,baseUrl).searchParams.get('q')==='VIBDBU'),'Semantic searches must open named queries in new tabs');
+  invariant(await evaluate("document.querySelectorAll('.binding-context-menu hr').length===2&&!document.querySelector('.binding-context-menu img[src$=\"external-link.svg\"]')"),'Menu groups or modifier-only navigation icons are incorrect');
   await captureScreenshot('physical-binding-actions-desktop.png');
   const sourceUrl=bindingItems[0].href;
   await pressKey('Escape','Escape',27);
   invariant(await evaluate(`document.activeElement===document.querySelector(${JSON.stringify(binding+' .representation-menu-trigger')})`),'Binding menu did not restore focus');
   const originalTargets=new Set((await cdp.call('Target.getTargets')).targetInfos.map(target=>target.targetId));
-  await openBinding();await evaluate("document.querySelector('.binding-context-menu a').click()");
+  await openBinding();await controlClick('.binding-context-menu a');
   let sourceTab;const popupDeadline=Date.now()+8000;
   while(!sourceTab&&Date.now()<popupDeadline){sourceTab=(await cdp.call('Target.getTargets')).targetInfos.find(target=>target.type==='page'&&!originalTargets.has(target.targetId)&&target.url===new URL(sourceUrl,baseUrl).href);if(!sourceTab)await sleep(100);}
   invariant(sourceTab,'Source navigation did not open the exact source/snapshot/object in a new tab');
@@ -3864,7 +3876,7 @@ async function physicalObjectActionsFlow() {
   async function openSearchHitInNewTab(selector,expectedPath){
     const targets=new Set((await cdp.call('Target.getTargets')).targetInfos.map(target=>target.targetId));
     const href=await evaluate(`document.querySelector(${JSON.stringify(selector)}).href`);
-    await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
+    await controlClick(selector);
     let resultTab;const until=Date.now()+8000;
     while(!resultTab&&Date.now()<until){resultTab=(await cdp.call('Target.getTargets')).targetInfos.find(target=>target.type==='page'&&!targets.has(target.targetId)&&target.url===href);if(!resultTab)await sleep(100);}
     invariant(resultTab&&new URL(resultTab.url).pathname===expectedPath,'Model search did not open the selected target in a new tab');
@@ -4369,6 +4381,212 @@ async function organizationDomainLayoutFlow() {
   }
 }
 
+async function contextMenuNavigationFlow() {
+  const actor='fausto.marzo';
+  const control=async(held)=>{await cdp.call('Input.dispatchKeyEvent',{type:held?'rawKeyDown':'keyUp',key:'Control',code:'ControlLeft',windowsVirtualKeyCode:17,modifiers:held?2:0},sessionId);await settleFrames();};
+  const openTab=async(selector)=>{
+    const before=new Set((await cdp.call('Target.getTargets')).targetInfos.map(item=>item.targetId));
+    const expected=await evaluate(`document.querySelector(${JSON.stringify(selector)}).href`);
+    await evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center',behavior:'instant'})`);await settleFrames();
+    const point=await evaluate(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+r.height/2};})()`);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...point,modifiers:2},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',buttons:1,modifiers:2,clickCount:1},sessionId);
+    await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',buttons:0,modifiers:2,clickCount:1},sessionId);
+    let target;
+    for(let attempt=0;attempt<40;attempt++){
+      target=(await cdp.call('Target.getTargets')).targetInfos.find(item=>!before.has(item.targetId)&&item.type==='page'&&item.url===expected);
+      if(target)break;await sleep(100);
+    }
+    invariant(target,'Control-click did not open the exact native URL in a new tab: '+expected);
+    await cdp.call('Target.closeTarget',{targetId:target.targetId});
+    await control(false);
+  };
+  await navigate('/?organization=efd',actor,1440,1000);
+  await waitFor('document.querySelector(".org-office[data-organization-id=efd-estv]")!==null','ESTV card missing');
+  const menu=async()=>{await evaluate('document.querySelector(".org-office[data-organization-id=efd-estv]").scrollIntoView({block:"center",behavior:"instant"})');await settleFrames();await evaluate('(()=>{const node=document.querySelector(".org-office[data-organization-id=efd-estv]"),r=node.getBoundingClientRect();node.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true,clientX:r.left+20,clientY:r.top+20}));})()');await waitFor('document.querySelector(".org-context-menu")!==null','Organization menu missing');};
+  await menu();
+  invariant(await evaluate('getComputedStyle(document.querySelector(".org-context-menu a"),"::after").visibility==="hidden"'),'New-tab icon is visible without Control');
+  const menuLayout=await evaluate('[...document.querySelectorAll(".org-context-menu a")].map(link=>{const r=link.getBoundingClientRect(),s=link.querySelector("span").getBoundingClientRect();return[r.width,r.height,s.width,s.height]})');
+  await captureScreenshot('context-menu-normal.png');
+  await control(true);
+  invariant(await evaluate('getComputedStyle(document.querySelector(".org-context-menu a"),"::after").visibility==="visible"'),'Control did not reveal navigation icon');
+  invariant(await evaluate('JSON.stringify([...document.querySelectorAll(".org-context-menu a")].map(link=>{const r=link.getBoundingClientRect(),s=link.querySelector("span").getBoundingClientRect();return[r.width,r.height,s.width,s.height]}))')===JSON.stringify(menuLayout),'Control changed menu text wrapping or row dimensions');
+  invariant(await evaluate('[...document.querySelectorAll(".org-context-menu button")].every(button=>getComputedStyle(button,"::after").content==="none")'),'Local or disabled commands advertise a new tab');
+  await captureScreenshot('context-menu-control.png');
+  const targetsBefore=(await cdp.call('Target.getTargets')).targetInfos.length;
+  const previous=await evaluate('document.querySelector("[data-hide-unrelated-switch]").getAttribute("aria-checked")');
+  await evaluate('document.querySelector("[data-hide-unrelated-option]").dispatchEvent(new MouseEvent("click",{bubbles:true,cancelable:true,ctrlKey:true}))');
+  invariant(await evaluate('document.querySelector("[data-hide-unrelated-switch]").getAttribute("aria-checked")')!==previous,'Control changed the meaning of the local visibility toggle');
+  invariant((await cdp.call('Target.getTargets')).targetInfos.length===targetsBefore,'Local visibility toggle opened a tab');
+  await control(false);await menu();await control(true);await openTab('.org-context-menu a[data-organization-product-search]');
+  invariant(await evaluate('location.pathname==="/"&&document.querySelector(".org-focus-title").textContent.trim()==="EFD"'),'Control-click replaced the current canvas');
+  await menu();await evaluate('window.__contextNavigationMarker=true;document.querySelector(".org-context-menu a").click()');
+  await waitFor('document.querySelector(".org-focus-title")?.textContent.trim()==="ESTV"','Normal drill-down did not stay in the current canvas');
+  invariant(await evaluate('window.__contextNavigationMarker===true'),'Normal drill-down reloaded the page');
+  await navigate('/products?relationship=all',actor,1440,1000);
+  await waitFor('document.querySelector(".product-context-trigger")!==null','Product context trigger missing');
+  await evaluate('document.querySelector(".product-context-trigger").click()');await waitFor('document.querySelector(".product-context-popover a")!==null','Product context menu missing');
+  await control(true);await openTab('.product-context-popover a');
+  invariant(await evaluate('location.pathname==="/products"'),'Product Control-click replaced the catalog');
+  await evaluate('if(!document.querySelector(".product-context-popover"))document.querySelector(".product-context-trigger").click()');await waitFor('document.querySelector(".product-context-popover a")!==null','Product menu did not reopen');
+  const destination=await evaluate('document.querySelector(".product-context-popover a").getAttribute("href")');
+  await evaluate('window.__contextNavigationMarker=true;document.querySelector(".product-context-popover a").click()');
+  await waitFor(`location.pathname===${JSON.stringify(destination)}`,'Normal product menu click did not navigate in the current tab');
+  invariant(await evaluate('window.__contextNavigationMarker===true'),'Normal router link performed a document reload');
+  invariant(cdp.runtimeExceptions.length===0,JSON.stringify(cdp.runtimeExceptions));
+  console.log('PASS context menus: Control-only icons, native exact-URL new tabs, current-tab routing, unchanged local toggle and no document reload');
+}
+
+async function requesterDecisionFlow() {
+  const actor='fausto.marzo',owner='kassandra.valdata',stamp=Date.now();
+  let productId,published;
+  await navigate('/',actor,1440,1000);
+  const fixture=expectStatus(await api(owner,'/api/v1/poc/product-fixtures'),200,'read synthetic publication fixture').body.find(item=>item.id==='kassandra-bronze');
+  const payload=structuredClone(fixture.payload);
+  payload.publicationMode='automatic';payload.sourceProductId=`daca.notification-check.${stamp}`;
+  payload.businessMetadata.title=`Synthetische Antragsbenachrichtigung ${stamp}`;
+  payload.technicalMetadata.endpoint.path=`/synthetic-notification-check/${stamp}`;
+  try {
+    productId=expectStatus(await api(owner,'/api/v1/metadata-publications',{method:'POST',body:payload}),201,'publish only synthetic notification metadata').body.productId;
+    const today=new Date().toISOString().slice(0,10);
+    const request=expectStatus(await api(actor,`/api/v1/data-products/${productId}/access-requests`,{method:'POST',body:{consumerType:'person',machineId:null,purpose:'Synthetische Prüfung der persönlichen Benachrichtigung nach Freigabe.',legalBasis:'Amtshilfe',requestedProtocol:'http',requestedVariant:'modified',validFrom:today,validUntil:null,contactEmail:'fausto.marzo@example.invalid',notes:null,conditionsAccepted:true}}),201,'create isolated notification request').body;
+    await navigate(`/products/${productId}/usage?request=${request.id}`,actor,1440,1000);
+    await waitFor(`document.querySelector('[data-testid="request-decision"]')?.textContent.includes(${JSON.stringify(request.requestNumber)})`,'personal request context did not load');
+    await evaluate("document.querySelector('.daca-authority-notification').click()");
+    const approved=expectStatus(await api(owner,`/api/v1/access-requests/${request.id}/decision`,{method:'POST',body:{decision:'approve',grantedVariant:'modified'}}),200,'owner approves isolated request').body;
+    await waitFor(`(()=>{const links=[...document.querySelectorAll('details[open] .notification-item')];return links.some(link=>link.textContent.includes(${JSON.stringify(request.requestNumber)})&&link.textContent.includes('Freigabe steht noch aus'));})()`,'approval did not arrive in the requester bell without reload');
+    await waitFor("document.querySelector('[data-testid=request-decision]')?.textContent.includes('noch nicht technisch aktiviert')",'already-open request did not refresh after approval');
+    invariant(!await evaluate(`(()=>{const links=[...document.querySelectorAll('details[open] .notification-item')];return links.some(link=>link.textContent.includes(${JSON.stringify(request.requestNumber)})&&link.textContent.includes('Zugriff gewährt'));})()`),'approval was incorrectly advertised as an effective grant');
+    await captureScreenshot('requester-approval-pending.png');
+    published=expectStatus(await api(owner,`/api/v1/data-products/${productId}/policies/${approved.policy.id}/publish`,{method:'POST',etag:`"${approved.policy.revision}"`}),201,'publish isolated request policy through real enforcement projections').body;
+    await waitFor(`(()=>{const links=[...document.querySelectorAll('details[open] .notification-item')];return links.some(link=>link.textContent.includes(${JSON.stringify(request.requestNumber)})&&link.textContent.includes('Zugriff gewährt'));})()`,'confirmed grant did not arrive automatically in the open requester bell');
+    const messages=expectStatus(await api(actor,'/api/v1/tasks/mine'),200,'read requester decision messages').body.filter(item=>item.accessRequestId===request.id);
+    invariant(messages.length===1&&messages[0].taskType==='access_request_granted','grant did not replace the pending approval message exactly once');
+    invariant(!expectStatus(await api('ariane.keller','/api/v1/tasks/mine'),200,'read unrelated messages').body.some(item=>item.accessRequestId===request.id),'another person received the requester decision');
+    await evaluate(`document.querySelector('.notification-item[data-notification-id="task:${messages[0].id}"]').click()`);
+    await waitFor(`document.querySelector('[data-testid=request-decision]')?.textContent.includes(${JSON.stringify(request.requestNumber)})&&document.querySelector('[data-testid=request-decision]')?.textContent.includes('Zugriff gewährt (modifiziert)')`,'grant link did not show the exact request and final status');
+    await evaluate("document.querySelector('[data-testid=request-decision]').scrollIntoView({block:'center',behavior:'instant'})");await settleFrames();
+    await captureScreenshot('requester-granted-desktop.png');
+    await setViewport(390,844);await evaluate("document.querySelector('[data-testid=request-decision]').scrollIntoView({block:'center',behavior:'instant'})");await settleFrames();
+    invariant(await evaluate("(()=>{const card=document.querySelector('[data-testid=request-decision]'),r=card.getBoundingClientRect(),heading=card.querySelector('h2').getBoundingClientRect(),button=card.querySelector('button').getBoundingClientRect();return document.documentElement.scrollWidth<=innerWidth+1&&heading.width>r.width*.6&&button.width>=140&&button.right<=r.right;})()"),'personal decision context is clipped or cramped on mobile');
+    await captureScreenshot('requester-granted-mobile.png');
+    await clickText('[data-testid=request-decision] button','Zur Kenntnis nehmen');
+    await waitFor(`!document.querySelector('.notification-item[data-notification-id="task:${messages[0].id}"]')`,'acknowledged requester message did not leave the bell');
+    await navigate(`/products/${productId}/usage?request=${request.id}`,actor,1440,1000);
+    await waitFor("document.querySelector('[data-testid=request-decision]')?.textContent.includes('Zugriff gewährt (modifiziert)')",'grant status was lost after reload');
+    invariant(!expectStatus(await api(actor,'/api/v1/tasks/mine'),200,'verify durable acknowledgement').body.some(item=>item.id===messages[0].id),'acknowledged message was recreated');
+    invariant(cdp.runtimeExceptions.length===0,`Requester decision errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+    console.log('PASS requester decision: live approval and confirmed grant, real OPA/PostgreSQL publication, private bell, exact request context, mobile and durable acknowledgement');
+  } finally {
+    if(productId){
+      if(published){
+        const policyPage=expectStatus(await api(owner,`/api/v1/data-products/${productId}/policies`),200,'read synthetic policies for cleanup').body;
+        const policies=Array.isArray(policyPage)?policyPage:policyPage.items;
+        const latest=policies.reduce((left,right)=>left.revision>right.revision?left:right);
+        expectStatus(await api(owner,`/api/v1/data-products/${productId}/policies/${published.id}/revoke`,{method:'POST',etag:`"${latest.revision}"`}),201,'revoke only the synthetic test policy');
+      }
+      const product=expectStatus(await api(owner,`/api/v1/data-products/${productId}`),200,'read synthetic product for retirement');
+      expectStatus(await api(owner,`/api/v1/data-products/${productId}`,{method:'PATCH',etag:`"${product.body.revision}"`,body:{lifecycle:'retired'}}),200,'retire only synthetic notification product');
+      const messages=expectStatus(await api(actor,'/api/v1/tasks/mine'),200,'read synthetic message cleanup').body.filter(task=>task.dataProductId===productId&&task.taskKind==='information');
+      for(const message of messages)expectStatus(await api(actor,`/api/v1/tasks/${message.id}/acknowledge`,{method:'POST'}),200,'close only synthetic decision message');
+    }
+  }
+}
+
+async function productAccessRequestFlow(openEnded=false,productId='11111111-1111-4111-8111-111111111111') {
+  const actor='fausto.marzo';
+  let owner;
+  const purpose=`Synthetische Produktseiten-Anfrage zur Plausibilisierung aggregierter Kennzahlen ${Date.now()}`;
+  let request,followUpRequest;
+  try {
+    await navigate(`/products/${productId}/overview`,actor,1440,1000);
+    owner=expectStatus(await api(actor,`/api/v1/data-products/${productId}`),200,'read assigned Data Owner').body.ownerUserId;
+    await waitFor("document.querySelector('.product-overview-request-access')!==null",'consumer request action missing from product overview');
+    invariant(await evaluate(`(()=>{const link=document.querySelector('.product-overview-request-access'),r=link.getBoundingClientRect(),badge=document.querySelector('.product-overview-heading daca-status-badge').getBoundingClientRect();return link.getAttribute('href')==='/products/${productId}/access-request'&&r.height>=44&&r.bottom<=badge.top;})()`),'request action must appear above the status badge with a touch-sized target');
+    await captureScreenshot('product-request-desktop.png');
+    await setViewport(390,844);await settleFrames();
+    invariant(await evaluate("(()=>{const r=document.querySelector('.product-overview-request-access').getBoundingClientRect();return document.documentElement.scrollWidth<=innerWidth+1&&r.width>0&&r.height>=44&&r.left>=0&&r.right<=innerWidth;})()"),'request action is clipped on mobile');
+    await captureScreenshot('product-request-mobile.png');
+    await evaluate("document.querySelector('.product-overview-request-access').click()");
+    await waitFor("document.querySelector('.access-request-form')!==null",'overview button did not open the existing request form');
+    await setControls({'[formcontrolname=purpose]':purpose,'[formcontrolname=legalBasis]':'Amtshilfe zwischen Behörden','[formcontrolname=contactEmail]':'fausto.marzo@example.invalid'});
+    if(openEnded){
+      await evaluate("document.querySelector('[formcontrolname=openEnded]').click()");
+      invariant(await evaluate("document.querySelector('[formcontrolname=validUntil]').disabled"),'indefinite request still requires an end date');
+      await evaluate("document.querySelector('[formcontrolname=openEnded]').scrollIntoView({block:'center',behavior:'instant'})");await settleFrames();
+      await captureScreenshot('product-request-unbounded-form.png');
+    }
+    await evaluate("document.querySelector('.access-request-consent input').click()");
+    await clickText('.access-request-form button','Zugriffsanfrage einreichen');
+    await waitFor("document.querySelector('.access-request-confirmation')?.textContent.includes('Ihre Zugriffsanfrage ist eingegangen')",'submitted request receipt missing');
+    request=expectStatus(await api(actor,`/api/v1/data-products/${productId}/access-requests/mine`),200,'read submitted request').body.find(item=>item.purpose===purpose);
+    invariant(request?.status==='submitted'&&request.requesterId===actor,'request was not persisted for the authenticated requester');
+    const contact=expectStatus(await api(actor,'/api/v1/demo-users'),200,'read current owner contact').body.find(person=>person.id===owner);
+    invariant(contact,'assigned Data Owner is missing from the person directory');
+    await waitFor(`(()=>{const card=document.querySelector('.access-request-owner-contact'),photo=card?.querySelector('img'),link=card?.querySelector('a');return card?.textContent.includes(${JSON.stringify(contact.displayName)})&&photo?.complete&&photo.naturalWidth>0&&photo.getAttribute('src')===${JSON.stringify(contact.avatarUrl)}&&link?.getAttribute('href')===${JSON.stringify('https://teams.microsoft.com/l/chat/0/0?users='+encodeURIComponent(contact.email))};})()`,'receipt did not show the current owner portrait and Teams contact');
+    invariant(await evaluate(`document.querySelector('.access-request-owner-contact').textContent.includes(${JSON.stringify(contact.organization)})`),'receipt is missing the current owner organization');
+    await setViewport(1440,1000);await evaluate("document.querySelector('.access-request-owner-contact').scrollIntoView({block:'center',behavior:'instant'})");await settleFrames();
+    await captureScreenshot('product-request-receipt-desktop.png');
+    await setViewport(390,844);await evaluate("document.querySelector('.access-request-owner-contact').scrollIntoView({block:'center',behavior:'instant'})");await settleFrames();
+    invariant(await evaluate("(()=>{const card=document.querySelector('.access-request-owner-contact'),r=card.getBoundingClientRect(),link=card.querySelector('a').getBoundingClientRect();return document.documentElement.scrollWidth<=innerWidth+1&&r.left>=0&&r.right<=innerWidth&&link.height>=44&&link.right<=innerWidth;})()"),'Data Owner contact or Teams target is clipped on mobile');
+    await captureScreenshot('product-request-receipt-mobile.png');
+    if(openEnded)invariant(request.validUntil===null,'indefinite request did not persist an explicit null end date');
+    const tasks=expectStatus(await api(owner,'/api/v1/tasks/mine'),200,'read owner notifications').body;
+    invariant(tasks.some(task=>task.taskType==='access_request_review'&&task.accessRequestId===request.id),'request did not notify the product Data Owner');
+    invariant(!expectStatus(await api('ariane.keller','/api/v1/tasks/mine'),200,'read unrelated notifications').body.some(task=>task.accessRequestId===request.id),'request notification went to an unrelated owner');
+    await navigate(`/products/${productId}/overview`,owner,1440,1000);
+    await waitFor("document.querySelector('.daca-authority-notification')!==null",'owner notification bell missing');
+    invariant(await evaluate("document.querySelector('.product-overview-request-access')===null"),'owner was offered a request for their own product');
+    await evaluate("document.querySelector('.daca-authority-notification').click()");
+    await waitFor(`document.querySelector('details[open] .notification-item[data-notification-id="request:${request.id}"]')!==null`,'request did not appear in notification flyout');
+    invariant(await evaluate(`document.querySelectorAll('.notification-item[data-notification-id="request:${request.id}"]').length===1`),'request was counted twice in notification list');
+    followUpRequest=expectStatus(await api(actor,`/api/v1/data-products/${productId}/access-requests`,{method:'POST',body:{consumerType:'person',machineId:null,purpose:purpose+' · Hintergrundaktualisierung',legalBasis:'Amtshilfe zwischen Behörden',requestedProtocol:'http',requestedVariant:'modified',validFrom:request.validFrom,validUntil:request.validUntil,contactEmail:'fausto.marzo@example.invalid',notes:null,conditionsAccepted:true}}),201,'submit follow-up while owner keeps notification panel open').body;
+    await waitFor(`document.querySelector('details[open] .notification-item[data-notification-id="request:${followUpRequest.id}"]')!==null`,'new request did not appear automatically in the open owner notification panel');
+    invariant(await evaluate(`document.querySelectorAll('.notification-item[data-notification-id="request:${followUpRequest.id}"]').length===1`),'follow-up request appeared twice');
+    await captureScreenshot('product-request-notification.png');
+    await setViewport(390,844);await settleFrames();
+    await captureScreenshot('product-request-notification-mobile.png');
+    const panelBounds=await evaluate("(()=>{const r=document.querySelector('.notification-panel').getBoundingClientRect();return{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:innerWidth,height:innerHeight};})()");
+    invariant(panelBounds.left>=0&&panelBounds.right<=panelBounds.width&&panelBounds.top>=0&&panelBounds.bottom<=panelBounds.height,'notification panel is clipped on mobile: '+JSON.stringify(panelBounds));
+    invariant(await evaluate("['.daca-authority-notification','.daca-header-language','.daca-header-theme','.daca-header-documentation','.daca-header-settings'].every(selector=>{const r=document.querySelector(selector).getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=document.documentElement.clientWidth;})"),'mobile header controls are clipped beside the user name');
+    await setViewport(1440,1000);await settleFrames();
+    await evaluate(`document.querySelector('.notification-item[data-notification-id="request:${request.id}"]').click()`);
+    await waitFor(`document.querySelector('a[data-testid="access-request-to-setting"][href*="${request.id}"]')!==null`,'submitted request missing from owner tasks');
+    await captureScreenshot('product-request-owner-task.png');
+    await evaluate(`document.querySelector('a[data-testid="access-request-to-setting"][href*="${request.id}"]').click()`);
+    await waitFor(`document.querySelector('[data-testid="linked-access-request"]')?.textContent.includes(${JSON.stringify(request.requestNumber)})`,'owner could not open this request for review');
+    await waitFor(`document.querySelector('.exposure-directory-results [aria-selected="true"]')?.textContent.includes('${actor}')`,'requester identity was not carried into review');
+    if(openEnded){
+      invariant(await evaluate("document.querySelector('.exposure-rule-section .access-request-open-ended input').checked"),'owner review lost the indefinite end date');
+      invariant(await evaluate("!document.body.textContent.includes('9999-12-31')"),'owner review exposed an internal end-date ceiling');
+      await evaluate("document.querySelector('.exposure-rule-section .access-request-open-ended').scrollIntoView({block:'center',behavior:'instant'})");await settleFrames();
+      await captureScreenshot('product-request-unbounded-review.png');
+    }
+    await navigate('/tasks',owner,1440,1000);
+    await waitFor(`document.querySelector('a[data-testid="access-request-to-setting"][href*="${request.id}"]')!==null`,'reviewed request missing from owner inbox');
+    await evaluate(`(()=>{const card=document.querySelector('a[data-testid="access-request-to-setting"][href*="${request.id}"]').closest('article');[...card.querySelectorAll('button')].find(button=>button.textContent.trim()==='Ablehnen').click();})()`);
+    await waitFor(`(async()=>{const response=await fetch('/api/v1/data-products/${productId}/access-requests/mine',{headers:{'X-DaCa-User':'${actor}'}});return response.ok&&(await response.json()).some(item=>item.id==='${request.id}'&&item.status==='rejected');})()`,'owner decision was not persisted');
+    await navigate(`/products/${productId}/access-request`,actor,1440,1000);
+    await waitFor(`document.querySelector('.access-request-history')?.textContent.includes(${JSON.stringify(request.requestNumber)})&&document.querySelector('.access-request-history')?.textContent.includes('Zugriff nicht gewährt')`,'requester could not see owner decision after reload');
+    const decisions=expectStatus(await api(actor,'/api/v1/tasks/mine'),200,'read rejection message').body.filter(task=>task.accessRequestId===request.id&&task.taskType==='access_request_rejected');
+    invariant(decisions.length===1,'requester did not receive one rejection message');
+    await evaluate("document.querySelector('.daca-authority-notification').click()");
+    await waitFor(`document.querySelector('.notification-item[data-notification-id="task:${decisions[0].id}"]')!==null`,'rejection was not visible in the requester bell');
+    await evaluate(`document.querySelector('.notification-item[data-notification-id="task:${decisions[0].id}"]').click()`);
+    await waitFor(`document.querySelector('[data-testid=request-decision]')?.textContent.includes(${JSON.stringify(request.requestNumber)})&&document.querySelector('[data-testid=request-decision]')?.textContent.includes('Nicht gewährt')`,'rejection message did not open the personal request');
+    invariant(cdp.runtimeExceptions.length===0,`Product request errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
+    console.log('PASS product-access-request: desktop/mobile action and notification panel, existing form, persisted submission, owner-only messages/bell/inbox, live arrival without reload, deduplication, trusted review identity, rejection and requester history; no policy publication');
+  } finally {
+    // Close only this synthetic request; preserve its append-only workflow evidence.
+    for(const created of [request,followUpRequest])if(created){
+      const current=expectStatus(await api(actor,`/api/v1/data-products/${productId}/access-requests/mine`),200,'read request cleanup').body.find(item=>item.id===created.id);
+      if(current&&['submitted','identity_review','legal_review','conditions_review'].includes(current.status))expectStatus(await api(owner,`/api/v1/access-requests/${created.id}/decision`,{method:'POST',body:{decision:'reject',comment:'Synthetic product overview browser check complete.'}}),200,'close only test request');
+      const messages=expectStatus(await api(actor,'/api/v1/tasks/mine'),200,'read test decision cleanup').body.filter(task=>task.accessRequestId===created.id&&task.taskKind==='information');
+      for(const message of messages)expectStatus(await api(actor,`/api/v1/tasks/${message.id}/acknowledge`,{method:'POST'}),200,'acknowledge only test decision message');
+    }
+  }
+}
+
 async function organizationLayoutFlow() {
   const actor='kassandra.valdata',path='/api/v1/organization-network/view';
   await navigate('/',actor,1440,1100);
@@ -4605,7 +4823,7 @@ async function organizationExplorerFlow() {
   await waitFor("!document.querySelector('.org-domains')&&!document.querySelector('.org-domain-thread')",'domain layer and assignment lines did not switch off');
   await evaluate("(()=>{const node=[...document.querySelectorAll('.org-office')].find(node=>node.textContent.includes('ESTV'));node.focus();node.dispatchEvent(new KeyboardEvent('keydown',{key:'F10',code:'F10',shiftKey:true,bubbles:true,cancelable:true}));})()");
   await waitFor("document.querySelector('.org-context-menu')",'keyboard context menu missing');
-  invariant(await evaluate("document.querySelectorAll('.org-context-menu a[target=\"_blank\"][rel=\"noopener\"]').length===2"),'context menu lacks native new-tab links');
+  invariant(await evaluate("document.querySelectorAll('.org-context-menu a[href]').length>=2&&!document.querySelector('.org-context-menu a[target=\"_blank\"]')"),'context menu lacks native new-tab links');
   await waitFor("[...document.querySelectorAll('.org-context-menu daca-search-icon')].every(icon=>performance.getEntriesByType('resource').some(resource=>resource.name.endsWith('/assets/catalog-search/'+icon.getAttribute('name')+'.svg')))",'menu icons did not load');
   await settleFrames();
 
@@ -4714,10 +4932,17 @@ try {
   await cdp.call('Network.setCacheDisabled', { cacheDisabled: true }, sessionId);
   await cdp.call('Network.setBypassServiceWorker', { bypass: true }, sessionId);
 
+  if(args.get('--flow')==='context-menu-navigation'){await contextMenuNavigationFlow();} else
+  if(args.get('--flow')==='requester-decision'){await requesterDecisionFlow();} else
+  if(args.get('--flow')==='product-access-request'){await productAccessRequestFlow(args.get('--request-end')==='indefinite',args.get('--request-product'));} else
   if(args.get('--flow')==='organization-heading-space'){await organizationHeadingSpaceFlow();} else if(args.get('--flow')==='organization-highway'){await organizationHighwayFlow();} else if(args.get('--flow')==='organization-view-options'){await organizationViewOptionsFlow();} else if(args.get('--flow')==='canvas-card-styles'){await canvasCardStylesFlow();} else if(args.get('--flow')==='canvas-selection'){await canvasSelectionFlow();} else if(args.get('--flow')==='protected-buildings'){await protectedBuildingsFlow();} else if(args.get('--flow')==='domain-product-layout'){await domainProductLayoutFlow();} else if(args.get('--flow')==='organization-flow'){await organizationFlowFlow();} else if(args.get('--flow')==='canvas-controls'){await canvasControlsFlow();} else if(args.get('--flow')==='recent-work'){await recentWorkFlow();} else if(args.get('--flow')==='organization-object-search'){await organizationObjectSearchFlow();} else if(args.get('--flow')==='organization-localization'){await organizationLocalizationFlow();} else if(args.get('--flow')==='organization-domain-layout'){await organizationDomainLayoutFlow();} else if(args.get('--flow')==='organization-layout'){await organizationLayoutFlow();} else if(args.get('--flow')==='semantic-performance'){await semanticPerformanceFlow();} else if(args.get('--flow')==='domain-radial-layout'){await domainRadialLayoutFlow();} else if(args.get('--flow')==='organization-explorer'){await organizationExplorerFlow();} else if(args.get('--flow')==='domain-exploration'){await domainExplorationFlow();} else if(args.get('--flow')==='domain-loading-indicators'){await domainLoadingIndicatorsFlow();} else if(args.get('--flow')==='physical-domain-removal'){await physicalDomainRemovalFlow();} else if(args.get('--flow')==='lineage-access'){await lineageAccessFlow();} else if(args.get('--flow')==='domain-canvas-mobile-layout'){await domainCanvasMobileLayoutFlow();} else if(args.get('--flow')==='domain-canvas-approval'){await domainCanvasApprovalFlow();} else if(args.get('--flow')==='source-info-notices'){await sourceInfoNoticesFlow();} else if(args.get('--flow')==='mapping-status-tooltips'){await mappingStatusTooltipsFlow();} else if(args.get('--flow')==='personal-search-views'){await personalSearchViewsFlow();} else if(args.get('--flow')==='lineage-explorer'){await lineageExplorerFlow();} else if(args.get('--flow')==='model-department-default'){await modelDepartmentDefaultFlow();} else if(args.get('--flow')==='physical-derivation'){await physicalDerivationEntryFlow();} else if(args.get('--flow')==='physical-object-actions'){await physicalObjectActionsFlow();} else if(args.get('--flow')==='mapping-release-tail'){await navigate('/models','christian.man');const physical=await physicalFirstFlow();await existingToExistingFlow(physical);await dataModelJourneyTen();await sourceAccessReturnFlow();await fieldMoveFlow();console.log('PASS focused Mapping release tail');} else if(args.get('--flow')==='semantic-own-office'){await semanticOwnOfficeFlow();} else if(args.get('--flow')==='mapping-start'){await mappingStartFlow();} else if(args.get('--flow')==='expert-search'){await expertSearchFlow();} else if(args.get('--flow')==='mapping-live-refresh'){await mappingLiveRefreshFlow();} else if(args.get('--flow')==='domain-transfer'){await domainTransferFlow();} else if(args.get('--flow')==='domain-metadata'){await domainMetadataFlow();} else if(args.get('--flow')==='semantic-owner-search'){await semanticOwnerSearchFlow();} else if(args.get('--flow')==='domain-relation-types'){await domainRelationTypesFlow();} else if(args.get('--flow')==='organization-term-network'){await organizationTermNetworkFlow();} else if(args.get('--flow')==='domain-connection-gesture'){await domainConnectionGestureFlow();} else if(args.get('--flow')==='domain-card-actions'){await domainCardActionsFlow();} else if(args.get('--flow')==='governance-information'){await governanceInformationFlow();} else if(args.get('--flow')==='semantic-gestures'){await semanticGestureFlow();} else if(args.get('--flow')==='domain-network'){await domainNetworkFlow();} else if(args.get('--flow')==='field-move'){await fieldMoveFlow();} else if(args.get('--flow')==='hold-connections'){await holdConnectionFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});} else if(args.get('--flow')==='source-access-return'){await sourceAccessReturnFlow();} else if(args.get('--flow')==='csv-import'){await csvPhysicalModelsFlow();} else if(args.get('--flow')==='inventory-representation'){await inventoryRepresentationFlow();} else if(args.get('--flow')==='concept-network'){await conceptNetworkEditingFlow();} else if(args.get('--flow')==='line-editing'){
     invariant(args.get('--model-id')&&args.get('--snapshot-id'),'line-editing flow requires model-id and snapshot-id');
     await edgeEditingFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});
   } else {
+  await productAccessRequestFlow();
+  await productAccessRequestFlow(true);
+  await requesterDecisionFlow();
+  await contextMenuNavigationFlow();
   await adaImportJourneyFlow();
   await csvPhysicalModelsFlow();
   await inventoryRepresentationFlow();

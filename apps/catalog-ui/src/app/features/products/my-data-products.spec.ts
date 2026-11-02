@@ -125,6 +125,15 @@ describe('My data products filtering', () => {
     });
   });
 
+  it('keeps Teams contact tied to the current owner when metadata contains an old contact', () => {
+    const product = { ...FALLBACK_PRODUCTS[0], ownerUserId: 'new.owner', additionalMetadata: {
+      ...FALLBACK_PRODUCTS[0].additionalMetadata,
+      dataOwner: { name: 'Previous Owner', organization: 'ESTV', avatarUrl: '/assets/old.webp', teamsUrl: 'https://teams.microsoft.com/l/chat/0/0?users=old%40example.invalid' },
+    } };
+    const users = [{ id: 'new.owner', displayName: 'Current Owner', organization: 'BIT', email: 'current@example.invalid', phone: null, avatarUrl: '/assets/current.webp', roles: ['data_owner'] }];
+    expect(resolvedDataOwner(product, users)).toMatchObject({ name: 'Current Owner', organization: 'EFD BIT', avatarUrl: '/assets/current.webp', teamsUrl: 'https://teams.microsoft.com/l/chat/0/0?users=current%40example.invalid' });
+  });
+
   it('qualifies legacy federal organization labels without changing cantons', () => {
     expect(personOrganizationLabel('Eidgenössische Steuerverwaltung ESTV')).toBe('EFD ESTV');
     expect(personOrganizationLabel('Eidgenössische Finanzverwaltung EFV')).toBe('EFD EFV');

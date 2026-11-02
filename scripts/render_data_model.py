@@ -86,7 +86,9 @@ CATALOG_TABLES = {
     "physical_source_access_requests": "Reasoned source-restoration applications tied to an access-state revision, with current Data Owner decisions and linked workflow tasks; approval grants no new organization role.",
     "physical_tables": "Snapshot-bound PostgreSQL table/view, S3 Parquet object or CSV inventory table metadata; import_metadata retains CSV records without field names. row_count comes only from an actual Parquet footer and is distinct from object_count.",
     "access_requests": (
-        "Requests by people or machines for time-bounded access, including renewals linked "
+        "Requests by people or machines for bounded or explicitly open-ended initial access; "
+        "NULL valid_until means no requested end and maps to the existing date.max policy ceiling. "
+        "Renewals keep a finite end and are linked "
         "to immutable source-grant evidence."
     ),
     "administrative_organizations": "Ordered federal organization hierarchy covering the Federal Council, Chancellery, departments, offices and affiliated units.",
@@ -142,7 +144,7 @@ CATALOG_TABLES = {
     "source_access_grants": "Immutable person or group-snapshot grants for metadata-only source catalog entries.",
     "source_access_requests": "Auditable direct-owner requests for access to discoverable data sources.",
     "source_catalog_entries": "Credential-free metadata for discoverable PoC data sources and their synthetic object inventory.",
-    "workflow_tasks": "Owner and approver work items for quality, access governance, SLA review and request processing, plus recipient-private search-view messages linked through search_view_share_id.",
+    "workflow_tasks": "Owner and approver work items, recipient-private search-view messages, and acknowledgeable requester decision messages linked through access_request_id with stable IDs per request/message type.",
 }
 
 CONTROL_PLANE_TABLES = {

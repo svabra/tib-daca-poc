@@ -208,7 +208,8 @@ class AccessRequest(Base):
             "'granted_modified', 'granted_original', 'rejected', 'withdrawn')",
             name="ck_access_request_status",
         ),
-        CheckConstraint("valid_until >= valid_from", name="ck_access_request_dates"),
+        CheckConstraint("valid_until IS NULL OR valid_until >= valid_from", name="ck_access_request_dates"),
+        CheckConstraint("request_kind != 'renewal' OR valid_until IS NOT NULL", name="ck_access_request_renewal_end"),
         CheckConstraint(
             "fulfillment_subject_type IS NULL OR fulfillment_subject_type IN ('person', 'machine', 'group')",
             name="ck_access_request_fulfillment_subject_type",
@@ -264,7 +265,7 @@ class AccessRequest(Base):
     requested_protocol: Mapped[str] = mapped_column(String(32), nullable=False)
     requested_variant: Mapped[str] = mapped_column(String(32), nullable=False)
     valid_from: Mapped[date] = mapped_column(Date, nullable=False)
-    valid_until: Mapped[date] = mapped_column(Date, nullable=False)
+    valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="submitted")
     fulfillment_subject_type: Mapped[str | None] = mapped_column(String(32))
@@ -287,6 +288,11 @@ class AccessRequest(Base):
     )
 
     data_product: Mapped[DataProduct] = relationship(back_populates="access_requests")
+
+    @property
+    def policy_valid_until(self) -> date:
+        """Use the existing policy/OPA/PostgreSQL ceiling for an open-ended request."""
+        return self.valid_until if self.valid_until is not None else date.max
 
 
 class PolicyRevision(Base):

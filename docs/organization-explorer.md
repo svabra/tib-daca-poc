@@ -1,5 +1,25 @@
 # Start-page organization explorer
 
+Context-menu destinations open in the current view by default; their new-tab icon appears
+only while Control is held. Organization drill-down, home and overview are native links:
+normal clicks retain in-canvas navigation, while Control-click opens their exact scoped URL.
+The separate permanently-new-tab entry is replaced by a normal current-view link for the
+focused node. Organization/domain searches are ordinary router links. Domain visibility and
+the hide-unrelated toggle remain local commands and never receive a new-tab affordance.
+
+BIT has a display-only Easter egg keyed by stable organization ID `efd-bit`: Control + hover
+reveals three to four fine yellow SVG bolts behind its card, protruding beyond the
+edges in a compact 8% perimeter. Four staggered channels alternate eight short branching
+shapes in a 0.48-second cycle; each bolt snaps off after about 0.2 seconds before its
+replacement appears. The mask's inset matches that smaller perimeter, and its rear layer keeps the card
+interior and text clear, including the bolt glow. Bolts use a 1.2-unit stroke and restrained
+0.5px/1.5px glows for a fine line. It works for office/satellite cards, the
+focused BIT heading and fullscreen. The decoration is pointer-transparent and hidden from
+assistive technology. It follows the card without intercepting selection, dragging, tooltips
+or shortcuts, and never modifies saved/draft positions. Key release and window blur/visibility
+loss clear the modifier state; pointer movement resynchronizes it and hover exit hides the bolts.
+Reduced-motion preferences show four static bolts instead of animated discharges.
+
 External organization cards (for example St. Gallen while exploring EFD) must stay outside the focused organization's rectangle. The rendered boundary, automatic optimizer, single-card pointer/touch and keyboard constraints, and group-movement acceptance share the same geometry. The full 120×84 reserved card footprint plus eight world units of floating clearance must fit outside at least one side. A single-card move is projected to the nearest feasible perimeter position; a group move that would cross the boundary is rejected as a whole to preserve relative spacing. The bottom strip cannot fit the reserved footprint and clearance, so overlapping bottom positions use another feasible side. These rules apply at every focused hierarchy level and in fullscreen. Previously saved overlapping satellite anchors are corrected only in the rendered view; loading, navigation and discard do not write a profile or dirty the draft. Explicit layout Save continues to use the existing revision checks and scope keys.
 
 Data-highway packet flights now start and finish beneath the opaque source and target cards, instead of stopping at or before their visible borders. A shared 36-unit overlap covers the packet head, halo and 28-unit trail before the animation loops; smaller organization cards use an inset rectangle near their center. Lineage retains its routed visible path, while the data landscape retains exact subcurves of its ribbon. Three-second flight duration, direction, packet counts, reciprocal lanes, title clearance and saved layouts are preserved.

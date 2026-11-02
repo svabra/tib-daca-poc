@@ -1,8 +1,10 @@
-import { ChangeDetectionStrategy, Component, HostListener, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, inject, input, output, signal } from '@angular/core';
+import { ContextMenuNavigationService } from './context-menu-navigation.service';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { DacaGlossaryTermComponent } from './glossary-term.component';
 import { DacaVersionOverlayComponent } from './version-overlay.component';
 import { DacaFeatureScope } from './feature-list';
+import { DacaNotificationMenuComponent, DacaNotification } from './notification-menu.component';
 
 export interface DacaNavigationItem {
   label: string;
@@ -22,7 +24,7 @@ export interface DacaUserOption {
 @Component({
   selector: 'daca-federal-shell',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, DacaGlossaryTermComponent, DacaVersionOverlayComponent],
+  imports: [RouterLink, RouterLinkActive, DacaGlossaryTermComponent, DacaVersionOverlayComponent, DacaNotificationMenuComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <a class="daca-skip-link" href="#main-content">{{ shellLabel('skip') }}</a>
@@ -49,17 +51,8 @@ export interface DacaUserOption {
             }
             @if (showHeaderLogout()) { <button class="daca-header-action" type="button" (click)="logout.emit()">{{ shellLabel('logout') }}</button> }
           }
-          @if (notificationCount() > 0) {
-            <a
-              class="daca-authority-notification"
-              [href]="notificationHref()"
-              [attr.aria-label]="notificationCount() + ' ' + shellLabel(notificationCount() === 1 ? 'notificationSingular' : 'notificationPlural')"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" />
-              </svg>
-              <span>{{ notificationCount() > 99 ? '99+' : notificationCount() }}</span>
-            </a>
+          @if (userName()) {
+            <daca-notification-menu [items]="notifications()" [loading]="notificationsLoading()" [error]="notificationsError()" [href]="notificationHref()" [locale]="locale()" [context]="userId()" />
           }
           <label class="daca-header-language"><span class="daca-sr-only">{{ shellLabel('language') }}</span><select [value]="locale()" (change)="languageChange.emit($any($event.target).value)"><option value="de">DE</option><option value="fr">FR</option><option value="it">IT</option><option value="rm" lang="rm">RM</option><option value="en">EN</option></select></label>
           <button class="daca-header-theme" type="button" (click)="themeToggle.emit()" [attr.aria-label]="shellLabel(theme() === 'dark' ? 'lightMode' : 'darkMode')">{{ theme() === 'dark' ? '☀' : '◐' }}<span class="daca-header-icon-tooltip" aria-hidden="true">{{ shellLabel(theme() === 'dark' ? 'lightMode' : 'darkMode') }}</span></button>
@@ -188,6 +181,7 @@ export interface DacaUserOption {
   `,
 })
 export class FederalShellComponent {
+  private readonly contextMenuNavigation = inject(ContextMenuNavigationService);
   shellLabel(key: string): string {
     const locale = this.locale();
     if (locale === 'rm') {
@@ -250,6 +244,9 @@ export class FederalShellComponent {
   readonly languageChange = output<string>();
   readonly themeToggle = output<void>();
   readonly notificationCount = input(0);
+  readonly notifications = input<readonly DacaNotification[]>([]);
+  readonly notificationsLoading = input(false);
+  readonly notificationsError = input(false);
   readonly notificationHref = input('/#main-content');
   readonly navigation = input.required<readonly DacaNavigationItem[]>();
   readonly menuOpen = signal(false);

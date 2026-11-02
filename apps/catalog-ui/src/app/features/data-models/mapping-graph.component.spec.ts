@@ -162,7 +162,7 @@ describe('MappingGraphComponent field context menu', () => {
     const fixture=TestBed.createComponent(MappingGraphComponent);fixture.detectChanges();const root=fixture.nativeElement as HTMLElement;
     root.querySelector('.logical-node>header')!.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}));fixture.detectChanges();
     const links=[...root.querySelectorAll<HTMLAnchorElement>('.canvas-context-menu a[href*="?q="]')];
-    expect(links).toHaveLength(2);expect(links.every(link=>link.target==='_blank'&&new URL(link.href).searchParams.get('q')===title&&link.querySelector('img'))).toBe(true);
+    expect(links).toHaveLength(2);expect(links.every(link=>!link.target&&new URL(link.href).searchParams.get('q')===title&&!link.querySelector('img'))).toBe(true);
     expect(root.querySelector('.canvas-context-menu')?.textContent).not.toContain('Datenquelle \u00f6ffnen');
   });
 
@@ -271,7 +271,7 @@ describe('MappingGraphComponent field context menu', () => {
     expect(root.querySelector<HTMLAnchorElement>('.canvas-context-menu a')?.getAttribute('href')).toBe('/domains/domain-personal');
     expect(root.querySelector('.canvas-context-menu')?.textContent).not.toContain('Domäne zuordnen');
     root.querySelector('.physical-representation')!.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}));fixture.detectChanges();
-    expect(root.querySelector<HTMLAnchorElement>('.representation-context-menu a[href^="/domains/"]')?.getAttribute('target')).toBe('_blank');
+    expect(root.querySelector<HTMLAnchorElement>('.representation-context-menu a[href^="/domains/"]')?.getAttribute('target')).toBeNull();
     expect(root.querySelector('.physical-representation .model-domain')?.textContent).toContain('Personal');
     expect(root.querySelector('.logical-node .model-domain')?.textContent).toContain('Personal');
   });

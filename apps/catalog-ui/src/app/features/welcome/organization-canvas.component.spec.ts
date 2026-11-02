@@ -232,7 +232,7 @@ describe('OrganizationCanvasComponent', () => {
     root.querySelector('[data-organization-id="estv"]')!.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}));fixture.detectChanges();
     const link=root.querySelector<HTMLAnchorElement>('a[data-organization-product-search]')!;
     expect(link.textContent).toContain('Alle Datenprodukte der Organisation anzeigen');
-    expect(link.getAttribute('href')).toBe('/search?organization=estv&kind=product');expect(link.target).toBe('_blank');
+    expect(link.getAttribute('href')).toBe('/search?organization=estv&kind=product');expect(link.target).toBe('');
     language.set('rm');fixture.detectChanges();
     // Language changes dismiss an open context menu; reopen for localized copy.
     root.querySelector('[data-organization-id="estv"]')!.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}));fixture.detectChanges();
@@ -598,11 +598,11 @@ describe('OrganizationCanvasComponent', () => {
     root.querySelector('.org-office')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 200 })); fixture.detectChanges();
     const menu = root.querySelector('[role="menu"]')!;
     expect(menu.classList.contains('daca-canvas-context-menu')).toBe(true);
-    expect(menu.querySelectorAll('[role="menuitem"]>daca-search-icon')).toHaveLength(10);
+    expect([...menu.querySelectorAll('[role="menuitem"]')].every(item=>item.querySelector('daca-search-icon'))).toBe(true);
     expect(menu.textContent).toContain('Zugeordnete Domänen');
-    expect(menu.querySelectorAll('a[target="_blank"][rel="noopener"]')).toHaveLength(2);
+    expect(menu.querySelectorAll('a[target="_blank"]')).toHaveLength(0);
     expect(menu.querySelector('a[href^="/search"]')?.getAttribute('href')).toContain('kind=product');
-    const dive=[...menu.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent?.includes('Hier eintauchen'))!;
+    const dive=[...menu.querySelectorAll<HTMLAnchorElement>('a')].find(button=>button.textContent?.includes('Hier eintauchen'))!;
     dive.click();fixture.detectChanges();
     expect(root.querySelector('.org-focus')?.textContent).toContain('ESTV');
     expect(root.querySelector('.org-office')?.textContent).toContain('Business Intelligence');
@@ -610,7 +610,7 @@ describe('OrganizationCanvasComponent', () => {
     root.querySelector('.org-focus')!.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:200,clientY:200}));fixture.detectChanges();
     expect(root.querySelector('[role="menu"]')).not.toBeNull();
     expect(root.querySelector('[role="menu"]')?.textContent).not.toContain('Hier eintauchen');
-    expect(root.querySelector('[role="menu"]')?.textContent).toContain('Ansicht in neuem Tab');
+    expect(root.querySelector('[role="menu"]')?.textContent).toContain('Ansicht öffnen');
     fixture.componentInstance.escape(); fixture.detectChanges(); expect(root.querySelector('[role="menu"]')).toBeNull();
   });
   it('clears the previous user graph during an identity change and reports failed reads', () => {

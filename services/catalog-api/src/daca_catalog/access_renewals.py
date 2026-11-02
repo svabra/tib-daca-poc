@@ -213,7 +213,8 @@ def matching_request_evidence(
         AccessRequest.fulfillment_subject_id == subject.id,
         AccessRequest.requested_protocol == protocol,
         AccessRequest.valid_from == grant.valid_from,
-        AccessRequest.valid_until == grant.valid_until,
+        (AccessRequest.valid_until.is_(None) | (AccessRequest.valid_until == grant.valid_until))
+        if grant.valid_until == date.max else AccessRequest.valid_until == grant.valid_until,
         AccessRequest.granted_variant == grant.data_variant,
         AccessRequest.decision_policy_revision_id == policy.id,
     )
@@ -596,7 +597,7 @@ def renewal_policy_definition(
     )
     if source_payload != context_payload:
         raise HTTPException(409, "The immutable source grant context no longer matches")
-    if renewal.valid_until <= source_grant.valid_until:
+    if renewal.valid_until is None or renewal.valid_until <= source_grant.valid_until:
         raise HTTPException(422, "A renewal must extend the current end date")
     if (
         renewal.valid_from != source_grant.valid_from

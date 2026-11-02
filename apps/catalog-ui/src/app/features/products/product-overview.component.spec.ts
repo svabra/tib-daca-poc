@@ -121,11 +121,25 @@ async function render(canEdit = true, summaryFails = false) {
   fixture.detectChanges();
   await fixture.whenStable();
   fixture.detectChanges();
-  return { fixture, component: fixture.componentInstance, catalog, serviceLevelApi, product };
+  return { fixture, component: fixture.componentInstance, catalog, serviceLevelApi, product, identity };
 }
 
 describe('ProductOverviewComponent SLA control person', () => {
   afterEach(() => TestBed.resetTestingModule());
+
+  it('links consumers directly from the heading to this product request and reacts to identity changes', async () => {
+    const {fixture,identity,product}=await render();
+    const root=fixture.nativeElement as HTMLElement;
+    product.update(value=>({...value,additionalMetadata:{...value.additionalMetadata,catalogUsage:{responsibleUserIds:['joel.ruod']}}}));
+    identity.userId.set('inactive.user');fixture.detectChanges();
+    const link=root.querySelector<HTMLAnchorElement>('.product-overview-heading-actions .product-overview-request-access');
+    expect(link?.textContent?.trim()).toBe('Zugriff anfragen');
+    expect(link?.getAttribute('href')).toBe(`/products/${PRODUCT_ID}/access-request`);
+    identity.userId.set('joel.ruod');fixture.detectChanges();
+    expect(root.querySelector('.product-overview-request-access')).toBeNull();
+    identity.userId.set('inactive.user');product.update(value=>({...value,id:'another-product'}));fixture.detectChanges();
+    expect(root.querySelector('.product-overview-request-access')).toBeNull();
+  });
 
   it('shows the safe controller identity, organization and role and resolves duplicate names by organization', async () => {
     const { fixture, component } = await render();

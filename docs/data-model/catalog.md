@@ -1,5 +1,31 @@
 # Catalog data model
 
+`workflow_tasks` now also stores requester decision information using task types
+`access_request_approved`, `access_request_granted`, and `access_request_rejected`.
+Existing `access_request_id`, `data_product_id`, `assignee_user_id`, `task_kind=information`,
+status and acknowledgement fields carry the evidence; no schema or JSON member is added.
+A deterministic UUID per request/message type and PostgreSQL conflict handling prevent duplicate
+delivery and preserve acknowledgement across reconciliation/restarts. Final messages complete
+superseded pending-activation messages. Actor-scoped reconciliation backfills old decisions,
+requiring current covered, published and fully deployed policy evidence for grant messages.
+No permission is inferred from the presence or acknowledgement of a message.
+
+Initial `access_requests.valid_until` is nullable after migration `0048_open_ended_access_requests`:
+SQL `NULL` is the authoritative statement that no end date was requested. Bounded dates must
+remain on/after `valid_from`; renewal requests retain a mandatory finite end date enforced by
+`ck_access_request_renewal_end`. Existing rows are preserved. Downgrade refuses while any
+unbounded request exists, rather than inventing a date or losing the request's intent.
+
+At the existing policy boundary, `AccessRequest.policy_valid_until` maps a missing requested
+end to `date.max` (`9999-12-31`), the already-supported inclusive no-expiry ceiling used by
+legacy policy grants, generated Rego and PostgreSQL entitlement projection. The request and
+its response retain `null`; no synthetic date is written back into the request. Fulfillment
+validation, deployment acknowledgements and request-to-grant evidence use the same mapping.
+An open-ended grant cannot satisfy a bounded request or a bounded grant an open-ended request.
+The UI labels this policy ceiling “Unbestimmtes Enddatum”; renewal eligibility stays limited
+to finite grants approaching expiry. Revocation, four-eyes review and matching projection
+revisions continue to apply. No role, grant scope, protocol or automatic permission is added.
+
 Automatic product-deputy eligibility resolves existing `federal_person_memberships` (valid primary memberships, with history taking precedence) or active federal `identity_directory_entries.organization_id` through active `administrative_organizations.parent_id` links to the nearest office. This keeps ESTV BI within ESTV without treating all EFD offices as equivalent. Non-federal legacy fixtures retain exact organization pairing; federal history never falls back to a profile label. Existing product deputy fields are reconciled by the seed; no schema, JSON shape, migration, access policy or additional role is introduced.
 
 Marker `poc-verteidigung-armasuisse-building-demand-v1` adds product `1bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb` / `urn:daca:ch:verteidigung:building-use-demand` as the reverse counterpart of the protected-building inventory. Existing product/domain-assignment/audit/provenance/marker tables and `catalogUsage` members are reused. Data Owner is `lawrence.hill`, deputy `hong.an.captain`, consumer `giuseppe.starwars`, domain Verteidigung. The marker is independent of the inventory marker, so the image startup seed also upgrades databases where the forward fixture already exists. Neither product, existing people/roles, retirement nor access policies are reset; no endpoints or access receipts are created. No new schema, JSON member or migration is added.
@@ -494,9 +520,9 @@ reads it from the actual footer. It never denotes the number of S3 objects (`obj
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
-- Alembic head: `0047_domain_network_views`
-- Schema fingerprint: `f7bf867ca9efe361`
-- Migration fingerprint: `720d0e7cac1524b6`
+- Alembic head: `0048_open_ended_access_requests`
+- Schema fingerprint: `ea262c712d6ccacc`
+- Migration fingerprint: `686ccf00c61f32ce`
 - Tables: `104`
 
 ## Domain status vocabulary
@@ -2024,7 +2050,7 @@ Relationships in this diagram are physical foreign keys inside this database onl
 
 ### `access_requests`
 
-Requests by people or machines for time-bounded access, including renewals linked to immutable source-grant evidence.
+Requests by people or machines for bounded or explicitly open-ended initial access; NULL valid_until means no requested end and maps to the existing date.max policy ceiling. Renewals keep a finite end and are linked to immutable source-grant evidence.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|
@@ -2042,7 +2068,7 @@ Requests by people or machines for time-bounded access, including renewals linke
 | `requested_protocol` | `VARCHAR(32)` | no | — | — |
 | `requested_variant` | `VARCHAR(32)` | no | — | — |
 | `valid_from` | `DATE` | no | — | — |
-| `valid_until` | `DATE` | no | — | — |
+| `valid_until` | `DATE` | yes | — | — |
 | `notes` | `TEXT` | yes | — | — |
 | `status` | `VARCHAR(32)` | no | — | `submitted` |
 | `fulfillment_subject_type` | `VARCHAR(32)` | yes | — | — |
@@ -2060,12 +2086,13 @@ Constraints and indexes:
 
 - Unique `unnamed`: `request_number`
 - Check `ck_access_request_consumer_type`: `consumer_type IN ('person', 'machine')`
-- Check `ck_access_request_dates`: `valid_until >= valid_from`
+- Check `ck_access_request_dates`: `valid_until IS NULL OR valid_until >= valid_from`
 - Check `ck_access_request_fulfillment_subject_type`: `fulfillment_subject_type IS NULL OR fulfillment_subject_type IN ('person', 'machine', 'group')`
 - Check `ck_access_request_granted_variant`: `granted_variant IS NULL OR granted_variant IN ('original', 'modified')`
 - Check `ck_access_request_kind`: `request_kind IN ('initial', 'renewal')`
 - Check `ck_access_request_protocol`: `requested_protocol IN ('http', 'postgresql', 'both')`
 - Check `ck_access_request_renewal_context`: `(request_kind = 'initial' AND renewal_of_request_id IS NULL AND renewal_context IS NULL) OR (request_kind = 'renewal' AND renewal_of_request_id IS NOT NULL AND renewal_context IS NOT NULL)`
+- Check `ck_access_request_renewal_end`: `request_kind != 'renewal' OR valid_until IS NOT NULL`
 - Check `ck_access_request_status`: `status IN ('submitted', 'identity_review', 'legal_review', 'conditions_review', 'approved_policy_pending', 'granted_modified', 'granted_original', 'rejected', 'withdrawn')`
 - Check `ck_access_request_variant`: `requested_variant IN ('original', 'modified', 'either')`
 - Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
@@ -4629,7 +4656,7 @@ Constraints and indexes:
 
 ### `workflow_tasks`
 
-Owner and approver work items for quality, access governance, SLA review and request processing, plus recipient-private search-view messages linked through search_view_share_id.
+Owner and approver work items, recipient-private search-view messages, and acknowledgeable requester decision messages linked through access_request_id with stable IDs per request/message type.
 
 | Column | Type | Null | Keys | Default |
 |---|---|:---:|---|---|

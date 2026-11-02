@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from .access_request_notifications import notify_access_request_status
 from .control_people import is_active_publication_approver
 from .models import (
     AccessRequest,
@@ -97,7 +98,7 @@ def bind_access_request_fulfillments(
                 or typed_grant.weekly_availability != context.weekly_availability
                 or typed_grant.metadata_channels != context.metadata_channels
                 or typed_grant.group_snapshot != context.group_snapshot
-                or typed_grant.valid_until != access_request.valid_until
+                or typed_grant.valid_until != access_request.policy_valid_until
                 or typed_grant.valid_until <= context.valid_until
             ):
                 raise HTTPException(
@@ -140,7 +141,7 @@ def bind_access_request_fulfillments(
             raise HTTPException(422, "The policy protocols must exactly match the access request")
         if (
             grant.get("validFrom") != access_request.valid_from.isoformat()
-            or grant.get("validUntil") != access_request.valid_until.isoformat()
+            or grant.get("validUntil") != access_request.policy_valid_until.isoformat()
         ):
             raise HTTPException(
                 422, "The policy validity period must exactly match the access request"
@@ -167,6 +168,7 @@ def bind_access_request_fulfillments(
         ):
             task.status = "in_progress"
             task.updated_at = utc_now()
+        notify_access_request_status(session, access_request, product)
         session.add(
             AuditEvent(
                 id=uuid.uuid4(),
@@ -712,6 +714,7 @@ def decide_submission(
                     request_task.status = "completed"
                     request_task.completed_at = now
                     request_task.updated_at = now
+                notify_access_request_status(session, renewal, product)
                 session.add(
                     AuditEvent(
                         id=uuid.uuid4(),

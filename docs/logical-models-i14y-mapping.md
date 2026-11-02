@@ -1,5 +1,11 @@
 # Logical models, I14Y concepts, physical models, and mappings
 
+Context-menu navigation and search results now use ordinary native links: normal clicks stay
+in the current tab and Control-click opens a new tab. The shared shell shows the new-tab
+indicator only while Control is held. Assignment, hiding, editing, derivation and object-picker
+commands stay local and show no new-tab icon. Explicit object selection still adds/selects
+within the current workspace. Source/model/domain/query IDs in navigation URLs are preserved.
+
 Release regressions distinguish Christiano Stadello's primary armasuisse membership from his explicit Immobilien data-steward assignment. Domain-review handover tests update the canonical owner and concrete responsibility rows together, retaining the current deputy and rejecting the former owner. No modeling scope or approval permission is widened by a display-name change.
 
 Shared canvas actions retain compact 32px desktop buttons and a 44px minimum target on viewports up to 700px as well as coarse-pointer devices. This keeps Mapping save/create actions and fullscreen exits usable in narrow desktop windows and mobile layouts.

@@ -588,7 +588,8 @@ def test_owner_cannot_expand_scope_and_four_eyes_rejection_releases_new_renewal(
         tasks = list(
             session.scalars(select(WorkflowTask).where(WorkflowTask.access_request_id == stored.id))
         )
-        assert tasks and all(item.status == "completed" for item in tasks)
+        assert tasks and all(item.status == "completed" for item in tasks if item.task_kind == "action")
+        assert [(item.task_type, item.status) for item in tasks if item.task_kind == "information" and item.status != "completed"] == [("access_request_rejected", "open")]
     assert effective_grant(client)["renewalEligibility"]["eligible"] is True
     assert submit_renewal(client, valid_until="2028-12-31")["status"] == "submitted"
 
@@ -796,6 +797,9 @@ def test_renewal_switches_active_policy_only_after_opa_and_postgres_converge(
         )
         assert postgres is not None and postgres.state == "failed"
 
+    requester_messages = client.get("/api/v1/tasks/mine", headers=CONSUMER).json()
+    assert [item["taskType"] for item in requester_messages if item["accessRequestId"] == renewal["id"]] == ["access_request_approved"]
+
     retried = governance_decision(client, failed_submission)
     monkeypatch.setattr("daca_catalog.governance.project_to_postgresql", deployed_projection)
     converged = acknowledge(client, policy["id"], policy["revision"], "deployed")
@@ -837,7 +841,8 @@ def test_renewal_switches_active_policy_only_after_opa_and_postgres_converge(
         tasks = list(
             session.scalars(select(WorkflowTask).where(WorkflowTask.access_request_id == stored.id))
         )
-        assert tasks and all(item.status == "completed" for item in tasks)
+        assert tasks and all(item.status == "completed" for item in tasks if item.task_kind == "action")
+        assert [(item.task_type, item.status) for item in tasks if item.task_kind == "information" and item.status != "completed"] == [("access_request_granted", "open")]
 
     before_reset_bundle = client.get("/api/v1/opa/bundles/catalog.tar.gz")
     # The sample target rejects stale revisions. Model that monotonic contract

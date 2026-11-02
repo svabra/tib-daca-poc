@@ -37,17 +37,17 @@ describe('Physical object actions and identity',()=>{
     expect(root.querySelector('.menu-hint')?.nextElementSibling?.tagName).not.toBe('HR');
     expect(root.querySelector('a')?.getAttribute('href')).toContain('/physical-models/'+FALLBACK_PHYSICAL_SNAPSHOT.sourceId);
     expect(root.querySelector('a')?.getAttribute('href')).toContain('tableId='+FALLBACK_PHYSICAL_SNAPSHOT.tables[0].id);
-    expect(root.querySelector('a')?.getAttribute('target')).toBe('_blank');
+    expect(root.querySelector('a')?.getAttribute('target')).toBeNull();
     expect(root.querySelector('a')?.getAttribute('rel')).toBe('noopener');
-    expect(root.querySelector('a img[src$="external-link.svg"]')).not.toBeNull();
+    expect(root.querySelector('a img[src$="external-link.svg"]')).toBeNull();
   });
   it('opens semantic searches in a new tab with the actual object name and an external-link icon',()=>{
     const {root,table}=setup();
-    const links=[...root.querySelectorAll<HTMLAnchorElement>('a[target=_blank][href^="/domains"]')];
+    const links=[...root.querySelectorAll<HTMLAnchorElement>('a[href^="/domains"]')];
     expect(links).toHaveLength(2);
     expect(links.map(link=>new URL(link.href).searchParams.get('q'))).toEqual([table.name,table.name]);
     expect(links.map(link=>new URL(link.href).pathname)).toEqual(['/domains/terminology','/domains']);
-    expect(links.every(link=>link.rel==='noopener'&&link.querySelector('img[src$="external-link.svg"]'))).toBe(true);
+    expect(links.every(link=>link.rel==='noopener'&&!link.target&&!link.querySelector('img[src$="external-link.svg"]'))).toBe(true);
   });
   it('keeps assignments permission-aware and omits redundant domain actions',()=>{
     const {fixture,component,root,facade,table,snapshot}=setup(false);

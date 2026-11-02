@@ -1,3 +1,4 @@
+import { AccessEndDatePipe } from '../../shared/access-end-date.pipe';
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, HostListener, inject, OnDestroy, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -35,7 +36,7 @@ interface DeputyTooltipState {
 @Component({
   selector: 'daca-my-data-products',
   standalone: true,
-  imports: [DatePipe, RouterLink, QualityMedalComponent],
+  imports: [AccessEndDatePipe, DatePipe, RouterLink, QualityMedalComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="daca-page-heading product-index-heading">
@@ -533,7 +534,7 @@ interface DeputyTooltipState {
                     @for (grant of consumer.grants; track grant.grantId) {
                       <section>
                         <div><strong>{{ protocolLabel(grant.protocol) }}</strong><span>{{ variantLabel(grant.variant) }}</span></div>
-                        <p>Gültig {{ grant.validFrom | date: 'dd.MM.yyyy' }}–{{ grant.validUntil | date: 'dd.MM.yyyy' }}</p>
+                        <p>Gültig {{ grant.validFrom | date: 'dd.MM.yyyy' }}–{{ grant.validUntil | accessEndDate }}</p>
                         <small>{{ grantEvidenceLabel(grant) }}</small>
                       </section>
                     }

@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { AccessEndDatePipe } from '../../shared/access-end-date.pipe';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StatusBadgeComponent } from '@bit-daca/design-system';
@@ -10,7 +10,7 @@ import { accessConsumerSummary, consumersForProduct } from '../products/my-data-
 @Component({
   selector: 'daca-access-workspace',
   standalone: true,
-  imports: [DatePipe, ProductWorkspaceNavComponent, RouterLink, StatusBadgeComponent],
+  imports: [AccessEndDatePipe, ProductWorkspaceNavComponent, RouterLink, StatusBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <daca-product-workspace-nav
@@ -55,7 +55,7 @@ import { accessConsumerSummary, consumersForProduct } from '../products/my-data-
                 <small>{{ entitlement.consumer.consumerType === 'person' ? 'eIAM' : 'M2M' }} · {{ entitlement.consumer.identityId }}</small>
               </div>
               <div><span>{{ protocolLabel(entitlement.grant.protocol) }}</span><small>{{ entitlement.grant.variant === 'original' ? 'Originaldaten' : 'Modifiziert' }}</small></div>
-              <div><strong>{{ expiryLabel(entitlement.grant.expiresInDays) }}</strong><small>Gültig bis {{ entitlement.grant.validUntil | date: 'dd.MM.yyyy' }}</small></div>
+              <div><strong>{{ expiryLabel(entitlement.grant.expiresInDays) }}</strong><small>Gültig bis {{ entitlement.grant.validUntil | accessEndDate }}</small></div>
             </article>
           }
           <p class="access-workspace-expiry-note">Diese Liste stammt aus der aktuell aktiven Policy. Offene Verlängerungen ändern die wirksame Freigabe erst nach Vier-Augen-Entscheid und bestätigtem OPA-/PostgreSQL-Deployment.</p>

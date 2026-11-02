@@ -1,3 +1,4 @@
+import { AccessEndDatePipe } from '../../shared/access-end-date.pipe';
 import { DOCUMENT, DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -7,10 +8,13 @@ import {
   inject,
   OnDestroy,
   signal,
+  untracked,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { catchError, forkJoin, map, of } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
+import { isAccessRequestDecisionTask } from '../../core/catalog-notifications';
 import { ClipboardService } from '../../core/clipboard.service';
 import {
   DataProduct,
@@ -38,7 +42,7 @@ import {
 @Component({
   selector: 'daca-product-usage',
   standalone: true,
-  imports: [DatePipe, ProductWorkspaceNavComponent, QualityMedalComponent, RouterLink],
+  imports: [AccessEndDatePipe, DatePipe, ProductWorkspaceNavComponent, QualityMedalComponent, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <daca-product-workspace-nav
@@ -83,6 +87,23 @@ import {
         <button type="button" class="daca-button is-secondary" (click)="load()">Erneut versuchen</button>
       </section>
     } @else if (product(); as currentProduct) {
+      @if (selectedRequest(); as request) {
+        <section id="request-decision" class="daca-card product-request-decision" data-testid="request-decision" role="status">
+          <div>
+            <p class="daca-eyebrow">Ihr Zugriffsantrag · {{ request.requestNumber }}</p>
+            <h2>{{ requestStatusLabel(request.status) }}</h2>
+            <p>{{ currentProduct.title }} · {{ request.validFrom | date:'dd.MM.yyyy' }} – {{ request.validUntil | accessEndDate }}</p>
+            @if (request.status === 'approved_policy_pending') { <p>Ihr Antrag ist genehmigt. Die Freigabe ist noch nicht technisch aktiviert.</p> }
+            @if (request.notes) { <p>{{ request.notes }}</p> }
+            @for (message of decisionMessages(); track message.id) {
+              <button class="daca-button is-secondary" type="button" (click)="acknowledgeDecision(message.id)">Zur Kenntnis nehmen</button>
+            }
+            @if (decisionError()) { <p class="daca-alert is-error" role="alert">{{ decisionError() }}</p> }
+          </div>
+        </section>
+      } @else if (selectedRequestId()) {
+        <p id="request-decision" class="daca-alert" role="status">{{ requestStatusError() ? 'Der Antragsstatus konnte nicht geladen werden.' : 'Dieser Antrag ist für Ihre Identität nicht verfügbar.' }}</p>
+      }
       <section id="data-dictionary" class="product-dictionary" aria-labelledby="product-dictionary-title">
         <header>
           <div>
@@ -207,19 +228,19 @@ import {
                   <span aria-hidden="true">!</span>
                   <div>
                     <strong>{{ expiryLabel(expiry.daysRemaining) }}</strong>
-                    <small>Aktuell gültig bis {{ expiry.grant.validUntil | date: 'dd.MM.yyyy' }} · {{ grantProtocolLabel(expiry.grant) }} · Variante {{ variantLabel(expiry.grant.dataVariant) }}</small>
+                    <small>Aktuell gültig bis {{ expiry.grant.validUntil | accessEndDate }} · {{ grantProtocolLabel(expiry.grant) }} · Variante {{ variantLabel(expiry.grant.dataVariant) }}</small>
                   </div>
                 </div>
               }
               @for (grant of effectiveGrants(); track $index) {
-                <p>Für Ihre Demo-Identität ist eine veröffentlichte Freigabe für <strong>{{ grantProtocolLabel(grant) }}</strong> dokumentiert. Sie gilt vom {{ grant.validFrom | date: 'dd.MM.yyyy' }} bis {{ grant.validUntil | date: 'dd.MM.yyyy' }}. Das Zielsystem prüft zusätzlich die vereinbarten Laufzeitregeln{{ grantAvailabilityLabel(grant) }}.</p>
+                <p>Für Ihre Demo-Identität ist eine veröffentlichte Freigabe für <strong>{{ grantProtocolLabel(grant) }}</strong> dokumentiert. Sie gilt vom {{ grant.validFrom | date: 'dd.MM.yyyy' }} bis {{ grant.validUntil | accessEndDate }}. Das Zielsystem prüft zusätzlich die vereinbarten Laufzeitregeln{{ grantAvailabilityLabel(grant) }}.</p>
               }
             } @else if (accessStatusError()) {
               <h2 id="product-usage-access-title">Zugriffsstatus derzeit nicht verfügbar</h2>
               <p class="daca-alert is-error" role="alert">Der wirksame Zugriffsstatus konnte nicht vollständig geladen werden. Deshalb wird hier keine neue Anfrage angeboten.</p>
             } @else if (latestRequest(); as request) {
-              <h2 id="product-usage-access-title">Zugriffsantrag in Bearbeitung</h2>
-              <p>Ihr jüngster Katalogantrag <strong>{{ request.requestNumber }}</strong> hat den Status «{{ requestStatusLabel(request.status) }}» und gilt für den beantragten Zeitraum {{ request.validFrom | date: 'dd.MM.yyyy' }} bis {{ request.validUntil | date: 'dd.MM.yyyy' }}. Der technische Zugriff wird weiterhin am Zielsystem geprüft.</p>
+              <h2 id="product-usage-access-title">{{ requestStatusLabel(request.status) }}</h2>
+              <p>Ihr jüngster Katalogantrag <strong>{{ request.requestNumber }}</strong> hat den Status «{{ requestStatusLabel(request.status) }}» und gilt für den beantragten Zeitraum {{ request.validFrom | date: 'dd.MM.yyyy' }} bis {{ request.validUntil | accessEndDate }}. Der technische Zugriff wird weiterhin am Zielsystem geprüft.</p>
             } @else {
               <h2 id="product-usage-access-title">Zugriff separat beantragen</h2>
               <p>Die dokumentierten Endpunkte sind keine Zugriffsfreigabe. Stellen Sie vor der Nutzung einen Antrag mit Zweck, Rechtsgrundlage und Gültigkeitszeitraum.</p>
@@ -249,9 +270,17 @@ export class ProductUsageComponent implements OnDestroy {
   private readonly clipboard = inject(ClipboardService);
   private readonly document = inject(DOCUMENT);
   readonly productId = this.route.snapshot.paramMap.get('id') ?? '';
+  private readonly queryParams = toSignal(this.route.queryParamMap, {initialValue:this.route.snapshot.queryParamMap});
+  readonly selectedRequestId = computed(()=>this.queryParams().get('request'));
   readonly product = signal<DataProduct | null>(null);
   readonly quality = signal<ProductQualityWorkspace | null>(null);
   readonly requests = signal<readonly StoredAccessRequest[]>([]);
+  readonly selectedRequest = computed(()=>this.requests().find(request=>request.id===this.selectedRequestId())??null);
+  readonly decisionError = signal<string|null>(null);
+  readonly decisionMessages = computed(()=>this.api.workflowTasks().filter(task=>
+    isAccessRequestDecisionTask(task.taskType) && task.dataProductId===this.productId && task.accessRequestId===this.selectedRequestId() && task.status!=='completed'));
+  private readonly decisionVersion = computed(()=>this.api.workflowTasks().filter(task=>
+    isAccessRequestDecisionTask(task.taskType) && task.dataProductId===this.productId).map(task=>task.id+':'+task.updatedAt).sort().join('|'));
   readonly effectiveAccess = signal<ProductEffectiveAccessResponse | null>(null);
   readonly requestStatusError = signal(false);
   readonly policyStatusError = signal(false);
@@ -290,11 +319,14 @@ export class ProductUsageComponent implements OnDestroy {
   constructor() {
     effect(() => {
       this.api.identityUserId();
-      this.load();
+      this.queryParams();
+      this.decisionVersion();
+      untracked(()=>this.load());
     });
   }
 
   ngOnDestroy(): void {
+    ++this.loadGeneration;
     if (this.copyTimer) clearTimeout(this.copyTimer);
     if (this.scrollTimer) clearTimeout(this.scrollTimer);
   }
@@ -356,6 +388,11 @@ export class ProductUsageComponent implements OnDestroy {
 
   isOwner(): boolean {
     return this.product()?.ownerUserId === this.api.identityUserId();
+  }
+
+  acknowledgeDecision(taskId:string):void {
+    this.decisionError.set(null);
+    this.api.acknowledgeTask(taskId).subscribe({error:()=>this.decisionError.set('Die Information konnte nicht bestätigt werden. Bitte erneut versuchen.')});
   }
 
   mappingStatusLabel(mapping: ProductQualityMapping): string {
@@ -436,8 +473,8 @@ export class ProductUsageComponent implements OnDestroy {
   }
 
   private scrollToRequestedSection(): void {
-    const fragment = this.route.snapshot.fragment;
-    if (fragment !== 'data-dictionary' && fragment !== 'endpoint-quickstart') return;
+    const fragment = this.selectedRequestId() ? 'request-decision' : this.route.snapshot.fragment;
+    if (fragment !== 'request-decision' && fragment !== 'data-dictionary' && fragment !== 'endpoint-quickstart') return;
     if (this.scrollTimer) clearTimeout(this.scrollTimer);
     this.scrollTimer = setTimeout(() => {
       const target = this.document.getElementById(fragment);

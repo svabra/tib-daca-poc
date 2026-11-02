@@ -1,3 +1,4 @@
+import { OPEN_ENDED_POLICY_DATE } from '../../shared/access-end-date.pipe';
 import { ChangeDetectionStrategy, Component, OnDestroy, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-daca/design-system';
@@ -76,6 +77,10 @@ const [JOURNEY_START_DATE, JOURNEY_END_DATE] = journeyDateRange();
       <a [routerLink]="['/products', product().id, 'metadata']">Metadaten ansehen</a>
     </section>
 
+    @if (!isJourneyProduct() && linkedAccessRequest(); as request) {
+      <section class="daca-alert" role="status" data-testid="linked-access-request"><strong>{{ request.requestNumber }} · {{ request.requesterName }}</strong><p>{{ request.purpose }}</p><p>Identität, Zeitraum und angefragte Bereitstellung wurden übernommen. Prüfen Sie die Zugriffskonditionen vor der Freigabe.</p></section>
+    }
+
     @if (isJourneyProduct()) {
       <div class="exposure-layout">
         <section class="daca-card exposure-form">
@@ -94,9 +99,10 @@ const [JOURNEY_START_DATE, JOURNEY_END_DATE] = journeyDateRange();
               <div class="exposure-section-heading"><div><p class="daca-eyebrow">Gültigkeit und PBAC</p><h3>Durchgehend gültig</h3></div><span>24/7</span></div>
               <div class="exposure-period-grid">
                 <label>Gültig ab<input type="date" [value]="journeyStartDate()" (input)="journeyStartDate.set($any($event.target).value)"></label>
-                <label>Gültig bis<input type="date" [value]="journeyEndDate()" [min]="journeyStartDate()" (input)="journeyEndDate.set($any($event.target).value)"></label>
+                <label>Gültig bis<input type="date" [value]="journeyEndDate() === openEndedPolicyDate ? '' : journeyEndDate()" [disabled]="journeyEndDate() === openEndedPolicyDate" [min]="journeyStartDate()" (input)="journeyEndDate.set($any($event.target).value)"></label>
                 <div class="exposure-timezone"><span>Zeitfenster</span><strong>Alle Wochentage · 24 Stunden</strong><small>Keine zusätzliche Wochenzeit-Einschränkung</small></div>
               </div>
+              <label class="access-request-open-ended"><input type="checkbox" [checked]="journeyEndDate() === openEndedPolicyDate" (change)="setJourneyOpenEnded($any($event.target).checked)"> Unbestimmtes Enddatum</label>
             </section>
             <div class="exposure-channel-grid">
               <label class="exposure-koby-consent is-selected"><input type="checkbox" role="switch" [checked]="journeyKoby()" (change)="journeyKoby.set($any($event.target).checked)"><span><strong>KOBY über MCP aktivieren</strong><small>Metadaten und Kontext; keine Produktdaten oder Zugangsdaten.</small></span><b>MCP</b></label>
@@ -254,13 +260,15 @@ const [JOURNEY_START_DATE, JOURNEY_END_DATE] = journeyDateRange();
         </section>
 
         <section class="exposure-rule-section" aria-labelledby="period-title">
-          <div class="exposure-section-heading"><div><p class="daca-eyebrow">Schritt 2</p><h2 id="period-title">Wie lange gilt die Zugriffseinstellung?</h2></div>@if (dateValid()) { <span>{{ durationDays() }} Kalendertage</span> }</div>
+          <div class="exposure-section-heading"><div><p class="daca-eyebrow">Schritt 2</p><h2 id="period-title">Wie lange gilt die Zugriffseinstellung?</h2></div>@if (dateValid()) { <span>{{ openEnded() ? 'Unbestimmtes Enddatum' : durationDays() + ' Kalendertage' }}</span> }</div>
           <div class="exposure-period-grid">
             <label>Gültig ab *<input type="date" [value]="startDate()" (input)="setStartDate($any($event.target).value)"></label>
-            <label>Gültig bis *<input type="date" [value]="endDate()" [min]="startDate()" (input)="setEndDate($any($event.target).value)"></label>
+            <label>Gültig bis{{ openEnded() ? '' : ' *' }}<input type="date" [value]="openEnded() ? '' : endDate()" [disabled]="openEnded()" [min]="startDate()" (input)="setEndDate($any($event.target).value)"></label>
             <div class="exposure-timezone"><span>Zeitzone</span><strong>Europe/Zurich</strong><small>MEZ / MESZ</small></div>
           </div>
+          <label class="access-request-open-ended"><input type="checkbox" [checked]="openEnded()" (change)="setOpenEnded($any($event.target).checked)"> Unbestimmtes Enddatum</label>
           @if (!dateValid()) { <p class="daca-alert is-error" role="alert">Das Enddatum muss am oder nach dem Startdatum liegen.</p> }
+          @else if(openEnded()){<p class="exposure-help">Die Einstellung gilt ab dem Startdatum ohne festgelegtes Enddatum bis zu einem Widerruf.</p>}
           @else { <p class="exposure-help">Vor Beginn und nach Ablauf werden Datenzugriff sowie gewählte Metadatenkanäle automatisch unwirksam.</p> }
         </section>
 
@@ -285,7 +293,7 @@ const [JOURNEY_START_DATE, JOURNEY_END_DATE] = journeyDateRange();
         <div class="daca-card-body">
           <div class="exposure-policy-sentence" [class.is-blocked]="!canActivate()">
             <span>{{ canActivate() ? 'ALLOW' : 'DENY' }}</span>
-            @if (canActivate()) { <p><strong>{{ subjectSummary() }}</strong> darf dieses Datenprodukt vom <strong>{{ formatDate(startDate()) }}</strong> bis <strong>{{ formatDate(endDate()) }}</strong> über {{ protocolLabel() }} lesen.</p> }
+            @if (canActivate()) { <p><strong>{{ subjectSummary() }}</strong> darf dieses Datenprodukt ab <strong>{{ formatDate(startDate()) }}</strong>@if (openEnded()) { ohne festgelegtes Enddatum } @else { bis <strong>{{ formatDate(endDate()) }}</strong> }über {{ protocolLabel() }} lesen.</p> }
             @else { <p>Ohne ein explizit ausgewähltes, gültiges Zugriffsziel und einen gültigen Zeitraum bleibt das Datenprodukt gesperrt.</p> }
           </div>
           <dl class="exposure-review-list">
@@ -294,7 +302,7 @@ const [JOURNEY_START_DATE, JOURNEY_END_DATE] = journeyDateRange();
             @if (subjectType() === 'group') { <div><dt>Snapshot</dt><dd>{{ selectedGroup()?.memberCount ?? 0 }} Personen · Rev. {{ selectedGroup()?.membershipRevision ?? '–' }}</dd></div> }
             <div><dt>Berechtigung</dt><dd><code>data.read</code></dd></div>
             <div><dt>Zugriffswege</dt><dd>{{ protocolLabel() }}</dd></div>
-            <div><dt>Gültigkeit</dt><dd>{{ dateValid() ? durationDays() + ' Tage' : 'Ungültig' }}</dd></div>
+            <div><dt>Gültigkeit</dt><dd>{{ openEnded() ? 'Unbestimmtes Enddatum' : dateValid() ? durationDays() + ' Tage' : 'Ungültig' }}</dd></div>
             <div><dt>KOBY / MCP</dt><dd [class.is-positive]="kobyAllowed()">{{ kobyAllowed() ? 'Metadaten erlaubt' : 'Nicht erlaubt' }}</dd></div>
             <div><dt>I14Y</dt><dd [class.is-positive]="i14yAllowed()">{{ i14yAllowed() ? 'Lieferung simuliert' : 'Nicht liefern' }}</dd></div>
           </dl>
@@ -340,6 +348,9 @@ export class ExposureStudioComponent implements OnDestroy {
   readonly groupCreateError = signal<string | null>(null);
   readonly startDate = signal(INITIAL_EXPOSURE_DRAFT.validFrom);
   readonly endDate = signal(INITIAL_EXPOSURE_DRAFT.validUntil);
+  readonly openEndedPolicyDate=OPEN_ENDED_POLICY_DATE;
+  readonly openEnded = computed(()=>this.endDate()===OPEN_ENDED_POLICY_DATE);
+  private finiteEndDate=INITIAL_EXPOSURE_DRAFT.validUntil;
   readonly kobyAllowed = signal(INITIAL_EXPOSURE_DRAFT.kobyMetadataAllowed);
   readonly i14yAllowed = signal(INITIAL_EXPOSURE_DRAFT.i14yMetadataDelivery);
   readonly publicationState = signal<PublicationState>('draft');
@@ -371,7 +382,7 @@ export class ExposureStudioComponent implements OnDestroy {
   });
   readonly linkedAccessRequestId = this.route.snapshot.queryParamMap.get('request');
   readonly linkedAccessRequest = computed(() => this.linkedAccessRequestId
-    ? this.api.ownerAccessRequests().find((request) => request.id === this.linkedAccessRequestId) ?? null
+    ? this.api.ownerAccessRequests().find((request) => request.id === this.linkedAccessRequestId && request.dataProductId === this.product().id) ?? null
     : null);
   readonly dateValidForJourney = computed(() => isExposureDateRangeValid(this.journeyStartDate(), this.journeyEndDate()));
   readonly subjectValid = computed(() => isExposureSubjectIdValid(this.subjectId()));
@@ -385,12 +396,14 @@ export class ExposureStudioComponent implements OnDestroy {
   readonly durationDays = computed(() => exposureDurationDays(this.startDate(), this.endDate()));
   readonly metadataChannelCount = computed(() => Number(this.kobyAllowed()) + Number(this.i14yAllowed()));
   readonly protocols = computed<('http' | 'postgresql')[]>(() => {
+    const request=this.linkedAccessRequest();
+    if(request)return request.requestedProtocol==='both'?['http','postgresql']:[request.requestedProtocol];
     const values = new Set<'http' | 'postgresql'>();
     for (const endpoint of this.product().endpoints) values.add(endpoint.protocol === 'http-rest' ? 'http' : 'postgresql');
     return values.size ? [...values] : ['http'];
   });
   readonly protocolLabel = computed(() => this.protocols().map((value) => value === 'http' ? 'REST' : 'PostgreSQL').join(' · '));
-  readonly canActivate = computed(() => isExposurePublishable({
+  readonly canActivate = computed(() => (!this.linkedAccessRequestId || !!this.linkedAccessRequest()) && isExposurePublishable({
     subjectType: this.subjectType(), subjectId: this.subjectId(), validFrom: this.startDate(), validUntil: this.endDate(),
     kobyMetadataAllowed: this.kobyAllowed(), i14yMetadataDelivery: this.i14yAllowed(),
   }));
@@ -415,12 +428,16 @@ export class ExposureStudioComponent implements OnDestroy {
       if (!request || this.linkedRequestInitialized) return;
       this.linkedRequestInitialized = true;
       this.startDate.set(request.validFrom);
-      this.endDate.set(request.validUntil);
+      this.endDate.set(request.validUntil ?? OPEN_ENDED_POLICY_DATE);
       this.journeyStartDate.set(request.validFrom);
-      this.journeyEndDate.set(request.validUntil);
+      this.journeyEndDate.set(request.validUntil ?? OPEN_ENDED_POLICY_DATE);
       if (request.consumerType === 'machine' && request.machineId) {
         this.subjectType.set('machine');
         this.machineIdentity.set(request.machineId);
+      } else if(request.consumerType==='person') {
+        this.subjectType.set('person');
+        this.personQuery.set(request.requesterId);
+        this.searchPeople();
       }
     });
     this.api.loadAdministrativeOrganizations().subscribe({
@@ -481,7 +498,13 @@ export class ExposureStudioComponent implements OnDestroy {
     this.personSearchSubscription = this.api.searchDirectoryPeople(
       this.personQuery(), this.personSource(), this.personOrganizationId(),
     ).subscribe({
-      next: (people) => { this.people.set(people); this.directoryLoading.set(false); },
+      next: (people) => {
+        this.people.set(people);this.directoryLoading.set(false);
+        const request=this.linkedAccessRequest();
+        if(request?.consumerType==='person' && this.personQuery()===request.requesterId){
+          this.selectedPerson.set(people.find(person=>person.id===request.requesterId)??null);
+        }
+      },
       error: () => { this.directoryError.set('Das Identitätsverzeichnis ist momentan nicht verfügbar.'); this.directoryLoading.set(false); },
     });
   }
@@ -582,6 +605,14 @@ export class ExposureStudioComponent implements OnDestroy {
   setMachineIdentity(value: string): void { this.machineIdentity.set(value); this.markDraft(); }
   setStartDate(value: string): void { this.startDate.set(value); this.markDraft(); }
   setEndDate(value: string): void { this.endDate.set(value); this.markDraft(); }
+  setOpenEnded(value:boolean):void {
+    if(value){this.finiteEndDate=this.endDate();this.setEndDate(OPEN_ENDED_POLICY_DATE);}
+    else this.setEndDate(this.finiteEndDate>=this.startDate()?this.finiteEndDate:this.startDate());
+  }
+  setJourneyOpenEnded(value:boolean):void {
+    if(value){this.finiteEndDate=this.journeyEndDate();this.journeyEndDate.set(OPEN_ENDED_POLICY_DATE);}
+    else this.journeyEndDate.set(this.finiteEndDate>=this.journeyStartDate()?this.finiteEndDate:this.journeyStartDate());
+  }
   setKobyAllowed(value: boolean): void { this.kobyAllowed.set(value); this.markDraft(); }
   setI14yAllowed(value: boolean): void { this.i14yAllowed.set(value); this.markDraft(); }
 
@@ -590,7 +621,7 @@ export class ExposureStudioComponent implements OnDestroy {
     this.publicationError.set(null);
     const grant: NonNullable<PolicyDefinition['grants']>[number] = {
       subject: { type: this.subjectType(), id: this.subjectId() }, actions: ['data.read'], protocols: this.protocols(),
-      validFrom: this.startDate(), validUntil: this.endDate(), dataVariant: 'original',
+      validFrom: this.startDate(), validUntil: this.endDate(), dataVariant: this.linkedAccessRequest()?.requestedVariant==='modified'?'modified':'original',
       metadataChannels: { kobyMcp: this.kobyAllowed(), i14y: this.i14yAllowed() },
     };
     const accessRequestFulfillments = this.linkedAccessRequestId ? [{
@@ -652,6 +683,7 @@ export class ExposureStudioComponent implements OnDestroy {
   }
 
   formatDate(value: string): string {
+    if(value===OPEN_ENDED_POLICY_DATE)return 'Unbestimmtes Enddatum';
     const timestamp = exposureUtcDay(value);
     if (!Number.isFinite(timestamp)) return '–';
     return new Intl.DateTimeFormat('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(timestamp);

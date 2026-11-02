@@ -81,13 +81,13 @@ interface ConnectionHold { side: 'logical'|'physical'; id: string; pointerId: nu
           <button type="button" role="menuitem" class="create-representation" (click)="requestRepresentation()"><svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Neue physische Repräsentation</span></button>
           <hr role="separator">
         }
-        @for(type of objectKinds.slice(2);track type.id){<button type="button" role="menuitem" (click)="openObjectBrowser(type.id)"><daca-search-icon [name]="menuIcons[type.id]"/><span>{{type.label}}</span><img src="/assets/catalog-search/external-link.svg" width="14" height="14" alt="" title="Suchtreffer in neuem Tab"></button>}
+        @for(type of objectKinds.slice(2);track type.id){<button type="button" role="menuitem" (click)="openObjectBrowser(type.id)"><daca-search-icon [name]="menuIcons[type.id]"/><span>{{type.label}}</span></button>}
         @if(position.logical){
           <hr role="separator">
-          @if(facade.model()?.dataDomain?.id){<a role="menuitem" [href]="'/domains/'+facade.model()!.dataDomain.id" target="_blank" rel="noopener" (click)="closeMenu()"><daca-search-icon name="hierarchy"/><span>Zugehörige Domäne anzeigen</span><img src="/assets/catalog-search/external-link.svg" width="14" height="14" alt="" title="Neuer Tab"></a>}
+          @if(facade.model()?.dataDomain?.id){<a role="menuitem" [href]="'/domains/'+facade.model()!.dataDomain.id" rel="noopener" (click)="closeMenu()"><daca-search-icon name="hierarchy"/><span>Zugehörige Domäne anzeigen</span></a>}
           @else if(canManage()){<button type="button" role="menuitem" (click)="requestDomain(null)"><daca-search-icon name="hierarchy"/><span>Domäne zuordnen</span></button>}
-          <a role="menuitem" routerLink="/domains/terminology" [queryParams]="{q:facade.model()?.title?.de || facade.model()?.entityName}" target="_blank" rel="noopener" (click)="closeMenu()"><daca-search-icon name="book"/><span>Term suchen und öffnen</span><img src="/assets/catalog-search/external-link.svg" width="14" height="14" alt="" title="Neuer Tab"></a>
-          <a role="menuitem" routerLink="/domains" [queryParams]="{q:facade.model()?.title?.de || facade.model()?.entityName}" target="_blank" rel="noopener" (click)="closeMenu()"><daca-search-icon name="hierarchy"/><span>Domäne suchen und öffnen</span><img src="/assets/catalog-search/external-link.svg" width="14" height="14" alt="" title="Neuer Tab"></a>
+          <a role="menuitem" routerLink="/domains/terminology" [queryParams]="{q:facade.model()?.title?.de || facade.model()?.entityName}" rel="noopener" (click)="closeMenu()"><daca-search-icon name="book"/><span>Term suchen und öffnen</span></a>
+          <a role="menuitem" routerLink="/domains" [queryParams]="{q:facade.model()?.title?.de || facade.model()?.entityName}" rel="noopener" (click)="closeMenu()"><daca-search-icon name="hierarchy"/><span>Domäne suchen und öffnen</span></a>
         }
       </div>}
       @if(representationMenu();as position){<div class="field-context-menu representation-context-menu" role="menu" aria-label="Aktionen der physischen Struktur" [style.left.px]="position.x" [style.top.px]="position.y">
@@ -102,7 +102,7 @@ interface ConnectionHold { side: 'logical'|'physical'; id: string; pointerId: nu
         <button type="button" role="menuitem" class="is-danger" [disabled]="!canManage()||facade.logicalFields().length<=1" (click)="deleteField.emit(opened.fieldId);closeMenu()">Logisches Feld entfernen</button>
         @for(type of objectKinds;track type.id){<button type="button" role="menuitem" (click)="openObjectBrowser(type.id)">{{type.label}}</button>}
       </div>}
-      @if(objectBrowser();as kind){<daca-catalog-object-browser [initialKind]="kind" [openInNewTab]="true" (closed)="closeObjectBrowser()"/>}
+      @if(objectBrowser();as kind){<daca-catalog-object-browser [initialKind]="kind" (closed)="closeObjectBrowser()"/>}
     </section>
   `,
   styles: [`

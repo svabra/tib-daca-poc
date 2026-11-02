@@ -125,7 +125,7 @@ describe('Lineage explorer', () => {
     fixture.detectChanges();await fixture.whenStable();
     const link=root.querySelector<HTMLAnchorElement>('.lineage-edge-menu a')!;
     expect(link.getAttribute('href')).toBe(`/products/${FALLBACK_PRODUCT.id}/lineage/c/access-events`);
-    expect(link.target).toBe('_blank');expect(link.rel).toBe('noopener');
+    expect(link.target).toBe('');expect(link.rel).toBe('noopener');
     expect(document.activeElement).toBe(link);
     document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));fixture.detectChanges();
     expect(root.querySelector('.lineage-edge-menu')).toBeNull();

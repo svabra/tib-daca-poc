@@ -107,7 +107,7 @@ describe('OwnerTasksComponent service-level workflow task', () => {
     expect(root.textContent).toContain('Zugriffsanfragen konnten nicht geladen werden');
     expect(root.textContent).not.toContain('Keine offenen Zugriffsanfragen');
     root.querySelector<HTMLButtonElement>('[data-testid="retry-owner-inbox"]')!.click();
-    expect(api.refreshOwnerAccessRequestInbox).toHaveBeenCalledOnce();
+    expect(api.refreshOwnerAccessRequestInbox).toHaveBeenCalledTimes(2);
   });
 
   it('shows an unknown approver-task status with retry instead of presenting a zero-task result', async () => {

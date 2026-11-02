@@ -6,7 +6,7 @@ import { DemoIdentityService } from '../../core/demo-identity.service';
 import { ProductServiceLevelApiService } from '../service-level/product-service-level-api.service';
 import { ServiceLevelSummaryResponse } from '../service-level/product-service-level.models';
 import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav.component';
-import { accessConsumerSummary, DataOwnerProfile, deliveryProtocols, resolvedDataOwner, resolvedDeputyDataOwner } from './my-data-products';
+import { accessConsumerSummary, canTransferOwnership, DataOwnerProfile, deliveryProtocols, resolvedDataOwner, resolvedDeputyDataOwner } from './my-data-products';
 
 @Component({
   selector: 'daca-product-overview',
@@ -27,9 +27,14 @@ import { accessConsumerSummary, DataOwnerProfile, deliveryProtocols, resolvedDat
         <h1>{{ product().title }}</h1>
         <p>{{ product().description }}</p>
       </div>
-      <daca-status-badge [tone]="product().lifecycle === 'active' ? 'green' : 'orange'">
-        @if (product().qualityMedal) { {{ qualityLabel() }} · }{{ product().lifecycle === 'active' ? 'Aktiv' : 'Entwurf' }} · Revision {{ product().revision }}
-      </daca-status-badge>
+      <div class="product-overview-heading-actions">
+        @if (canRequestAccess()) {
+          <a class="daca-button product-overview-request-access" [routerLink]="['/products', product().id, 'access-request']">Zugriff anfragen</a>
+        }
+        <daca-status-badge [tone]="product().lifecycle === 'active' ? 'green' : 'orange'">
+          @if (product().qualityMedal) { {{ qualityLabel() }} · }{{ product().lifecycle === 'active' ? 'Aktiv' : 'Entwurf' }} · Revision {{ product().revision }}
+        </daca-status-badge>
+      </div>
     </section>
 
     @for (alert of simulationAlerts(); track alert.eventId) {
@@ -124,6 +129,8 @@ export class ProductOverviewComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly productId = this.route.snapshot.paramMap.get('id') ?? '';
   readonly product = this.api.product;
+  readonly canRequestAccess = computed(() => this.product().id === this.productId
+    && !canTransferOwnership(this.product(), this.identity.userId()));
   readonly serviceLevel = signal<ServiceLevelSummaryResponse | null>(null);
   readonly serviceLevelLoading = signal(true);
   readonly serviceLevelError = signal(false);

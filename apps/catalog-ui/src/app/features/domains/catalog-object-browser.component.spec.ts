@@ -41,10 +41,10 @@ describe('CatalogObjectBrowserComponent',()=>{
     fixture.componentRef.setInput('initialKind','logical');fixture.detectChanges();
     const root=fixture.nativeElement as HTMLElement,closed=vi.fn();fixture.componentInstance.closed.subscribe(closed);
     const link=root.querySelector<HTMLAnchorElement>('a.object-result')!;
-    expect(link.getAttribute('href')).toBe('/models/logical');expect(link.target).toBe('_blank');expect(link.rel).toBe('noopener');
-    expect(link.querySelector('img[src$="external-link.svg"]')).not.toBeNull();
+    expect(link.getAttribute('href')).toBe('/models/logical');expect(link.target).toBe('');expect(link.rel).toBe('noopener');
+    expect(link.querySelector('img[src$="external-link.svg"]')).toBeNull();
     const navigate=vi.spyOn(TestBed.inject(Router),'navigate');
-    link.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));expect(navigate).not.toHaveBeenCalled();expect(closed).toHaveBeenCalledOnce();
+    link.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,ctrlKey:true}));expect(navigate).not.toHaveBeenCalled();expect(closed).toHaveBeenCalledOnce();
     fixture.componentRef.setInput('selectionMode',true);fixture.detectChanges();
     expect(root.querySelector('a.object-result')).toBeNull();expect(root.querySelector('button.object-result')).not.toBeNull();
   });
@@ -68,6 +68,6 @@ describe('CatalogObjectBrowserComponent',()=>{
     info.blur();expect(document.querySelector('[role=tooltip]')).toBeNull();
     component.query.set('urn:daca:physical-source:inventory');expect(component.results().map(item=>item.id)).toEqual(['csv-table']);
     fixture.detectChanges();const originLink=root.querySelector<HTMLAnchorElement>('a.object-result')!;
-    expect(originLink.target).toBe('_blank');expect(originLink.getAttribute('href')).toBe('/physical-models/inventory?snapshotId=csv&tableId=csv-table');
+    expect(originLink.target).toBe('');expect(originLink.getAttribute('href')).toBe('/physical-models/inventory?snapshotId=csv&tableId=csv-table');
   });
 });

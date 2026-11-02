@@ -87,9 +87,9 @@
 @if(edgeMenu(); as menu){
   <div class="lineage-edge-menu" role="menu" tabindex="-1" aria-label="Kantenaktionen" [style.left.px]="menu.x" [style.top.px]="menu.y">
     @if(canOpenLogs(menu.edge)){
-      <a role="menuitem" [routerLink]="['/products',api.product().id,'lineage',menu.edge.id,'access-events']" target="_blank" rel="noopener" (click)="edgeMenu.set(null)"><daca-search-icon name="book"/><span>Zugriffsprotokolle öffnen</span><daca-search-icon name="external-link"/></a>
+      <a role="menuitem" [routerLink]="['/products',api.product().id,'lineage',menu.edge.id,'access-events']" rel="noopener" (click)="edgeMenu.set(null)"><daca-search-icon name="book"/><span>Zugriffsprotokolle öffnen</span></a>
     }@else{
-      <span [dacaTooltip]="accessHelp" tabindex="0"><button role="menuitem" type="button" disabled><daca-search-icon name="book"/><span>Zugriffsprotokolle öffnen</span><daca-search-icon name="external-link"/></button></span>
+      <span [dacaTooltip]="accessHelp" tabindex="0"><button role="menuitem" type="button" disabled><daca-search-icon name="book"/><span>Zugriffsprotokolle öffnen</span></button></span>
       <small>Nur für den Data Owner der Quelle oder des Produkts.</small>
     }
   </div>

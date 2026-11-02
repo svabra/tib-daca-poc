@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { Observable, of, Subject, throwError } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
+import type { WorkflowTaskWire } from '../../core/catalog-api.service';
 import { ClipboardService } from '../../core/clipboard.service';
 import { FALLBACK_PRODUCT } from '../../core/catalog.seed';
 import { DataProduct, ProductEffectiveAccessResponse, ProductQualityWorkspace, StoredAccessRequest } from '../../core/catalog.models';
@@ -89,6 +90,8 @@ function apiStub(options: {
       grants: [],
     })),
     product: signal(PRODUCT),
+    workflowTasks: signal<readonly WorkflowTaskWire[]>([]),
+    acknowledgeTask:vi.fn(()=>of({})),
   };
 }
 
@@ -96,6 +99,7 @@ async function render(
   api: ReturnType<typeof apiStub>,
   clipboard = { writeText: vi.fn().mockResolvedValue(undefined) },
   fragment: string | null = null,
+  selectedRequestId: string | null = null,
 ) {
   await TestBed.configureTestingModule({
     imports: [ProductUsageComponent],
@@ -103,7 +107,7 @@ async function render(
       provideRouter([]),
       { provide: CatalogApiService, useValue: api },
       { provide: ClipboardService, useValue: clipboard },
-      { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: PRODUCT_ID }), fragment } } },
+      { provide: ActivatedRoute, useValue: { queryParamMap:of(convertToParamMap(selectedRequestId?{request:selectedRequestId}:{})), snapshot: { paramMap: convertToParamMap({ id: PRODUCT_ID }), queryParamMap:convertToParamMap({}), fragment } } },
     ],
   }).compileComponents();
   const fixture = TestBed.createComponent(ProductUsageComponent);
@@ -117,6 +121,23 @@ describe('ProductUsageComponent', () => {
   afterEach(() => {
     vi.useRealTimers();
     TestBed.resetTestingModule();
+  });
+
+  it('refreshes an already-open personal request when its decision arrives and allows acknowledgement',async()=>{
+    const request={id:'selected',dataProductId:PRODUCT_ID,requestNumber:'ZA-MINE',status:'approved_policy_pending',validFrom:'2026-11-02',validUntil:null,updatedAt:'2026-11-02T10:00:00Z'} as StoredAccessRequest;
+    const newer={...request,id:'newer',requestNumber:'ZA-OTHER',updatedAt:'2026-11-02T11:00:00Z'};
+    const api=apiStub({requests:of([request,newer])});
+    const {fixture}=await render(api,undefined,null,'selected');
+    expect(fixture.nativeElement.querySelector('[data-testid="request-decision"]').textContent).toContain('ZA-MINE');
+    expect(fixture.nativeElement.querySelector('[data-testid="request-decision"]').textContent).toContain('noch nicht technisch aktiviert');
+    api.loadMyAccessRequests.mockReturnValue(of([{...request,status:'granted_modified'},newer]));
+    api.workflowTasks.set([{id:'decision',taskType:'access_request_granted',accessRequestId:'selected',dataProductId:PRODUCT_ID,status:'open',updatedAt:'2026-11-02T12:00:00Z'} as WorkflowTaskWire]);
+    fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();
+    const card=fixture.nativeElement.querySelector('[data-testid="request-decision"]');
+    expect(card.textContent).toContain('Zugriff gewährt (modifiziert)');
+    expect(card.textContent).not.toContain('ZA-OTHER');
+    card.querySelector('button').click();
+    expect(api.acknowledgeTask).toHaveBeenCalledWith('decision');
   });
 
   it('renders the dictionary, gaps, exact anchors and credential-free endpoint quickstarts', async () => {

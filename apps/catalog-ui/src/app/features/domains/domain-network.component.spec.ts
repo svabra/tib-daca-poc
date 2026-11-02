@@ -283,7 +283,7 @@ describe('DomainNetworkComponent',()=>{
     const root=fixture.nativeElement as HTMLElement;root.querySelector('.graph-node')!.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}));fixture.detectChanges();
     expect([...root.querySelectorAll('.concept-context-menu [role=menuitem]')].filter(item=>item.textContent?.includes('suchen und öffnen'))).toHaveLength(4);
     const links=[...root.querySelectorAll<HTMLAnchorElement>('.concept-context-menu a[href^="/domains"]')];
-    expect(links.every(link=>link.target==='_blank')).toBe(true);
+    expect(links.every(link=>!link.target)).toBe(true);
     expect(links.filter(link=>new URL(link.href).searchParams.has('q')).every(link=>new URL(link.href).searchParams.get('q')==='Domäne a')).toBe(true);
   });
 });

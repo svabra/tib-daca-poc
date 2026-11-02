@@ -1,3 +1,4 @@
+import { AccessEndDatePipe } from '../../shared/access-end-date.pipe';
 import { SourceRestorationRequestsComponent } from './source-restoration-requests.component';
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
@@ -6,6 +7,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-daca/design-system';
 import { finalize } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
+import { isAccessRequestDecisionTask } from '../../core/catalog-notifications';
 import { CatalogI18nService } from '../../core/catalog-i18n.service';
 import { AccessRenewalContext, StoredAccessRequest } from '../../core/catalog.models';
 import { SourceAccessRequestsComponent } from './source-access-requests.component';
@@ -13,7 +15,7 @@ import { SourceAccessRequestsComponent } from './source-access-requests.componen
 @Component({
   selector: 'daca-owner-tasks',
   standalone: true,
-  imports: [SourceRestorationRequestsComponent, DatePipe, RouterLink, StatusBadgeComponent, DacaGlossaryTermComponent, SourceAccessRequestsComponent],
+  imports: [AccessEndDatePipe, SourceRestorationRequestsComponent, DatePipe, RouterLink, StatusBadgeComponent, DacaGlossaryTermComponent, SourceAccessRequestsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="daca-page-heading owner-tasks-heading">
@@ -92,7 +94,7 @@ import { SourceAccessRequestsComponent } from './source-access-requests.componen
                   <dl>
                     <div><dt>Identität</dt><dd>{{ request.consumerType === 'person' ? 'eIAM · ' + request.requesterId : 'M2M · ' + request.machineId }}</dd></div>
                     <div><dt>Protokoll</dt><dd>{{ protocolLabel(request.requestedProtocol) }}</dd></div>
-                    <div><dt>Gültigkeit</dt><dd>{{ request.validFrom | date: 'dd.MM.yyyy' }}–{{ request.validUntil | date: 'dd.MM.yyyy' }}</dd></div>
+                    <div><dt>Gültigkeit</dt><dd>{{ request.validFrom | date: 'dd.MM.yyyy' }}–{{ request.validUntil | accessEndDate }}</dd></div>
                     <div><dt>Status</dt><dd>{{ statusLabel(request.status) }}</dd></div>
                   </dl>
                   @if (renewalContext(request); as previous) {
@@ -112,7 +114,7 @@ import { SourceAccessRequestsComponent } from './source-access-requests.componen
                             <tr><th scope="row">Gültig ab</th><td>{{ previous.validFrom | date: 'dd.MM.yyyy' }}</td><td class="is-unchanged">Unverändert</td></tr>
                             <tr><th scope="row">Zeitfenster</th><td>{{ availabilityLabel(previous.weeklyAvailability) }}</td><td class="is-unchanged">Unverändert</td></tr>
                             <tr><th scope="row">Verwendungszweck</th><td>{{ previous.purpose || 'Nicht dokumentiert' }}</td><td>{{ request.purpose }}</td></tr>
-                            <tr><th scope="row">Gültig bis</th><td>{{ previous.validUntil | date: 'dd.MM.yyyy' }}</td><td class="is-new">{{ request.validUntil | date: 'dd.MM.yyyy' }}</td></tr>
+                            <tr><th scope="row">Gültig bis</th><td>{{ previous.validUntil | accessEndDate }}</td><td class="is-new">{{ request.validUntil | accessEndDate }}</td></tr>
                           </tbody>
                         </table>
                       </div>
@@ -170,7 +172,8 @@ export class OwnerTasksComponent {
   readonly filteredProductId = computed(() => this.queryParamMap().get('product'));
   readonly requests = computed(() => {
     const productId = this.filteredProductId();
-    return this.api.ownerAccessRequests().filter((request) => !productId || request.dataProductId === productId);
+    const requestId = this.queryParamMap().get('request');
+    return this.api.ownerAccessRequests().filter((request) => (!productId || request.dataProductId === productId) && (!requestId || request.id === requestId));
   });
   readonly filteredProductTitle = computed(() => this.productTitle(this.filteredProductId() ?? ''));
   readonly sourceRestorationTasks = computed(() => this.api.workflowTasks().filter(task => task.taskType === 'physical_source_access_review'));
@@ -190,6 +193,7 @@ export class OwnerTasksComponent {
   private readonly renewalGovernance = signal<Record<string, { id: string }>>({});
 
   constructor() {
+    this.api.refreshOwnerAccessRequestInbox();
     this.api.refreshSourceAccessRequestInbox();
     this.api.refreshWorkflowTasks();
   }
@@ -238,6 +242,9 @@ export class OwnerTasksComponent {
       search_view_shared: 'View erhalten',
       metadata_quality: 'Qualität',
       access_governance: 'Governance',
+      access_request_approved: 'Antrag genehmigt · Aktivierung ausstehend',
+      access_request_granted: 'Zugriff gewährt',
+      access_request_rejected: 'Zugriffsanfrage abgelehnt',
       simulation_quality_alert: 'Qualitätsalarm',
       simulation_discoverability_alert: 'Auffindbarkeitsalarm',
       simulation_isbo_restriction: 'Dringender Sicherheitsalarm',
@@ -268,6 +275,7 @@ export class OwnerTasksComponent {
     if (task.taskType.startsWith('glossary_term_') && task.glossaryTermProposalId) return ['/glossary/proposals', task.glossaryTermProposalId, 'review'];
     if (task.taskType.startsWith('domain_change_') || task.domainChangeRequestId) return ['/domains'];
     if (!task.dataProductId) return ['/tasks'];
+    if (isAccessRequestDecisionTask(task.taskType)) return ['/products',task.dataProductId,'usage'];
     if (task.taskType === 'publication_approval' && task.governanceSubmissionId) return ['/governance-submissions', task.governanceSubmissionId];
     if (task.taskType === 'service_level_approval') return ['/products', task.dataProductId, 'sla'];
     if (task.taskType === 'metadata_quality' || task.taskType === 'simulation_quality_alert') return ['/products', task.dataProductId, 'quality'];
@@ -279,7 +287,8 @@ export class OwnerTasksComponent {
     this.api.acknowledgeTask(taskId).subscribe({ error: () => this.decisionError.set('Die Information konnte nicht bestätigt werden.') });
   }
 
-  taskQueryParams(task: { taskType: string; serviceLevelRevisionId?: string | null; searchViewShareId?: string | null }): Record<string, string> | null {
+  taskQueryParams(task: { taskType: string; serviceLevelRevisionId?: string | null; searchViewShareId?: string | null; accessRequestId?: string | null }): Record<string, string> | null {
+    if(isAccessRequestDecisionTask(task.taskType) && task.accessRequestId)return {request:task.accessRequestId};
     if (task.taskType === 'search_view_shared' && task.searchViewShareId) return {sharedView: task.searchViewShareId};
     return task.taskType === 'service_level_approval' && task.serviceLevelRevisionId
       ? { review: task.serviceLevelRevisionId }
@@ -358,7 +367,7 @@ export class OwnerTasksComponent {
           delete next[request.id];
           return next;
         });
-        this.decisionNotice.set('Policy publiziert. Der zeitlich begrenzte Zugriff ist jetzt aktiv.');
+        this.decisionNotice.set('Policy publiziert. Der Zugriff wird nach bestätigter technischer Aktivierung wirksam.');
       },
       error: (error) => this.decisionError.set(error?.error?.detail ?? 'Policy-Publikation fehlgeschlagen.'),
     });

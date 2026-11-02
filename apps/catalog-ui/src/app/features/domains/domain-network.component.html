@@ -28,12 +28,12 @@
         <button role="menuitem" type="button" [disabled]="!canSource(links()[selectedLink()!].sourceId)" (click)="editLink(selectedLink()!);menu.set(null)"><daca-search-icon name="adjustments-horizontal"/><span>Verbindungstyp ändern</span></button>
         <button role="menuitem" type="button" [disabled]="!canSource(links()[selectedLink()!].sourceId)" (click)="removeLink(selectedLink()!)"><daca-search-icon name="x"/><span>Verbindung löschen</span></button><hr>
       }@else if(context.id){
-        <a role="menuitem" [routerLink]="['/domains',context.id]" target="_blank" rel="noopener" (click)="menu.set(null)"><daca-search-icon name="hierarchy"/><span>Diese Domäne öffnen</span><daca-search-icon name="external-link"/></a>
+        <a role="menuitem" [routerLink]="['/domains',context.id]" rel="noopener" (click)="menu.set(null)"><daca-search-icon name="hierarchy"/><span>Diese Domäne öffnen</span></a>
         <button role="menuitem" type="button" [disabled]="!canSource(context.id)" (click)="begin(context.id)"><daca-search-icon name="hierarchy"/><span>Neue Domänenbeziehung</span></button>
         <button role="menuitem" type="button" [disabled]="!canLayout()" (click)="dropFromDomain(context.id)"><daca-search-icon name="forms"/><span>Domäne erstellen oder suchen …</span></button>
         @if(canDelete(context.id)){<button class="is-danger" role="menuitem" type="button" (click)="deleteDomain(context.id)"><daca-search-icon name="x"/><span>Domäne im Katalog stilllegen …</span></button>}<hr>
-        <a role="menuitem" routerLink="/domains/terminology" [queryParams]="{q:menuDomain()?.preferredLabel}" target="_blank" rel="noopener" (click)="menu.set(null)"><daca-search-icon name="book"/><span>Term suchen und öffnen</span><daca-search-icon name="external-link"/></a>
-        <a role="menuitem" routerLink="/domains" [queryParams]="{q:menuDomain()?.preferredLabel}" target="_blank" rel="noopener" (click)="menu.set(null)"><daca-search-icon name="hierarchy"/><span>Domäne suchen und öffnen</span><daca-search-icon name="external-link"/></a><hr>
+        <a role="menuitem" routerLink="/domains/terminology" [queryParams]="{q:menuDomain()?.preferredLabel}" rel="noopener" (click)="menu.set(null)"><daca-search-icon name="book"/><span>Term suchen und öffnen</span></a>
+        <a role="menuitem" routerLink="/domains" [queryParams]="{q:menuDomain()?.preferredLabel}" rel="noopener" (click)="menu.set(null)"><daca-search-icon name="hierarchy"/><span>Domäne suchen und öffnen</span></a><hr>
         <button role="menuitem" type="button" [disabled]="!canLayout()" (click)="hideDomain(context.id)"><daca-search-icon name="x"/><span>Darstellung dieser Domäne entfernen</span></button>
         <small class="menu-hint">Die Domäne bleibt im Katalog erhalten.</small><hr>
       }@else{
@@ -41,7 +41,7 @@
         <button role="menuitem" type="button" [disabled]="!canLayout()" (click)="canvasAction('search')"><daca-search-icon name="search"/><span>Domäne suchen und einfügen …</span></button><hr>
       }
       @for(type of objectKinds;track type.id){@if(type.id==='logical'||type.id==='physical'){
-        <button role="menuitem" type="button" (click)="openObject(type.id)"><daca-search-icon [name]="type.id==='logical'?'schema':'box'"/><span>{{type.label}}</span><daca-search-icon name="external-link"/></button>
+        <button role="menuitem" type="button" (click)="openObject(type.id)"><daca-search-icon [name]="type.id==='logical'?'schema':'box'"/><span>{{type.label}}</span></button>
       }}
     </div>
   }
@@ -50,5 +50,5 @@
   @if(dropMenu();as context){<div class="concept-context-menu canvas-drop-menu" role="menu" [style.left.px]="context.x" [style.top.px]="context.y" (keydown)="menuKey($event)"><button role="menuitem" type="button" [disabled]="saving()" (click)="dropAction('create')">Neue Domäne erstellen</button><button role="menuitem" type="button" (click)="dropAction('search')">Domäne suchen</button></div>}
   @if(selectionOpen()){<daca-catalog-object-browser initialKind="domain" [selectionMode]="true" (selected)="selectDomain($event)" (closed)="selectionOpen.set(false)"/>}
   @if(creationOpen()){<daca-semantic-create-dialog kind="domain" (busyChanged)="creationBusy.set($event)" (created)="created($event)" (closed)="creationOpen.set(false);creationBusy.set(false)"/>}
-  @if(objectBrowser();as kind){<daca-catalog-object-browser [initialKind]="kind" [openInNewTab]="true" (closed)="closeObject()"/>}
+  @if(objectBrowser();as kind){<daca-catalog-object-browser [initialKind]="kind" (closed)="closeObject()"/>}
 </section>}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from daca_catalog.domain_glossary_seed import VEHICLE_PRODUCT_ID
 from daca_catalog.main import daaif_ontology_suggestion
 from daca_catalog.models import DemoUser
@@ -253,7 +254,8 @@ def test_quality_requires_canonical_product_and_all_key_field_mappings(client):
     )
 
 
-def test_approval_creates_timed_policy_draft_and_publish_grants_request(client, monkeypatch):
+@pytest.mark.parametrize("requested_until", ["2027-08-31", None])
+def test_approval_creates_timed_policy_draft_and_publish_grants_request(client, monkeypatch, requested_until):
     from daca_catalog.policy import ProjectionResult
 
     payload = fixture(client, "kassandra-bronze")["payload"]
@@ -271,7 +273,7 @@ def test_approval_creates_timed_policy_draft_and_publish_grants_request(client, 
             "requestedProtocol": "http",
             "requestedVariant": "modified",
             "validFrom": "2026-09-01",
-            "validUntil": "2027-08-31",
+            "validUntil": requested_until,
             "contactEmail": "beat.stalder@sg.ch",
             "notes": None,
             "conditionsAccepted": True,
@@ -288,6 +290,13 @@ def test_approval_creates_timed_policy_draft_and_publish_grants_request(client, 
     grant = decided.json()["policy"]["definition"]["grants"][0]
     assert grant["subject"] == {"type": "person", "id": "beat.stalder"}
     assert grant["validFrom"] == "2026-09-01"
+    assert grant["validUntil"] == (requested_until or "9999-12-31")
+    requester_headers = {"X-DaCa-User": "beat.stalder"}
+    def decision_messages():
+        response = client.get("/api/v1/tasks/mine", headers=requester_headers)
+        assert response.status_code == 200
+        return [item for item in response.json() if item["accessRequestId"] == request.json()["id"]]
+    assert [item["taskType"] for item in decision_messages()] == ["access_request_approved"]
     activity = client.get(
         f"/api/v1/data-products/{product_id}/activity",
         headers={"X-DaCa-User": "kassandra.valdata"},
@@ -315,6 +324,7 @@ def test_approval_creates_timed_policy_draft_and_publish_grants_request(client, 
         headers={"X-DaCa-User": "beat.stalder"},
     ).json()
     assert mine[0]["status"] == "approved_policy_pending"
+    assert [item["taskType"] for item in decision_messages()] == ["access_request_approved"]
     opa_deployment = next(
         item for item in published.json()["deployments"] if item["target"] == "opa"
     )
@@ -335,6 +345,28 @@ def test_approval_creates_timed_policy_draft_and_publish_grants_request(client, 
         headers={"X-DaCa-User": "beat.stalder"},
     ).json()
     assert mine[0]["status"] == "granted_modified"
+    assert mine[0]["validUntil"] == requested_until
+    messages = decision_messages()
+    assert len(messages) == 1
+    assert messages[0]["taskType"] == "access_request_granted"
+    assert messages[0]["taskKind"] == "information"
+    assert "Zugriff gewährt" in messages[0]["title"]
+    assert "modifiziert" in messages[0]["detail"]
+    assert [item["id"] for item in decision_messages()] == [messages[0]["id"]]
+    for other_actor in ["ariane.keller", "kassandra.valdata"]:
+        others = client.get("/api/v1/tasks/mine", headers={"X-DaCa-User": other_actor}).json()
+        assert not any(item["id"] == messages[0]["id"] for item in others)
+        assert client.post(f"/api/v1/tasks/{messages[0]['id']}/acknowledge", headers={"X-DaCa-User": other_actor}).status_code == 404
+    assert client.post(f"/api/v1/tasks/{messages[0]['id']}/acknowledge", headers=requester_headers).status_code == 200
+    assert decision_messages() == []  # Reconciliation must never reopen acknowledged messages.
+    if requested_until is None:
+        effective = client.get(
+            f"/api/v1/data-products/{product_id}/effective-access",
+            headers={"X-DaCa-User": "beat.stalder"},
+        ).json()
+        assert effective["granted"]
+        assert effective["grants"][0]["validUntil"] == "9999-12-31"
+        assert effective["grants"][0]["sourceRequestId"] == request.json()["id"]
 
     reset = client.post(
         f"/api/v1/poc/data-products/{product_id}/reset",

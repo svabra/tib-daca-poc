@@ -1,16 +1,18 @@
+import { AccessEndDatePipe } from '../../shared/access-end-date.pipe';
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DacaGlossaryTermComponent } from '@bit-daca/design-system';
 import { CatalogApiService } from '../../core/catalog-api.service';
+import { DemoIdentityService } from '../../core/demo-identity.service';
 import { AccessRequestStatus, AccessRequestSubmission, StoredAccessRequest } from '../../core/catalog.models';
-import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/my-data-products';
+import { canTransferOwnership, deliveryProtocols, resolvedDataOwner } from '../products/my-data-products';
 
 @Component({
   selector: 'daca-access-request-form',
   standalone: true,
-  imports: [DatePipe, ReactiveFormsModule, RouterLink, DacaGlossaryTermComponent],
+  imports: [AccessEndDatePipe, DatePipe, ReactiveFormsModule, RouterLink, DacaGlossaryTermComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <nav class="access-request-breadcrumb" aria-label="Brotkrümelnavigation">
@@ -21,7 +23,7 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
       <div>
         <p class="daca-eyebrow">Zugriffsantrag</p>
         <h1>Zugriff auf Datenprodukt anfragen</h1>
-        <p>Beschreiben Sie den vorgesehenen Datenbezug für eine persönliche <daca-glossary-term term="eIAM" />-Identität oder einen <daca-glossary-term term="M2M" />-Service. Die Data Ownerin oder der Data Owner prüft Identität, Rechtslage und Zugriffskonditionen.</p>
+        <p>Beschreiben Sie den vorgesehenen Datenbezug für eine persönliche <daca-glossary-term term="eIAM" />-Identität oder einen <daca-glossary-term term="M2M" />-Service. Der Data Owner prüft Identität, Rechtslage und Zugriffskonditionen.</p>
       </div>
     </section>
 
@@ -36,12 +38,26 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
         <span class="access-request-confirmation-icon" aria-hidden="true">✓</span>
         <p class="daca-eyebrow">Antrag gespeichert</p>
         <h2>Ihre Zugriffsanfrage ist eingegangen</h2>
-        <p>Der Antrag wurde in der PostgreSQL-Katalogdatenbank gespeichert und an die zuständige Data Ownerin beziehungsweise den zuständigen Data Owner übergeben.</p>
+        <p>Der Antrag wurde gespeichert und an den zuständigen Data Owner übergeben.</p>
+        <section class="access-request-owner-contact" aria-label="Zuständiger Data Owner">
+          @if (owner(); as owner) {
+            <img [src]="owner.avatarUrl" alt="">
+            <div>
+              <span>Data Owner</span>
+              <strong>{{ owner.name }}</strong>
+              <span>{{ owner.organization }}</span>
+              @if (owner.teamsUrl; as teamsUrl) {
+                <a [href]="teamsUrl" target="_blank" rel="noreferrer" [attr.aria-label]="owner.name + ' über Microsoft Teams kontaktieren'">Über Teams kontaktieren</a>
+              } @else { <small>Teams-Kontakt nicht hinterlegt</small> }
+            </div>
+          } @else { <p>Kontaktdaten des Data Owner sind derzeit nicht verfügbar.</p> }
+        </section>
         <dl>
           <div><dt>Antragsnummer</dt><dd>{{ receipt.requestNumber }}</dd></div>
           <div><dt>Status</dt><dd>{{ statusLabel(receipt.status) }}</dd></div>
           <div><dt>Datenprodukt</dt><dd>{{ product().title }}</dd></div>
           <div><dt>Eingereicht</dt><dd>{{ receipt.createdAt | date: 'dd.MM.yyyy, HH:mm' }}</dd></div>
+          <div><dt>Gültigkeit</dt><dd>{{ receipt.validFrom | date:'dd.MM.yyyy' }} – {{ receipt.validUntil | accessEndDate }}</dd></div>
         </dl>
         <div class="access-request-confirmation-actions">
           <a class="daca-button is-primary" routerLink="/products" [queryParams]="{ relationship: 'requestedByMe' }">Meine Anfragen anzeigen</a>
@@ -106,7 +122,7 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
                 <option value="Gesetzlicher Auftrag der ESTV">Gesetzlicher Auftrag der ESTV</option>
                 <option value="Amtshilfe zwischen Behörden">Amtshilfe zwischen Behörden</option>
                 <option value="Statistik, Planung und Qualitätssicherung">Statistik, Planung und Qualitätssicherung</option>
-                <option value="Rechtsgrundlage wird mit der Data Ownerin geklärt">Noch mit der Data Ownerin / dem Data Owner zu klären</option>
+                <option value="Rechtsgrundlage wird mit dem Data Owner geklärt">Noch mit dem Data Owner zu klären</option>
               </select>
               @if (form.controls.legalBasis.touched && form.controls.legalBasis.invalid) { <small class="field-error">Wählen Sie den fachlichen oder gesetzlichen Auftrag aus.</small> }
             </label>
@@ -136,10 +152,11 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
                 <input type="date" formControlName="validFrom">
               </label>
               <label class="access-request-field">
-                <span>Gültig bis *</span>
+                <span>Gültig bis{{ form.controls.openEnded.value ? '' : ' *' }}</span>
                 <input type="date" formControlName="validUntil" [min]="form.controls.validFrom.value">
               </label>
             </div>
+            <label class="access-request-open-ended"><input type="checkbox" formControlName="openEnded" (change)="endDateModeChanged()"> Unbestimmtes Enddatum</label>
             @if (periodInvalid()) { <p class="access-request-period-error" role="alert">Das Enddatum darf nicht vor dem Startdatum liegen.</p> }
             <label class="access-request-field">
               <span>Ergänzende Hinweise <small>(optional)</small></span>
@@ -195,6 +212,7 @@ import { canTransferOwnership, dataOwner, deliveryProtocols } from '../products/
                   <strong>{{ request.requestNumber }}</strong>
                   <span>{{ statusLabel(request.status) }}</span>
                   <small>{{ request.createdAt | date: 'dd.MM.yyyy' }} · {{ consumerLabel(request) }}</small>
+                  <small>{{ request.validFrom | date:'dd.MM.yyyy' }} – {{ request.validUntil | accessEndDate }}</small>
                 </article>
               }
             </section>
@@ -208,12 +226,15 @@ export class AccessRequestFormComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly fb = inject(FormBuilder);
   readonly api = inject(CatalogApiService);
+  private readonly identity = inject(DemoIdentityService);
   readonly productId = this.route.snapshot.paramMap.get('id') ?? '';
   readonly product = computed(() => this.api.products().find((item) => item.id === this.productId) ?? this.api.product());
+  readonly owner = computed(() => resolvedDataOwner(this.product(), this.identity.users()));
   readonly createdRequest = signal<StoredAccessRequest | null>(null);
   readonly existingRequests = signal<readonly StoredAccessRequest[]>([]);
   readonly submitting = signal(false);
   readonly submitError = signal<string | null>(null);
+  private finiteEndDate='';
 
   readonly form = this.fb.nonNullable.group({
     consumerType: this.fb.nonNullable.control<'person' | 'machine'>('person'),
@@ -224,6 +245,7 @@ export class AccessRequestFormComponent {
     requestedVariant: this.fb.nonNullable.control<'original' | 'modified' | 'either'>('either'),
     validFrom: [futureDate(7), Validators.required],
     validUntil: [futureDate(372), Validators.required],
+    openEnded: false,
     contactEmail: ['', [Validators.required, Validators.email]],
     notes: '',
     conditionsAccepted: [false, Validators.requiredTrue],
@@ -240,7 +262,7 @@ export class AccessRequestFormComponent {
   }
 
   ownerName(): string {
-    return dataOwner(this.product())?.name ?? this.product().owner;
+    return this.owner()?.name ?? this.product().owner;
   }
 
   protocolsLabel(): string {
@@ -264,7 +286,13 @@ export class AccessRequestFormComponent {
 
   periodInvalid(): boolean {
     const { validFrom, validUntil } = this.form.getRawValue();
-    return Boolean(validFrom && validUntil && validUntil < validFrom);
+    return !this.form.controls.openEnded.value && Boolean(validFrom && validUntil && validUntil < validFrom);
+  }
+
+  endDateModeChanged():void {
+    const end=this.form.controls.validUntil;
+    if(this.form.controls.openEnded.value){this.finiteEndDate=end.value;end.setValue('');end.disable();}
+    else {end.setValue(this.finiteEndDate);end.enable();}
   }
 
   submit(): void {
@@ -279,7 +307,7 @@ export class AccessRequestFormComponent {
       requestedProtocol: value.requestedProtocol,
       requestedVariant: value.requestedVariant,
       validFrom: value.validFrom,
-      validUntil: value.validUntil,
+      validUntil: value.openEnded ? null : value.validUntil,
       contactEmail: value.contactEmail.trim(),
       notes: value.notes.trim() || null,
       conditionsAccepted: true,
