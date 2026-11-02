@@ -7,6 +7,7 @@ import { DemoIdentityService } from '../../core/demo-identity.service';
 import { UserPreferencesService } from '../../core/user-preferences.service';
 import { OrganizationCanvasComponent, OrganizationNetwork, OrganizationNode } from './organization-canvas.component';
 import { OrganizationView } from './organization-view';
+import { ORGANIZATION_CARD, clearsOrganizationBoundary } from './organization-layout';
 
 const node = (id: string, parentId: string | null, code: string, kind = 'office'): OrganizationNode => ({ id, parentId, code, label: code, kind, description: `${code} Details`, registry: true, productCount: 2, directProductCount: 0, consumedProductCount: 1, directConsumedProductCount: 1, domainIds: ['tax'] });
 const graph: OrganizationNetwork = {
@@ -37,6 +38,42 @@ describe('OrganizationCanvasComponent', () => {
     if (!hideUnrelated) { fixture.componentInstance.setHideUnrelatedOrganizations(false); fixture.detectChanges(); }
     return { fixture, root: fixture.nativeElement as HTMLElement, http };
   }
+  it('keeps external organizations outside while dragging and using arrow keys, also in fullscreen',()=>{
+    const {fixture,root,http}=render(graph,undefined,false),component=fixture.componentInstance;
+    vi.spyOn(root.querySelector('.org-stage')!,'getBoundingClientRect').mockReturnValue({left:0,top:0,width:960,height:650,right:960,bottom:650,x:0,y:0,toJSON:()=>({})});
+    for(const fullscreen of [false,true]){
+      if(fullscreen){root.querySelector<HTMLButtonElement>('.org-fullscreen')!.click();fixture.detectChanges();}
+      const before=component.satellites().find(item=>item.node.id==='ne')!,card=root.querySelector('[data-organization-id="ne"]')!;
+      card.dispatchEvent(new PointerEvent('pointerdown',{button:0,pointerId:8,clientX:before.x,clientY:before.y,bubbles:true}));
+      document.dispatchEvent(new PointerEvent('pointermove',{pointerId:8,clientX:480,clientY:330,bubbles:true,cancelable:true}));fixture.detectChanges();
+      document.dispatchEvent(new PointerEvent('pointerup',{pointerId:8,bubbles:true}));
+      expect(clearsOrganizationBoundary({...component.satellites().find(item=>item.node.id==='ne')!,...ORGANIZATION_CARD})).toBe(true);
+      for(let index=0;index<30;index++){
+        card.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));fixture.detectChanges();
+        expect(clearsOrganizationBoundary({...component.satellites().find(item=>item.node.id==='ne')!,...ORGANIZATION_CARD})).toBe(true);
+      }
+    }
+    expect(component.focusId()).toBe('efd');
+    http.expectNone(request=>request.method==='PUT');
+  });
+  it('rejects group moves across the boundary and corrects legacy external anchors for display only',()=>{
+    const view:OrganizationView={revision:1,configuration:{schemaVersion:1,scopes:{efd:{offices:{},satellites:{ne:{x:480,y:330},vbs:{x:80,y:320}}},overview:{offices:{efd:{x:300,y:400}},satellites:{}}}}};
+    const {fixture,http}=render(graph,view,false),component=fixture.componentInstance;
+    expect(clearsOrganizationBoundary({...component.satellites().find(item=>item.node.id==='ne')!,...ORGANIZATION_CARD})).toBe(true);
+    expect(component.draft()).toEqual(view.configuration);expect(component.dirty()).toBe(false);
+    const items=component.selection.items().filter(item=>item.id==='vbs'||item.id==='ne');
+    expect(component.selection.accepts!(items)).toBe(true);
+    expect(component.selection.accepts!(items.map(item=>({...item,x:480,y:330})))).toBe(false);
+    expect(component.selection.accepts!([{id:'vbs',x:150,y:320}])).toBe(false);
+    const before=component.draft(),snapshot=component.selection.begin();
+    const moved=items.map(item=>({...item,x:item.x+5}));
+    expect(component.selection.accepts!(moved)).toBe(true);component.selection.move(moved);component.selection.finish();
+    component.saveLayout();const request=http.expectOne('/api/v1/organization-network/view');
+    expect(request.request.body.configuration.scopes['overview']).toEqual(view.configuration.scopes['overview']);
+    for(const point of Object.values(request.request.body.configuration.scopes['efd'].satellites) as {x:number;y:number}[])expect(clearsOrganizationBoundary({...point,...ORGANIZATION_CARD})).toBe(true);
+    request.flush({revision:2,configuration:component.draft()});fixture.detectChanges();
+    component.selection.cancel(snapshot);expect(component.draft()).toEqual(before);
+  });
   it('filters only organizations with neither supply nor consumption, inside and outside the current area',()=>{
     const network=structuredClone(graph);
     network.nodes.push(node('empty','efd','EMPTY'),node('consumer','efd','CONSUMER'),node('outside-empty',null,'OUTSIDE'));

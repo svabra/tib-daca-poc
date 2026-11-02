@@ -4384,7 +4384,7 @@ async function organizationLayoutFlow() {
     invariant(await evaluate("(()=>{const r=document.querySelector('.organization-explorer').getBoundingClientRect();return r.left===0&&r.top===0&&Math.abs(r.width-innerWidth)<2&&Math.abs(r.height-innerHeight)<2;})()"),'fullscreen does not cover the viewport');
     await waitFor("document.activeElement===document.querySelector('.org-fullscreen')",'fullscreen did not focus its exit control');await settleFrames();
     await evaluate("document.querySelector('.org-accessible-list summary').focus()");await settleFrames();await pressKey('Tab','Tab',9);
-    invariant(await evaluate("document.activeElement===document.querySelector('.org-layer [role=switch]')"),'fullscreen focus escaped after last control: '+await evaluate("document.activeElement?.outerHTML.slice(0,400)"));
+    invariant(await evaluate("document.activeElement===document.querySelector('.org-layout-toolbar button:not(:disabled)')"),'fullscreen focus escaped after last control: '+await evaluate("document.activeElement?.outerHTML.slice(0,400)"));
     await pressKey('Tab','Tab',9); // Continue within the modal before starting a pointer gesture.
     const before=await evaluate("(()=>{const c=document.querySelector('.org-office[data-organization-id=efd]'),r=c.getBoundingClientRect(),s=document.querySelector('.org-stage').getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+r.height/2,dx:r.left+r.width/2<s.left+s.width/2?65:-65,dy:r.top+r.height/2<s.top+s.height/2?25:-25,left:c.style.left};})()");
     await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:before.x,y:before.y},sessionId);
@@ -4409,6 +4409,35 @@ async function organizationLayoutFlow() {
     invariant(await evaluate(`document.querySelector('.org-office[data-organization-id=efd]').style.left===${JSON.stringify(savedLeft)}`),'organization anchor did not survive reload');
     await evaluate("document.querySelector('.org-office[data-organization-id=efd]').click()");
     await waitFor("document.querySelector('.org-focus')?.textContent.includes('EFD')",'saved card cannot drill down');
+    // External cantons must never look like members of the focused department.
+    await cdp.call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]},sessionId);
+    for(const fullscreen of [false,true]){
+      if(fullscreen){await evaluate("document.querySelector('.org-fullscreen').click()");await settleFrames();}
+      const selector=await evaluate(`(()=>{const card=[...document.querySelectorAll('.org-satellite')].find(card=>card.textContent.includes('St. Gallen'));if(!card)throw new Error('St. Gallen satellite missing');return '.org-satellite[data-organization-id="'+card.dataset.organizationId+'"]';})()`);
+      const clear=()=>evaluate(`(()=>{const card=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(),scope=document.querySelector('.org-bubble').getBoundingClientRect();return card.right<=scope.left||card.left>=scope.right||card.bottom<=scope.top||card.top>=scope.bottom;})()`);
+      for(const touch of [false,true]){
+        await evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center',inline:'nearest',behavior:'instant'})`);await settleFrames();
+        const points=await evaluate(`(()=>{const card=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(),scope=document.querySelector('.org-bubble').getBoundingClientRect();return{from:{x:card.left+card.width/2,y:card.top+card.height/2},to:{x:scope.left+scope.width/2,y:scope.top+scope.height/2}};})()`);
+        if(touch){
+          await cdp.call('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...points.from,id:1}]},sessionId);
+          await cdp.call('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...points.to,id:1}]},sessionId);
+          await cdp.call('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]},sessionId);
+        }else{
+          await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...points.from},sessionId);
+          await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...points.from,button:'left',buttons:1,clickCount:1},sessionId);
+          await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...points.to,buttons:1},sessionId);
+          await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...points.to,button:'left',buttons:0,clickCount:1},sessionId);
+        }
+        await settleFrames();invariant(await clear(),`external canton entered EFD during ${touch?'touch':'mouse'} drag (fullscreen=${fullscreen})`);
+        const key=await evaluate(`(()=>{const card=document.querySelector(${JSON.stringify(selector)}),r=card.getBoundingClientRect(),s=document.querySelector('.org-bubble').getBoundingClientRect();card.focus();return r.right<=s.left?'ArrowRight':r.left>=s.right?'ArrowLeft':r.bottom<=s.top?'ArrowDown':'ArrowUp';})()`);
+        for(let step=0;step<12;step++)await pressKey(key,key,{ArrowRight:39,ArrowLeft:37,ArrowDown:40,ArrowUp:38}[key]);
+        await settleFrames();invariant(await clear(),'external canton entered EFD using arrow keys');
+        invariant(await evaluate("document.querySelector('.org-focus')?.textContent.includes('EFD')"),'boundary drag navigated into another organization');
+      }
+      await evaluate("document.querySelector('.org-discard-layout').click()");
+      if(fullscreen){await evaluate("document.querySelector('.org-fullscreen').click()");await settleFrames();}
+    }
+    await cdp.call('Emulation.setEmulatedMedia',{features:[]},sessionId);
     const officeKey=await evaluate("(()=>{const card=document.querySelector('.org-office[data-organization-id=\"efd-estv\"]');card.focus();return parseFloat(card.style.top)<50?'ArrowDown':'ArrowUp';})()");await pressKey(officeKey,officeKey,officeKey==='ArrowDown'?40:38);
     const satelliteKey=await evaluate("(()=>{const card=document.querySelector('.org-satellite[data-organization-id=vbs]');card.focus();return parseFloat(card.style.left)<50?'ArrowRight':'ArrowLeft';})()");await pressKey(satelliteKey,satelliteKey,satelliteKey==='ArrowRight'?39:37);
     await waitFor("!document.querySelector('.org-save-layout').disabled",'nested anchor changes were not staged');

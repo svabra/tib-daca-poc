@@ -134,9 +134,16 @@ Datenzugriff. Diese Definition steht auch im mehrsprachigen UI-Glossar.
 ## ROHS CPS PoC
 
 The operator seed `rohs-cps-catalog-v1` provisions synthetic metadata under **EFD–BIT–PS–CPS**.
-For an existing runtime with `SEED_ON_STARTUP=false`, install only this scenario and refresh the
+The Catalog API image startup includes this scenario even with `SEED_ON_STARTUP=false`.
+For a targeted installation into an existing runtime, install only this scenario and refresh the
 system glossary with `docker compose exec catalog-api uv run python -m daca_catalog.rohs_cps_seed`.
 Do not rerun the full catalog seed to install this fixture.
+In the remote PoC, run `uv run --no-sync python -m daca_catalog.rohs_cps_seed` in the
+Catalog API pod's OpenShift Terminal; see [PoC delivery verification](../k8s/README.md#rohs-cps-example-metadata-in-the-poc).
+These synthetic ROHS examples are independent of the container platform hosting the PoC.
+Verify both products in product search with active-only filtering disabled; draft products
+do not appear in the active-product data landscape. Loading a newer UI alone does not install
+API fixtures, and the marker must not be removed to resurrect retired examples.
 **Marcello Hebeisa** is Data Owner and **Matteo Duca** is deputy; both are selectable PoC personas
 with active primary unit memberships and narrowly scoped modeling/object responsibilities.
 **Fausto Marzo** is the selectable independent Publication Approver in the parent PS unit

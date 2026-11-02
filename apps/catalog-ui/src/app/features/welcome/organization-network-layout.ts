@@ -1,4 +1,4 @@
-import { OrganizationPlacement } from './organization-layout';
+import { OrganizationPlacement, clearsOrganizationBoundary } from './organization-layout';
 
 export interface OrganizationLayoutEdge { sourceId: string; targetId: string; weight: number }
 export interface OrganizationLayoutRegion { x: number; y: number; width: number; height: number }
@@ -23,7 +23,7 @@ export function optimizeOrganizationNetwork(initial: readonly NetworkPlacement[]
     const r=node.region;
     if(node.x-node.width/2<r.x+8 || node.x+node.width/2>r.x+r.width-8 || node.y-node.height/2<r.y+8 || node.y+node.height/2>r.y+r.height-8) return false;
     // Exterior cards keep their perimeter lanes; a saved anchor is never adjusted.
-    if(node.group==='satellite' && !(node.x+node.width/2+8<=180 || node.x-node.width/2-8>=780 || node.y+node.height/2+8<=104 || node.y-node.height/2-8>=558)) return false;
+    if(node.group==='satellite' && !clearsOrganizationBoundary(node)) return false;
     return !nodes.some(other=>other!==node&&collides(node,other));
   };
   const hitsCard = (a:NetworkPlacement,b:NetworkPlacement,card:NetworkPlacement) => {

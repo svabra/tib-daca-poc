@@ -4,6 +4,7 @@ export interface OrganizationField { width:number; height:number; exclusions?:re
 export const ORGANIZATION_TITLE = { x:346, y:112, width:268, height:96 };
 export const ORGANIZATION_ANCHOR_Y_OFFSET = 120;
 export const ORGANIZATION_CARD = { width: 120, height: 84 };
+export const ORGANIZATION_BOUNDARY = { x:180, y:104, width:600, height:454 };
 export const ORGANIZATION_FIELD = { x: 202, y: 120, width: 556, height: 420, exclusions:[{...ORGANIZATION_TITLE,x:144,y:-8}] };
 export const ORGANIZATION_OVERVIEW_FIELD = { x: 34, y: 30, width: 892, height: 590 };
 
@@ -13,6 +14,27 @@ export function organizationFieldForHeading(heading: OrganizationExclusion) {
 }
 
 export interface OrganizationPlacement { id: string; x: number; y: number; width: number; height: number; delay: string; duration: string }
+
+/** Reserve eight world units for the card's independent floating animation. */
+export function clearsOrganizationBoundary(item: {x:number;y:number;width:number;height:number}): boolean {
+  const rect=ORGANIZATION_BOUNDARY;
+  return item.x+item.width/2+8<=rect.x || item.x-item.width/2-8>=rect.x+rect.width ||
+    item.y+item.height/2+8<=rect.y || item.y-item.height/2-8>=rect.y+rect.height;
+}
+
+/** Project an external card onto the nearest legal perimeter lane. */
+export function constrainOrganizationSatellite(point: {x:number;y:number}, width:number, height:number): {x:number;y:number} {
+  const bounded=(value:{x:number;y:number})=>({x:Math.max(width/2+8,Math.min(960-width/2-8,value.x)),y:Math.max(height/2+8,Math.min(650-height/2-8,value.y))});
+  const position=bounded(point),rect=ORGANIZATION_BOUNDARY;
+  if(clearsOrganizationBoundary({...position,width,height}))return position;
+  return [
+    {x:rect.x-width/2-8,y:position.y},
+    {x:rect.x+rect.width+width/2+8,y:position.y},
+    {x:position.x,y:rect.y-height/2-8},
+    {x:position.x,y:rect.y+rect.height+height/2+8},
+  ].map(bounded).filter(value=>clearsOrganizationBoundary({...value,width,height}))
+    .sort((a,b)=>Math.hypot(a.x-position.x,a.y-position.y)-Math.hypot(b.x-position.x,b.y-position.y))[0];
+}
 
 export function clearsOrganizationHeading(item: {x:number;y:number;width:number;height:number}, field:OrganizationField): boolean {
   return !field.exclusions?.some(rect=>item.x+item.width/2+14>rect.x && item.x-item.width/2-14<rect.x+rect.width && item.y+item.height/2+14>rect.y && item.y-item.height/2-14<rect.y+rect.height);

@@ -11,7 +11,7 @@ import { UserPreferencesService } from '../../core/user-preferences.service';
 import { optimizeOrganizationNetwork, NetworkPlacement, OrganizationLayoutEdge } from './organization-network-layout';
 import { SearchIconComponent } from '../search/search-icon.component';
 import { TooltipDirective } from '../../shared/tooltip.directive';
-import { ORGANIZATION_CARD, ORGANIZATION_FIELD, ORGANIZATION_OVERVIEW_FIELD, ORGANIZATION_TITLE, ORGANIZATION_ANCHOR_Y_OFFSET, OrganizationExclusion, OrganizationField, organizationFieldForHeading, clearsOrganizationHeading, organizationSatellite, scatterOrganizations, groupOrganizationDomains } from './organization-layout';
+import { ORGANIZATION_BOUNDARY, ORGANIZATION_CARD, ORGANIZATION_FIELD, ORGANIZATION_OVERVIEW_FIELD, ORGANIZATION_TITLE, ORGANIZATION_ANCHOR_Y_OFFSET, OrganizationExclusion, OrganizationField, organizationFieldForHeading, clearsOrganizationHeading, clearsOrganizationBoundary, constrainOrganizationSatellite, organizationSatellite, scatterOrganizations, groupOrganizationDomains } from './organization-layout';
 import { emptyOrganizationConfiguration, OrganizationConfiguration, OrganizationView } from './organization-view';
 import { organizationCountLabel } from './organization-count-labels';
 import { organizationFlow } from './organization-flow';
@@ -42,12 +42,13 @@ let organizationCanvasSequence = 0;
 export class OrganizationCanvasComponent {
   readonly packetTailId = `org-highway-tail-${++organizationCanvasSequence}`;
   readonly organizationCard=ORGANIZATION_CARD;
+  readonly organizationBoundary=ORGANIZATION_BOUNDARY;
   private selectionObjects(){return [...this.offices().map(item=>({...item,id:item.node.id,kind:'offices' as const})),...this.domainBubbles().map(item=>({...item,kind:'offices' as const})),...this.satellites().map(item=>({...item,id:item.node.id,kind:'satellites' as const,width:ORGANIZATION_CARD.width,height:ORGANIZATION_CARD.height}))];}
   readonly selection:CanvasSelectionAdapter={
     context:()=>this.identity.userId()+':'+this.scopeKey(),enabled:()=>this.canArrange(),
     scale:()=>{const rect=this.stage()?.nativeElement.getBoundingClientRect();return{x:(rect?.width||960)/960,y:(rect?.height||650)/650};},
     items:()=>this.selectionObjects().map(item=>({...item,minX:item.width/2+8,minY:item.height/2+8,maxX:(item.kind==='offices'?this.officeField().width:960)-item.width/2-8,maxY:(item.kind==='offices'?Math.max(this.officeField().height,...this.layout().map(node=>node.y+node.height/2+8)):650)-item.height/2-8})),
-    accepts:items=>items.every(item=>{const object=this.selectionObjects().find(object=>object.id===item.id);return !object||object.kind!=='offices'||!this.focus()||clearsOrganizationHeading({...item,width:object.width,height:object.height},this.officeField());}),
+    accepts:items=>items.every(item=>{const object=this.selectionObjects().find(object=>object.id===item.id);if(!object)return true;return object.kind==='satellites'?clearsOrganizationBoundary({...item,width:object.width,height:object.height}):!this.focus()||clearsOrganizationHeading({...item,width:object.width,height:object.height},this.officeField());}),
     begin:()=>{const before=this.draft(),objects=this.selectionObjects(),scope=this.scopeKey(),current=before.scopes[scope]??{offices:{},satellites:{}};
       this.closeMenu();this.tooltips().forEach(tooltip=>tooltip.close());
       this.draft.set({schemaVersion:1,scopes:{...before.scopes,[scope]:{offices:{...current.offices,...Object.fromEntries(objects.filter(item=>item.kind==='offices').map(item=>[item.id,{x:item.x,y:item.y-(this.focus()?ORGANIZATION_ANCHOR_Y_OFFSET:0)}]))},satellites:{...current.satellites,...Object.fromEntries(objects.filter(item=>item.kind==='satellites').map(item=>[item.id,{x:item.x,y:item.y}]))}}}});return before;},
@@ -313,9 +314,10 @@ export class OrganizationCanvasComponent {
   }
   private anchor(id: string, kind: 'offices' | 'satellites', automatic: Position, width: number, height: number): Position {
     const saved = this.draft().scopes[this.scopeKey()]?.[kind]?.[id];
-    return saved ? this.constrain(kind, saved, width, height) : automatic;
+    return this.constrain(kind, saved ?? automatic, width, height);
   }
   private constrain(kind: 'offices' | 'satellites', point: Position, width: number, height: number, avoidHeading=false): Position {
+    if(kind==='satellites')return constrainOrganizationSatellite(point,width,height);
     const field = this.officeField(), maxWidth = kind === 'offices' ? field.width : 960;
     const maxHeight = kind === 'offices' ? Math.max(field.height, ...this.layout().map(item => item.y + item.height / 2 + 8)) : 650;
     const bounded=(value:Position)=>({ x: Math.max(width / 2 + 8, Math.min(maxWidth - width / 2 - 8, value.x)), y: Math.max(height / 2 + 8, Math.min(maxHeight - height / 2 - 8, value.y)) });

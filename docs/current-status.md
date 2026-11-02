@@ -1,5 +1,11 @@
 # Current status
 
+Release **0.3.6** prepares the external-organization placement fix and verified ROHS CPS fixture delivery for publication. Canonical package/runtime versions, service-worker metadata, focused OpenAPI documents and the three OpenShift image pins use 0.3.6. Latest DE/EN release notes cover the boundary fix and PoC backfill, while 0.3.5 remains in the searchable archive. The external PoC runtime has not been changed from this workstation.
+
+ROHS CPS delivery is verified against the published Catalog API 0.3.5 image in isolated PostgreSQL 18.4 with the PoC's `daca_catalog` schema and a non-superuser role: startup creates both synthetic draft products and the scoped backfill is idempotent. These use cases are independent of the hosting container platform. [The PoC runbook](../k8s/README.md#rohs-cps-example-metadata-in-the-poc) documents the Catalog API pod Terminal command and search verification without active-only filtering. The remote PoC's actual image and data state have not been inspected from this workstation.
+
+External organization cards in the data landscape stay outside the focused organization's boundary, including pointer/touch dragging, arrow keys, group movement and fullscreen. Card edges retain floating clearance. Older overlapping personal anchors are projected outside for display without an automatic profile write; explicit Save retains the existing revision workflow.
+
 Release 0.3.5 fixes the PostgreSQL compatibility failures that blocked the 0.3.4 image pipeline. Automatic deputy eligibility uses the trusted nearest-office hierarchy rather than matching profile strings: Joel Ruod in ESTV BI remains eligible for Kassandra's ESTV products; other EFD offices and expired memberships remain excluded. The seed no longer alternates between Joel and a fallback deputy. Regression fixtures reflect current organization labels, Sibilla's GS-VBS profile, Christiano's armasuisse membership, explicitly scoped term ownership and complete domain handovers. The external PoC/OpenShift rollout remains deferred.
 
 Shared canvas actions retain compact 32px desktop buttons and a 44px minimum target on viewports up to 700px as well as coarse-pointer devices. This keeps Mapping save/create actions and fullscreen exits usable in narrow desktop windows and mobile layouts.

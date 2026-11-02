@@ -1,5 +1,11 @@
 # BIT DaCa
 
+Release **0.3.6** keeps external organization cards outside the focused data-landscape boundary during pointer/touch, keyboard and group movement, including fullscreen. It also adds an existing-catalog delivery regression and a scoped PoC backfill runbook for the synthetic ROHS CPS products. The current release popup and searchable history describe both changes; 0.3.5 remains archived separately.
+
+ROHS CPS examples are included in the published Catalog API image 0.3.5, including startup against an existing catalog. They are synthetic catalog use cases independent of the PoC hosting platform. For targeted backfill in the PoC, run `uv run --no-sync python -m daca_catalog.rohs_cps_seed` in the Catalog API pod; verify both products in search with active-only filtering disabled. See [PoC delivery verification](k8s/README.md#rohs-cps-example-metadata-in-the-poc).
+
+External organization cards in the data landscape stay outside the focused organization's boundary, including pointer/touch dragging, arrow keys, group movement and fullscreen. Card edges retain floating clearance. Older overlapping personal anchors are projected outside for display without an automatic profile write; explicit Save retains the existing revision workflow.
+
 Release 0.3.5 repairs automatic deputy selection after the PoC organization updates. Federal subdivisions resolve to their nearest active office through trusted memberships/directory IDs, so ESTV BI remains within ESTV without granting rights across EFD offices. Expired primary memberships cannot fall back to stale directory labels. PostgreSQL release tests now use the confirmed personas, hierarchical display labels, explicit object scopes and transactional domain handovers.
 
 Shared canvas actions retain compact 32px desktop buttons and a 44px minimum target on viewports up to 700px as well as coarse-pointer devices. This keeps Mapping save/create actions and fullscreen exits usable in narrow desktop windows and mobile layouts.

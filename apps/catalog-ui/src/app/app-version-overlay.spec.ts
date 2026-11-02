@@ -29,7 +29,9 @@ describe('Catalog runtime version overlay', () => {
     const dialog = fixture.nativeElement.querySelector('.daca-feature-dialog') as HTMLDialogElement;
     expect(dialog.hasAttribute('open')).toBe(true);
     expect(dialog.textContent).toContain(`V${DACA_VERSION}`);
-    expect(dialog.textContent).toContain('Stellvertretung innerhalb desselben Amts erhalten');
+    expect(dialog.textContent).toContain('Externe Organisationen ausserhalb der Grenze halten');
+    expect(dialog.textContent).toContain('ROHS-Beispiele in bestehenden PoC-Katalogen bereitstellen');
+    expect(dialog.textContent).not.toContain('Stellvertretung innerhalb desselben Amts erhalten');
     expect(dialog.textContent).not.toContain('Data-Highways als Lichtband');
     expect(dialog.textContent).not.toContain('Pers\u00f6nliche Such-Views speichern und teilen');
     expect(dialog.textContent).not.toContain('Expertensuche nach Kontext oder Fokus');

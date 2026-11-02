@@ -1,5 +1,10 @@
 # DaCa OpenShift presentation stack
 
+The **0.3.6** release pins Catalog UI, Catalog API and Sample Data Product to matching
+0.3.6 images. Wait for the image-publication workflow to succeed before applying these
+manifests. This release includes the external-organization placement fix and the verified
+ROHS CPS backfill procedure below; applying a manifest remains a separate PoC rollout.
+
 These manifests deploy the DaCa presentation workloads into `daai-brs-d`. They intentionally
 contain no PostgreSQL, pgAdmin, PVC or database-service resource. The deployed workloads are
 Catalog UI, Catalog API, Sample Data Product/Policy Projector and OPA. Control Plane images are
@@ -99,6 +104,44 @@ DAAIF publishes metadata inside the namespace to
 external; its reverse proxy serves Catalog API, Swagger/OpenAPI and sample-product paths.
 
 ## Verification and rollback
+
+### ROHS CPS example metadata in the PoC
+
+The ROHS example products describe a synthetic catalog use case. They are unrelated to
+the OpenShift platform hosting DaCa. The published Catalog API image `0.3.5` includes
+`rohs-cps-catalog-v1`; its image command runs `daca-catalog-seed` after migrations even
+when the ConfigMap sets `SEED_ON_STARTUP=false`. Existing catalog seed markers do not
+skip the separate ROHS fixture. No database reset or local database export is needed.
+
+If the fixture is missing from an existing PoC with a compatible image, open the
+**Terminal of the Catalog API pod** in the OpenShift console and run the scoped command:
+
+```bash
+uv run --no-sync python -m daca_catalog.rohs_cps_seed
+```
+
+The equivalent CLI command is:
+
+```bash
+oc exec -n daai-brs-d deployment/daca-catalog-api -c catalog-api -- uv run --no-sync python -m daca_catalog.rohs_cps_seed
+```
+
+This uses the pod's existing database/schema configuration. Verify the two catalog URNs
+`urn:daca:ch:bit:cps:rohs-telemetry` (**ROHS Container-Ereignisse**) and
+`urn:daca:ch:bit:cps:rohs-analytics` (**ROHS SLO & Kapazitätsanalyse**) in product search
+with the active-only filter disabled, using Marcello Hebeisa as Data Owner. Matteo Duca
+is deputy and Fausto Marzo is control person. Both products begin as **drafts**; the
+active-product landscape is not an installation check. The one-time marker preserves
+subsequent edits, retirement and revoked assignments. Do not remove it to recreate
+intentionally retired objects. If the module is missing, first roll out the Catalog API
+image pinned in `daca-catalog-api.yaml` and wait for readiness. An API image rollback
+does not undo migrations or fixture writes.
+
+The published `0.3.5` image was checked locally in an isolated PostgreSQL 18.4 database
+using the PoC's `daca_catalog` schema and a non-superuser database role: image startup
+created both products, and a subsequent scoped seed completed without duplicates.
+
+### Other fixtures and release verification
 
 The same image seed additionally provisions `urn:daca:ch:verteidigung:building-use-demand`
 (**Gebäudenutzungsbedarf der Verteidigung**) using a separate upgrade marker. Verteidigung
