@@ -16,7 +16,7 @@ import { canTransferOwnership, deliveryProtocols, resolvedDataOwner } from '../p
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <nav class="access-request-breadcrumb" aria-label="Brotkrümelnavigation">
-      <a routerLink="/products">Meine Datenprodukte</a><span aria-hidden="true">›</span><span>Zugriff anfragen</span>
+      <a routerLink="/products">Datenprodukte</a><span aria-hidden="true">›</span><span>Zugriff anfragen</span>
     </nav>
 
     <section class="daca-page-heading access-request-heading">

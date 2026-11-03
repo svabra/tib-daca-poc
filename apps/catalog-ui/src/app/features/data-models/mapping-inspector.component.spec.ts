@@ -92,4 +92,23 @@ describe('MappingInspectorComponent workflow actions', () => {
     button.click();
     expect(remove).not.toHaveBeenCalled();
   });
+
+  it('offers saving and submitting a dirty mapping despite a type warning', () => {
+    const {fixture,root,mapping}=render('draft',{
+      mappingType:'Transformed',transformationRule:'String(value)',
+      validationResult:{valid:false,issues:[{code:'type_mismatch',severity:'warning',message:'integer ↔ string'}]},
+    });
+    facade.reviseMapping(mapping.id,{physicalColumnIds:['column-valid']});fixture.detectChanges();
+    const save=vi.fn(),submit=vi.fn();
+    fixture.componentInstance.save.subscribe(save);fixture.componentInstance.submit.subscribe(submit);
+    const buttons=[...root.querySelectorAll<HTMLButtonElement>('button')];
+    const saveButton=buttons.find(button=>button.textContent==='Entwurf speichern')!;
+    const submitButton=buttons.find(button=>button.textContent?.includes('Speichern &'))!;
+    expect(saveButton.disabled).toBe(false);expect(submitButton.disabled).toBe(false);
+    saveButton.click();submitButton.click();
+    expect(save).toHaveBeenCalledOnce();expect(submit).toHaveBeenCalledWith(mapping.id);
+    fixture.componentRef.setInput('saveDisabledReason','Speichern läuft');fixture.componentRef.setInput('busy',true);fixture.detectChanges();
+    expect(saveButton.disabled).toBe(true);expect(submitButton.disabled).toBe(true);
+    expect(root.textContent).toContain('Typkonflikt');
+  });
 });

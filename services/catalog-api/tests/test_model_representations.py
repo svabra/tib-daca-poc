@@ -46,6 +46,58 @@ def body_for(model, snapshot, table):
     }
 
 
+@pytest.mark.parametrize("mapping_type,severity", [("Transformed", "warning"), ("Direct", "error")])
+def test_type_conflicts_do_not_block_draft_storage_or_review_submission(
+    client, session_factory, mapping_type, severity
+):
+    from daca_catalog.modeling_service import normalize_postgresql_type, physical_column_type
+    from daca_catalog.models import LogicalFieldVersion, PhysicalColumn
+
+    model, etag, snapshot, table = context(client, session_factory)
+    original = client.get(
+        f"/api/v1/asset-mappings?logicalModelId={model['id']}", headers=HEADERS
+    ).json()["items"][0]
+    with session_factory() as session:
+        field = session.get(LogicalFieldVersion, uuid.UUID(original["logicalFieldVersionIds"][0]))
+        columns = session.scalars(
+            select(PhysicalColumn).where(PhysicalColumn.physical_table_id == uuid.UUID(table["id"]))
+        ).all()
+        column = next(item for item in columns if physical_column_type(item) != normalize_postgresql_type(field.data_type))
+        column_id = str(column.id)
+    value = {key: original[key] for key in (
+        "logicalModelVersionId", "physicalSnapshotId", "classification", "responsibleUserId",
+        "validFrom", "logicalFieldVersionIds",
+    )}
+    value.update(mappingType=mapping_type, transformationRule="String(value)" if mapping_type == "Transformed" else None,
+                 physicalColumnIds=[column_id], physicalSnapshotId=snapshot["id"])
+    payload = body_for(model, snapshot, table)
+    payload["mappings"] = [{"clientId": f"type-conflict-{mapping_type}", "value": value}]
+    saved = client.post(
+        f"/api/v1/logical-models/{model['id']}/mapping-drafts",
+        headers={**HEADERS, "If-Match": etag}, json=payload,
+    )
+    assert saved.status_code == 200, saved.text
+    mapping = saved.json()["mappings"][0]["mapping"]
+    assert mapping["status"] == "draft"
+    assert any(issue["code"] == "type_mismatch" and issue["severity"] == severity
+               for issue in mapping["validationResult"]["issues"])
+    submitted = client.post(
+        f"/api/v1/asset-mappings/{mapping['id']}/versions/{mapping['versionId']}/submit",
+        headers={**HEADERS, "If-Match": f'"{mapping["lockVersion"]}"'},
+    )
+    assert submitted.status_code == 200, submitted.text
+    review = submitted.json()
+    assert review["status"] == "review_pending"
+    validated = client.post(
+        f"/api/v1/asset-mappings/{review['id']}/versions/{review['versionId']}/validate",
+        headers={**HEADERS, "If-Match": f'"{review["lockVersion"]}"'},
+    )
+    assert validated.status_code == 200, validated.text
+    result = validated.json()
+    assert result["validationResult"]["valid"] is (mapping_type == "Transformed")
+    assert result["status"] == ("validated" if mapping_type == "Transformed" else "review_pending")
+
+
 def test_workspace_removals_are_versioned_only_on_save_and_reject_stale_or_duplicate_requests(client, session_factory):
     model, etag, _snapshot, _table = context(client, session_factory)
     path = f"/api/v1/logical-models/{model['id']}/mapping-drafts"

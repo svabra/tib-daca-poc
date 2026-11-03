@@ -4,6 +4,7 @@ export interface OrganizationField { width:number; height:number; exclusions?:re
 export const ORGANIZATION_TITLE = { x:346, y:112, width:268, height:96 };
 export const ORGANIZATION_ANCHOR_Y_OFFSET = 120;
 export const ORGANIZATION_CARD = { width: 120, height: 84 };
+export const ORGANIZATION_CANVAS_HEIGHT = 740;
 export const ORGANIZATION_BOUNDARY = { x:180, y:104, width:600, height:454 };
 export const ORGANIZATION_FIELD = { x: 202, y: 120, width: 556, height: 420, exclusions:[{...ORGANIZATION_TITLE,x:144,y:-8}] };
 export const ORGANIZATION_OVERVIEW_FIELD = { x: 34, y: 30, width: 892, height: 590 };
@@ -24,7 +25,7 @@ export function clearsOrganizationBoundary(item: {x:number;y:number;width:number
 
 /** Project an external card onto the nearest legal perimeter lane. */
 export function constrainOrganizationSatellite(point: {x:number;y:number}, width:number, height:number): {x:number;y:number} {
-  const bounded=(value:{x:number;y:number})=>({x:Math.max(width/2+8,Math.min(960-width/2-8,value.x)),y:Math.max(height/2+8,Math.min(650-height/2-8,value.y))});
+  const bounded=(value:{x:number;y:number})=>({x:Math.max(width/2+8,Math.min(960-width/2-8,value.x)),y:Math.max(height/2+8,Math.min(ORGANIZATION_CANVAS_HEIGHT-height/2-8,value.y))});
   const position=bounded(point),rect=ORGANIZATION_BOUNDARY;
   if(clearsOrganizationBoundary({...position,width,height}))return position;
   return [

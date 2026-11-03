@@ -1,5 +1,54 @@
 # PBAC policy flow
 
+## Permission registry, revocation and public history
+
+`GET /api/v1/data-products/{id}/access-permissions` projects the published policy, independently
+of the request inbox. Every existing reader of the product may see person, machine and group
+grants, conditions and frozen group members. Private-product visibility remains enforced.
+Expired/future grants are excluded using Europe/Zurich dates; weekly windows and variants remain
+explicit conditions. Listing a grant never bypasses the PEP/PDP or PostgreSQL RLS. Pending or
+failed deployments show only the last confirmed snapshot with an explicit status.
+
+`DELETE /api/v1/data-products/{id}/access-permissions/{grantId}` requires the current Data Owner
+or eligible deputy and `If-Match` for the latest policy revision. Grant IDs bind the exact active
+policy/content. Product-row serialization and revision checks reject stale/foreign grants;
+outstanding policy drafts/reviews block conflicting changes. Only the selected grant is removed.
+Subject selectors are rebuilt, and removing the last grant creates explicit deny with empty
+selectors, preventing legacy fallback. Other direct/group grants, memberships and history remain.
+
+Governed products stage `workflowKind=access_revocation` with `revocation.grant`, remaining
+grants and `preservedProductState`. The independent assigned control person approves/rejects.
+OPA is staged first, PostgreSQL second; visibility/lifecycle and the confirmed policy remain
+unchanged on rejection/failure. Ungoverned revocations use the existing PostgreSQL projection
+and pending OPA bundle flow. The UI distinguishes request, activation and confirmed completion.
+
+`GET /api/v1/data-products/{id}/access-permission-events` exposes the complete safe permission
+log to those readers, independently of current entitlement. Existing append-only `audit_events`
+store the product UUID, initiating actor and revision under `resource_type=access-permission`.
+Effective checkpoints use deterministic UUIDs and conflict-safe inserts only after exact OPA/
+PostgreSQL convergence, including ordinary policy publication, renewal and full policy revoke.
+Each checkpoint records canonical before/after grants grouped by subject with `granted`,
+`changed` or `revoked`; duplicate acknowledgements do not duplicate events. Requested/rejected
+revocations are distinct. Old confirmed policy revisions remain inspectable without rewriting
+evidence. No request purposes, private comments, credentials, Rego or diagnostics are returned.
+Search and incremental display allow every returned event to be inspected.
+
+## Product access request history
+
+`GET /api/v1/data-products/{product_id}/access-requests` exposes open and completed requests
+to the product's current owners/deputies and `catalogUsage.responsibleUserIds`, using the same
+responsibility boundary as the owner inbox. It rejects unrelated readers with 403 and returns
+404 for unknown products. Responses use `Cache-Control: no-store`. The existing public
+permission registry/log does not grant access to private purposes, contact details or notes.
+
+The product access workspace lists requests directly under **Zugriffsanfragen**; its subnav
+and request KPI link to that section rather than the global tasks page. Arrival time determines
+the default descending order, reversible in the UI; last-update time is displayed separately.
+Every workflow outcome is retained, including rejection, withdrawal and pending activation.
+Details expand in place. Background polling retains sorting and expanded rows; actor/product
+changes cancel reads and clear private details. The global task inbox remains open-only.
+This is a read projection of existing request records, with no new persisted structure.
+
 ## Requester decision messages
 
 The original implementation updated a request's status but created only the owner's review

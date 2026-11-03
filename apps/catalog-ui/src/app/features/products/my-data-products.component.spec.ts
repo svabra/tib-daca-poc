@@ -47,6 +47,33 @@ const IDENTITY_USERS = [
 ];
 
 describe('MyDataProductsComponent quality medals', () => {
+  it('defaults to offered only when this identity offers products, and preserves explicit choices as data loads', async () => {
+    const actor=signal('kassandra.valdata'), products=signal<typeof FALLBACK_PRODUCTS>([]);
+    const api={identityUser:signal(IDENTITY_USERS[0]),identityUserId:actor,identityUsers:()=>IDENTITY_USERS,loading:signal(true),usingFallback:signal(false),products,ownedAccessConsumers:signal([])};
+    await TestBed.configureTestingModule({imports:[MyDataProductsComponent],providers:[provideRouter([]),
+      {provide:CatalogApiService,useValue:api},{provide:ActivatedRoute,useValue:{snapshot:{queryParamMap:convertToParamMap({})}}},
+    ]}).compileComponents();
+    const fixture=TestBed.createComponent(MyDataProductsComponent), component=fixture.componentInstance;
+    expect(component.filter()).toBe('all');
+    products.set(FALLBACK_PRODUCTS);api.loading.set(false);fixture.detectChanges();
+    expect(component.filter()).toBe('offered');expect(fixture.nativeElement.querySelector('h1').textContent).toBe('Datenprodukte');
+    component.selectFilter('all');products.set([...FALLBACK_PRODUCTS]);expect(component.filter()).toBe('all');
+    actor.set('no-products-user');expect(component.filter()).toBe('all');
+    component.selectFilter('offered');products.set([...FALLBACK_PRODUCTS]);expect(component.filter()).toBe('offered');
+    component.resetFilters();expect(component.filter()).toBe('all');
+    fixture.destroy();TestBed.resetTestingModule();
+  });
+
+  it('honors an explicit offered URL filter even when the identity offers no products', async () => {
+    const api={identityUser:signal(IDENTITY_USERS[0]),identityUserId:()=> 'no-products-user',identityUsers:()=>IDENTITY_USERS,loading:signal(false),usingFallback:signal(false),products:signal(FALLBACK_PRODUCTS),ownedAccessConsumers:signal([])};
+    await TestBed.configureTestingModule({imports:[MyDataProductsComponent],providers:[provideRouter([]),
+      {provide:CatalogApiService,useValue:api},{provide:ActivatedRoute,useValue:{snapshot:{queryParamMap:convertToParamMap({relationship:'offered'})}}},
+    ]}).compileComponents();
+    const fixture=TestBed.createComponent(MyDataProductsComponent);
+    expect(fixture.componentInstance.filter()).toBe('offered');expect(fixture.componentInstance.filteredProducts()).toHaveLength(0);
+    fixture.destroy();TestBed.resetTestingModule();
+  });
+
   it('shows exactly one quality medal for every product in table and records views', async () => {
     const products = FALLBACK_PRODUCTS.slice(0, 2).map((product, index) => ({
       ...product,
@@ -80,7 +107,7 @@ describe('MyDataProductsComponent quality medals', () => {
     }).compileComponents();
 
     const fixture = TestBed.createComponent(MyDataProductsComponent);
-    fixture.componentInstance.filter.set('all');
+    fixture.componentInstance.selectFilter('all');
     fixture.detectChanges();
 
     const tableRows = fixture.nativeElement.querySelectorAll('.product-table tbody tr');
@@ -135,7 +162,7 @@ describe('MyDataProductsComponent quality medals', () => {
     }).compileComponents();
 
     const fixture = TestBed.createComponent(MyDataProductsComponent);
-    fixture.componentInstance.filter.set('all');
+    fixture.componentInstance.selectFilter('all');
     fixture.detectChanges();
 
     const root = fixture.nativeElement as HTMLElement;
@@ -234,7 +261,7 @@ describe('MyDataProductsComponent quality medals', () => {
       ],
     }).compileComponents();
     const fixture = TestBed.createComponent(MyDataProductsComponent);
-    fixture.componentInstance.filter.set('all');
+    fixture.componentInstance.selectFilter('all');
     fixture.detectChanges();
 
     const tableOwner = fixture.nativeElement.querySelector('.product-table-owner') as HTMLElement;
@@ -310,7 +337,7 @@ describe('MyDataProductsComponent quality medals', () => {
       ],
     }).compileComponents();
     const fixture = TestBed.createComponent(MyDataProductsComponent);
-    fixture.componentInstance.filter.set('all');
+    fixture.componentInstance.selectFilter('all');
     fixture.detectChanges();
 
     const tableOwner = fixture.nativeElement.querySelector('.product-table-owner') as HTMLElement;

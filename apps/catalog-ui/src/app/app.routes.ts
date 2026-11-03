@@ -19,7 +19,7 @@ export const routes: Routes = [
     pathMatch: 'full',
     loadComponent: () => import('./features/products/my-data-products.component').then((m) => m.MyDataProductsComponent),
     data: { preload: true },
-    title: 'Meine Datenprodukte | DaCa',
+    title: 'Datenprodukte | DaCa',
   },
   ...DATA_MODEL_ROUTES,
   {

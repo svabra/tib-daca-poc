@@ -681,6 +681,13 @@ export class CatalogApiService {
       .pipe(timeout(3000));
   }
 
+  loadProductAccessRequests(productId: string): Observable<readonly StoredAccessRequest[]> {
+    return this.http.get<StoredAccessRequest[]>(
+      `/api/v1/data-products/${encodeURIComponent(productId)}/access-requests`,
+      { headers: this.identity.headers() },
+    ).pipe(timeout(5000));
+  }
+
   loadOwnedAccessConsumers(): Observable<readonly OwnedAccessConsumer[]> {
     return this.http.get<OwnedAccessConsumer[]>('/api/v1/access-consumers/owned', {
       headers: this.identity.headers(),
@@ -1014,6 +1021,18 @@ export class CatalogApiService {
       `/api/v1/data-products/${encodeURIComponent(productId)}/effective-access`,
       { headers: this.identity.headers() },
     ).pipe(timeout(3000));
+  }
+
+  loadProductPermissions(productId:string):Observable<import('./catalog.models').ProductPermissionsResponse>{
+    return this.http.get<import('./catalog.models').ProductPermissionsResponse>(`/api/v1/data-products/${encodeURIComponent(productId)}/access-permissions`,{headers:this.identity.headers()}).pipe(timeout(10000));
+  }
+  loadPermissionLog(productId:string):Observable<import('./catalog.models').PermissionLogResponse>{
+    return this.http.get<import('./catalog.models').PermissionLogResponse>(`/api/v1/data-products/${encodeURIComponent(productId)}/access-permission-events`,{headers:this.identity.headers()}).pipe(timeout(10000));
+  }
+  revokeProductPermission(productId:string,grantId:string,revision:number):Observable<import('./catalog.models').PermissionRevocationResponse>{
+    return this.http.delete<import('./catalog.models').PermissionRevocationResponse>(`/api/v1/data-products/${encodeURIComponent(productId)}/access-permissions/${encodeURIComponent(grantId)}`,{headers:this.identity.headers().set('If-Match',`"${revision}"`)}).pipe(
+      tap(()=>{this.refreshProducts();this.refreshWorkflowTasks();}),
+    );
   }
 
   loadAccessRenewalFixture(): Observable<AccessRenewalFixtureState> {

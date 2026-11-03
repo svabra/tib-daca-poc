@@ -156,6 +156,17 @@ from .policy import (
 from .problems import install_problem_handlers
 from .product_activity import is_privileged_product_auditor
 from .product_activity import product_activity as build_product_activity
+from .product_permissions import (
+    PermissionLogResponse,
+    PermissionRevocationResponse,
+    ProductPermissionsResponse,
+    permission_log,
+    record_permission_activation,
+    revoke_permission,
+)
+from .product_permissions import (
+    registry as permission_registry,
+)
 from .representation_api import create_representation_router
 from .schemas import (
     AccessGovernanceCreate,
@@ -457,7 +468,7 @@ def active_bundle_state(session: Session) -> tuple[list[ActivePolicy], str]:
     for submission in session.scalars(
         select(GovernanceSubmission).where(GovernanceSubmission.status == "approved_deploying")
     ):
-        if submission.review_snapshot.get("workflowKind") != "access_renewal":
+        if submission.review_snapshot.get("workflowKind") not in {"access_renewal", "access_revocation"}:
             continue
         pending = session.get(PolicyRevision, submission.policy_revision_id)
         if pending is not None and pending.status == "published":
@@ -788,6 +799,7 @@ def finalize_policy_activation(
 ) -> bool:
     """Apply post-deployment effects only after both enforcement targets agree."""
     finalize_submission_deployment(session, product, policy, settings)
+    record_permission_activation(session, product, policy)
     if not policy_is_fully_deployed(session, policy):
         return False
     complete_tasks(session, product.id, "access_governance")
@@ -5765,6 +5777,32 @@ def create_router() -> APIRouter:
         return owned_access_consumers(session, actor)
 
     @router.get(
+        "/data-products/{product_id}/access-requests",
+        response_model=list[AccessRequestResponse],
+        tags=["access requests"],
+    )
+    def list_product_access_requests(
+        product_id: uuid.UUID,
+        response: Response,
+        session: SessionDep,
+        actor: ActorDep,
+    ) -> list[AccessRequestResponse]:
+        product = find_product(session, product_id)
+        usage = product.extra_metadata.get("catalogUsage", {})
+        responsible = usage.get("responsibleUserIds", []) if isinstance(usage, dict) else []
+        if actor not in product_owners(session, product) and actor not in responsible:
+            raise HTTPException(403, "Only responsible users may inspect product access requests")
+        response.headers["Cache-Control"] = "no-store"
+        return [
+            access_request_response(session, item)
+            for item in session.scalars(
+                select(AccessRequest)
+                .where(AccessRequest.data_product_id == product_id)
+                .order_by(AccessRequest.created_at.desc(), AccessRequest.id.desc())
+            )
+        ]
+
+    @router.get(
         "/data-products/{product_id}/access-requests/mine",
         response_model=list[AccessRequestResponse],
         tags=["access requests"],
@@ -6513,6 +6551,33 @@ def create_router() -> APIRouter:
                 .order_by(MetadataDeliveryOutbox.created_at, MetadataDeliveryOutbox.id)
             )
         )
+
+    @router.get("/data-products/{product_id}/access-permissions", response_model=ProductPermissionsResponse, tags=["permissions"])
+    def get_product_permissions(product_id: uuid.UUID, response: Response, session: SessionDep, actor: OptionalActorDep):
+        response.headers["Cache-Control"] = "no-store"
+        product = find_product(session, product_id)
+        require_product_view(session, product, actor)
+        return permission_registry(session, product, actor)
+
+    @router.get("/data-products/{product_id}/access-permission-events", response_model=PermissionLogResponse, tags=["permissions"])
+    def get_permission_events(product_id: uuid.UUID, response: Response, session: SessionDep, actor: OptionalActorDep):
+        response.headers["Cache-Control"] = "no-store"
+        product = find_product(session, product_id)
+        require_product_view(session, product, actor)
+        return permission_log(session, product)
+
+    @router.delete("/data-products/{product_id}/access-permissions/{grant_id}", response_model=PermissionRevocationResponse, tags=["permissions"])
+    def delete_product_permission(product_id: uuid.UUID, grant_id: str, request: Request,
+                                  session: SessionDep, actor: ActorDep,
+                                  if_match: Annotated[str | None, Header(alias="If-Match")] = None):
+        product = session.scalar(select(DataProduct).where(DataProduct.id == product_id).with_for_update())
+        if product is None:
+            raise HTTPException(404, "Data product not found")
+        require_product_owner(session, product, actor)
+        current = latest_policy(session, product_id)
+        require_revision(if_match, current.revision if current else 0)
+        return revoke_permission(session, product, grant_id, actor, request.app.state.settings,
+                                 four_eyes=requires_four_eyes(session, product))
 
     @router.get(
         "/data-products/{product_id}/policies",

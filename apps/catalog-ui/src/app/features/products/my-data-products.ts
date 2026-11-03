@@ -8,7 +8,7 @@ export type ProductRelationshipFilter = 'all' | 'offered' | 'sharedByMe' | 'requ
 
 export const DEFAULT_PRODUCT_RELATIONSHIP_FILTER: ProductRelationshipFilter = 'offered';
 
-export function initialProductRelationshipFilter(value: string | null | undefined): ProductRelationshipFilter {
+export function initialProductRelationshipFilter(value: string | null | undefined, hasOfferedProducts = true): ProductRelationshipFilter {
   const supportedFilters: readonly ProductRelationshipFilter[] = [
     'all',
     'offered',
@@ -18,7 +18,7 @@ export function initialProductRelationshipFilter(value: string | null | undefine
   ];
   return supportedFilters.includes(value as ProductRelationshipFilter)
     ? value as ProductRelationshipFilter
-    : DEFAULT_PRODUCT_RELATIONSHIP_FILTER;
+    : hasOfferedProducts ? DEFAULT_PRODUCT_RELATIONSHIP_FILTER : 'all';
 }
 
 export interface MachineConsumer {

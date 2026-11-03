@@ -18,14 +18,14 @@ import { GovernanceDeploymentPoller } from './governance-deployment-poller';
     <section class="daca-page-heading">
       @if (submission(); as item) {
         <div>
-          <p class="daca-eyebrow">Vier-Augen-Prinzip · {{ isAccessRenewal(item) ? 'Zugriffsverlängerung' : 'Publikationsfreigabe' }}</p>
-          <h1>{{ isAccessRenewal(item) ? 'Zugriffsverlängerung prüfen' : 'Governance-Snapshot prüfen' }}</h1>
+          <p class="daca-eyebrow">Vier-Augen-Prinzip · {{ isRevocation(item) ? 'Berechtigungsentzug' : isAccessRenewal(item) ? 'Zugriffsverlängerung' : 'Publikationsfreigabe' }}</p>
+          <h1>{{ isRevocation(item) ? 'Berechtigungsentzug prüfen' : isAccessRenewal(item) ? 'Zugriffsverlängerung prüfen' : 'Governance-Snapshot prüfen' }}</h1>
           <p>Der Entscheid gilt exakt für die angezeigte Policy-Revision. Nachträgliche Änderungen erfordern eine neue Einreichung.</p>
         </div>
       } @else {
         <div><p class="daca-eyebrow">Vier-Augen-Prinzip</p><h1>Governance-Snapshot prüfen</h1><p>Der unveränderliche Prüfsnapshot wird geladen.</p></div>
       }
-      @if (submission(); as item) { <daca-status-badge [tone]="item.status === 'approved' ? 'green' : item.status === 'rejected' || item.status === 'deployment_failed' ? 'red' : 'orange'">{{ statusLabel(item.status, isAccessRenewal(item)) }}</daca-status-badge> }
+      @if (submission(); as item) { <daca-status-badge [tone]="item.status === 'approved' ? 'green' : item.status === 'rejected' || item.status === 'deployment_failed' ? 'red' : 'orange'">{{ isRevocation(item) ? revocationStatus(item.status) : statusLabel(item.status, isAccessRenewal(item)) }}</daca-status-badge> }
     </section>
 
     @if (loading()) { <section class="daca-card"><div class="daca-card-body">Prüfsnapshot wird geladen …</div></section> }
@@ -40,12 +40,15 @@ import { GovernanceDeploymentPoller } from './governance-deployment-poller';
               <div><dt>Kontrollperson</dt><dd>{{ item.reviewSnapshot.approver.displayName }}<small>{{ item.reviewSnapshot.approver.organization }}</small></dd></div>
               <div><dt>Klassifikation</dt><dd>{{ item.reviewSnapshot.dataProduct.classification }}</dd></div>
               <div><dt>Eingereicht</dt><dd>{{ item.submittedAt | date: 'dd.MM.yyyy, HH:mm' }}</dd></div>
-              @if (!isAccessRenewal(item)) {
+              @if (!isAccessChange(item)) {
                 <div><dt>Auffindbarkeit</dt><dd>{{ item.reviewSnapshot.discoverable ? 'Nach Deployment aktivieren' : 'Nicht aktivieren' }}</dd></div>
                 <div><dt>BAR</dt><dd>{{ item.archiveEvidence['enabled'] ? 'Automatisch · 20 Jahre' : 'Deaktiviert' }}</dd></div>
               }
             </dl>
 
+            @if (isRevocation(item)) {
+              @if(item.reviewSnapshot.revocation;as evidence){<section class="renewal-continuity"><h3>Diese Berechtigung wird entzogen</h3><p>{{subjectTypeLabel(evidence.grant.subject.type)}} · {{evidence.grant.subject.id}}</p><p>{{formatProtocols(evidence.grant.protocols)}} · {{variantLabel(evidence.grant.dataVariant)}} · {{evidence.grant.validFrom}} bis {{evidence.grant.validUntil|accessEndDate}}</p><p>Der Entzug betrifft nur diese Freigabe. Andere Freigaben, Auffindbarkeit und Produktstatus bleiben erhalten. Die nachfolgende Liste zeigt den verbleibenden Policy-Stand.</p></section>}
+            }
             @if (isAccessRenewal(item)) {
               @if (renewalEvidence(item); as renewal) {
                 <section class="renewal-comparison" aria-labelledby="renewal-comparison-title">
@@ -133,9 +136,11 @@ import { GovernanceDeploymentPoller } from './governance-deployment-poller';
         </section>
 
         <aside class="daca-card exposure-review">
-          <div class="daca-card-header"><div><p class="daca-eyebrow">Entscheid durch {{ item.reviewSnapshot.approver.displayName }}</p><h2>{{ isAccessRenewal(item) ? 'Verlängerung freigeben' : 'Publikation freigeben' }}</h2></div></div>
+          <div class="daca-card-header"><div><p class="daca-eyebrow">Entscheid durch {{ item.reviewSnapshot.approver.displayName }}</p><h2>{{ isRevocation(item) ? 'Berechtigungsentzug freigeben' : isAccessRenewal(item) ? 'Verlängerung freigeben' : 'Publikation freigeben' }}</h2></div></div>
           <div class="daca-card-body">
-            @if (isAccessRenewal(item)) {
+            @if(isRevocation(item)){
+              <div class="exposure-guardrail"><strong>{{revocationStatus(item.status)}}</strong><p>Der Entzug wird erst nach Bestätigung der neuen Revision durch OPA und PostgreSQL als abgeschlossen angezeigt. Die bisherige Policy bleibt bis dahin der bestätigte Stand; bei Ablehnung bleiben die Freigaben unverändert.</p></div>
+            } @else if (isAccessRenewal(item)) {
               <div class="exposure-guardrail"><strong>{{ renewalGuardrailTitle(item.status) }}</strong><p>{{ renewalGuardrailText(item) }}</p></div>
             } @else {
               <div class="exposure-guardrail"><strong>Default deny bis zum Doppel-Deployment</strong><p>Auch nach Ihrer Genehmigung bleiben Auffindbarkeit und Zugriff gesperrt, bis PostgreSQL und OPA genau Revision {{ item.policyRevision }} bestätigt haben.</p></div>
@@ -227,6 +232,9 @@ export class GovernanceReviewComponent implements OnDestroy {
   isAccessRenewal(submission: GovernanceSubmission): boolean {
     return submission.reviewSnapshot.workflowKind === 'access_renewal';
   }
+  isRevocation(submission:GovernanceSubmission):boolean{return submission.reviewSnapshot.workflowKind==='access_revocation';}
+  isAccessChange(submission:GovernanceSubmission):boolean{return this.isAccessRenewal(submission)||this.isRevocation(submission);}
+  revocationStatus(status:GovernanceSubmission['status']):string{return({pending_approval:'Entzug zu prüfen',approved_deploying:'Entzug genehmigt · Aktivierung läuft',approved:'Berechtigung entzogen',rejected:'Entzug abgelehnt',deployment_failed:'Aktivierung fehlgeschlagen'})[status];}
 
   renewalEvidence(submission: GovernanceSubmission): GovernanceSubmission['reviewSnapshot']['renewal'] | null {
     return this.isAccessRenewal(submission) ? submission.reviewSnapshot.renewal ?? null : null;
@@ -311,6 +319,7 @@ export class GovernanceReviewComponent implements OnDestroy {
   }
 
   approveLabel(submission: GovernanceSubmission): string {
+    if(this.isRevocation(submission))return submission.status==='deployment_failed'?'Aktivierung erneut starten':'Entzug genehmigen und Aktivierung starten';
     if (!this.isAccessRenewal(submission)) return 'Genehmigen und Deployment starten';
     return submission.status === 'deployment_failed'
       ? 'Aktivierung erneut starten'
@@ -325,7 +334,7 @@ export class GovernanceReviewComponent implements OnDestroy {
       next: (updated) => {
         this.submission.set(updated); this.deciding.set(false);
         if (updated.status === 'approved_deploying') {
-          this.notice.set(this.isAccessRenewal(updated)
+          this.notice.set(this.isAccessChange(updated)
             ? 'Genehmigt. DaCa aktiviert zuerst OPA und danach PostgreSQL. Die bestehende Policy bleibt bis zur Bestätigung beider Ziele aktiv.'
             : 'Genehmigt. PostgreSQL ist bestätigt; DaCa wartet fail-closed auf die OPA-Bestätigung.');
           this.scheduleDeploymentPoll(updated.id);
@@ -351,7 +360,9 @@ export class GovernanceReviewComponent implements OnDestroy {
   }
 
   private finishTerminalStatus(submission: GovernanceSubmission): void {
-    if (submission.status === 'approved') {
+    if(this.isRevocation(submission)){
+      this.notice.set(submission.status==='approved'?'Berechtigung entzogen. OPA und PostgreSQL haben die neue Revision bestätigt.':submission.status==='rejected'?'Entzug abgelehnt. Die bestehenden Freigaben bleiben unverändert.':'Der Entzug ist technisch nicht bestätigt. Die bisherige Policy bleibt der bestätigte Stand.');
+    } else if (submission.status === 'approved') {
       this.notice.set(this.isAccessRenewal(submission)
         ? 'Verlängerung aktiviert. OPA und PostgreSQL haben exakt diese neue Policy-Revision bestätigt.'
         : 'Publiziert. PostgreSQL und OPA haben exakt diese Policy-Revision bestätigt.');

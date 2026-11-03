@@ -16,8 +16,12 @@ describe('DaCa release history', () => {
     const releases = dacaReleaseHistory('catalog', 'de');
     expect(releases[0]?.version).toBe(DACA_VERSION);
     expect(releases.find(release => release.version === '0.2.0')?.features.some(feature => feature.title === 'Domänen an andere Personen abtreten')).toBe(true);
-    expect(releases[0]?.features.filter(feature => feature.tags.includes('Bugfix'))).toHaveLength(3);
-    expect(releases[0]?.features.some(feature => feature.tags.includes('Benachrichtigungen'))).toBe(true);
+    expect(releases[0]?.features).toHaveLength(5);
+    expect(releases[0]?.features.filter(feature => feature.tags.includes('Bugfix'))).toHaveLength(1);
+    expect(releases[0]?.features.some(feature => feature.tags.includes('Berechtigungen'))).toBe(true);
+    expect(releases.find(release => release.version === '0.3.7')?.features).toHaveLength(7);
+    expect(releases.find(release => release.version === '0.3.7')?.features.filter(feature => feature.tags.includes('Bugfix'))).toHaveLength(3);
+    expect(releases.find(release => release.version === '0.3.7')?.features.some(feature => feature.tags.includes('Benachrichtigungen'))).toBe(true);
     expect(releases.find(release => release.version === '0.3.6')?.features.some(feature => feature.tags.includes('Datenraum'))).toBe(true);
     expect(releases.find(release => release.version === '0.3.6')?.features.some(feature => feature.tags.includes('CPS'))).toBe(true);
     expect(releases[0]?.features.some(feature => /Blitz|lightning|Easter/i.test(feature.title+' '+feature.description))).toBe(false);

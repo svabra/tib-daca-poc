@@ -23,7 +23,7 @@
 .org-view-filters [role=switch] { flex:none; }
 @media(max-width:700px) { .org-navigation-row { padding-inline:16px; }.org-view-filters { flex-basis:100%; }.org-relationship-filter { max-width:100%; } }
 .org-viewport { position:relative; overflow:auto; isolation:isolate; }
-.org-stage { position:relative; min-width:960px; width:100%; max-width:1000px; margin-inline:auto; aspect-ratio:960/650; background:radial-gradient(at center,var(--daca-blue-soft),transparent 70%); }
+.org-stage { position:relative; min-width:960px; width:100%; max-width:1000px; margin-inline:auto; aspect-ratio:960/740; background:radial-gradient(at center,var(--daca-blue-soft),transparent 70%); }
 .org-stage.is-overview { background:linear-gradient(180deg,transparent,var(--daca-blue-soft)); }
 .org-geometry { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
 .org-bubble-halo { fill:var(--daca-blue-soft); opacity:.5; }

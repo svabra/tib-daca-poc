@@ -426,6 +426,7 @@ export interface GovernanceSubmission {
       requestedPurpose: string;
       requestedValidUntil: string;
     };
+    revocation?: {grant:PermissionScope};
     submittedAt: string;
   };
   archiveEvidence: Record<string, unknown>;
@@ -561,6 +562,27 @@ export interface OwnedAccessConsumer {
   displayName: string;
   organization: string;
   grants: AccessConsumerGrant[];
+}
+
+export type PermissionScope=NonNullable<PolicyDefinition['grants']>[number];
+export interface PublicPermission {
+  grantId:string;displayName:string;organization:string;grant:PermissionScope;
+  groupMembers:{id:string;displayName:string;organization:string}[];
+}
+export interface ProductPermissionsResponse {
+  asOfDate:string;
+  productId:string;policyRevision:number|null;latestRevision:number;state:'confirmed'|'pending'|'failed';
+  canManage:boolean;canRevoke:boolean;items:PublicPermission[];
+}
+export interface PermissionLogItem {
+  id:string;action:'granted'|'changed'|'revoked'|'revocation_requested'|'revocation_rejected';
+  occurredAt:string;actorId:string;actorName:string;subjectType:AccessSubjectType;subjectId:string;
+  displayName:string;organization:string;policyRevision:number;before:PermissionScope[];after:PermissionScope[];
+  source:'audit'|'policy_history';
+}
+export interface PermissionLogResponse {items:PermissionLogItem[];total:number;}
+export interface PermissionRevocationResponse {
+  policyId:string;policyRevision:number;state:'pending_approval'|'activating';governanceSubmissionId:string|null;
 }
 
 export type ProductActivityCategory =

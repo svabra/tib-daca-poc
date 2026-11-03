@@ -1,5 +1,39 @@
 # BIT DaCa
 
+Release **0.3.8** adds searchable current permissions, individual revocation and public
+permission logs, inline open/answered access-request history, Mapping draft saving despite
+type warnings, the **Datenprodukte** label with an adaptive start filter, and space below
+the organization boundary. German/English release notes describe these five changes; 0.3.7
+is retained in the archive. Managed application, API, PWA and OpenShift versions are synchronized.
+
+The data-landscape canvas now extends below the blue organization boundary, leaving a full
+external organization-card row with movement clearance. Cards can be dragged, moved by keyboard
+or grouped there and saved/restored in normal and fullscreen views. Existing anchors retain
+their coordinate origin; external organizations still cannot enter the focused boundary.
+
+The product catalog is labelled **Datenprodukte** throughout navigation, page titles and
+breadcrumbs. It initially selects **Von mir angeboten** when the current identity offers
+products; otherwise it selects **Alle Datenprodukte**. Explicit URL filters and manual filter
+choices take precedence, including while catalog data loads or refreshes.
+
+**Freigaben → Zugriffsanfragen** shows open and answered product requests directly on the
+product access page. Requests default to newest arrival first, with reversible sorting,
+arrival/last-edit timestamps, outcome and expandable details. Current Data Owners, deputies
+and existing responsible users can inspect this private request history; the task inbox
+continues to contain open work only.
+
+Mapping drafts can be saved directly in the detail inspector, including type conflicts and
+validation warnings. **Speichern & zur Prüfung einreichen** persists workspace changes before
+submitting the saved mapping revision. Warnings remain visible; validation and approval remain
+separate from draft storage. Failed submission preserves the successfully saved draft.
+
+Product **Freigaben** now shows a searchable registry of currently valid person, machine and
+group permissions, including frozen group members and scope/validity conditions. Every reader
+who may see the product may also inspect and search its permission history, with actor, revision
+and before/after evidence. Data Owners can revoke one exact grant after confirmation; unrelated
+grants remain intact. Governed products retain independent four-eyes review. Revocation is
+reported complete only after matching OPA/PostgreSQL confirmation. See [PBAC](docs/security/pbac.md).
+
 Release **0.3.7** includes product-page access requests, indefinite initial request dates,
 current Data Owner receipt contacts, request/decision notifications and Control-click context
 navigation. It also fixes missing CSV datatypes, restored physical field relations and logical

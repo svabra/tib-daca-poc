@@ -34,6 +34,7 @@ describe('Mapping workspace live refresh',()=>{
       listRepresentations:vi.fn(()=>of(state.snapshot.tables.map((table)=>({physicalSnapshotId:state.snapshot.id,physicalTableId:table.id})))),
       loadPhysicalSnapshot:vi.fn(()=>of(state.snapshot)),loadCanvasLayout:vi.fn(()=>of(state.layout)),loadDrift:vi.fn(()=>of(null)),
       saveWorkspaceDraft:vi.fn(),
+      submitMapping:vi.fn(),
       removePhysicalDomain:vi.fn(),
       rememberMappingWorkspace:vi.fn(()=>of(undefined)),
     };
@@ -51,6 +52,47 @@ describe('Mapping workspace live refresh',()=>{
     return{fixture,component:fixture.componentInstance,state,api,actor,secondTable};
   }
   function visibleIds(root:HTMLElement,attribute:string):string[]{return[...root.querySelectorAll(`[${attribute}]`)].map((element)=>element.getAttribute(attribute)!).sort();}
+
+  it('saves a local draft with a type warning before submitting the persisted successor',()=>{
+    const {component,api}=setup();
+    component.manageScopes.set([{role:'data_steward',descendantOrganizationIds:[component.facade.model()!.office]}] as any);
+    const previous=component.facade.mappings()[0];
+    const draft=component.facade.reviseMapping(previous.id,{mappingType:'Transformed',transformationRule:'String(value)',physicalColumnIds:['column-valid']})!;
+    expect(draft.validationResult?.issues).toContainEqual(expect.objectContaining({code:'type_mismatch',severity:'warning'}));
+    const save=new Subject<any>(),submit=new Subject<ApiResult<AssetMapping>>();
+    api.saveWorkspaceDraft.mockReturnValue(save);api.submitMapping.mockReturnValue(submit);
+    component.submitMapping(draft.id);
+    expect(api.saveWorkspaceDraft).toHaveBeenCalledOnce();
+    expect(api.submitMapping).not.toHaveBeenCalled();
+    expect(component.saving()).toBe(true);
+    const persisted={...draft,id:'persisted-mapping',versionId:'saved-version',lockVersion:7};
+    save.next({mappings:[{clientId:draft.id,mapping:persisted}],items:[]});save.complete();
+    expect(api.submitMapping).toHaveBeenCalledExactlyOnceWith(persisted.id,'saved-version','"7"');
+    expect(component.saving()).toBe(true);
+    submit.next({body:{...persisted,status:'review_pending'},etag:'"1"'});submit.complete();
+    expect(component.saving()).toBe(false);
+    expect(component.facade.mappings().find(item=>item.id===persisted.id)?.status).toBe('review_pending');
+    expect(component.facade.announcement()).toContain('gespeichert und zur Prüfung');
+  });
+
+  it('keeps a failed save local and never submits it; a failed submit preserves the saved draft',()=>{
+    const {component,api}=setup();
+    component.manageScopes.set([{role:'data_steward',descendantOrganizationIds:[component.facade.model()!.office]}] as any);
+    const previous=component.facade.mappings()[0];
+    component.facade.reviseMapping(previous.id,{mappingType:'Transformed',transformationRule:'String(value)'});
+    api.saveWorkspaceDraft.mockReturnValueOnce(throwError(()=>new Error('save conflict')));
+    component.submitMapping(previous.id);
+    expect(api.submitMapping).not.toHaveBeenCalled();
+    expect(component.facade.dirtyIds().has(previous.id)).toBe(true);
+    const saved={...component.facade.mappings()[0],versionId:'persisted-version',lockVersion:3};
+    api.saveWorkspaceDraft.mockReturnValueOnce(of({mappings:[{clientId:previous.id,mapping:saved}],items:[]}));
+    api.submitMapping.mockReturnValueOnce(throwError(()=>new Error('submit conflict')));
+    component.submitMapping(previous.id);
+    expect(component.facade.dirtyIds().has(previous.id)).toBe(false);
+    expect(component.facade.mappings()[0].versionId).toBe('persisted-version');
+    expect(component.error()).toContain('Entwurf wurde gespeichert');
+    expect(component.saving()).toBe(false);
+  });
 
   it('updates physical labels only after confirmed removal and preserves draft mappings on failures',()=>{
     const {component,api}=setup();

@@ -14,7 +14,6 @@ import {
   canTransferOwnership,
   DataOwnerProfile,
   dataConsumerCountLabel,
-  DEFAULT_PRODUCT_RELATIONSHIP_FILTER,
   deliveryProtocols,
   initialProductRelationshipFilter,
   matchesProduct,
@@ -81,7 +80,7 @@ interface DeputyTooltipState {
             [class.is-active]="filter() === item.value"
             [attr.aria-pressed]="filter() === item.value"
             aria-controls="product-results"
-            (click)="filter.set(item.value)"
+            (click)="selectFilter(item.value)"
           >
             <span>{{ i18n.t(filterKey(item.value)) }}</span><strong>{{ filterCount(item.value) }}</strong>
           </button>
@@ -592,7 +591,15 @@ export class MyDataProductsComponent implements OnDestroy {
   readonly i18n = inject(CatalogI18nService);
   private readonly route = inject(ActivatedRoute);
   readonly query = signal('');
-  readonly filter = signal<ProductRelationshipFilter>(DEFAULT_PRODUCT_RELATIONSHIP_FILTER);
+  private readonly filterChoice = signal<{ actor: string; value: ProductRelationshipFilter } | null>(null);
+  readonly filter = computed(() => {
+    const actor = this.api.identityUserId(), choice = this.filterChoice();
+    if (choice?.actor === actor) return choice.value;
+    return initialProductRelationshipFilter(
+      this.route.snapshot.queryParamMap.get('relationship'),
+      this.api.products().some(product => matchesProduct(product, '', 'offered', actor)),
+    );
+  });
   readonly viewMode = signal<'records' | 'table'>('table');
   readonly activeProductMenuId = signal<string | null>(null);
   readonly activeDeputyTooltip = signal<DeputyTooltipState | null>(null);
@@ -641,10 +648,8 @@ export class MyDataProductsComponent implements OnDestroy {
     });
   });
 
-  constructor() {
-    this.filter.set(initialProductRelationshipFilter(
-      this.route.snapshot.queryParamMap.get('relationship'),
-    ));
+  selectFilter(value: ProductRelationshipFilter): void {
+    this.filterChoice.set({ actor: this.api.identityUserId(), value });
   }
 
   updateQuery(event: Event): void {
@@ -1032,6 +1037,6 @@ export class MyDataProductsComponent implements OnDestroy {
 
   resetFilters(): void {
     this.query.set('');
-    this.filter.set('all');
+    this.selectFilter('all');
   }
 }

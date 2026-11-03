@@ -3,6 +3,13 @@ import { provideRouter } from '@angular/router';
 import { ProductWorkspaceNavComponent } from './product-workspace-nav.component';
 
 describe('ProductWorkspaceNavComponent', () => {
+  it('opens product access requests on the access page instead of the tasks page', () => {
+    TestBed.configureTestingModule({imports:[ProductWorkspaceNavComponent],providers:[provideRouter([])]});
+    const fixture=TestBed.createComponent(ProductWorkspaceNavComponent);
+    fixture.componentRef.setInput('productId','product-1');fixture.componentRef.setInput('productTitle','Produkt');fixture.componentRef.setInput('activeSection','access');fixture.detectChanges();
+    const link=[...fixture.nativeElement.querySelectorAll('.product-access-nav a')].find((item:any)=>item.textContent==='Zugriffsanfragen') as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('/products/product-1/access#access-requests');
+  });
   it('links to the product history after lineage and marks it as the current page', async () => {
     await TestBed.configureTestingModule({
       imports: [ProductWorkspaceNavComponent],

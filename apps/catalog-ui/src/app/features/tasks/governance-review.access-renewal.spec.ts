@@ -163,6 +163,17 @@ async function render(initial: GovernanceSubmission = RENEWAL, decisionResult?: 
 
 describe('GovernanceReviewComponent access renewal', () => {
   afterEach(() => TestBed.resetTestingModule());
+  it('reviews a single-grant revocation without implying a new product publication',async()=>{
+    const initial:GovernanceSubmission={...RENEWAL,reviewSnapshot:{...RENEWAL.reviewSnapshot,workflowKind:'access_revocation',renewal:undefined,revocation:{grant:RENEWAL.reviewSnapshot.grants[0]},grants:[]}};
+    const {fixture,api}=await render(initial,{...initial,status:'approved'});
+    const root=fixture.nativeElement as HTMLElement;
+    expect(root.textContent).toContain('Berechtigungsentzug prüfen');expect(root.textContent).toContain('consumer.user');
+    expect(root.textContent).toContain('Andere Freigaben, Auffindbarkeit und Produktstatus bleiben erhalten');
+    expect(root.textContent).not.toContain('AuffindbarkeitNach Deployment aktivieren');
+    root.querySelector<HTMLButtonElement>('[data-testid=governance-approve]')!.click();fixture.detectChanges();
+    expect(api.decideGovernanceSubmission).toHaveBeenCalledWith(initial.id,1,8,'approve',null);
+    expect(root.textContent).toContain('Berechtigung entzogen. OPA und PostgreSQL');
+  });
 
   it('renders the stored old/new evidence and every immutable condition without assumptions', async () => {
     const { fixture } = await render();

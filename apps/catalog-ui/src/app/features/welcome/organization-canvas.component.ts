@@ -12,7 +12,7 @@ import { UserPreferencesService } from '../../core/user-preferences.service';
 import { optimizeOrganizationNetwork, NetworkPlacement, OrganizationLayoutEdge } from './organization-network-layout';
 import { SearchIconComponent } from '../search/search-icon.component';
 import { TooltipDirective } from '../../shared/tooltip.directive';
-import { ORGANIZATION_BOUNDARY, ORGANIZATION_CARD, ORGANIZATION_FIELD, ORGANIZATION_OVERVIEW_FIELD, ORGANIZATION_TITLE, ORGANIZATION_ANCHOR_Y_OFFSET, OrganizationExclusion, OrganizationField, organizationFieldForHeading, clearsOrganizationHeading, clearsOrganizationBoundary, constrainOrganizationSatellite, organizationSatellite, scatterOrganizations, groupOrganizationDomains } from './organization-layout';
+import { ORGANIZATION_CANVAS_HEIGHT, ORGANIZATION_BOUNDARY, ORGANIZATION_CARD, ORGANIZATION_FIELD, ORGANIZATION_OVERVIEW_FIELD, ORGANIZATION_TITLE, ORGANIZATION_ANCHOR_Y_OFFSET, OrganizationExclusion, OrganizationField, organizationFieldForHeading, clearsOrganizationHeading, clearsOrganizationBoundary, constrainOrganizationSatellite, organizationSatellite, scatterOrganizations, groupOrganizationDomains } from './organization-layout';
 import { emptyOrganizationConfiguration, OrganizationConfiguration, OrganizationView } from './organization-view';
 import { organizationCountLabel } from './organization-count-labels';
 import { organizationFlow } from './organization-flow';
@@ -50,13 +50,14 @@ export class OrganizationCanvasComponent {
     if(document.visibilityState!=='visible')this.clearBitPower();
   }
   readonly packetTailId = `org-highway-tail-${++organizationCanvasSequence}`;
+  readonly canvasHeight=ORGANIZATION_CANVAS_HEIGHT;
   readonly organizationCard=ORGANIZATION_CARD;
   readonly organizationBoundary=ORGANIZATION_BOUNDARY;
   private selectionObjects(){return [...this.offices().map(item=>({...item,id:item.node.id,kind:'offices' as const})),...this.domainBubbles().map(item=>({...item,kind:'offices' as const})),...this.satellites().map(item=>({...item,id:item.node.id,kind:'satellites' as const,width:ORGANIZATION_CARD.width,height:ORGANIZATION_CARD.height}))];}
   readonly selection:CanvasSelectionAdapter={
     context:()=>this.identity.userId()+':'+this.scopeKey(),enabled:()=>this.canArrange(),
-    scale:()=>{const rect=this.stage()?.nativeElement.getBoundingClientRect();return{x:(rect?.width||960)/960,y:(rect?.height||650)/650};},
-    items:()=>this.selectionObjects().map(item=>({...item,minX:item.width/2+8,minY:item.height/2+8,maxX:(item.kind==='offices'?this.officeField().width:960)-item.width/2-8,maxY:(item.kind==='offices'?Math.max(this.officeField().height,...this.layout().map(node=>node.y+node.height/2+8)):650)-item.height/2-8})),
+    scale:()=>{const rect=this.stage()?.nativeElement.getBoundingClientRect();return{x:(rect?.width||960)/960,y:(rect?.height||ORGANIZATION_CANVAS_HEIGHT)/ORGANIZATION_CANVAS_HEIGHT};},
+    items:()=>this.selectionObjects().map(item=>({...item,minX:item.width/2+8,minY:item.height/2+8,maxX:(item.kind==='offices'?this.officeField().width:960)-item.width/2-8,maxY:(item.kind==='offices'?Math.max(this.officeField().height,...this.layout().map(node=>node.y+node.height/2+8)):ORGANIZATION_CANVAS_HEIGHT)-item.height/2-8})),
     accepts:items=>items.every(item=>{const object=this.selectionObjects().find(object=>object.id===item.id);if(!object)return true;return object.kind==='satellites'?clearsOrganizationBoundary({...item,width:object.width,height:object.height}):!this.focus()||clearsOrganizationHeading({...item,width:object.width,height:object.height},this.officeField());}),
     begin:()=>{const before=this.draft(),objects=this.selectionObjects(),scope=this.scopeKey(),current=before.scopes[scope]??{offices:{},satellites:{}};
       this.closeMenu();this.tooltips().forEach(tooltip=>tooltip.close());
@@ -98,7 +99,7 @@ export class OrganizationCanvasComponent {
   readonly draggingId = signal<string | null>(null);
   readonly fullscreen = signal(false);
   private readonly viewportSize = signal({ width: 0, height: 0 });
-  readonly fullscreenStageWidth = computed(() => Math.max(680, Math.min(this.viewportSize().width, this.viewportSize().height * 960 / 650)));
+  readonly fullscreenStageWidth = computed(() => Math.max(680, Math.min(this.viewportSize().width, this.viewportSize().height * 960 / ORGANIZATION_CANVAS_HEIGHT)));
   readonly savedView = signal<OrganizationView | null>(null);
   readonly draft = signal<OrganizationConfiguration>(emptyOrganizationConfiguration());
   readonly viewLoading = signal(true);
@@ -151,7 +152,7 @@ export class OrganizationCanvasComponent {
   readonly networkLayout = computed(() => {
     const field=this.officeField(),scope=this.draft().scopes[this.scopeKey()];
     const inner={...field,height:Math.max(field.height,...this.groupedLayout().map(item=>item.y+item.height/2+8))};
-    const outer={x:0,y:0,width:960,height:650};
+    const outer={x:0,y:0,width:960,height:ORGANIZATION_CANVAS_HEIGHT};
     const items:NetworkPlacement[]=this.groupedLayout().map(item=>({...item,x:item.x+field.x,y:item.y+field.y,region:inner,group:item.id.startsWith('domain:')?'domain':'office',fixed:!!scope?.offices[item.id]}));
     items.push(...this.baseSatellites().map(item=>({id:item.node.id,x:item.x,y:item.y,width:ORGANIZATION_CARD.width,height:ORGANIZATION_CARD.height,delay:item.delay,duration:item.duration,region:outer,group:'satellite' as const,fixed:!!scope?.satellites[item.node.id]})));
     const heading=this.headingArea();
@@ -335,7 +336,7 @@ export class OrganizationCanvasComponent {
   private constrain(kind: 'offices' | 'satellites', point: Position, width: number, height: number, avoidHeading=false): Position {
     if(kind==='satellites')return constrainOrganizationSatellite(point,width,height);
     const field = this.officeField(), maxWidth = kind === 'offices' ? field.width : 960;
-    const maxHeight = kind === 'offices' ? Math.max(field.height, ...this.layout().map(item => item.y + item.height / 2 + 8)) : 650;
+    const maxHeight = kind === 'offices' ? Math.max(field.height, ...this.layout().map(item => item.y + item.height / 2 + 8)) : ORGANIZATION_CANVAS_HEIGHT;
     const bounded=(value:Position)=>({ x: Math.max(width / 2 + 8, Math.min(maxWidth - width / 2 - 8, value.x)), y: Math.max(height / 2 + 8, Math.min(maxHeight - height / 2 - 8, value.y)) });
     const position=bounded(point);
     if(!avoidHeading||kind!=='offices'||!this.focus()||clearsOrganizationHeading({...position,width,height},field))return position;
@@ -379,7 +380,7 @@ export class OrganizationCanvasComponent {
     const dx = event.clientX - drag.start.x, dy = event.clientY - drag.start.y;
     if (!drag.moved && Math.hypot(dx, dy) < 5) return;
     if (!drag.moved) { drag.moved = true; this.draggingId.set(drag.id); this.tooltips().forEach(tooltip => tooltip.close()); }
-    event.preventDefault(); this.place(drag.id, drag.kind, { x: drag.origin.x + dx / bounds.width * 960, y: drag.origin.y + dy / bounds.height * 650 }, drag.width, drag.height);
+    event.preventDefault(); this.place(drag.id, drag.kind, { x: drag.origin.x + dx / bounds.width * 960, y: drag.origin.y + dy / bounds.height * ORGANIZATION_CANVAS_HEIGHT }, drag.width, drag.height);
   }
   @HostListener('document:pointerup', ['$event']) dropDrag(event: PointerEvent): void { if (this.drag?.pointerId === event.pointerId) this.finishDrag(); }
   @HostListener('document:pointercancel', ['$event']) cancelPointer(event: PointerEvent): void { if (this.drag?.pointerId === event.pointerId) this.cancelDrag(); }
@@ -502,20 +503,20 @@ export class OrganizationCanvasComponent {
     const bounds = stage.getBoundingClientRect(); if (!bounds.width || !bounds.height) return;
     const heading=stage.querySelector('.org-focus')?.getBoundingClientRect();
     if(heading?.width&&heading.height&&this.focusId()){
-      const rect={x:(heading.left-bounds.left)/bounds.width*960,y:(heading.top-bounds.top)/bounds.height*650,width:heading.width/bounds.width*960,height:heading.height/bounds.height*650};
+      const rect={x:(heading.left-bounds.left)/bounds.width*960,y:(heading.top-bounds.top)/bounds.height*ORGANIZATION_CANVAS_HEIGHT,width:heading.width/bounds.width*960,height:heading.height/bounds.height*ORGANIZATION_CANVAS_HEIGHT};
       const previous=untracked(()=>this.measuredHeading()),focusId=this.focusId()!,language=this.preferences.language();
       if(!previous||previous.focusId!==focusId||previous.language!==language||(['x','y','width','height'] as const).some(key=>Math.abs(previous.rect[key]-rect[key])>.25))this.measuredHeading.set({focusId,language,rect});
     }
     const title = stage.querySelector('.org-focus-title')?.getBoundingClientRect();
     this.focusTitle.set(title?.width && title.height ? {
-      center: { x: (title.left + title.width / 2 - bounds.left) / bounds.width * 960, y: (title.top + title.height / 2 - bounds.top) / bounds.height * 650 },
+      center: { x: (title.left + title.width / 2 - bounds.left) / bounds.width * 960, y: (title.top + title.height / 2 - bounds.top) / bounds.height * ORGANIZATION_CANVAS_HEIGHT },
       halfWidth: (title.width / 2 + 6) / bounds.width * 960,
-      halfHeight: (title.height / 2 + 6) / bounds.height * 650,
+      halfHeight: (title.height / 2 + 6) / bounds.height * ORGANIZATION_CANVAS_HEIGHT,
     } : null);
     const area = stage.querySelector('.org-office-field')?.getBoundingClientRect();
     const sizes=new Map<string,{width:number;height:number}>();
     for(const card of stage.querySelectorAll<HTMLElement>('.org-office[data-organization-id],.org-satellite[data-organization-id]')){
-      const rect=card.getBoundingClientRect();if(rect.width&&rect.height)sizes.set(card.dataset['organizationId']!,{width:rect.width/bounds.width*960,height:rect.height/bounds.height*650});
+      const rect=card.getBoundingClientRect();if(rect.width&&rect.height)sizes.set(card.dataset['organizationId']!,{width:rect.width/bounds.width*960,height:rect.height/bounds.height*ORGANIZATION_CANVAS_HEIGHT});
     }
     this.cardSizes.set(sizes);
     const positions = new Map<string, Position>();
@@ -523,7 +524,7 @@ export class OrganizationCanvasComponent {
       const rect = child.getBoundingClientRect();
       if (area && (rect.bottom < area.top || rect.top > area.bottom)) continue;
       const id = child.dataset['organizationId'] ?? `domain:${child.dataset['domainId']}`;
-      positions.set(id, { x: (rect.left + rect.width / 2 - bounds.left) / bounds.width * 960, y: (rect.top + rect.height / 2 - bounds.top) / bounds.height * 650 });
+      positions.set(id, { x: (rect.left + rect.width / 2 - bounds.left) / bounds.width * 960, y: (rect.top + rect.height / 2 - bounds.top) / bounds.height * ORGANIZATION_CANVAS_HEIGHT });
     }
     this.childPositions.set(positions);
   }

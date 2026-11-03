@@ -1,5 +1,23 @@
 # Catalog data model
 
+Permission management reuses policy, deployment, governance, task and audit records without a
+new migration. `audit_events.resource_type=access-permission` uses the product UUID as
+`resource_id`. `action=policy-activated` has a deterministic UUID per policy and
+`details={policyId,changes:[{subjectType,subjectId,action,before,after}]}`. Before/after canonical
+grant arrays contain identity, actions, protocols, validity, variant, metadata flags, optional
+weekly windows and frozen group membership. They contain no request purposes, credentials or
+protected payloads. Requested revocations use `action=revocation-requested` and
+`revocation_requested` changes. Existing governance evidence retains rejection decisions.
+Historical confirmed policy/deployment rows project as legacy log evidence without rewriting.
+
+`governance_submissions.review_snapshot.workflowKind=access_revocation` extends the existing
+access-change workflow alongside `access_renewal`. `revocation.grant` stores the removed grant;
+`grants` and `policy.definition` store the remaining policy; `preservedProductState` retains the
+active revision, visibility and lifecycle. Approval tasks use the existing governance foreign
+key without `access_request_id`. Independent control-person and staged deployment rules remain.
+Permission/history APIs are read projections within existing product visibility. Searching or
+displaying them never creates history or changes PBAC authorization.
+
 `workflow_tasks` now also stores requester decision information using task types
 `access_request_approved`, `access_request_granted`, and `access_request_rejected`.
 Existing `access_request_id`, `data_product_id`, `assignee_user_id`, `task_kind=information`,
@@ -48,7 +66,7 @@ The read-only organization-network projection adds `consumedProductCount` and `d
 
 `GET /api/v1/me/recent-work` is a non-persistent read model over existing `audit_events`, logical-model version authorship and current catalog roots/localizations. Related mapping, snapshot and resolved proposal events project to their root objects. It creates no history table, preferences or audit events. This differs from persisted Mapping workspace visits. Current visibility and lifecycle are reapplied before returning up to three items per category.
 
-`GET/PUT /api/v1/organization-network/view` persists the current active user's private organization-canvas anchors in the existing `demo_users.preferences` JSON, under key `organization-network-layout`. No migration or new table is required. The value is `{revision, configuration: {schemaVersion: 1, scopes: {...}}}`. Scope keys are the focused organization ID or reserved `overview`; each scope contains `offices` and `satellites` dictionaries mapping organization IDs to finite `{x, y}` anchors. Office coordinates retain the original normalized anchor frame described above; satellites use the 960 × 650 stage. Rendering clamps anchors to the current bounds. Layouts contain no organization metadata, roles, permissions, product records, credentials or access evidence.
+`GET/PUT /api/v1/organization-network/view` persists the current active user's private organization-canvas anchors in the existing `demo_users.preferences` JSON, under key `organization-network-layout`. No migration or new table is required. The value is `{revision, configuration: {schemaVersion: 1, scopes: {...}}}`. Scope keys are the focused organization ID or reserved `overview`; each scope contains `offices` and `satellites` dictionaries mapping organization IDs to finite `{x, y}` anchors. Office coordinates retain the original normalized anchor frame described above; satellites retain the same origin and world units on the expanded 960 × 740 stage. The lower placement strip uses the existing coordinate bounds without rescaling older anchors or changing the JSON schema. Rendering clamps anchors to the current bounds. Layouts contain no organization metadata, roles, permissions, product records, credentials or access evidence.
 
 The DTO rejects extra fields, unsupported schema versions, prototype-related keys, nonfinite/out-of-range coordinates (>100000), negative x, nested office y below -120, and negative overview/satellite y, overlong identifiers, more than 100 scopes and more than 2000 total anchors. The server always selects the authenticated current user, with no caller-supplied user selector. Both reads and writes use `Cache-Control: no-store`. A profile-row lock plus the expected revision prevents lost concurrent layout updates; stale revisions return 409. The preference JSON is merged with existing keys. Theme/language writes also lock and refresh the profile row before merging so concurrent preference writes retain the layout. Every successful layout save appends an `audit_events` record (`resource_type=organization-network-view`, `action=view-saved`, actor/resource ID=current user, new revision, details containing only `scopeCount`). Anchor coordinates are not copied into audit logs. Clearing one scope restores that level's automatic layout after explicit save; other scopes are retained. Current catalog metadata and policy projections are unchanged.
 
@@ -555,6 +573,8 @@ reads it from the actual footer. It never denotes the number of S3 objects (`obj
 - `endpoints.connection` describes only HTTP/REST or PostgreSQL connectivity and never contains credentials.
 - `policy_revisions.definition` is the constrained PBAC document. Each grant targets one person, machine or group, carries its validity period, optional IANA-zone weekly availability and independent KOBY/MCP and I14Y flags; group grants contain a server-generated membership snapshot. Generated Rego is stored separately and is not editable.
 - `governance_submissions.review_snapshot` preserves the exact product, grants, group memberships, office hours and policy revision reviewed by the assigned approver. `archive_evidence` records the BAR 20-year PoC choice without creating an archive job or network call.
+- Access-change snapshots use `workflowKind=access_renewal` or `access_revocation`; revocation stores the removed canonical grant under `revocation.grant`, remaining grants and `preservedProductState`. Approval tasks link the governance submission without an access request.
+- Permission checkpoints in `audit_events` use resource type `access-permission`, product UUID, actor and policy revision; `details.changes` stores subject type/ID, action and canonical before/after grant arrays. Deterministic activation IDs deduplicate exact OPA/PostgreSQL confirmations. Requested revocations are separate events; historical evidence is never rewritten.
 - `metadata_delivery_outbox.payload` is a DCAT-oriented metadata snapshot for the local I14Y simulation. It contains no product data and no external delivery URL.
 - `metadata_publications.normalized_payload` and `poc_product_fixtures.payload` retain normalized PoC metadata, never secrets.
 - `product_context_graphs.graph` stores deterministic nodes and edges; flexible provenance/audit `details` contain metadata only.

@@ -1,5 +1,15 @@
 # Start-page organization explorer
 
+The canvas extends to **960 × 740 world units**, leaving 182 units below the unchanged focused
+organization boundary (bottom y=558). This fits a full 120 × 84 external card footprint and
+its eight-unit floating margins. Bottom anchors can be dragged, moved with arrow keys or in
+groups, saved explicitly and restored after reload, including fullscreen. SVG viewBox, HTML
+positions, drag/selection constraints, measurements and fullscreen aspect ratio share the new
+height. Rendered card/heading sizes and their world positions remain stable; existing anchors
+are not rescaled or migrated. The expanded strip does not allow external cards into the blue
+boundary. The existing profile DTO already accepts these coordinates; no JSON key or schema
+version changes.
+
 Context-menu destinations open in the current view by default; their new-tab icon appears
 only while Control is held. Organization drill-down, home and overview are native links:
 normal clicks retain in-canvas navigation, while Control-click opens their exact scoped URL.

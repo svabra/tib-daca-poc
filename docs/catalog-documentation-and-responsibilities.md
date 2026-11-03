@@ -1,5 +1,14 @@
 # Catalog documentation and responsibilities
 
+The catalog entry is named **Datenprodukte** (French: Produits de données; Italian: Prodotti
+di dati; English: Data products). Shell navigation, route/browser titles, page headings,
+breadcrumbs and entry links use the same label. Relationship filters remain personal: the
+initial selection is **Von mir angeboten** only if `matchesProduct(..., 'offered', actor)`
+finds at least one product, otherwise **Alle Datenprodukte**. This uses the existing offered
+relationship and does not expand ownership or authorization. Defaults follow asynchronous
+catalog loading; supported `relationship` URL values and explicit user selections override
+them. A manual selection is scoped to the identity and survives catalog refresh/search edits.
+
 The [authorization audit](authorization-consistency-audit.md) distinguishes implemented object
 checks from remaining legacy scope authorization. Product metadata edits require an active
 concrete assignment. Owner/deputy decisions, private product visibility, lists, SLA and audit

@@ -54,7 +54,7 @@ import { CatalogApiService } from '../../core/catalog-api.service';
           </dl>
           <div class="catalog-actions">
             <a class="daca-button" routerLink="/exposure">Freigabe konfigurieren</a>
-            <a class="daca-button is-secondary" routerLink="/products">Meine Datenprodukte bearbeiten</a>
+            <a class="daca-button is-secondary" routerLink="/products">Datenprodukte bearbeiten</a>
             <a class="daca-button is-secondary" routerLink="/lineage">Lineage ansehen</a>
           </div>
         </div>

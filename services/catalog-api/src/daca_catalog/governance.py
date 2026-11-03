@@ -284,19 +284,30 @@ def _create_correction_task(
         )
 
 
-def create_renewal_submission(
+def create_renewal_submission(session: Session, product: DataProduct, access_request: AccessRequest,
+                              definition: dict[str, Any], fulfillment_subject: dict[str, str],
+                              actor: str) -> GovernanceSubmission:
+    return create_access_change_submission(session, product, access_request, definition, fulfillment_subject, actor)
+
+
+def create_access_change_submission(
     session: Session,
     product: DataProduct,
-    access_request: AccessRequest,
+    access_request: AccessRequest | None,
     definition: dict[str, Any],
-    fulfillment_subject: dict[str, str],
+    fulfillment_subject: dict[str, str] | None,
     actor: str,
+    *,
+    revoked_grant: dict[str, Any] | None = None,
 ) -> GovernanceSubmission:
     """Create four-eyes evidence while leaving the active product and policy untouched."""
     if actor not in product_owners(session, product):
         raise HTTPException(403, "Only the responsible data owner may submit governance")
-    if access_request.request_kind != "renewal" or access_request.renewal_context is None:
+    if access_request is not None and (access_request.request_kind != "renewal" or access_request.renewal_context is None):
         raise HTTPException(409, "Only a linked renewal can use renewal governance")
+    if access_request is None and revoked_grant is None:
+        raise HTTPException(422, "A policy change needs renewal or revocation evidence")
+    kind = "access_renewal" if access_request is not None else "access_revocation"
     existing = session.scalar(
         select(GovernanceSubmission).where(
             GovernanceSubmission.data_product_id == product.id,
@@ -344,18 +355,18 @@ def create_renewal_submission(
             )
         ],
         actor,
-    )
+    ) if access_request is not None else []
     now = utc_now()
     archive_evidence = {
         "enabled": False,
-        "evidenceState": "not_applicable_access_renewal",
+        "evidenceState": "not_applicable_" + kind,
         "recordedAt": now.isoformat(),
         "networkCallCreated": False,
         "archiveJobCreated": False,
     }
     snapshot = {
         "snapshotVersion": 1,
-        "workflowKind": "access_renewal",
+        "workflowKind": kind,
         "preservedProductState": {
             "activePolicyRevision": product.active_policy_revision,
             "discoverable": product.discoverable,
@@ -384,7 +395,7 @@ def create_renewal_submission(
             "revision": policy.revision,
             "definition": json.loads(json.dumps(definition)),
         },
-        "renewal": {
+        **({"renewal": {
             "requestId": str(access_request.id),
             "renewalOfRequestId": str(access_request.renewal_of_request_id),
             "originalGrant": RenewalContext.model_validate(
@@ -392,7 +403,7 @@ def create_renewal_submission(
             ).model_dump(mode="json", by_alias=True),
             "requestedPurpose": access_request.purpose,
             "requestedValidUntil": access_request.valid_until.isoformat(),
-        },
+        }} if access_request is not None else {"revocation": {"grant": revoked_grant}}),
         "submittedAt": now.isoformat(),
     }
     submission = GovernanceSubmission(
@@ -417,12 +428,13 @@ def create_renewal_submission(
             status="open",
             assignee_user_id=approver.id,
             data_product_id=product.id,
-            access_request_id=access_request.id,
+            access_request_id=access_request.id if access_request is not None else None,
             governance_submission_id=submission.id,
-            title=f"Verlängerung für «{product.title}» genehmigen",
+            title=f"{'Verlängerung' if access_request is not None else 'Berechtigungsentzug'} für «{product.title}» genehmigen",
             detail=(
                 "Vier-Augen-Prüfung der unveränderten Identität, Protokolle, Datenvariante "
-                "und Nutzungszeit mit dem verlängerten Enddatum."
+                "und Nutzungszeit mit dem verlängerten Enddatum." if access_request is not None else
+                "Prüfen Sie den Entzug der angegebenen Freigabe. Andere Berechtigungen bleiben erhalten."
             ),
             created_at=now,
             updated_at=now,
@@ -431,12 +443,12 @@ def create_renewal_submission(
     _audit(
         session,
         submission,
-        "access-renewal-submitted-for-four-eyes-approval",
+        kind.replace("_", "-") + "-submitted-for-four-eyes-approval",
         actor,
         {
             "approverUserId": approver.id,
             "policyRevision": policy.revision,
-            "accessRequestId": str(access_request.id),
+            "accessRequestId": str(access_request.id) if access_request is not None else None,
         },
     )
     return submission
@@ -638,6 +650,10 @@ def is_access_renewal_submission(submission: GovernanceSubmission) -> bool:
     return submission.review_snapshot.get("workflowKind") == "access_renewal"
 
 
+def is_access_change_submission(submission: GovernanceSubmission) -> bool:
+    return submission.review_snapshot.get("workflowKind") in {"access_renewal", "access_revocation"}
+
+
 def _linked_renewals(session: Session, policy_revision_id: uuid.UUID) -> list[AccessRequest]:
     return list(
         session.scalars(
@@ -688,7 +704,8 @@ def decide_submission(
     product = session.get(DataProduct, submission.data_product_id)
     if product is None:
         raise HTTPException(404, "Data product not found")
-    renewal_submission = is_access_renewal_submission(submission)
+    access_change_submission = is_access_change_submission(submission)
+    change_prefix = "access-revocation" if submission.review_snapshot.get("workflowKind") == "access_revocation" else "access-renewal"
     reviewed_product_revision = submission.review_snapshot.get("dataProduct", {}).get("revision")
     if reviewed_product_revision != product.revision:
         raise HTTPException(409, "The reviewed data product revision is stale")
@@ -701,7 +718,7 @@ def decide_submission(
         submission.decided_at = now
         submission.updated_at = now
         submission.revision += 1
-        if renewal_submission:
+        if access_change_submission:
             for renewal in _linked_renewals(session, policy.id):
                 renewal.status = "rejected"
                 renewal.updated_at = now
@@ -742,7 +759,7 @@ def decide_submission(
             task.status = "completed"
             task.completed_at = now
             task.updated_at = now
-        if not renewal_submission:
+        if not access_change_submission:
             _create_correction_task(
                 session,
                 submission,
@@ -752,14 +769,14 @@ def decide_submission(
         _audit(
             session,
             submission,
-            "access-renewal-rejected" if renewal_submission else "rejected",
+            f"{change_prefix}-rejected" if access_change_submission else "rejected",
             actor,
             {"comment": body.comment},
         )
         return DecisionResult(submission)
 
     retrying_published_renewal = (
-        renewal_submission
+        access_change_submission
         and submission.status == "deployment_failed"
         and policy.status == "published"
     )
@@ -767,17 +784,17 @@ def decide_submission(
         raise HTTPException(409, "Only the reviewed draft can be approved")
     projection: ProjectionResult = (
         ProjectionResult("pending")
-        if renewal_submission
+        if access_change_submission
         else project_to_postgresql(settings, product.id, policy.revision, policy.definition)
     )
-    if not renewal_submission and projection.state != "deployed":
+    if not access_change_submission and projection.state != "deployed":
         submission.status = "deployment_failed"
         submission.decision = "approve"
         submission.decision_comment = body.comment
         submission.decided_at = now
         submission.updated_at = now
         submission.revision += 1
-        if not renewal_submission:
+        if not access_change_submission:
             _create_correction_task(
                 session,
                 submission,
@@ -788,8 +805,8 @@ def decide_submission(
             session,
             submission,
             (
-                "access-renewal-approval-deployment-failed"
-                if renewal_submission
+                f"{change_prefix}-approval-deployment-failed"
+                if access_change_submission
                 else "approval-deployment-failed"
             ),
             actor,
@@ -799,7 +816,7 @@ def decide_submission(
 
     policy.status = "published"
     policy.published_at = policy.published_at or now
-    if not renewal_submission:
+    if not access_change_submission:
         product.active_policy_revision = policy.revision
         product.discoverable = False
         product.lifecycle = "draft"
@@ -819,7 +836,7 @@ def decide_submission(
         opa.error = None
         opa.updated_at = now
         postgres.observed_revision = projection.observed_revision
-        postgres.state = "pending" if renewal_submission else "deployed"
+        postgres.state = "pending" if access_change_submission else "deployed"
         postgres.error = None
         postgres.updated_at = now
     else:
@@ -838,7 +855,7 @@ def decide_submission(
                     target="postgresql",
                     desired_revision=policy.revision,
                     observed_revision=projection.observed_revision,
-                    state="pending" if renewal_submission else "deployed",
+                    state="pending" if access_change_submission else "deployed",
                     error=None,
                 ),
             ]
@@ -862,8 +879,8 @@ def decide_submission(
         session,
         submission,
         (
-            "access-renewal-approved-deployment-started"
-            if renewal_submission
+            f"{change_prefix}-approved-deployment-started"
+            if access_change_submission
             else "approved-deployment-started"
         ),
         actor,
@@ -888,14 +905,15 @@ def finalize_submission_deployment(
     # failures must remain stable until a human starts a new retry cycle.
     if submission.status != "approved_deploying":
         return submission
-    renewal_submission = is_access_renewal_submission(submission)
+    access_change_submission = is_access_change_submission(submission)
+    change_prefix = "access-revocation" if submission.review_snapshot.get("workflowKind") == "access_revocation" else "access-renewal"
     deployments = {
         item.target: item
         for item in session.scalars(
             select(PolicyDeployment).where(PolicyDeployment.policy_revision_id == policy.id)
         )
     }
-    if renewal_submission and settings is not None:
+    if access_change_submission and settings is not None:
         opa = deployments.get("opa")
         postgres = deployments.get("postgresql")
         if (
@@ -927,7 +945,7 @@ def finalize_submission_deployment(
         submission.status = "deployment_failed"
         submission.updated_at = utc_now()
         submission.revision += 1
-        if not renewal_submission:
+        if not access_change_submission:
             product.discoverable = False
             product.lifecycle = "draft"
             product.active_policy_revision = None
@@ -938,10 +956,10 @@ def finalize_submission_deployment(
                 WorkflowTask.status != "completed",
             )
         ):
-            task.status = "in_progress" if renewal_submission else "completed"
-            task.completed_at = None if renewal_submission else utc_now()
+            task.status = "in_progress" if access_change_submission else "completed"
+            task.completed_at = None if access_change_submission else utc_now()
             task.updated_at = utc_now()
-        if not renewal_submission:
+        if not access_change_submission:
             _create_correction_task(
                 session,
                 submission,
@@ -951,7 +969,7 @@ def finalize_submission_deployment(
         _audit(
             session,
             submission,
-            "access-renewal-deployment-failed" if renewal_submission else "deployment-failed",
+            f"{change_prefix}-deployment-failed" if access_change_submission else "deployment-failed",
             "daca-deployment-observer",
             {"target": failed.target, "error": failed.error},
         )
@@ -965,7 +983,7 @@ def finalize_submission_deployment(
     submission.status = "approved"
     submission.updated_at = now
     submission.revision += 1
-    if renewal_submission:
+    if access_change_submission:
         preserved = submission.review_snapshot.get("preservedProductState", {})
         product.active_policy_revision = policy.revision
         product.discoverable = bool(preserved.get("discoverable", product.discoverable))
@@ -992,8 +1010,8 @@ def finalize_submission_deployment(
         session,
         submission,
         (
-            "access-renewal-deployment-confirmed"
-            if renewal_submission
+            f"{change_prefix}-deployment-confirmed"
+            if access_change_submission
             else "deployment-confirmed-publication-activated"
         ),
         "daca-deployment-observer",

@@ -7,7 +7,7 @@ import { DemoIdentityService } from '../../core/demo-identity.service';
 import { UserPreferencesService } from '../../core/user-preferences.service';
 import { OrganizationCanvasComponent, OrganizationNetwork, OrganizationNode } from './organization-canvas.component';
 import { OrganizationView } from './organization-view';
-import { ORGANIZATION_CARD, clearsOrganizationBoundary } from './organization-layout';
+import { ORGANIZATION_CANVAS_HEIGHT, ORGANIZATION_CARD, clearsOrganizationBoundary } from './organization-layout';
 
 const node = (id: string, parentId: string | null, code: string, kind = 'office'): OrganizationNode => ({ id, parentId, code, label: code, kind, description: `${code} Details`, registry: true, productCount: 2, directProductCount: 0, consumedProductCount: 1, directConsumedProductCount: 1, domainIds: ['tax'] });
 const graph: OrganizationNetwork = {
@@ -40,7 +40,7 @@ describe('OrganizationCanvasComponent', () => {
   }
   it('keeps external organizations outside while dragging and using arrow keys, also in fullscreen',()=>{
     const {fixture,root,http}=render(graph,undefined,false),component=fixture.componentInstance;
-    vi.spyOn(root.querySelector('.org-stage')!,'getBoundingClientRect').mockReturnValue({left:0,top:0,width:960,height:650,right:960,bottom:650,x:0,y:0,toJSON:()=>({})});
+    vi.spyOn(root.querySelector('.org-stage')!,'getBoundingClientRect').mockReturnValue({left:0,top:0,width:960,height:ORGANIZATION_CANVAS_HEIGHT,right:960,bottom:ORGANIZATION_CANVAS_HEIGHT,x:0,y:0,toJSON:()=>({})});
     for(const fullscreen of [false,true]){
       if(fullscreen){root.querySelector<HTMLButtonElement>('.org-fullscreen')!.click();fixture.detectChanges();}
       const before=component.satellites().find(item=>item.node.id==='ne')!,card=root.querySelector('[data-organization-id="ne"]')!;
@@ -55,6 +55,26 @@ describe('OrganizationCanvasComponent', () => {
     }
     expect(component.focusId()).toBe('efd');
     http.expectNone(request=>request.method==='PUT');
+  });
+  it('moves an external organization below the blue box and restores its saved position',()=>{
+    const {fixture,root,http}=render(graph,undefined,false),component=fixture.componentInstance;
+    vi.spyOn(root.querySelector('.org-stage')!,'getBoundingClientRect').mockReturnValue({left:0,top:0,width:960,height:ORGANIZATION_CANVAS_HEIGHT,right:960,bottom:ORGANIZATION_CANVAS_HEIGHT,x:0,y:0,toJSON:()=>({})});
+    for(const fullscreen of [false,true]){
+      if(fullscreen){root.querySelector<HTMLButtonElement>('.org-fullscreen')!.click();fixture.detectChanges();}
+      const before=component.satellites().find(item=>item.node.id==='ne')!,card=root.querySelector('[data-organization-id="ne"]')!;
+      card.dispatchEvent(new PointerEvent('pointerdown',{button:0,pointerId:8,clientX:before.x,clientY:before.y,bubbles:true}));
+      document.dispatchEvent(new PointerEvent('pointermove',{pointerId:8,clientX:480,clientY:650,bubbles:true,cancelable:true}));fixture.detectChanges();
+      document.dispatchEvent(new PointerEvent('pointerup',{pointerId:8,bubbles:true}));
+      expect(component.draft().scopes['efd'].satellites['ne']).toEqual({x:480,y:650});
+      expect(component.selection.accepts!([{id:'ne',x:480,y:650}])).toBe(true);
+      expect(clearsOrganizationBoundary({...component.satellites().find(item=>item.node.id==='ne')!,...ORGANIZATION_CARD})).toBe(true);
+    }
+    component.saveLayout();const request=http.expectOne('/api/v1/organization-network/view');
+    const saved:OrganizationView={revision:1,configuration:request.request.body.configuration};
+    request.flush(saved);fixture.detectChanges();fixture.destroy();
+    const reopened=render(graph,saved,false);
+    expect(reopened.fixture.componentInstance.satellites().find(item=>item.node.id==='ne')).toMatchObject({x:480,y:650});
+    expect(reopened.root.querySelector('svg.org-geometry')?.getAttribute('viewBox')).toBe(`0 0 960 ${ORGANIZATION_CANVAS_HEIGHT}`);
   });
   it('rejects group moves across the boundary and corrects legacy external anchors for display only',()=>{
     const view:OrganizationView={revision:1,configuration:{schemaVersion:1,scopes:{efd:{offices:{},satellites:{ne:{x:480,y:330},vbs:{x:80,y:320}}},overview:{offices:{efd:{x:300,y:400}},satellites:{}}}}};
@@ -152,7 +172,7 @@ describe('OrganizationCanvasComponent', () => {
   it('releases the area below the measured heading for single/group moves and protects longer headings',()=>{
     const {fixture,root}=render(),component=fixture.componentInstance;
     const rect=(x:number,y:number,width:number,height:number)=>({left:x,top:y,width,height,right:x+width,bottom:y+height,x,y,toJSON:()=>({})});
-    vi.spyOn(root.querySelector('.org-stage')!,'getBoundingClientRect').mockReturnValue(rect(0,0,960,650));
+    vi.spyOn(root.querySelector('.org-stage')!,'getBoundingClientRect').mockReturnValue(rect(0,0,960,ORGANIZATION_CANVAS_HEIGHT));
     const heading=vi.spyOn(root.querySelector('.org-focus')!,'getBoundingClientRect').mockReturnValue(rect(346,120,268,70));
     component.measureChildren();fixture.detectChanges();
     const target={id:'estv',x:278,y:130};
@@ -184,8 +204,8 @@ describe('OrganizationCanvasComponent', () => {
   it('continues flows inside measured content-fit cards after their height changes',()=>{
     const {fixture,root}=render(),component=fixture.componentInstance;component.overview();fixture.detectChanges();
     const rect=(x:number,y:number,width:number,height:number)=>({left:x,top:y,width,height,right:x+width,bottom:y+height,x,y,toJSON:()=>({})});
-    vi.spyOn(root.querySelector('.org-stage')!,'getBoundingClientRect').mockReturnValue(rect(0,0,960,650));
-    vi.spyOn(root.querySelector('.org-office-field')!,'getBoundingClientRect').mockReturnValue(rect(0,0,960,650));
+    vi.spyOn(root.querySelector('.org-stage')!,'getBoundingClientRect').mockReturnValue(rect(0,0,960,ORGANIZATION_CANVAS_HEIGHT));
+    vi.spyOn(root.querySelector('.org-office-field')!,'getBoundingClientRect').mockReturnValue(rect(0,0,960,ORGANIZATION_CANVAS_HEIGHT));
     const source=vi.spyOn(root.querySelector('[data-organization-id="efd"]')!,'getBoundingClientRect').mockReturnValue(rect(100,200,120,40));
     vi.spyOn(root.querySelector('[data-organization-id="ne"]')!,'getBoundingClientRect').mockReturnValue(rect(100,400,120,60));
     component.measureChildren();fixture.detectChanges();
@@ -330,7 +350,7 @@ describe('OrganizationCanvasComponent', () => {
     }}};
     const {fixture,root,http}=render(graph,view),component=fixture.componentInstance;
     const bubble=root.querySelector<HTMLAnchorElement>('.org-domain-bubble')!,before=component.domainBubbles()[0];
-    vi.spyOn(root.querySelector('.org-stage')!,'getBoundingClientRect').mockReturnValue({left:0,top:0,width:960,height:650,right:960,bottom:650,x:0,y:0,toJSON:()=>({})});
+    vi.spyOn(root.querySelector('.org-stage')!,'getBoundingClientRect').mockReturnValue({left:0,top:0,width:960,height:ORGANIZATION_CANVAS_HEIGHT,right:960,bottom:ORGANIZATION_CANVAS_HEIGHT,x:0,y:0,toJSON:()=>({})});
     expect(bubble.draggable).toBe(false);expect(bubble.getAttribute('href')).toBe('/domains/tax');
     const nativeDrag=new Event('dragstart',{cancelable:true,bubbles:true});bubble.dispatchEvent(nativeDrag);expect(nativeDrag.defaultPrevented).toBe(true);
     bubble.dispatchEvent(new PointerEvent('pointerdown',{button:0,pointerId:5,clientX:100,clientY:100,bubbles:true}));
@@ -363,7 +383,7 @@ describe('OrganizationCanvasComponent', () => {
     const moved=component.domainBubbles()[0];
     expect(moved.y).not.toBe(before.y);expect(component.draft().scopes['efd'].offices['domain:tax']).toBeDefined();
     const draft=structuredClone(component.draft());
-    vi.spyOn(root.querySelector('.org-stage')!,'getBoundingClientRect').mockReturnValue({left:0,top:0,width:960,height:650,right:960,bottom:650,x:0,y:0,toJSON:()=>({})});
+    vi.spyOn(root.querySelector('.org-stage')!,'getBoundingClientRect').mockReturnValue({left:0,top:0,width:960,height:ORGANIZATION_CANVAS_HEIGHT,right:960,bottom:ORGANIZATION_CANVAS_HEIGHT,x:0,y:0,toJSON:()=>({})});
     bubble.dispatchEvent(new PointerEvent('pointerdown',{button:0,pointerId:6,clientX:100,clientY:100,bubbles:true}));
     document.dispatchEvent(new PointerEvent('pointermove',{pointerId:6,clientX:140,clientY:140,bubbles:true,cancelable:true}));fixture.detectChanges();
     component.escape();fixture.detectChanges();
@@ -389,7 +409,7 @@ describe('OrganizationCanvasComponent', () => {
   });
   it('moves a captured pointer without drilling down, cancels a later move, and restores fullscreen body scrolling', () => {
     const {fixture,root}=render(),component=fixture.componentInstance,stage=root.querySelector('.org-stage') as HTMLElement;
-    vi.spyOn(stage,'getBoundingClientRect').mockReturnValue({left:0,top:0,width:960,height:650,right:960,bottom:650,x:0,y:0,toJSON:()=>({})});
+    vi.spyOn(stage,'getBoundingClientRect').mockReturnValue({left:0,top:0,width:960,height:ORGANIZATION_CANVAS_HEIGHT,right:960,bottom:ORGANIZATION_CANVAS_HEIGHT,x:0,y:0,toJSON:()=>({})});
     (root.querySelector('.org-fullscreen') as HTMLButtonElement).click();fixture.detectChanges();expect(component.fullscreen()).toBe(true);expect(document.body.style.overflow).toBe('hidden');
     const card=root.querySelector('.org-office')!,before=component.offices()[0],dx=before.x>300?-20:20;
     card.dispatchEvent(new PointerEvent('pointerdown',{button:0,pointerId:1,clientX:100,clientY:100,bubbles:true}));
@@ -459,7 +479,7 @@ describe('OrganizationCanvasComponent', () => {
     const {fixture,root}=render(network),component=fixture.componentInstance;
     component.enter(graph.nodes.find(item=>item.id==='estv')!);component.showDomains.set(true);fixture.detectChanges();
     const rect=(x:number,y:number,width:number,height:number)=>({left:x,top:y,width,height,right:x+width,bottom:y+height,x,y,toJSON:()=>({})});
-    vi.spyOn(root.querySelector('.org-stage')!,'getBoundingClientRect').mockReturnValue(rect(0,0,960,650));
+    vi.spyOn(root.querySelector('.org-stage')!,'getBoundingClientRect').mockReturnValue(rect(0,0,960,ORGANIZATION_CANVAS_HEIGHT));
     vi.spyOn(root.querySelector('.org-office-field')!,'getBoundingClientRect').mockReturnValue(rect(0,200,960,450));
     const title=vi.spyOn(root.querySelector('.org-focus-title')!,'getBoundingClientRect').mockReturnValue(rect(435,120,90,30));
     vi.spyOn(root.querySelector('.org-domain-bubble')!,'getBoundingClientRect').mockReturnValue(rect(500,400,84,84));
@@ -479,8 +499,8 @@ describe('OrganizationCanvasComponent', () => {
     expect(root.querySelectorAll('.org-thread:not(.is-inferred)')).toHaveLength(1);
     component.overview();fixture.detectChanges();
     const rect=(x:number,y:number,width:number,height:number)=>({left:x,top:y,width,height,right:x+width,bottom:y+height,x,y,toJSON:()=>({})});
-    vi.spyOn(root.querySelector('.org-stage')!,'getBoundingClientRect').mockReturnValue(rect(0,0,960,650));
-    vi.spyOn(root.querySelector('.org-office-field')!,'getBoundingClientRect').mockReturnValue(rect(0,0,960,650));
+    vi.spyOn(root.querySelector('.org-stage')!,'getBoundingClientRect').mockReturnValue(rect(0,0,960,ORGANIZATION_CANVAS_HEIGHT));
+    vi.spyOn(root.querySelector('.org-office-field')!,'getBoundingClientRect').mockReturnValue(rect(0,0,960,ORGANIZATION_CANVAS_HEIGHT));
     vi.spyOn(root.querySelector('[data-organization-id="efd"]')!,'getBoundingClientRect').mockReturnValue(rect(100,150,100,50));
     const bubble=vi.spyOn(root.querySelector('.org-domain-bubble')!,'getBoundingClientRect').mockReturnValue(rect(400,300,80,80));
     component.measureChildren();fixture.detectChanges();

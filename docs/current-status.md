@@ -1,8 +1,70 @@
 # Current status
 
+Release **0.3.8** (2026-11-03) groups permission search/revocation/audit, inline request history,
+Mapping warning-save correction, the renamed product catalog/adaptive filter and the expanded
+organization canvas. The current German/English version overlay contains these five changes;
+0.3.7 retains its seven release notes in the archive. Managed package/API/PWA/OpenShift version
+surfaces are synchronized. The BIT lightning Easter egg remains excluded from feature lists.
+
+Data-landscape bottom clearance (2026-11-03): the organization canvas is now 960 × 740 world
+units, extending its lower perimeter from 650 while retaining the blue boundary and existing
+anchor origins. The 182-unit bottom strip fits a complete 120 × 84 card plus drift clearance.
+SVG/HTML positioning, drag/selection bounds, measurements and fullscreen sizing use the same
+height. Existing saved coordinates are not rescaled; lower external anchors save/reload using
+the unchanged per-user layout structure. Boundary exclusion remains enforced.
+Verified with 49 focused UI tests and the `organization-layout` browser flow: St. Gallen
+is dragged below EFD in normal/fullscreen views, moved by keyboard, saved and restored after
+reload; mouse/touch boundary protection and profile isolation also pass.
+
+Product catalog entry (2026-11-03): **Datenprodukte** replaces **Meine Datenprodukte** in
+navigation, titles, breadcrumbs and entry actions, with corresponding French/Italian/English
+labels. Default filtering is identity-aware: offered products when any exist for the current
+identity, otherwise all catalog products. Defaults react to asynchronously loaded catalog
+data; explicit relationship URL parameters and manual choices remain authoritative during
+refresh. A prior identity's manual choice does not apply to another identity.
+Verified with 27 focused UI tests and the `product-catalog-default` browser flow for an
+offering identity, a non-provider, manual selection/search and explicit URL filters.
+
+Product access requests (2026-11-03) are listed inline under **Freigaben → Zugriffsanfragen**,
+including answered requests. Navigation and the request KPI target the local section instead
+of `/tasks`. The private product-scoped read endpoint returns every request status with its
+original arrival and last-update timestamps, ordered by arrival descending. The UI offers
+ascending order and inline expandable details without leaving the product; it retains the
+selected order during polling. Pending activation remains distinct from effective grants.
+Reads clear/cancel on product or actor changes. Current owner/deputy and existing responsible
+users retain access; other readers cannot see private request details. The global inbox stays
+open-only. No persistence or approval semantics change.
+Verified with eight UI tests, three PostgreSQL API cases and the
+`product-access-request-history` browser flow using synthetic requests and real policy
+activation. Browser evidence covers same-product navigation, inline details, all three
+open/rejected/granted outcomes, both sort directions, refresh and desktop/mobile layouts.
+
+Mapping warning/save correction (2026-11-03): the inspector now exposes draft saving and a
+combined save/submit action for local edits. Semantic validation issues never gate draft storage.
+Submission waits for the atomic workspace save and uses the persisted mapping ID/version/lock,
+including rebases from logical-model edits. Failed saves retain local drafts without submitting;
+failed submissions report that the draft is already stored. Type warnings remain visible and
+the existing validation lifecycle, scope checks and optimistic concurrency remain in force.
+Verified with 88 Mapping UI tests, two PostgreSQL API cases (warning and error severity),
+and the `mapping-warning-save` Edge flow covering inspector save, persisted warning evidence,
+editing, save-before-submit and successful warning-only validation.
+
+Product access management now has a product-scoped, searchable permissions registry and public
+permission history for all existing catalog readers of that product. Person, machine and group
+grants include frozen group members, protocol, data variant, validity and weekly restrictions.
+The Data Owner/deputy can revoke a single revision-bound grant after explicit confirmation;
+other grants and memberships are retained. Optimistic revision checks reject stale actions.
+Governed products stage `access_revocation` through independent control-person approval and the
+existing OPA-first/PostgreSQL-second transition, preserving product visibility and the previous
+confirmed policy on rejection/failure. Append-only, deterministic `access-permission` audit
+checkpoints record effective grants, changes and revocations only after both targets confirm
+the exact revision. Requests and rejections are distinct log events; confirmed historical
+policy snapshots remain available without rewriting old evidence. The registry and history
+clear/cancel on product or identity changes and show explicit unavailable/activation states.
+
 Release **0.3.7** (2026-11-03) groups the access-request and notification improvements,
-Control-click context navigation and all three customer modelling fixes in the current
-German/English feature overlay. Release 0.3.6 retains its own historical notes. Package/API
+Control-click context navigation and all three customer modelling fixes in its archived
+German/English release notes. Release 0.3.6 retains its own historical notes. Package/API
 versions, PWA metadata and presentation image pins are synchronized. The BIT lightning Easter
 egg remains absent from the user-facing feature lists. Publishing images and applying the
 OpenShift manifests are separate steps; a Git push does not apply a PoC deployment.

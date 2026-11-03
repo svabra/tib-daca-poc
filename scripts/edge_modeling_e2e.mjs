@@ -1501,6 +1501,47 @@ async function fieldMoveFlow() {
   console.log('PASS field move: read-only entity, search, strict confirmation, cancellation, atomic move and destination reload');
 }
 
+async function mappingWarningSaveFlow(physical) {
+  await navigate(`/models/${physical.modelId}/mappings?physicalSnapshotId=${physical.snapshotId}`,'christian.man');
+  await waitFor("document.querySelector('.graph-canvas')!==null",'warning test workspace missing');
+  await clickText('.toolbar-actions button','Mapping hinzufügen');
+  await waitFor("document.querySelector('.mapping-dialog[open]')!==null",'warning mapping dialog missing');
+  const selections=await evaluate(`(() => {
+    const logical=document.querySelector('.mapping-dialog [formcontrolname=logicalFieldVersionIds]');
+    const physical=document.querySelector('.mapping-dialog [formcontrolname=physicalColumnIds]');
+    const field=[...logical.options].find(item=>/integer|decimal|numeric|int32|int64/i.test(item.textContent));
+    const column=[...physical.options].find(item=>/varchar|text|string/i.test(item.textContent));
+    if(!field||!column)return false;
+    for(const [select,option] of [[logical,field],[physical,column]]){for(const item of select.options)item.selected=item===option;select.dispatchEvent(new Event('change',{bubbles:true}));}
+    return true;
+  })()`);
+  invariant(selections,'warning test requires integer/decimal logical field and string physical column');
+  const marker=`Warning save QA ${Date.now()}`;
+  await setControls({'.mapping-dialog [formcontrolname=mappingType]':'Transformed','.mapping-dialog [formcontrolname=transformationRule]':'String(value)','.mapping-dialog [formcontrolname=comment]':marker});
+  await clickText('.mapping-dialog button','Mapping übernehmen');
+  await waitFor("!document.querySelector('.mapping-dialog[open]')&&document.querySelector('.mapping-detail .validation-issues')?.textContent.includes('Typkonflikt')",'local type warning missing');
+  invariant(await evaluate("[...document.querySelectorAll('.inspector-actions button')].find(button=>button.textContent==='Entwurf speichern')?.disabled===false"),'warning disabled inspector save');
+  await evaluate("document.querySelector('.mapping-detail').scrollIntoView({block:'start',behavior:'instant'})");await settleFrames();
+  await captureScreenshot('mapping-type-warning-unsaved.png');
+  await clickText('.inspector-actions button','Entwurf speichern');
+  await waitForWorkspaceSave('type-warning draft did not save');
+  const saved=expectStatus(await api('christian.man',`/api/v1/asset-mappings?logicalModelId=${physical.modelId}`),200,'read saved warning draft').body.items.find(item=>item.comment===marker);
+  invariant(saved?.status==='draft'&&saved.validationResult.issues.some(issue=>issue.code==='type_mismatch'&&issue.severity==='warning'),'type-warning draft not persisted with warning');
+  await clickText('.inspector-actions button','Bearbeiten');
+  await waitFor("document.querySelector('.mapping-dialog[open]')!==null",'saved warning mapping could not reopen');
+  await setControls({'.mapping-dialog [formcontrolname=transformationRule]':'String(value).trim()'});
+  await clickText('.mapping-dialog button','Mapping übernehmen');
+  await clickText('.inspector-actions button','Speichern & zur Prüfung einreichen');
+  await waitFor("document.querySelector('.mapping-detail')?.textContent.includes('Validieren')&&document.querySelector('.draft-save-action>button').disabled",'warning mapping not saved and submitted');
+  const submitted=expectStatus(await api('christian.man',`/api/v1/asset-mappings/${saved.id}`),200,'read submitted warning mapping').body;
+  invariant(submitted.status==='review_pending'&&submitted.transformationRule==='String(value).trim()','submission lost saved mapping changes');
+  await clickText('.inspector-actions button','Validieren');
+  await waitFor("document.querySelector('.mapping-detail')?.textContent.includes('Ablösen')",'warning-only mapping failed validation');
+  await evaluate("document.querySelector('.mapping-detail').scrollIntoView({block:'start',behavior:'instant'})");await settleFrames();
+  await captureScreenshot('mapping-type-warning-validated.png');
+  console.log('PASS mapping type warning: local save, persisted draft, save-before-submit and warning-only validation');
+}
+
 async function edgeEditingFlow(physical) {
   const route=`/models/${physical.modelId}/mappings?physicalSnapshotId=${physical.snapshotId}`;
   await navigate(route,'christian.man');
@@ -4477,7 +4518,101 @@ async function contextMenuNavigationFlow() {
   console.log('PASS context menus: Control-only icons, native exact-URL new tabs, current-tab routing, unchanged local toggle and no document reload');
 }
 
-async function requesterDecisionFlow() {
+async function permissionRegistryFlow(productId,owner,actor) {
+  const path=`/api/v1/data-products/${productId}/access-permissions`,logPath=`/api/v1/data-products/${productId}/access-permission-events`;
+  await navigate(`/products/${productId}/access`,actor,1440,1000);
+  await waitFor("document.querySelector('daca-product-permissions tbody tr')",'public permissions registry did not load');
+  invariant(await evaluate("document.querySelector('.revoke-permission')===null"),'reader can revoke a permission');
+  const before=expectStatus(await api(actor,path),200,'read product permissions as consumer').body;
+  invariant(before.state==='confirmed'&&before.items.length===1,'published grant is absent from public registry');
+  const grant=before.items[0];
+  expectStatus(await api(actor,`${path}/${grant.grantId}`,{method:'DELETE',etag:`"${before.latestRevision}"`}),403,'reject consumer revocation');
+  await setControls({'.permission-search input[type=search]':actor});
+  await waitFor("document.querySelectorAll('daca-product-permissions tbody tr').length===1",'permission identity search failed');
+  await capturePageSegmentScreenshot('daca-product-permissions','permissions-reader-desktop.png');
+  await setViewport(390,844);await settleFrames();
+  await evaluate("document.querySelector('#consumers').scrollIntoView({block:'start',behavior:'instant'})");await settleFrames();
+  await captureScreenshot('permissions-reader-mobile.png');
+  invariant(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),'permission registry overflows the mobile page');
+  await navigate(`/products/${productId}/access`,owner,1440,1000);
+  await waitFor("document.querySelector('.revoke-permission')",'owner revocation action unavailable');
+  await clickText('.revoke-permission','Berechtigung entziehen');
+  await waitFor("document.querySelector('daca-product-permissions dialog[open]')",'revocation confirmation missing');
+  await clickText('daca-product-permissions dialog footer button','Abbrechen');
+  invariant(expectStatus(await api(actor,path),200,'read grant after cancel').body.items.length===1,'cancelled revocation changed permissions');
+  await clickText('.revoke-permission','Berechtigung entziehen');
+  await clickText('daca-product-permissions dialog footer button','Berechtigung entziehen');
+  await waitFor("document.querySelector('daca-product-permissions')?.innerText.includes('Berechtigung entzogen. OPA und PostgreSQL')",'grant revocation did not converge through real OPA/PostgreSQL',60_000);
+  invariant(expectStatus(await api(actor,path),200,'read revoked registry as former consumer').body.items.length===0,'revoked permission still listed');
+  invariant(expectStatus(await api(actor,`/api/v1/data-products/${productId}/effective-access`),200,'read effective denial').body.granted===false,'revoked requester still has effective access');
+  await capturePageSegmentScreenshot('daca-product-permissions','permissions-revoked-desktop.png');
+  await navigate(`/products/${productId}/access`,'ariane.keller',1440,1000);
+  await waitFor("document.querySelector('[data-permission-event=revoked]')",'unrelated product reader cannot inspect revocation log');
+  await setControls({'#permission-log input[type=search]':'entzogen'});
+  await waitFor("document.querySelectorAll('.permission-event').length===1",'permission audit search failed');
+  await clickText('.permission-event summary','Vorher');
+  invariant(await evaluate("document.querySelector('.permission-comparison')?.innerText.includes('Modifizierte Daten')"),'audit before/after conditions missing');
+  await capturePageSegmentScreenshot('#permission-log','permissions-public-history.png');
+  const events=expectStatus(await api('ariane.keller',logPath),200,'read entire public permission history').body.items;
+  invariant(events.filter(event=>event.action==='revoked').length===1&&events.some(event=>event.action==='granted')&&events.some(event=>event.action==='revocation_requested'),'grant lifecycle was not durably logged exactly once');
+  console.log('PASS product permissions: public registry/search, owner-only confirmed revoke, cancellation, real OPA/PostgreSQL denial, mobile fit and searchable public before/after history');
+  return expectStatus(await api(owner,`/api/v1/data-products/${productId}/policies/latest`),200,'read synthetic cleanup policy').body;
+}
+
+async function productCatalogDefaultFlow() {
+  for(const [actor,expected] of [['kassandra.valdata','Von mir angeboten'],['fausto.marzo','Alle Datenprodukte']]){
+    await navigate('/products',actor);
+    await waitFor(`!document.querySelector('.product-results-tools')?.textContent.includes('aktualisiert')&&document.querySelector('.product-filter-row button.is-active span')?.textContent===${JSON.stringify(expected)}`,'incorrect initial product relationship filter for '+actor);
+    invariant(await evaluate("document.querySelector('h1')?.textContent==='Datenprodukte'&&document.title==='Datenprodukte | DaCa'"),'product catalog name was not updated');
+    const counts=await evaluate("[...document.querySelectorAll('.product-filter-row button')].map(button=>Number(button.querySelector('strong').textContent))");
+    invariant(actor==='kassandra.valdata'?counts[1]>0:counts[1]===0,'default-filter fixture has unexpected ownership');
+    await clickText('.product-filter-row button','Alle Datenprodukte');
+    await setControls({'.product-search input':'deliberately-no-product-match-qa'});
+    invariant(await evaluate("document.querySelector('.product-filter-row button.is-active span')?.textContent==='Alle Datenprodukte'"),'search overrode explicit relationship selection');
+    await captureScreenshot(`product-catalog-${actor.split('.')[0]}.png`);
+  }
+  await navigate('/products?relationship=offered','fausto.marzo');
+  await waitFor("document.querySelector('.product-filter-row button.is-active span')?.textContent==='Von mir angeboten'",'explicit URL relationship was ignored for a non-provider');
+  console.log('PASS product catalog naming and defaults: providers offered, non-providers all, explicit choices and URL filters preserved');
+}
+
+async function productRequestHistoryFlow(productId,owner,actor) {
+  const path=`/products/${productId}/access`,today=new Date().toISOString().slice(0,10);
+  const requestBody={consumerType:'person',machineId:null,purpose:'Synthetische Prüfung der Antragsliste direkt beim Datenprodukt.',legalBasis:'Amtshilfe',requestedProtocol:'http',requestedVariant:'either',validFrom:today,validUntil:null,contactEmail:'qa@example.invalid',notes:null,conditionsAccepted:true};
+  const rejected=expectStatus(await api(actor,`/api/v1/data-products/${productId}/access-requests`,{method:'POST',body:requestBody}),201,'create answered history request').body;
+  expectStatus(await api(owner,`/api/v1/access-requests/${rejected.id}/decision`,{method:'POST',body:{decision:'reject'}}),200,'answer isolated history request');
+  const open=expectStatus(await api(actor,`/api/v1/data-products/${productId}/access-requests`,{method:'POST',body:requestBody}),201,'create open history request').body;
+  try {
+    const history=expectStatus(await api(owner,`/api/v1/data-products/${productId}/access-requests`),200,'read complete product history').body;
+    const ids=history.map(item=>item.id);
+    invariant(history.some(item=>item.status==='granted_modified')&&history.some(item=>item.status==='rejected')&&history.some(item=>item.status==='submitted'),'history omitted a request outcome');
+    await navigate(path,owner,1440,1000);
+    await waitFor(`document.querySelectorAll('#access-requests article').length===${ids.length}`,'inline history did not load');
+    await clickText('.product-access-nav a','Zugriffsanfragen');
+    await waitFor(`location.pathname===${JSON.stringify(path)}&&location.hash==='#access-requests'`,'requests navigation left the product page');
+    const renderedIds=()=>evaluate("[...document.querySelectorAll('#access-requests article')].map(item=>item.dataset.accessRequestId)");
+    invariant(JSON.stringify(await renderedIds())===JSON.stringify(ids),'history did not default to newest arrival first');
+    const row=`#access-requests [data-access-request-id="${rejected.id}"]`;
+    invariant(await evaluate(`document.querySelector(${JSON.stringify(row)}).textContent.includes('Abgelehnt')&&document.querySelector(${JSON.stringify(row+' time:last-child')})!==null`),'answered request has no outcome/timestamp');
+    await clickText(`${row} summary`,'Antragsdetails anzeigen');
+    invariant(await evaluate(`document.querySelector(${JSON.stringify(row+' details')}).open&&location.pathname===${JSON.stringify(path)}`),'request details navigated away');
+    await setControls({'#access-requests select':'asc'});
+    await waitFor(`JSON.stringify([...document.querySelectorAll('#access-requests article')].map(item=>item.dataset.accessRequestId))===${JSON.stringify(JSON.stringify([...ids].reverse()))}`,'ascending arrival sort failed');
+    await clickText('#access-requests button','Aktualisieren');
+    await waitFor("!document.querySelector('#access-requests button').disabled",'history refresh did not finish');
+    invariant(JSON.stringify(await renderedIds())===JSON.stringify([...ids].reverse()),'refresh reset the selected order');
+    await evaluate("document.querySelector('#access-requests').scrollIntoView({block:'start',behavior:'instant'})");await settleFrames();await captureScreenshot('product-request-history-desktop.png');
+    await setViewport(390,844);await evaluate("document.querySelector('#access-requests').scrollIntoView({block:'start',behavior:'instant'})");await settleFrames();
+    invariant(await evaluate("document.documentElement.scrollWidth<=innerWidth+1"),'inline history overflows the mobile page');
+    await captureScreenshot('product-request-history-mobile.png');
+    invariant((await api(actor,`/api/v1/data-products/${productId}/access-requests`)).status===403,'request history leaked to an unrelated consumer');
+    console.log('PASS product request history: inline open/answered requests, outcomes, edit timestamps, reversible arrival sorting, refresh, mobile and scoped visibility');
+  } finally {
+    expectStatus(await api(owner,`/api/v1/access-requests/${open.id}/decision`,{method:'POST',body:{decision:'reject'}}),200,'close only synthetic history request');
+  }
+}
+
+async function requesterDecisionFlow(checkPermissions=false,checkHistory=false) {
   const actor='fausto.marzo',owner='kassandra.valdata',stamp=Date.now();
   let productId,published;
   await navigate('/',actor,1440,1000);
@@ -4517,13 +4652,15 @@ async function requesterDecisionFlow() {
     invariant(!expectStatus(await api(actor,'/api/v1/tasks/mine'),200,'verify durable acknowledgement').body.some(item=>item.id===messages[0].id),'acknowledged message was recreated');
     invariant(cdp.runtimeExceptions.length===0,`Requester decision errors: ${JSON.stringify(cdp.runtimeExceptions)}`);
     console.log('PASS requester decision: live approval and confirmed grant, real OPA/PostgreSQL publication, private bell, exact request context, mobile and durable acknowledgement');
+    if(checkHistory)await productRequestHistoryFlow(productId,owner,actor);
+    if(checkPermissions)published=await permissionRegistryFlow(productId,owner,actor);
   } finally {
     if(productId){
       if(published){
         const policyPage=expectStatus(await api(owner,`/api/v1/data-products/${productId}/policies`),200,'read synthetic policies for cleanup').body;
         const policies=Array.isArray(policyPage)?policyPage:policyPage.items;
         const latest=policies.reduce((left,right)=>left.revision>right.revision?left:right);
-        expectStatus(await api(owner,`/api/v1/data-products/${productId}/policies/${published.id}/revoke`,{method:'POST',etag:`"${latest.revision}"`}),201,'revoke only the synthetic test policy');
+        if(latest.status==='published')expectStatus(await api(owner,`/api/v1/data-products/${productId}/policies/${latest.id}/revoke`,{method:'POST',etag:`"${latest.revision}"`}),201,'revoke only the synthetic test policy');
       }
       const product=expectStatus(await api(owner,`/api/v1/data-products/${productId}`),200,'read synthetic product for retirement');
       expectStatus(await api(owner,`/api/v1/data-products/${productId}`,{method:'PATCH',etag:`"${product.body.revision}"`,body:{lifecycle:'retired'}}),200,'retire only synthetic notification product');
@@ -4692,9 +4829,26 @@ async function organizationLayoutFlow() {
         await settleFrames();invariant(await clear(),'external canton entered EFD using arrow keys');
         invariant(await evaluate("document.querySelector('.org-focus')?.textContent.includes('EFD')"),'boundary drag navigated into another organization');
       }
+      // The lower perimeter must fit a complete external organization card.
+      await evaluate("document.querySelector('.org-stage').scrollIntoView({block:'end',behavior:'instant'})");await settleFrames();
+      const bottomPoints=await evaluate(`(()=>{const card=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(),stage=document.querySelector('.org-stage').getBoundingClientRect(),height=document.querySelector('.org-geometry').viewBox.baseVal.height;return{from:{x:card.left+card.width/2,y:card.top+card.height/2},to:{x:stage.left+stage.width/2,y:stage.top+stage.height*650/height}};})()`);
+      await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...bottomPoints.from},sessionId);
+      await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...bottomPoints.from,button:'left',buttons:1,clickCount:1},sessionId);
+      await cdp.call('Input.dispatchMouseEvent',{type:'mouseMoved',...bottomPoints.to,buttons:1},sessionId);
+      await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...bottomPoints.to,button:'left',buttons:0,clickCount:1},sessionId);
+      await settleFrames();
+      invariant(await evaluate(`(()=>{const card=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(),box=document.querySelector('.org-bubble').getBoundingClientRect(),stage=document.querySelector('.org-stage').getBoundingClientRect();return card.top>box.bottom&&card.bottom<stage.bottom&&card.left>box.left&&card.right<box.right;})()`),'external card cannot occupy the space below the blue box');
+      await evaluate(`document.querySelector(${JSON.stringify(selector)}).focus()`);await pressKey('ArrowDown','ArrowDown',40);
+      await evaluate("document.querySelector('.org-save-layout').click()");
+      await waitFor("document.querySelector('.org-save-layout').disabled&&document.querySelector('.org-layout-toolbar').getAttribute('aria-busy')==='false'",'bottom anchor did not save');
+      const bottomSaved=expectStatus(await api(actor,path),200,'read saved bottom organization anchor').body;
+      invariant(Object.values(bottomSaved.configuration.scopes.efd.satellites).some(point=>point.y>640&&point.x>400&&point.x<560),'lower anchor was clamped back into the old canvas');
+      await captureScreenshot(`organization-bottom-space-${fullscreen?'fullscreen':'normal'}.png`);
       await evaluate("document.querySelector('.org-discard-layout').click()");
       if(fullscreen){await evaluate("document.querySelector('.org-fullscreen').click()");await settleFrames();}
     }
+    await navigate('/?organization=efd',actor,1440,1100);
+    await waitFor("[...document.querySelectorAll('.org-satellite')].some(card=>{const r=card.getBoundingClientRect(),box=document.querySelector('.org-bubble').getBoundingClientRect();return card.textContent.includes('St. Gallen')&&r.top>box.bottom&&r.left>box.left&&r.right<box.right;})",'saved lower organization anchor did not survive reload');
     await cdp.call('Emulation.setEmulatedMedia',{features:[]},sessionId);
     const officeKey=await evaluate("(()=>{const card=document.querySelector('.org-office[data-organization-id=\"efd-estv\"]');card.focus();return parseFloat(card.style.top)<50?'ArrowDown':'ArrowUp';})()");await pressKey(officeKey,officeKey,officeKey==='ArrowDown'?40:38);
     const satelliteKey=await evaluate("(()=>{const card=document.querySelector('.org-satellite[data-organization-id=vbs]');card.focus();return parseFloat(card.style.left)<50?'ArrowRight':'ArrowLeft';})()");await pressKey(satelliteKey,satelliteKey,satelliteKey==='ArrowRight'?39:37);
@@ -4973,15 +5127,16 @@ try {
   await cdp.call('Network.setBypassServiceWorker', { bypass: true }, sessionId);
 
   if(args.get('--flow')==='customer-modeling-fixes'){await customerModelingFixesFlow();} else if(args.get('--flow')==='context-menu-navigation'){await contextMenuNavigationFlow();} else
-  if(args.get('--flow')==='requester-decision'){await requesterDecisionFlow();} else
+  if(args.get('--flow')==='product-permissions'){await requesterDecisionFlow(true);} else if(args.get('--flow')==='requester-decision'){await requesterDecisionFlow();} else
   if(args.get('--flow')==='product-access-request'){await productAccessRequestFlow(args.get('--request-end')==='indefinite',args.get('--request-product'));} else
-  if(args.get('--flow')==='organization-heading-space'){await organizationHeadingSpaceFlow();} else if(args.get('--flow')==='organization-highway'){await organizationHighwayFlow();} else if(args.get('--flow')==='organization-view-options'){await organizationViewOptionsFlow();} else if(args.get('--flow')==='canvas-card-styles'){await canvasCardStylesFlow();} else if(args.get('--flow')==='canvas-selection'){await canvasSelectionFlow();} else if(args.get('--flow')==='protected-buildings'){await protectedBuildingsFlow();} else if(args.get('--flow')==='domain-product-layout'){await domainProductLayoutFlow();} else if(args.get('--flow')==='organization-flow'){await organizationFlowFlow();} else if(args.get('--flow')==='canvas-controls'){await canvasControlsFlow();} else if(args.get('--flow')==='recent-work'){await recentWorkFlow();} else if(args.get('--flow')==='organization-object-search'){await organizationObjectSearchFlow();} else if(args.get('--flow')==='organization-localization'){await organizationLocalizationFlow();} else if(args.get('--flow')==='organization-domain-layout'){await organizationDomainLayoutFlow();} else if(args.get('--flow')==='organization-layout'){await organizationLayoutFlow();} else if(args.get('--flow')==='semantic-performance'){await semanticPerformanceFlow();} else if(args.get('--flow')==='domain-radial-layout'){await domainRadialLayoutFlow();} else if(args.get('--flow')==='organization-explorer'){await organizationExplorerFlow();} else if(args.get('--flow')==='domain-exploration'){await domainExplorationFlow();} else if(args.get('--flow')==='domain-loading-indicators'){await domainLoadingIndicatorsFlow();} else if(args.get('--flow')==='physical-domain-removal'){await physicalDomainRemovalFlow();} else if(args.get('--flow')==='lineage-access'){await lineageAccessFlow();} else if(args.get('--flow')==='domain-canvas-mobile-layout'){await domainCanvasMobileLayoutFlow();} else if(args.get('--flow')==='domain-canvas-approval'){await domainCanvasApprovalFlow();} else if(args.get('--flow')==='source-info-notices'){await sourceInfoNoticesFlow();} else if(args.get('--flow')==='mapping-status-tooltips'){await mappingStatusTooltipsFlow();} else if(args.get('--flow')==='personal-search-views'){await personalSearchViewsFlow();} else if(args.get('--flow')==='lineage-explorer'){await lineageExplorerFlow();} else if(args.get('--flow')==='model-department-default'){await modelDepartmentDefaultFlow();} else if(args.get('--flow')==='physical-derivation'){await physicalDerivationEntryFlow();} else if(args.get('--flow')==='physical-object-actions'){await physicalObjectActionsFlow();} else if(args.get('--flow')==='mapping-release-tail'){await navigate('/models','christian.man');const physical=await physicalFirstFlow();await existingToExistingFlow(physical);await dataModelJourneyTen();await sourceAccessReturnFlow();await fieldMoveFlow();console.log('PASS focused Mapping release tail');} else if(args.get('--flow')==='semantic-own-office'){await semanticOwnOfficeFlow();} else if(args.get('--flow')==='mapping-start'){await mappingStartFlow();} else if(args.get('--flow')==='expert-search'){await expertSearchFlow();} else if(args.get('--flow')==='mapping-live-refresh'){await mappingLiveRefreshFlow();} else if(args.get('--flow')==='domain-transfer'){await domainTransferFlow();} else if(args.get('--flow')==='domain-metadata'){await domainMetadataFlow();} else if(args.get('--flow')==='semantic-owner-search'){await semanticOwnerSearchFlow();} else if(args.get('--flow')==='domain-relation-types'){await domainRelationTypesFlow();} else if(args.get('--flow')==='organization-term-network'){await organizationTermNetworkFlow();} else if(args.get('--flow')==='domain-connection-gesture'){await domainConnectionGestureFlow();} else if(args.get('--flow')==='domain-card-actions'){await domainCardActionsFlow();} else if(args.get('--flow')==='governance-information'){await governanceInformationFlow();} else if(args.get('--flow')==='semantic-gestures'){await semanticGestureFlow();} else if(args.get('--flow')==='domain-network'){await domainNetworkFlow();} else if(args.get('--flow')==='field-move'){await fieldMoveFlow();} else if(args.get('--flow')==='hold-connections'){await holdConnectionFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});} else if(args.get('--flow')==='source-access-return'){await sourceAccessReturnFlow();} else if(args.get('--flow')==='csv-import'){await csvPhysicalModelsFlow();} else if(args.get('--flow')==='inventory-representation'){await inventoryRepresentationFlow();} else if(args.get('--flow')==='concept-network'){await conceptNetworkEditingFlow();} else if(args.get('--flow')==='line-editing'){
+  if(args.get('--flow')==='product-catalog-default'){await productCatalogDefaultFlow();} else if(args.get('--flow')==='product-access-request-history'){await requesterDecisionFlow(false,true);} else if(args.get('--flow')==='mapping-warning-save'){await navigate('/models','christian.man');await mappingWarningSaveFlow(args.get('--model-id')?{modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')}:await physicalFirstFlow());} else if(args.get('--flow')==='organization-heading-space'){await organizationHeadingSpaceFlow();} else if(args.get('--flow')==='organization-highway'){await organizationHighwayFlow();} else if(args.get('--flow')==='organization-view-options'){await organizationViewOptionsFlow();} else if(args.get('--flow')==='canvas-card-styles'){await canvasCardStylesFlow();} else if(args.get('--flow')==='canvas-selection'){await canvasSelectionFlow();} else if(args.get('--flow')==='protected-buildings'){await protectedBuildingsFlow();} else if(args.get('--flow')==='domain-product-layout'){await domainProductLayoutFlow();} else if(args.get('--flow')==='organization-flow'){await organizationFlowFlow();} else if(args.get('--flow')==='canvas-controls'){await canvasControlsFlow();} else if(args.get('--flow')==='recent-work'){await recentWorkFlow();} else if(args.get('--flow')==='organization-object-search'){await organizationObjectSearchFlow();} else if(args.get('--flow')==='organization-localization'){await organizationLocalizationFlow();} else if(args.get('--flow')==='organization-domain-layout'){await organizationDomainLayoutFlow();} else if(args.get('--flow')==='organization-layout'){await organizationLayoutFlow();} else if(args.get('--flow')==='semantic-performance'){await semanticPerformanceFlow();} else if(args.get('--flow')==='domain-radial-layout'){await domainRadialLayoutFlow();} else if(args.get('--flow')==='organization-explorer'){await organizationExplorerFlow();} else if(args.get('--flow')==='domain-exploration'){await domainExplorationFlow();} else if(args.get('--flow')==='domain-loading-indicators'){await domainLoadingIndicatorsFlow();} else if(args.get('--flow')==='physical-domain-removal'){await physicalDomainRemovalFlow();} else if(args.get('--flow')==='lineage-access'){await lineageAccessFlow();} else if(args.get('--flow')==='domain-canvas-mobile-layout'){await domainCanvasMobileLayoutFlow();} else if(args.get('--flow')==='domain-canvas-approval'){await domainCanvasApprovalFlow();} else if(args.get('--flow')==='source-info-notices'){await sourceInfoNoticesFlow();} else if(args.get('--flow')==='mapping-status-tooltips'){await mappingStatusTooltipsFlow();} else if(args.get('--flow')==='personal-search-views'){await personalSearchViewsFlow();} else if(args.get('--flow')==='lineage-explorer'){await lineageExplorerFlow();} else if(args.get('--flow')==='model-department-default'){await modelDepartmentDefaultFlow();} else if(args.get('--flow')==='physical-derivation'){await physicalDerivationEntryFlow();} else if(args.get('--flow')==='physical-object-actions'){await physicalObjectActionsFlow();} else if(args.get('--flow')==='mapping-release-tail'){await navigate('/models','christian.man');const physical=await physicalFirstFlow();await existingToExistingFlow(physical);await dataModelJourneyTen();await sourceAccessReturnFlow();await fieldMoveFlow();console.log('PASS focused Mapping release tail');} else if(args.get('--flow')==='semantic-own-office'){await semanticOwnOfficeFlow();} else if(args.get('--flow')==='mapping-start'){await mappingStartFlow();} else if(args.get('--flow')==='expert-search'){await expertSearchFlow();} else if(args.get('--flow')==='mapping-live-refresh'){await mappingLiveRefreshFlow();} else if(args.get('--flow')==='domain-transfer'){await domainTransferFlow();} else if(args.get('--flow')==='domain-metadata'){await domainMetadataFlow();} else if(args.get('--flow')==='semantic-owner-search'){await semanticOwnerSearchFlow();} else if(args.get('--flow')==='domain-relation-types'){await domainRelationTypesFlow();} else if(args.get('--flow')==='organization-term-network'){await organizationTermNetworkFlow();} else if(args.get('--flow')==='domain-connection-gesture'){await domainConnectionGestureFlow();} else if(args.get('--flow')==='domain-card-actions'){await domainCardActionsFlow();} else if(args.get('--flow')==='governance-information'){await governanceInformationFlow();} else if(args.get('--flow')==='semantic-gestures'){await semanticGestureFlow();} else if(args.get('--flow')==='domain-network'){await domainNetworkFlow();} else if(args.get('--flow')==='field-move'){await fieldMoveFlow();} else if(args.get('--flow')==='hold-connections'){await holdConnectionFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});} else if(args.get('--flow')==='source-access-return'){await sourceAccessReturnFlow();} else if(args.get('--flow')==='csv-import'){await csvPhysicalModelsFlow();} else if(args.get('--flow')==='inventory-representation'){await inventoryRepresentationFlow();} else if(args.get('--flow')==='concept-network'){await conceptNetworkEditingFlow();} else if(args.get('--flow')==='line-editing'){
     invariant(args.get('--model-id')&&args.get('--snapshot-id'),'line-editing flow requires model-id and snapshot-id');
     await edgeEditingFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});
   } else {
+  await productCatalogDefaultFlow();
   await productAccessRequestFlow();
   await productAccessRequestFlow(true);
-  await requesterDecisionFlow();
+  await requesterDecisionFlow(true,true);
   await contextMenuNavigationFlow();
   await adaImportJourneyFlow();
   await csvPhysicalModelsFlow();
@@ -4990,6 +5145,7 @@ try {
   const logical = await logicalFirstFlow();
   console.log(`PASS logical-first: ${logical.modelId}`);
   const physical = await physicalFirstFlow();
+  await mappingWarningSaveFlow(physical);
   await edgeEditingFlow(physical);
   await holdConnectionFlow(physical);
   console.log(`PASS physical-first: ${physical.modelId} @ ${physical.snapshotId}`);

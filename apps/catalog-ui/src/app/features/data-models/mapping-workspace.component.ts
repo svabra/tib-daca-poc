@@ -192,7 +192,7 @@ export function exactMappingSuggestions(
           </span></div></header>
         <div class="mapping-body" [class.is-drift]="facade.view()==='drift'">
           <main>@switch(facade.view()){@case('graph'){<daca-mapping-graph [responsibleUserId]="identity.userId()" [fullscreen]="fullscreen()" (toggleFullscreen)="toggleFullscreen($event)" [canManage]="canManageSelectedModel()" (fieldActivated)="focusSelectedFieldInput()" (disconnect)="disconnectFieldLink($event.mappingId,$event.columnId)" (removeRelationship)="removeMapping($event)" (deleteField)="deleteLogicalField($event)" (addRepresentation)="openRepresentationPicker($event)" (assignDomain)="openDomainDialog($event)" [domainBusy]="domainBusy()" (removePhysicalDomain)="removePhysicalDomain($event.tableId,$event.domainId)"/>}@case('table'){<daca-mapping-matrix/>}@case('drift'){<daca-mapping-drift/>}}</main>
-          <aside [style.display]="facade.view()==='drift'?'none':null" class="mapping-side" aria-label="Merkmale und Mapping">@if(facade.selectedField();as field){@for(versionId of [model.versionId];track versionId){<daca-logical-model-editor [workspaceSaving]="saving()" [mappingDraftsPending]="facade.hasDirtyMappings()" [id]="model.id" [embedded]="true" [fieldPanelOnly]="true" [selectedFieldId]="field.id" (draftChanged)="facade.previewLogicalDraft($event.modelId,$event.versionId,$event.value)" (modelSaved)="modelCharacteristicsSaved($event)" />}}<daca-mapping-inspector [showFieldSummary]="false" [canRemove]="canManageSelectedModel()" (validate)="validateMapping($event)" (submit)="submitMapping($event)" (supersede)="supersedeMapping($event)" (remove)="removeMapping($event)" /></aside>
+          <aside [style.display]="facade.view()==='drift'?'none':null" class="mapping-side" aria-label="Merkmale und Mapping">@if(facade.selectedField();as field){@for(versionId of [model.versionId];track versionId){<daca-logical-model-editor [workspaceSaving]="saving()" [mappingDraftsPending]="facade.hasDirtyMappings()" [id]="model.id" [embedded]="true" [fieldPanelOnly]="true" [selectedFieldId]="field.id" (draftChanged)="facade.previewLogicalDraft($event.modelId,$event.versionId,$event.value)" (modelSaved)="modelCharacteristicsSaved($event)" />}}<daca-mapping-inspector [showFieldSummary]="false" [canRemove]="canManageSelectedModel()" [busy]="saving()" [saveDisabledReason]="draftSaveDisabledReason()" (save)="saveMappings()" (validate)="validateMapping($event)" (submit)="submitMapping($event)" (supersede)="supersedeMapping($event)" (remove)="removeMapping($event)" /></aside>
         </div>
         @if(pickerOpen()){<daca-representation-picker [model]="model" (closed)="closeRepresentationPicker()" (added)="addRepresentation($event.snapshot,$event.table)" />}
         @if(domainDialog();as target){<daca-model-domain-dialog [targetName]="domainTargetName()" [logical]="target.tableId===null" [physicalOptions]="domainOptions()" [initialDomainId]="target.useLogicalDomain ? model.dataDomain.id : ''" [fixedDomain]="!!target.useLogicalDomain" [busy]="domainBusy()" [error]="domainError()" (closed)="closeDomainDialog()" (confirmed)="assignDomain($event)"/>}
@@ -527,20 +527,58 @@ export class MappingWorkspaceComponent {
     if(mapping.physicalColumnIds.length===1){this.removeMapping(mappingId);return;}
     this.facade.reviseMapping(mappingId,{physicalColumnIds:mapping.physicalColumnIds.filter((id)=>id!==columnId)});
   }
-  saveMappings():void{
+  saveMappings(submitId?:string):void{
     const model=this.facade.model();if(!model||this.draftSaveDisabledReason())return;
     const dirty=this.facade.mappings().filter((mapping)=>this.facade.dirtyIds().has(mapping.id));
     const representations=this.facade.pendingRepresentations().map((item)=>({physicalSnapshotId:item.snapshot.id,physicalTableId:item.table.id}));
     ++this.refreshGeneration;this.saving.set(true);this.error.set(null);
     const token=this.selectionRequestToken,actor=this.identity.userId();
     const current=()=>token===this.selectionRequestToken&&actor===this.identity.userId()&&this.facade.model()?.id===model.id;
-    this.api.saveWorkspaceDraft(model,representations,dirty,this.facade.logicalDraft(),this.facade.pendingRemovals(),this.facade.canvasLayoutDraft()).pipe(takeUntilDestroyed(this.destroyRef),finalize(()=>{if(current())this.saving.set(false);})).subscribe({
-      next:(result)=>{if(!current())return;this.facade.markRemovalsSaved(result.removedMappingIds??[]);for(const item of result.mappings)this.facade.replaceSaved(item.clientId,item.mapping);if(result.logicalModel)this.facade.rebaseAfterModelSave(result.logicalModel,result.currentMappings??[]);this.facade.markRepresentationsSaved(new Set(result.items.map((item)=>item.physicalTableId)));if(result.canvasLayout)this.facade.restoreCanvasLayout(result.canvasLayout);this.refreshNotice.set(null);this.rememberWorkspace(true);this.facade.announcement.set('Alle Mapping-Entwürfe wurden versioniert gespeichert.');this.issueRefreshKey.update((value)=>value+1);this.catalogApi.refreshWorkflowTasks();},
-      error:(error:Error)=>{if(current())this.error.set(`${error.message} Es wurden keine Änderungen dieses Speichervorgangs übernommen; die lokalen Entwürfe bleiben erhalten.`);},
+    let draftSaved=false,submitted=false;
+    this.api.saveWorkspaceDraft(model,representations,dirty,this.facade.logicalDraft(),this.facade.pendingRemovals(),this.facade.canvasLayoutDraft()).pipe(
+      tap((result)=>{
+        if(!current())return;
+        this.facade.markRemovalsSaved(result.removedMappingIds??[]);
+        for(const item of result.mappings)this.facade.replaceSaved(item.clientId,item.mapping);
+        if(result.logicalModel)this.facade.rebaseAfterModelSave(result.logicalModel,result.currentMappings??[]);
+        this.facade.markRepresentationsSaved(new Set(result.items.map((item)=>item.physicalTableId)));
+        if(result.canvasLayout)this.facade.restoreCanvasLayout(result.canvasLayout);
+        draftSaved=true;this.refreshNotice.set(null);this.rememberWorkspace(true);
+        this.facade.announcement.set('Alle Mapping-Entwürfe wurden versioniert gespeichert.');
+        this.issueRefreshKey.update((value)=>value+1);this.catalogApi.refreshWorkflowTasks();
+      }),
+      concatMap((result)=>{
+        if(!submitId||!current())return EMPTY;
+        const savedId=result.mappings.find((item)=>item.clientId===submitId)?.mapping.id??submitId;
+        // Resolve again after a logical-model save may have rebased the mapping.
+        const mapping=this.facade.mappings().find((item)=>item.id===savedId);
+        if(!mapping||!['draft','broken'].includes(mapping.status)||this.facade.dirtyIds().has(savedId))return EMPTY;
+        submitted=true;
+        return this.api.submitMapping(mapping.id,mapping.versionId,`"${mapping.lockVersion}"`);
+      }),
+      takeUntilDestroyed(this.destroyRef),finalize(()=>{if(current())this.saving.set(false);}),
+    ).subscribe({
+      next:({body})=>{if(!current())return;this.facade.markValidation(body);this.facade.announcement.set('Das Mapping wurde gespeichert und zur Prüfung eingereicht.');},
+      error:(error:Error)=>{if(current())this.error.set(draftSaved&&submitted
+        ? `${error.message} Der Entwurf wurde gespeichert, konnte aber nicht zur Prüfung eingereicht werden. Bitte erneut einreichen.`
+        : `${error.message} Es wurden keine Änderungen dieses Speichervorgangs übernommen; die lokalen Entwürfe bleiben erhalten.`);},
     });
   }
+
   removeMapping(id:string):void{if(this.canManageSelectedModel())this.facade.stageMappingRemoval(id);}
   validateMapping(id:string):void{const mapping=this.facade.mappings().find((item)=>item.id===id);if(!mapping||mapping.status!=='review_pending'||mapping.id.startsWith('draft-mapping-'))return;++this.refreshGeneration;this.saving.set(true);this.api.validateMapping(mapping.id,mapping.versionId,`"${mapping.lockVersion}"`).pipe(finalize(()=>this.saving.set(false))).subscribe({next:({body})=>{this.facade.markValidation(body);this.facade.announcement.set(body.validationResult?.valid?'Mapping ist gültig.':'Mapping enthält Prüfhinsweise oder Fehler.');},error:(error:Error)=>this.error.set(error.message)});}
-  submitMapping(id:string):void{const mapping=this.facade.mappings().find((item)=>item.id===id);if(!mapping||!['draft','broken'].includes(mapping.status)||mapping.id.startsWith('draft-mapping-')||this.facade.dirtyIds().has(id))return;++this.refreshGeneration;this.saving.set(true);this.error.set(null);this.api.submitMapping(mapping.id,mapping.versionId,`"${mapping.lockVersion}"`).pipe(finalize(()=>this.saving.set(false))).subscribe({next:({body})=>{this.facade.markValidation(body);this.facade.announcement.set('Das Mapping wurde als unveränderliche Nachfolgeversion zur Prüfung eingereicht.');},error:(error:Error)=>this.error.set(error.message)});}
+  submitMapping(id:string):void{
+    const mapping=this.facade.mappings().find((item)=>item.id===id);
+    if(!mapping||!['draft','broken'].includes(mapping.status)||this.saving())return;
+    if(mapping.id.startsWith('draft-mapping-')||this.facade.dirtyIds().has(id)){this.saveMappings(id);return;}
+    ++this.refreshGeneration;this.saving.set(true);this.error.set(null);
+    const token=this.selectionRequestToken,actor=this.identity.userId();
+    const current=()=>token===this.selectionRequestToken&&actor===this.identity.userId();
+    this.api.submitMapping(mapping.id,mapping.versionId,`"${mapping.lockVersion}"`).pipe(takeUntilDestroyed(this.destroyRef),finalize(()=>{if(current())this.saving.set(false);})).subscribe({
+      next:({body})=>{if(current()){this.facade.markValidation(body);this.facade.announcement.set('Das Mapping wurde als unveränderliche Nachfolgeversion zur Prüfung eingereicht.');}},
+      error:(error:Error)=>{if(current())this.error.set(error.message);},
+    });
+  }
+
   supersedeMapping(id:string):void{const mapping=this.facade.mappings().find((item)=>item.id===id);if(!mapping||!['validated','broken'].includes(mapping.status)||mapping.id.startsWith('draft-mapping-')||this.facade.dirtyIds().has(id))return;++this.refreshGeneration;this.saving.set(true);this.error.set(null);this.api.supersedeMapping(mapping.id,mapping.versionId,`"${mapping.lockVersion}"`).pipe(finalize(()=>this.saving.set(false))).subscribe({next:({body})=>{this.facade.markValidation(body);this.facade.announcement.set('Das Mapping wurde durch eine unveränderliche Nachfolgeversion abgelöst.');},error:(error:Error)=>this.error.set(error.message)});}
 }

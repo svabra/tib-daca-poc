@@ -17,7 +17,7 @@ interface OntologyTerm { id: string; uri: string; kind: 'class' | 'property'; la
   imports: [RouterLink, DacaGlossaryTermComponent, QualityContextGraphComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <nav class="quality-breadcrumb"><a routerLink="/products">Meine Datenprodukte</a><span>›</span><a [routerLink]="['/products', product().id, 'overview']">{{ product().title }}</a><span>›</span><strong>Qualität</strong></nav>
+    <nav class="quality-breadcrumb"><a routerLink="/products">Datenprodukte</a><span>›</span><a [routerLink]="['/products', product().id, 'overview']">{{ product().title }}</a><span>›</span><strong>Qualität</strong></nav>
     <section class="daca-page-heading quality-heading"><div><p class="daca-eyebrow">Datenprodukt-Qualität</p><h1>Von <daca-glossary-term term="DAAIF" /> zu Platinum</h1><p>Prüfen und ergänzen Sie technische, fachliche und semantische Metadaten in fünf kompakten Schritten.</p></div>@if (state(); as current) { <span class="quality-medal quality-medal-large" [class]="'is-' + current.quality.medal">{{ current.quality.medal }} · {{ current.quality.score }}/6</span> }</section>
 
     @if (state(); as current) {

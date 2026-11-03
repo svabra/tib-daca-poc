@@ -1,19 +1,27 @@
-import { ORGANIZATION_CARD, ORGANIZATION_FIELD, ORGANIZATION_OVERVIEW_FIELD, clearsOrganizationBoundary, constrainOrganizationSatellite, clearsOrganizationHeading, organizationSatellite, scatterOrganizations, groupOrganizationDomains } from './organization-layout';
+import { ORGANIZATION_CANVAS_HEIGHT, ORGANIZATION_BOUNDARY, ORGANIZATION_CARD, ORGANIZATION_FIELD, ORGANIZATION_OVERVIEW_FIELD, clearsOrganizationBoundary, constrainOrganizationSatellite, clearsOrganizationHeading, organizationSatellite, scatterOrganizations, groupOrganizationDomains } from './organization-layout';
 
 describe('free organization layout', () => {
+  it('reserves a complete card row below the focused organization boundary', () => {
+    const bottom=ORGANIZATION_BOUNDARY.y+ORGANIZATION_BOUNDARY.height;
+    expect(ORGANIZATION_CANVAS_HEIGHT-bottom).toBeGreaterThanOrEqual(ORGANIZATION_CARD.height+16);
+    const point={x:480,y:bottom+ORGANIZATION_CARD.height/2+20};
+    expect(constrainOrganizationSatellite(point,ORGANIZATION_CARD.width,ORGANIZATION_CARD.height)).toEqual(point);
+    expect(clearsOrganizationBoundary({...point,...ORGANIZATION_CARD})).toBe(true);
+    expect(point.y+ORGANIZATION_CARD.height/2+8).toBeLessThanOrEqual(ORGANIZATION_CANVAS_HEIGHT);
+  });
   it('keeps external card edges outside every side and corner, with room for drift', () => {
     const positions=[{x:240,y:320},{x:720,y:320},{x:480,y:120},{x:480,y:530},{x:180,y:104},{x:780,y:558},{x:480,y:330},{x:-500,y:1000}];
     for(const point of positions){
       const result=constrainOrganizationSatellite(point,ORGANIZATION_CARD.width,ORGANIZATION_CARD.height);
       expect(clearsOrganizationBoundary({...result,...ORGANIZATION_CARD})).toBe(true);
       expect(result.x).toBeGreaterThanOrEqual(68);expect(result.x).toBeLessThanOrEqual(892);
-      expect(result.y).toBeGreaterThanOrEqual(50);expect(result.y).toBeLessThanOrEqual(600);
+      expect(result.y).toBeGreaterThanOrEqual(50);expect(result.y).toBeLessThanOrEqual(ORGANIZATION_CANVAS_HEIGHT-50);
     }
     expect(constrainOrganizationSatellite({x:240,y:320},120,84)).toEqual({x:112,y:320});
     expect(constrainOrganizationSatellite({x:720,y:320},120,84)).toEqual({x:848,y:320});
     expect(constrainOrganizationSatellite({x:480,y:120},120,84)).toEqual({x:480,y:54});
-    // The bottom strip is too short for the reserved footprint plus drift clearance.
-    expect(constrainOrganizationSatellite({x:480,y:530},120,84)).toEqual({x:112,y:530});
+    // The expanded bottom strip accepts a full card plus drift clearance.
+    expect(constrainOrganizationSatellite({x:480,y:530},120,84)).toEqual({x:480,y:608});
     expect(clearsOrganizationBoundary({x:150,y:320,...ORGANIZATION_CARD})).toBe(false);
     expect(constrainOrganizationSatellite({x:80,y:300},120,84)).toEqual({x:80,y:300});
   });

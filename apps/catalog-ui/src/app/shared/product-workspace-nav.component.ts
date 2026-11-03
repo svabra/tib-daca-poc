@@ -12,7 +12,7 @@ export type ProductAccessView = 'overview' | 'grant' | 'technical' | null;
   template: `
     <div class="product-workspace-context">
       <nav class="product-workspace-breadcrumb" aria-label="Brotkrümelnavigation">
-        <a routerLink="/products">Meine Datenprodukte</a>
+        <a routerLink="/products">Datenprodukte</a>
         <span aria-hidden="true">›</span>
         <strong>{{ productTitle() }}</strong>
       </nav>
@@ -62,7 +62,7 @@ export type ProductAccessView = 'overview' | 'grant' | 'technical' | null;
             [class.is-active]="accessView() === 'overview'"
             [attr.aria-current]="accessView() === 'overview' ? 'page' : null"
           >Übersicht</a>
-          <a routerLink="/tasks" [queryParams]="{ product: productId() }">Zugriffsanfragen</a>
+          <a [routerLink]="['/products', productId(), 'access']" fragment="access-requests">Zugriffsanfragen</a>
           <a [routerLink]="['/products', productId(), 'access']" fragment="consumers">Datenkonsumenten</a>
           <a
             [routerLink]="['/products', productId(), 'access', 'grant']"

@@ -17,13 +17,16 @@ import {
   resolvedDeputyDataOwner,
 } from './my-data-products';
 
-describe('My data products filtering', () => {
+describe('Data products filtering', () => {
   it('starts with offered products unless a supported URL filter was requested', () => {
     expect(DEFAULT_PRODUCT_RELATIONSHIP_FILTER).toBe('offered');
     expect(initialProductRelationshipFilter(null)).toBe('offered');
     expect(initialProductRelationshipFilter('unknown')).toBe('offered');
+    expect(initialProductRelationshipFilter(null, false)).toBe('all');
+    expect(initialProductRelationshipFilter('unknown', false)).toBe('all');
     for (const explicitFilter of ['all', 'offered', 'sharedByMe', 'requestedByMe', 'sharedWithMe'] as const) {
       expect(initialProductRelationshipFilter(explicitFilter)).toBe(explicitFilter);
+      expect(initialProductRelationshipFilter(explicitFilter, false)).toBe(explicitFilter);
     }
   });
 

@@ -79,7 +79,7 @@ export class App {
   readonly notificationCount = computed(() => this.notifications().length);
   private readonly navigationDefinition: readonly DacaNavigationItem[] = [
     { label: 'Startseite', path: '/', exact: true },
-    { label: 'Meine Datenprodukte', path: '/products' },
+    { label: 'Datenprodukte', path: '/products' },
     { label: 'Datenquellen', path: '/physical-models' },
     { label: 'Datenmodelle', path: '/models' },
     { label: 'Domäne und Terminologie', path: '/domains' },
@@ -108,7 +108,7 @@ export class App {
       const language = this.preferences.language();
       const titles: Record<string, readonly [string, string, string, string]> = {
         '/': ['Willkommen', 'Bienvenue', 'Benvenuti', 'Welcome'],
-        '/products': ['Meine Datenprodukte', 'Mes produits de données', 'I miei prodotti di dati', 'My data products'],
+        '/products': ['Datenprodukte', 'Produits de données', 'Prodotti di dati', 'Data products'],
         '/search': ['Expertensuche', 'Recherche avancée', 'Ricerca avanzata', 'Expert search'],
         '/physical-models': ['Sichtbare Datenquellen', 'Sources de données visibles', 'Fonti dati visibili', 'Visible data sources'],
         '/models': ['Datenmodelle', 'Modèles de données', 'Modelli di dati', 'Data models'],
@@ -132,7 +132,7 @@ export class App {
   private navigationLabel(label: string): string {
     const translated: Record<string, readonly [string, string, string]> = {
       'Startseite': ['Accueil', 'Pagina iniziale', 'Home'],
-      'Meine Datenprodukte': ['Mes produits de données', 'I miei prodotti di dati', 'My data products'],
+      'Datenprodukte': ['Produits de données', 'Prodotti di dati', 'Data products'],
       'Datenquellen': ['Sources de données', 'Fonti dati', 'Data sources'],
       'Datenmodelle': ['Modèles de données', 'Modelli di dati', 'Data models'],
       'Domäne und Terminologie': ['Domaine et terminologie', 'Dominio e terminologia', 'Domain and terminology'],

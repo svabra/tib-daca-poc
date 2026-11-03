@@ -1,5 +1,15 @@
 # Logical models, I14Y concepts, physical models, and mappings
 
+The mapping inspector offers **Entwurf speichern** and **Speichern & zur Prüfung einreichen**
+for unsaved mappings. Both reuse the atomic workspace draft save, including other pending
+workspace edits. Type conflicts and semantic warnings remain visible but never prevent draft
+storage. The combined action submits only after persistence, resolving the returned mapping ID
+and its latest version/lock after any logical-model rebase. Failed saves keep local edits and
+do not submit; failed submission keeps the saved draft and explains how to retry. Warning-only
+Transformed mappings can pass validation; Direct/Renamed incompatibilities remain validation
+errors without blocking draft storage or submission for review. Authorization, structural
+reference checks, stale-version rejection and immutable workflow history remain unchanged.
+
 CSV fields without a declared datatype use `string`; the preview names the assumption and keeps
 the original empty `Datentyp` in `importMetadata.records`. Legacy CSV columns stored as `unknown`
 use the same effective type only when their retained records all explicitly contain an empty
