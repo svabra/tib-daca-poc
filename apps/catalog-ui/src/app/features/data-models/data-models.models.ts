@@ -83,6 +83,7 @@ export interface RecentMappingWorkspace {
 }
 
 export interface LogicalModelSummary {
+  versionId?: string;
   id: string;
   urn: string;
   revision: number;
@@ -130,6 +131,12 @@ export interface LogicalModel extends LogicalModelSummary {
   distributions: DcatDistribution[];
   dataServices: DcatDataService[];
   assistanceProvenance?: readonly LogicalModelAssistanceProvenance[];
+}
+
+export interface LogicalSearchField {
+  modelId:string;modelVersionId:string;id:string;rootId:string;entityName:string;name:string;
+  dataType:string;nullable:boolean;shortDescription:string|null;comment:string|null;
+  businessObject:string|null;sourceSystem:string|null;
 }
 
 export interface LogicalModelReview {

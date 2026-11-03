@@ -4,7 +4,7 @@ import { catchError, finalize, forkJoin, from, map, mergeMap, of, Subscription, 
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 import { DataModelsApiService } from '../data-models/data-models-api.service';
-import { CatalogSearchAsset, domainSearchAsset, logicalSearchAsset, physicalSearchAssets, productSearchAsset, sourceSearchAsset, termSearchAsset } from './catalog-search.models';
+import { CatalogSearchAsset, domainSearchAsset, logicalFieldSearchAssets, logicalSearchAsset, physicalSearchAssets, productSearchAsset, sourceSearchAsset, termSearchAsset } from './catalog-search.models';
 import type { OrganizationNetwork } from '../welcome/organization-canvas.component';
 import { UserPreferencesService } from '../../core/user-preferences.service';
 
@@ -63,14 +63,17 @@ export class CatalogSearchDataService {
       domains:this.api.loadDomains().pipe(catchError(()=>{failed();return of([]);})),
       terms:this.api.loadGlossaryTerms().pipe(catchError(()=>{failed();return of([]);})),
       logical:this.models.listLogicalModels().pipe(catchError(()=>{failed();return of([]);})),
+      logicalFields:this.models.listLogicalFields().pipe(catchError(()=>{failed();return of([]);})),
       sources:this.models.listPhysicalSources().pipe(catchError(error=>{if(error.status!==403)failed();return of([]);})),
-    }).pipe(mergeMap(({products,network,domains,terms,logical,sources})=>{
-      if(current()){this.network.set(network);this.metadata.set([...products.map(productSearchAsset),...domains.map(domainSearchAsset),...terms.map(termSearchAsset),...logical.map(model=>logicalSearchAsset(model,domains)),...sources.map(sourceSearchAsset)]);}
+    }).pipe(mergeMap(({products,network,domains,terms,logical,logicalFields,sources})=>{
+      const fieldsByModel=new Map<string,(typeof logicalFields)[number][]>();
+      for(const field of logicalFields){let fields=fieldsByModel.get(field.modelId);if(!fields){fields=[];fieldsByModel.set(field.modelId,fields);}fields.push(field);}
+      if(current()){this.network.set(network);this.metadata.set([...products.map(productSearchAsset),...domains.map(domainSearchAsset),...terms.map(termSearchAsset),...logical.flatMap(model=>[logicalSearchAsset(model,domains),...logicalFieldSearchAssets(model,fieldsByModel.get(model.id)??[],domains)]),...sources.map(sourceSearchAsset)]);}
       return from(sources.filter(source=>source.latestSnapshotId)).pipe(mergeMap(source=>this.models.loadPhysicalSnapshot(source.latestSnapshotId!).pipe(
         map(snapshot=>physicalSearchAssets(source,snapshot)),catchError(()=>{failed();return of([] as CatalogSearchAsset[]);}),
       ),4),toArray(),map(groups=>groups.flat()));
     }),takeUntilDestroyed(this.destroyRef),finalize(()=>{if(current())this.loading.set(false);})).subscribe({
-      next:physical=>{if(current())this.metadata.update(items=>[...items,...physical]);},
+      next:details=>{if(current())this.metadata.update(items=>[...items,...details]);},
       error:()=>failed(),
     });
   }

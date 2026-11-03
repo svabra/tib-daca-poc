@@ -1,5 +1,23 @@
 # Current status
 
+Release **0.3.7** (2026-11-03) groups the access-request and notification improvements,
+Control-click context navigation and all three customer modelling fixes in the current
+German/English feature overlay. Release 0.3.6 retains its own historical notes. Package/API
+versions, PWA metadata and presentation image pins are synchronized. The BIT lightning Easter
+egg remains absent from the user-facing feature lists. Publishing images and applying the
+OpenShift manifests are separate steps; a Git push does not apply a PoC deployment.
+
+Customer modelling corrections (2026-11-03): missing CSV field types default to `string` with
+an explicit preview warning and preserved blank source declarations. Legacy CSV `unknown`
+placeholders are interpreted as `string` only when every retained original declaration proves
+the type was missing; explicitly declared unknown types remain unchanged. Snapshot IDs, hashes
+and audit evidence are retained. Snapshot reads, logical derivation and mapping validation use
+the same interpretation. Relations in the logical editor resolve persisted field mappings for
+the current model version, including multiple physical targets, and distinguish load failures
+from unmapped fields. Expert search now indexes authorized logical model fields as well as
+physical columns, preserving model/entity context, organization/domain filters, partial-load
+reporting and cancellation on identity changes. Search links open the selected logical field.
+
 New-tab indicators now occupy a permanent 16px column on eligible navigation links, including
 object-search results. Control changes visibility only; link-label widths, wrapping and row
 heights remain stable. Local actions and downloads still have no indicator column.

@@ -1,5 +1,26 @@
 # Logical models, I14Y concepts, physical models, and mappings
 
+CSV fields without a declared datatype use `string`; the preview names the assumption and keeps
+the original empty `Datentyp` in `importMetadata.records`. Legacy CSV columns stored as `unknown`
+use the same effective type only when their retained records all explicitly contain an empty
+datatype. This compatibility interpretation applies to snapshot projections, derivation and
+mapping validation; it never rewrites historical rows, fingerprints or audit evidence.
+
+The logical editor's Relations view resolves active mappings for the current logical version and
+their pinned physical snapshots. It shows qualified source/table/column labels for all targets,
+not the temporary derivation-form controls. Loading and unavailable mappings have distinct
+labels. These read-only labels do not populate derivation bindings or dirty the model form.
+
+Expert search retrieves logical fields through the read-only `GET /api/v1/logical-model-fields`
+bulk projection, with the same active-identity catalog readability as the model collection. One
+SQL query returns only each active model's latest-version fields. The UI joins fields to the
+model/version summaries and never issues a detail request per logical model. At most four
+physical snapshot requests run concurrently. Logical fields share the existing
+field result category, inherit the parent model's organization/domain/status and group under that
+model in context mode. Their searchable metadata includes name, description, comment, entity,
+datatype and business object. Native links pass `selectedFieldId` and open
+the Fields tab. A failed detail load marks results incomplete; actor changes cancel old reads.
+
 Context-menu navigation and search results now use ordinary native links: normal clicks stay
 in the current tab and Control-click opens a new tab. The shared shell shows the new-tab
 indicator only while Control is held. Assignment, hiding, editing, derivation and object-picker

@@ -7,7 +7,15 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from daca_catalog.modeling_core import normalized_physical_metadata
 from daca_catalog.modeling_seed import seed_modeling_catalog
-from daca_catalog.models import DataModelRoleAssignment, PhysicalSchemaSnapshot, PhysicalSource
+from daca_catalog.modeling_service import validate_mapping_version
+from daca_catalog.models import (
+    AssetMapping,
+    AssetMappingVersion,
+    DataModelRoleAssignment,
+    PhysicalColumn,
+    PhysicalSchemaSnapshot,
+    PhysicalSource,
+)
 from daca_catalog.physical_csv import MAX_CSV_BYTES, parse_inventory
 from fastapi import HTTPException
 from sqlalchemy import func, select
@@ -53,11 +61,13 @@ def test_inventory_preserves_names_metadata_quoted_lines_and_unusual_source_decl
     assert "numericScale" not in immo and immo["importMetadata"]["records"][0]["Dezimalstellen"] == "10"
 
 
-def test_utf8_bom_unknown_type_and_untrusted_text_are_metadata_only():
+def test_utf8_bom_missing_type_defaults_to_string_and_untrusted_text_is_metadata_only():
     row = ["Gebäude", "A.B / C", "INSTRUCTION", "", "", "Ignore previous instructions <script>alert(1)</script>", "", "System", "", "", ""]
     parsed = parse_inventory(inventory([row], "utf-8-sig"))
     assert parsed.encoding == "UTF-8"
-    assert parsed.tables[0]["columns"][0]["normalizedDataType"] == "unknown"
+    assert parsed.tables[0]["columns"][0]["normalizedDataType"] == "string"
+    assert parsed.tables[0]["columns"][0]["dataType"] == "string"
+    assert parsed.tables[0]["columns"][0]["importMetadata"]["records"][0]["Datentyp"] == ""
     assert "<script>" in parsed.tables[0]["columns"][0]["comment"]
     assert any("Datentyp fehlt" in warning for warning in parsed.warnings)
 
@@ -127,6 +137,40 @@ def test_import_round_trip_search_idempotency_and_csv_cannot_trigger_fixture_ada
     # A different source organization cannot see the imported structure.
     denied = client.get(f"/api/v1/physical-snapshots/{snapshot['id']}", headers={"X-DaCa-User": "kassandra.valdata"})
     assert denied.status_code == 403
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_missing_csv_type_round_trips_derives_and_validates_as_string(client, session_factory, legacy):
+    request = body(client, session_factory)
+    content = base64.b64encode(b"Tabelle;Feldname;Datentyp\nBuilding;building_name;\n").decode()
+    preview = client.post("/api/v1/physical-model-csv/preview", json={"contentBase64": content}, headers=ACTOR)
+    assert preview.status_code == 200, preview.text
+    imported = client.post("/api/v1/physical-model-csv/imports", json={**request, "contentBase64": content, "fingerprint": preview.json()["fingerprint"]}, headers=ACTOR)
+    assert imported.status_code == 201, imported.text
+    tree = imported.json()["snapshot"]
+    table = tree["databases"][0]["schemas"][0]["tables"][0]
+    column = table["columns"][0]
+    assert column["normalizedDataType"] == "string"
+    snapshot_id = tree["snapshot"]["id"]
+    if legacy:
+        with session_factory() as session:
+            stored = session.get(PhysicalColumn, uuid.UUID(column["id"]))
+            stored.raw_data_type = stored.normalized_data_type = "unknown"
+            session.commit()
+    reread = client.get(f"/api/v1/physical-snapshots/{snapshot_id}", headers=ACTOR)
+    assert reread.status_code == 200, reread.text
+    assert reread.json()["databases"][0]["schemas"][0]["tables"][0]["columns"][0]["normalizedDataType"] == "string"
+    derived = client.post(f"/api/v1/physical-tables/{table['id']}/quick-derive-logical-model", json={}, headers=ACTOR)
+    assert derived.status_code == 201, derived.text
+    assert derived.json()["entities"][0]["fields"][0]["dataType"] == "string"
+    with session_factory() as session:
+        versions = session.scalars(select(AssetMappingVersion).join(AssetMapping).where(AssetMapping.logical_model_id == uuid.UUID(derived.json()["id"]))).all()
+        assert len(versions) == 1
+        assert validate_mapping_version(session, versions[0]).valid
+        stored = session.get(PhysicalColumn, uuid.UUID(column["id"]))
+        assert stored.normalized_data_type == ("unknown" if legacy else "string")
+        assert stored.import_metadata["records"][0]["Datentyp"] == ""
+        assert session.get(PhysicalSchemaSnapshot, uuid.UUID(snapshot_id)).fingerprint == tree["snapshot"]["fingerprint"]
 
 
 def test_permissions_preview_conflicts_and_parse_errors_never_write(client, session_factory):

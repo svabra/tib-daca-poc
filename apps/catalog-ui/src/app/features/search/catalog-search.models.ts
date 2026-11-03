@@ -1,5 +1,5 @@
 import { DataProduct, DomainSummary, GlossaryTermSummary } from '../../core/catalog.models';
-import { LogicalModelSummary, PhysicalSnapshot, PhysicalSource, PhysicalTable } from '../data-models/data-models.models';
+import { LogicalModelSummary, LogicalSearchField, PhysicalSnapshot, PhysicalSource, PhysicalTable } from '../data-models/data-models.models';
 import { physicalConnectionStatus } from '../data-models/physical-connection-status';
 import { catalogDataProductMatches, catalogProductMatches } from '../welcome/welcome-search';
 
@@ -61,6 +61,17 @@ export function sourceSearchAsset(source:PhysicalSource):CatalogSearchAsset{
     context:[source.databaseName,source.catalogPath].filter(Boolean),organization:source.office||source.ownerName,
     domains:[],status:source.lifecycle??'active',route:['/physical-models',source.id],updatedAt:source.updatedAt,
     sourceType:source.connectorType,keywords:[source.ownerName,source.systemName]};
+}
+export function logicalFieldSearchAssets(model:LogicalModelSummary,fields:readonly LogicalSearchField[],domains:readonly DomainSummary[]=[]):CatalogSearchAsset[]{
+  const parent=logicalSearchAsset(model,domains);
+  return fields.filter(field=>field.modelId===model.id&&(!model.versionId||field.modelVersionId===model.versionId)).map(field=>({
+    key:'logical-field:'+model.id+':'+field.rootId,id:field.id,kind:'field',label:field.name,
+    description:[field.shortDescription,field.comment].filter(Boolean).join('\n'),
+    context:[parent.label,field.entityName,...parent.context].filter(Boolean),organization:parent.organization,
+    domains:parent.domains,status:parent.status,route:parent.route,params:{selectedFieldId:field.id},
+    updatedAt:parent.updatedAt,identifier:field.rootId,dataType:field.dataType,nullable:field.nullable,parent,
+    keywords:[field.businessObject??'',field.sourceSystem??''],
+  }));
 }
 export function physicalSearchAssets(source:PhysicalSource,snapshot:PhysicalSnapshot):CatalogSearchAsset[]{
   const connection=physicalConnectionStatus(snapshot);

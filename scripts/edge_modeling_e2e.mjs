@@ -394,6 +394,46 @@ async function pressKey(key, code, windowsVirtualKeyCode) {
   }, sessionId);
 }
 
+async function customerModelingFixesFlow() {
+  const actor='christian.man',stamp=Date.now(),fieldName=`customer_field_${stamp}`;
+  await navigate('/models',actor);
+  const reference=expectStatus(await api(actor,'/api/v1/logical-models/83cb48b4-32b4-5bc9-b613-1036c3cb2e77'),200,'read modelling scope').body;
+  const contentBase64=Buffer.from(`Tabelle;Feldname;Datentyp;Kurzbeschreibung\nCustomerModel${stamp};${fieldName};;Synthetic missing type regression\nCustomerModel${stamp};second_field;CHAR;Second logical field\n`,'utf8').toString('base64');
+  const preview=expectStatus(await api(actor,'/api/v1/physical-model-csv/preview',{method:'POST',body:{contentBase64}}),200,'preview missing datatype').body;
+  invariant(preview.tables[0].columns[0].normalizedDataType==='string'&&preview.warnings.some(item=>item.includes('als string angenommen')),'missing CSV type did not default to string');
+  const imported=expectStatus(await api(actor,'/api/v1/physical-model-csv/imports',{method:'POST',body:{contentBase64,fingerprint:preview.fingerprint,name:`Customer modelling QA ${stamp}`,filename:'customer-model-qa.csv',departmentCode:reference.departmentCode,organizationId:reference.organizationId}}),201,'import missing datatype').body;
+  try {
+    const table=imported.snapshot.databases[0].schemas[0].tables[0];
+    const derivation={title:`Customer logical QA ${stamp}`,description:'Synthetic regression for saved field representations and search.',dataDomainId:reference.dataDomainId,dataOwnerUserId:reference.dataOwnerUserId,deputyOwnerUserId:reference.deputyOwnerUserId};
+    const proposed=expectStatus(await api(actor,`/api/v1/physical-tables/${table.id}/derivation-preview`,{method:'POST',body:derivation}),200,'derive string proposal').body;
+    invariant(proposed.fields[0].dataType==='string','derivation discarded the assumed string type');
+    const model=expectStatus(await api(actor,`/api/v1/physical-tables/${table.id}/derive-logical-model`,{method:'POST',body:{...derivation,fields:proposed.fields}}),201,'save derived logical model').body;
+    const fields=model.entities.flatMap(entity=>entity.fields);
+    const mappings=expectStatus(await api(actor,`/api/v1/asset-mappings?logicalModelId=${model.id}`),200,'read saved customer mappings').body.items;
+    for(const mapping of mappings){
+      const validated=expectStatus(await api(actor,`/api/v1/asset-mappings/${mapping.id}/versions/${mapping.versionId}/validate`,{method:'POST',etag:`"${mapping.lockVersion}"`}),200,'validate assumed-string mapping').body;
+      invariant(validated.validationResult.valid,'assumed-string mapping failed validation');
+    }
+    await navigate(`/models/${model.id}?selectedFieldId=${fields[1].id}`,actor);
+    await waitFor("document.querySelector('#model-panel-fields')?.hidden===false&&document.querySelector('.field-table tr.is-selected')?.innerText.includes('second_field')",'logical field deep link did not select the requested field');
+    await clickText('.field-browser nav button','Relation');
+    await waitFor(`document.querySelector('.relation-list button')?.innerText.includes(${JSON.stringify(fieldName)})&&!document.querySelector('.relation-list button')?.innerText.includes('werden geladen')`,'persisted physical relation was not restored');
+    invariant(await evaluate("!document.querySelector('.relation-list')?.innerText.includes('Keine Repräsentation')"),'saved field mapping was reported as absent');
+    await capturePageSegmentScreenshot('#model-panel-fields','customer-saved-relations.png');
+    const search=`/search?q=${fieldName}&kind=field&organization=${encodeURIComponent(model.organizationId)}&domain=${encodeURIComponent(model.dataDomainId)}`;
+    await navigate(search,actor);
+    await waitFor(`document.querySelector('[data-search-key="logical-field:${model.id}:${fields[0].rootId||fields[0].id}"]')!==null`, 'logical field not found with organization and domain filters',60_000);
+    invariant(await evaluate(`document.querySelector('[data-search-key^="logical-field:${model.id}:"] .search-row-kind')?.textContent==='Logisches Feld'`),'logical field was labelled as a physical column');
+    await capturePageSegmentScreenshot('.catalog-search','customer-logical-field-search.png');
+    await evaluate(`document.querySelector('[data-search-key^="logical-field:${model.id}:"] a').click()`);
+    await waitFor(`location.pathname==='/models/${model.id}'&&document.querySelector('#model-panel-fields')?.hidden===false&&document.querySelector('.field-table tr.is-selected')?.innerText.includes(${JSON.stringify(fieldName)})`,'search result did not open the exact logical field');
+    console.log('PASS customer modelling fixes: missing CSV type, derived string mapping, restored relations, scoped logical field search and direct field navigation');
+  } finally {
+    const source=expectStatus(await api(actor,'/api/v1/physical-sources'),200,'read only customer QA inventory').body.items.find(item=>item.id===imported.sourceId);
+    if(source)expectStatus(await api(actor,`/api/v1/structure-inventories/${source.id}/archive`,{method:'POST',etag:`"${source.revision}"`}),200,'archive only customer QA inventory');
+  }
+}
+
 async function csvPhysicalModelsFlow() {
   const suppliedFile = args.get('--csv-file');
   const actor = suppliedFile ? 'mirjam.keller' : 'christian.spider';
@@ -4932,7 +4972,7 @@ try {
   await cdp.call('Network.setCacheDisabled', { cacheDisabled: true }, sessionId);
   await cdp.call('Network.setBypassServiceWorker', { bypass: true }, sessionId);
 
-  if(args.get('--flow')==='context-menu-navigation'){await contextMenuNavigationFlow();} else
+  if(args.get('--flow')==='customer-modeling-fixes'){await customerModelingFixesFlow();} else if(args.get('--flow')==='context-menu-navigation'){await contextMenuNavigationFlow();} else
   if(args.get('--flow')==='requester-decision'){await requesterDecisionFlow();} else
   if(args.get('--flow')==='product-access-request'){await productAccessRequestFlow(args.get('--request-end')==='indefinite',args.get('--request-product'));} else
   if(args.get('--flow')==='organization-heading-space'){await organizationHeadingSpaceFlow();} else if(args.get('--flow')==='organization-highway'){await organizationHighwayFlow();} else if(args.get('--flow')==='organization-view-options'){await organizationViewOptionsFlow();} else if(args.get('--flow')==='canvas-card-styles'){await canvasCardStylesFlow();} else if(args.get('--flow')==='canvas-selection'){await canvasSelectionFlow();} else if(args.get('--flow')==='protected-buildings'){await protectedBuildingsFlow();} else if(args.get('--flow')==='domain-product-layout'){await domainProductLayoutFlow();} else if(args.get('--flow')==='organization-flow'){await organizationFlowFlow();} else if(args.get('--flow')==='canvas-controls'){await canvasControlsFlow();} else if(args.get('--flow')==='recent-work'){await recentWorkFlow();} else if(args.get('--flow')==='organization-object-search'){await organizationObjectSearchFlow();} else if(args.get('--flow')==='organization-localization'){await organizationLocalizationFlow();} else if(args.get('--flow')==='organization-domain-layout'){await organizationDomainLayoutFlow();} else if(args.get('--flow')==='organization-layout'){await organizationLayoutFlow();} else if(args.get('--flow')==='semantic-performance'){await semanticPerformanceFlow();} else if(args.get('--flow')==='domain-radial-layout'){await domainRadialLayoutFlow();} else if(args.get('--flow')==='organization-explorer'){await organizationExplorerFlow();} else if(args.get('--flow')==='domain-exploration'){await domainExplorationFlow();} else if(args.get('--flow')==='domain-loading-indicators'){await domainLoadingIndicatorsFlow();} else if(args.get('--flow')==='physical-domain-removal'){await physicalDomainRemovalFlow();} else if(args.get('--flow')==='lineage-access'){await lineageAccessFlow();} else if(args.get('--flow')==='domain-canvas-mobile-layout'){await domainCanvasMobileLayoutFlow();} else if(args.get('--flow')==='domain-canvas-approval'){await domainCanvasApprovalFlow();} else if(args.get('--flow')==='source-info-notices'){await sourceInfoNoticesFlow();} else if(args.get('--flow')==='mapping-status-tooltips'){await mappingStatusTooltipsFlow();} else if(args.get('--flow')==='personal-search-views'){await personalSearchViewsFlow();} else if(args.get('--flow')==='lineage-explorer'){await lineageExplorerFlow();} else if(args.get('--flow')==='model-department-default'){await modelDepartmentDefaultFlow();} else if(args.get('--flow')==='physical-derivation'){await physicalDerivationEntryFlow();} else if(args.get('--flow')==='physical-object-actions'){await physicalObjectActionsFlow();} else if(args.get('--flow')==='mapping-release-tail'){await navigate('/models','christian.man');const physical=await physicalFirstFlow();await existingToExistingFlow(physical);await dataModelJourneyTen();await sourceAccessReturnFlow();await fieldMoveFlow();console.log('PASS focused Mapping release tail');} else if(args.get('--flow')==='semantic-own-office'){await semanticOwnOfficeFlow();} else if(args.get('--flow')==='mapping-start'){await mappingStartFlow();} else if(args.get('--flow')==='expert-search'){await expertSearchFlow();} else if(args.get('--flow')==='mapping-live-refresh'){await mappingLiveRefreshFlow();} else if(args.get('--flow')==='domain-transfer'){await domainTransferFlow();} else if(args.get('--flow')==='domain-metadata'){await domainMetadataFlow();} else if(args.get('--flow')==='semantic-owner-search'){await semanticOwnerSearchFlow();} else if(args.get('--flow')==='domain-relation-types'){await domainRelationTypesFlow();} else if(args.get('--flow')==='organization-term-network'){await organizationTermNetworkFlow();} else if(args.get('--flow')==='domain-connection-gesture'){await domainConnectionGestureFlow();} else if(args.get('--flow')==='domain-card-actions'){await domainCardActionsFlow();} else if(args.get('--flow')==='governance-information'){await governanceInformationFlow();} else if(args.get('--flow')==='semantic-gestures'){await semanticGestureFlow();} else if(args.get('--flow')==='domain-network'){await domainNetworkFlow();} else if(args.get('--flow')==='field-move'){await fieldMoveFlow();} else if(args.get('--flow')==='hold-connections'){await holdConnectionFlow({modelId:args.get('--model-id'),snapshotId:args.get('--snapshot-id')});} else if(args.get('--flow')==='source-access-return'){await sourceAccessReturnFlow();} else if(args.get('--flow')==='csv-import'){await csvPhysicalModelsFlow();} else if(args.get('--flow')==='inventory-representation'){await inventoryRepresentationFlow();} else if(args.get('--flow')==='concept-network'){await conceptNetworkEditingFlow();} else if(args.get('--flow')==='line-editing'){
@@ -4945,6 +4985,7 @@ try {
   await contextMenuNavigationFlow();
   await adaImportJourneyFlow();
   await csvPhysicalModelsFlow();
+  await customerModelingFixesFlow();
   await inventoryRepresentationFlow();
   const logical = await logicalFirstFlow();
   console.log(`PASS logical-first: ${logical.modelId}`);

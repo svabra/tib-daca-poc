@@ -1,5 +1,18 @@
 # BIT DaCa
 
+Release **0.3.7** includes product-page access requests, indefinite initial request dates,
+current Data Owner receipt contacts, request/decision notifications and Control-click context
+navigation. It also fixes missing CSV datatypes, restored physical field relations and logical
+field discovery in expert search. German/English release notes include these changes; 0.3.6
+remains archived. All managed package, API, PWA and OpenShift image versions are synchronized.
+
+CSV structure imports assume `string` when a field has no declared type and show this assumption
+in the preview. Original CSV declarations remain available. Existing missing-type imports are
+interpreted consistently during display, logical derivation and mapping validation without
+rewriting their immutable snapshots. The logical editor's Relations view restores saved physical
+field mappings after reopening. Expert search includes logical fields with their model/entity
+context, inherited organization/domain filters and direct links to the selected field.
+
 Context-menu navigation now stays in the current tab by default. Hold Control to reveal the new-tab icon and use native Control-click to open the linked destination separately. The icon has permanently reserved space, so showing it never changes text wrapping or row heights. Filters, editing/selection dialogs, copying, downloads and other local actions never advertise a new tab. This also applies to navigation results opened from context-menu searches; explicit object selection still changes the current workspace.
 
 The data-landscape canvas hides a BIT Easter egg: hold Control while hovering BIT to reveal three to four fine, short yellow lightning bolts that snap on and off behind its organization card, close to the edges. Each discharge lasts about 0.2 seconds; the overlay extends only 8% beyond the card. It works in fullscreen and focused BIT views. Releasing Control, leaving the card or losing window focus removes it; reduced motion keeps four static bolts.

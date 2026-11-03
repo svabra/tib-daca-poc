@@ -1,11 +1,25 @@
 import { FALLBACK_PRODUCT } from '../../core/catalog.seed';
-import { FALLBACK_PHYSICAL_SNAPSHOT } from '../data-models/mapping-fallback';
+import { FALLBACK_LOGICAL_MODEL, FALLBACK_PHYSICAL_SNAPSHOT } from '../data-models/mapping-fallback';
 import { PhysicalSource } from '../data-models/data-models.models';
-import { groupSearchAssets, physicalSearchAssets, productSearchAsset, searchAssetIcon, searchAssetMatches } from './catalog-search.models';
+import { groupSearchAssets, logicalFieldSearchAssets, physicalSearchAssets, productSearchAsset, searchAssetIcon, searchAssetMatches } from './catalog-search.models';
 
 export const SEARCH_SOURCE:PhysicalSource={id:FALLBACK_PHYSICAL_SNAPSHOT.sourceId,name:'Gebäudeinventar',revision:1,connectorType:'csv',department:'VBS',office:'armasuisse',systemName:'ImmoGIS',databaseName:'CSV',latestSnapshotId:FALLBACK_PHYSICAL_SNAPSHOT.id,latestSnapshotSequence:1,latestSnapshot:null,catalogPath:'urn:daca:source:test',ownerName:'Data Owner',updatedAt:'2026-10-30'};
 
 describe('Catalog search asset projection',()=>{
+  it('finds logical field metadata with exact model context and a direct field link',()=>{
+    const original=FALLBACK_LOGICAL_MODEL.fields[0];
+    const model={...FALLBACK_LOGICAL_MODEL,fields:[{...original,name:'Gebäudezweck',shortDescription:'Nutzungsart',comment:'Armasuisse Liegenschaft',entityName:'Gebäude'}]};
+    const field=logicalFieldSearchAssets(model,model.fields.map(field=>({...field,modelId:model.id,modelVersionId:model.versionId})))[0];
+    for(const query of ['Gebaudezweck','Nutzungsart','Liegenschaft',original.dataType])expect(searchAssetMatches(field,query)).toBe(true);
+    expect(field.route).toEqual(['/models',model.id]);expect(field.params).toEqual({selectedFieldId:original.id});
+    expect(field.parent?.key).toBe('logical:'+model.id);expect(field.context).toContain('Gebäude');
+    expect(groupSearchAssets([field])[0].children).toEqual([field]);
+    expect(field.key).not.toBe('field:'+original.id);expect(field.connection).toBeUndefined();
+  });
+  it('does not attach another model or historical version fields to a current model',()=>{
+    const model=FALLBACK_LOGICAL_MODEL,field={...model.fields[0],modelId:model.id,modelVersionId:model.versionId};
+    expect(logicalFieldSearchAssets(model,[{...field,modelId:'another-model'},{...field,modelVersionId:'historical-version'}])).toEqual([]);
+  });
   it.each([
     ['postgresql','table','table'],['postgresql','view','table-options'],
     ['postgresql','materialized_view','table-options'],['s3','parquet','cube'],['s3','table','cube'],

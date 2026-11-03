@@ -77,6 +77,7 @@ from .modeling_api import create_modeling_router
 from .modeling_assistance_api import create_modeling_assistance_router
 from .modeling_lifecycle_api import create_modeling_lifecycle_router
 from .modeling_resources_api import create_modeling_resources_router
+from .modeling_search_api import create_modeling_search_router
 from .modeling_seed import seed_modeling_catalog
 from .models import (
     AccessRequest,
@@ -7043,6 +7044,7 @@ def create_app(
     app.include_router(create_logical_model_review_router())
     app.include_router(create_mapping_inconsistency_router())
     app.include_router(create_modeling_resources_router())
+    app.include_router(create_modeling_search_router())
     app.include_router(create_mapping_workspace_history_router())
     app.include_router(create_search_views_router())
     from .domain_network import create_domain_network_router

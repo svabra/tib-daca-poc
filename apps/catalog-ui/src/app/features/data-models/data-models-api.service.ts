@@ -19,6 +19,7 @@ import {
   LogicalModelReadiness,
   LogicalModelSummary,
   LogicalModelWrite,
+  LogicalSearchField,
   LogicalDerivationContext,
   LogicalDerivationPreview,
   MappingStatus,
@@ -169,6 +170,12 @@ export class DataModelsApiService {
       `/api/v1/logical-models/${encodeURIComponent(id)}`,
       { headers: this.identity.headers(), observe: 'response' },
     )).pipe(map((result) => ({ ...result, body: this.normalizeLogicalModel(result.body) })));
+  }
+
+  listLogicalFields():Observable<readonly LogicalSearchField[]>{
+    return this.identitySafe(this.http.get<CollectionResponse<LogicalSearchField>>('/api/v1/logical-model-fields',{
+      headers:this.identity.headers(),
+    }),30000).pipe(map(response=>response.items));
   }
 
   moveLogicalField(modelId:string, fieldId:string, body:{sourceVersionId:string;targetModelId:string;targetVersionId:string;targetEntityId:string}):Observable<ApiResult<LogicalModel>> {

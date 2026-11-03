@@ -7,6 +7,7 @@ from daca_catalog.modeling_core import (
     S3ParquetPhysicalMetadataAdapter,
     canonical_hash,
     detect_physical_drift,
+    effective_physical_type,
     fixture_metadata,
     normalize_postgresql_type,
     normalized_physical_metadata,
@@ -14,6 +15,15 @@ from daca_catalog.modeling_core import (
 )
 from daca_catalog.settings import Settings
 from pydantic import SecretStr, ValidationError
+
+
+def test_only_legacy_csv_fields_with_explicitly_missing_types_default_to_string():
+    metadata = {"format": "daca-structure-csv-v1", "records": [{"Datentyp": " "}]}
+    assert effective_physical_type("unknown", "unknown", metadata) == "string"
+    for records in ([], [{}], [{"Datentyp": "unknown"}], [{"Datentyp": ""}, {"Datentyp": "CHAR"}]):
+        assert effective_physical_type("unknown", "unknown", {**metadata, "records": records}) == "unknown"
+    assert effective_physical_type("unknown", "unknown", None) == "unknown"
+    assert effective_physical_type("IfcLogical", "ifclogical", metadata) == "ifclogical"
 
 
 def test_fixture_drift_covers_required_changes_and_pending_rename() -> None:

@@ -387,8 +387,12 @@ column `records` contains one or more descriptions of the same field, with
 `nullabilityKnown: false`; table `recordsWithoutField` retains declarations lacking a field name.
 Source classifications and value-list names stay original declarations, not policy assignments
 or newly created glossary terms. Character lengths are normalized only for string-like types;
-original lengths/scales (including source inconsistencies) remain in the records. Unknown types
-remain unknown. IFC Logical retains its three-valued semantics. Literal table/column names and
+original lengths/scales (including source inconsistencies) remain in the records. Missing CSV
+types default to `string` with a preview warning; the original blank `Datentyp` stays in `records`.
+Legacy `unknown` placeholders use `string` in read projections, derivation and mapping validation
+only when all retained CSV records explicitly prove the type was missing. Historical rows,
+snapshot hashes and audit records are not rewritten. Explicitly declared unknown types remain
+unknown. IFC Logical retains its three-valued semantics. Literal table/column names and
 source-system grouping are preserved; hashes of structured name tuples provide unambiguous keys.
 The `CSV` schema and system database names are inventory namespaces, not inferred live databases.
 

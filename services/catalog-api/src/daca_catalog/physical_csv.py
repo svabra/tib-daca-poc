@@ -121,15 +121,15 @@ def parse_inventory(content_base64: str) -> CsvInventory:
                 table["importMetadata"]["recordsWithoutField"].append(record)
                 warnings.append(f"{system} / {table_name}: Eintrag ohne Feldnamen als Tabellenhinweis erhalten.")
                 continue
-            normalized_type = SAP_IFC_TYPES.get(raw_type.casefold(), normalize_postgresql_type(raw_type)) if raw_type else "unknown"
+            normalized_type = SAP_IFC_TYPES.get(raw_type.casefold(), normalize_postgresql_type(raw_type)) if raw_type else "string"
             if not raw_type:
-                warnings.append(f"{system} / {table_name}.{field_name}: Datentyp fehlt; als unbekannt erfasst.")
+                warnings.append(f"{system} / {table_name}.{field_name}: Datentyp fehlt; als string angenommen.")
 
             length, scale = _numeric(record, "Länge", reader.line_num), _numeric(record, "Dezimalstellen", reader.line_num)
             # Source lengths/scales can mean storage bytes or contain inconsistent
             # declarations (e.g. Integer, length 4, scale 10). Preserve originals;
             # only project unambiguous string lengths into normalized constraints.
-            column = {"name": field_name, "dataType": raw_type or "unknown",
+            column = {"name": field_name, "dataType": raw_type or "string",
                       "normalizedDataType": normalized_type,
                       "characterLength": length if normalized_type == "string" else None,
                       "nullable": True, "ordinalPosition": len(table["columns"]) + 1,

@@ -61,6 +61,19 @@ def normalize_postgresql_type(raw_type: str) -> str:
     return normalized.replace(" ", "_")
 
 
+def effective_physical_type(raw_type: str, normalized_type: str, import_metadata: dict[str, Any] | None) -> str:
+    """Interpret legacy CSV placeholders without rewriting immutable import evidence."""
+    records = (import_metadata or {}).get("records", [])
+    if (
+        raw_type == normalized_type == "unknown"
+        and (import_metadata or {}).get("format") == "daca-structure-csv-v1"
+        and records
+        and all(isinstance(record, dict) and "Datentyp" in record and not str(record["Datentyp"]).strip() for record in records)
+    ):
+        return "string"
+    return normalized_type
+
+
 class PhysicalMetadataAdapter(Protocol):
     def inspect(self, *, variant: str | None = None) -> dict[str, Any]: ...
 

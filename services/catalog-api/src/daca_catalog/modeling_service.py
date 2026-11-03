@@ -13,6 +13,7 @@ from .modeling_core import (
     PhysicalMetadataAdapter,
     canonical_hash,
     detect_physical_drift,
+    effective_physical_type,
     normalize_postgresql_type,
     normalized_physical_metadata,
     stable_uuid,
@@ -1326,6 +1327,10 @@ def clone_logical_version(
     )
 
 
+def physical_column_type(column: PhysicalColumn) -> str:
+    return effective_physical_type(column.raw_data_type, column.normalized_data_type, column.import_metadata)
+
+
 def snapshot_tree(session: Session, snapshot: PhysicalSchemaSnapshot) -> dict[str, Any]:
     source = session.get(PhysicalSource, snapshot.source_id)
     databases: list[dict[str, Any]] = []
@@ -1379,7 +1384,7 @@ def snapshot_tree(session: Session, snapshot: PhysicalSchemaSnapshot) -> dict[st
                                 "urn": column.urn,
                                 "name": column.name,
                                 "rawDataType": column.raw_data_type,
-                                "normalizedDataType": column.normalized_data_type,
+                                "normalizedDataType": physical_column_type(column),
                                 "characterLength": column.character_length,
                                 "numericPrecision": column.numeric_precision,
                                 "numericScale": column.numeric_scale,
@@ -2014,7 +2019,7 @@ def validate_mapping_version(session: Session, version: AssetMappingVersion) -> 
         expected_type = normalize_postgresql_type(logical.data_type)
         for physical in physical_columns:
             severity = "error" if strict else "warning"
-            if expected_type != physical.normalized_data_type:
+            if expected_type != physical_column_type(physical):
                 issues.append(
                     MappingIssue(
                         severity=severity,

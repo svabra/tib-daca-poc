@@ -9,7 +9,7 @@ import { DataModelsApiService, LogicalModelExportFile, ModelingApiError } from '
 import { I14yConceptReference, LogicalField, LogicalModelWrite } from './data-models.models';
 import { LogicalModelEditorComponent, logicalModelVersionEtag, normalizeFieldConceptSelection } from './logical-model-editor.component';
 import { logicalModelHelpLocale } from './logical-model-field-help.directive';
-import { FALLBACK_LOGICAL_MODEL, FALLBACK_PHYSICAL_SNAPSHOT } from './mapping-fallback';
+import { FALLBACK_LOGICAL_MODEL, FALLBACK_MAPPINGS, FALLBACK_PHYSICAL_SNAPSHOT } from './mapping-fallback';
 import { ModelingAssistanceService, TermdatEntry } from './modeling-assistance.service';
 
 const REFERENCES:I14yConceptReference[]=[
@@ -154,6 +154,32 @@ describe('LogicalModelEditorComponent contracts',()=>{
     tabs[2].click();fixture.detectChanges();
     expect(root.querySelector<HTMLElement>('#model-panel-fields')?.hidden).toBe(false);
     expect(root.querySelector('.field-table')).not.toBeNull();
+  });
+  it('opens a logical search hit on its selected field',()=>{
+    Object.assign(TestBed.inject(DataModelsApiService),{loadLogicalModel:()=>of({body:FALLBACK_LOGICAL_MODEL,etag:'"1"'})});
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent);
+    fixture.componentRef.setInput('id',FALLBACK_LOGICAL_MODEL.id);
+    fixture.componentRef.setInput('selectedFieldId',FALLBACK_LOGICAL_MODEL.fields[1].id);
+    fixture.detectChanges();TestBed.tick();fixture.detectChanges();
+    expect(fixture.componentInstance.selectedFieldIndex()).toBe(1);
+    expect(fixture.componentInstance.activeTab()).toBe('fields');
+  });
+  it('restores persisted physical relations after reopening without creating new derivation bindings',()=>{
+    const mappings=[{...FALLBACK_MAPPINGS[0],logicalModelVersionId:FALLBACK_LOGICAL_MODEL.versionId,logicalFieldVersionIds:[FALLBACK_LOGICAL_MODEL.fields[0].versionId],physicalSnapshotId:FALLBACK_PHYSICAL_SNAPSHOT.id,physicalColumnIds:[FALLBACK_PHYSICAL_SNAPSHOT.tables[0].columns[0].id]}];
+    Object.assign(TestBed.inject(DataModelsApiService),{loadLogicalModel:()=>of({body:FALLBACK_LOGICAL_MODEL,etag:'"1"'}),listMappings:()=>of(mappings)});
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent),component=fixture.componentInstance;
+    fixture.componentRef.setInput('id',FALLBACK_LOGICAL_MODEL.id);fixture.detectChanges();
+    component.activeTab.set('fields');component.structureView.set('relation');fixture.detectChanges();TestBed.tick();fixture.detectChanges();
+    const first=(fixture.nativeElement as HTMLElement).querySelector('.relation-list button')!;
+    expect(first.textContent).toContain('org_unit_id');expect(first.textContent).not.toContain('Keine Repräsentation');
+    expect(component.fields.at(0).controls.physicalColumnId.value).toBe('');expect(component.form.pristine).toBe(true);
+  });
+  it('distinguishes unavailable physical relations from an unmapped field',()=>{
+    Object.assign(TestBed.inject(DataModelsApiService),{loadLogicalModel:()=>of({body:FALLBACK_LOGICAL_MODEL,etag:'"1"'}),listMappings:()=>throwError(()=>new Error('unavailable'))});
+    const fixture=TestBed.createComponent(LogicalModelEditorComponent),component=fixture.componentInstance;
+    fixture.componentRef.setInput('id',FALLBACK_LOGICAL_MODEL.id);fixture.detectChanges();
+    component.structureView.set('relation');fixture.detectChanges();TestBed.tick();
+    expect(component.physicalRelationLabel(0)).toContain('konnten nicht geladen');
   });
 
   it('removes a graph field through a versioned model save without silently saving other edits',()=>{

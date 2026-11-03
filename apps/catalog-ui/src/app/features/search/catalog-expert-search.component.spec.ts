@@ -30,6 +30,14 @@ describe('Catalog expert search modes and shared preview',()=>{
     return{fixture,component:fixture.componentInstance,root:fixture.nativeElement as HTMLElement,data,query,navigate};
   }
 
+  it('distinguishes logical field results from physical columns',async()=>{
+    const parent:CatalogSearchAsset={...table,key:'logical:buildings',id:'buildings',kind:'logical',label:'Gebäudemodell'};
+    const logicalField:CatalogSearchAsset={...field,key:'logical-field:buildings:egid',parent};
+    const {component,root}=await setup({q:'Gebäude'},[logicalField]);
+    expect(component.assetTypeLabel(logicalField)).toBe('Logisches Feld');
+    expect(component.assetTypeLabel(field)).toBe('Physisches Feld');
+    expect(root.querySelector('.search-row-kind')?.textContent).toBe('Logisches Feld');
+  });
   it('shows the shared spinner throughout scoped loading in both layouts, without a premature empty state',async()=>{
     const {component,fixture,root,data}=await setup({organization:'armasuisse'},[]);
     const catalogLoading=component.api.loading as WritableSignal<boolean>;

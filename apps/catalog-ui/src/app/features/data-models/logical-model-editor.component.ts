@@ -6,7 +6,7 @@ import { PhysicalRepresentation } from './mapping-draft.facade';
 import { afterNextRender, ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, Injector, input, output, signal, viewChild } from '@angular/core';
 import { AbstractControl, FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { debounceTime, distinctUntilChanged, finalize, forkJoin, of, take } from 'rxjs';
+import { debounceTime, distinctUntilChanged, finalize, forkJoin, map, of, switchMap, take } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService, ModelingPersona } from '../../core/demo-identity.service';
 import { I14yConceptsApiService } from '../domains/i14y-concepts-api.service';
@@ -138,7 +138,7 @@ export function logicalModelVersionEtag(model: Pick<LogicalModel, 'lockVersion'>
               @if(structureView()==='table'){
                  <div class="field-table-wrap"><table class="field-table"><thead><tr><th>Feld</th><th>Entität</th><th>Datentyp</th><th>Kardinalität</th><th aria-label="Aktionen"></th></tr></thead><tbody>@for(field of fields.controls;track field;let index=$index){<tr [class.is-selected]="selectedFieldIndex()===index"><td><button class="field-select" type="button" (click)="selectField(index)"><strong>{{ field.controls.name.value || 'Unbenannt' }}</strong><small>Position {{ field.controls.order.value }}</small></button></td><td>{{ field.controls.entityName.value }}</td><td>{{ field.controls.dataType.value }}@if(field.controls.length.value){ · L {{ field.controls.length.value }}}</td><td>{{ field.controls.minCount.value }}..{{ field.controls.maxCount.value ?? '*' }}</td><td><button class="remove-field" type="button" [disabled]="fields.length===1 || !canRemoveFields()" [attr.aria-label]="(field.controls.name.value || 'Feld') + ' entfernen'" (click)="removeField(index)">Entfernen</button></td></tr>}</tbody></table></div>
               } @else {
-                <div class="relation-list">@for(field of fields.controls;track field;let index=$index){<button type="button" [class.is-selected]="selectedFieldIndex()===index" (click)="selectField(index)"><span><small>Logisch</small><strong>{{ field.controls.entityName.value }}.{{ field.controls.name.value || 'Unbenannt' }}</strong></span><span><small>Physisch</small><strong>{{ field.controls.physicalColumnName.value || 'Keine Repräsentation' }}</strong></span></button>}</div>
+                <div class="relation-list">@for(field of fields.controls;track field;let index=$index){<button type="button" [class.is-selected]="selectedFieldIndex()===index" (click)="selectField(index)"><span><small>Logisch</small><strong>{{ field.controls.entityName.value }}.{{ field.controls.name.value || 'Unbenannt' }}</strong></span><span><small>Physisch</small><strong>{{ physicalRelationLabel(index) }}</strong></span></button>}</div>
               }
             </section>
             @if(fields.at(selectedFieldIndex());as selectedField){<daca-logical-field-characteristics [canMove]="!!model() && canRemoveFields()" (moveRequested)="openFieldMove($event)" [field]="selectedField" [businessObjects]="businessObjects()" [concepts]="concepts()" [conceptReferences]="fieldConceptReferences()" />}
@@ -197,6 +197,9 @@ export class LogicalModelEditorComponent {
   readonly activeTab = signal<'status' | 'model' | 'fields'>('model');
   readonly selectedFieldIndex = signal(0);
   readonly structureView = signal<'table' | 'relation'>('table');
+  readonly physicalRelations=signal<ReadonlyMap<string,readonly string[]>>(new Map());
+  readonly physicalRelationsLoading=signal(false);
+  readonly physicalRelationsError=signal(false);
   readonly fieldMoveOpen=signal(false);
   private fieldMoveTrigger:HTMLElement|null=null;
   readonly moveOrganizations=computed(()=>[...new Set(this.modelingScopes().filter((scope)=>(scope.role === 'data_owner' || scope.role === 'deputy_data_owner')||(scope.role === 'data_steward' || scope.role === 'deputy_data_steward')).flatMap((scope)=>scope.descendantOrganizationIds??[]))]);
@@ -345,6 +348,28 @@ export class LogicalModelEditorComponent {
       error: () => this.scopeChanged(),
     });
     effect(() => { const id = this.id(); if (id) { if (!this.embedded()) this.activeTab.set('status'); this.load(id); } });
+    effect((onCleanup)=>{
+      const model=this.model();this.identity.user();
+      if(this.structureView()!=='relation'||!model)return;
+      this.physicalRelations.set(new Map());this.physicalRelationsError.set(false);this.physicalRelationsLoading.set(true);
+      const request=this.api.listMappings(model.id).pipe(
+        map(items=>items.filter(item=>item.logicalModelVersionId===model.versionId&&item.status!=='superseded')),
+        switchMap(mappings=>{
+          const ids=[...new Set(mappings.map(item=>item.physicalSnapshotId))];
+          return (ids.length?forkJoin(ids.map(id=>this.api.loadPhysicalSnapshot(id))):of([])).pipe(map(snapshots=>{
+            const result=new Map<string,string[]>();
+            for(const mapping of mappings){
+              const snapshot=snapshots.find(item=>item.id===mapping.physicalSnapshotId);
+              if(!snapshot)continue;
+              const labels=snapshot.tables.flatMap(table=>table.columns.filter(column=>mapping.physicalColumnIds.includes(column.id)).map(column=>`${snapshot.sourceName} · ${physicalObjectName(snapshot,table)}.${column.name}`));
+              for(const id of mapping.logicalFieldVersionIds)result.set(id,[...new Set([...(result.get(id)??[]),...labels])]);
+            }
+            return result;
+          }));
+        }),
+      ).subscribe({next:relations=>{this.physicalRelations.set(relations);this.physicalRelationsLoading.set(false);},error:()=>{this.physicalRelationsError.set(true);this.physicalRelationsLoading.set(false);}});
+      onCleanup(()=>request.unsubscribe());
+    });
     effect(() => {
       const snapshotId = this.physicalSnapshotId() || this.sourceSnapshotId();
       const tableId = this.physicalTableId();
@@ -613,7 +638,15 @@ export class LogicalModelEditorComponent {
     (event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
   }
 
-  load(id: string): void { this.loading.set(true); this.error.set(null); this.api.loadLogicalModel(id).pipe(finalize(() => this.loading.set(false))).subscribe({ next: ({ body }) => { this.model.set(body); this.etag.set(logicalModelVersionEtag(body)); this.patch(body); if (!this.embedded()) this.activeTab.set('status'); }, error: (error: Error) => this.error.set(error.message) }); }
+  physicalRelationLabel(index:number):string{
+    const controls=this.fields.at(index).controls;
+    if(controls.physicalColumnName.value)return controls.physicalColumnName.value;
+    if(this.physicalRelationsLoading())return 'Repräsentationen werden geladen …';
+    if(this.physicalRelationsError())return 'Repräsentationen konnten nicht geladen werden';
+    const labels=this.physicalRelations().get(controls.versionId.value??'')||this.physicalRelations().get(controls.id.value??'');
+    return labels?.length?labels.join(' · '):'Keine Repräsentation';
+  }
+  load(id: string): void { this.loading.set(true); this.error.set(null); this.api.loadLogicalModel(id).pipe(finalize(() => this.loading.set(false))).subscribe({ next: ({ body }) => { this.model.set(body); this.etag.set(logicalModelVersionEtag(body)); this.patch(body); if (!this.embedded()) this.activeTab.set(this.selectedFieldId()?'fields':'status'); }, error: (error: Error) => this.error.set(error.message) }); }
   private loadDerivedSource(snapshotId: string, tableId: string): void {
     const loadKey = `${snapshotId}:${tableId}`;
     if (this.derivedLoadKey === loadKey) return;
@@ -775,7 +808,10 @@ export class LogicalModelEditorComponent {
   private selectFieldById(fieldId: string | undefined): void {
     if (!fieldId) { this.selectedFieldIndex.set(Math.min(this.selectedFieldIndex(), Math.max(0, this.fields.length - 1))); return; }
     const index = this.fields.controls.findIndex((field) => [field.controls.id.value, field.controls.versionId.value].includes(fieldId));
-    if (index >= 0) this.selectedFieldIndex.set(index);
+    if (index >= 0) {
+      this.selectedFieldIndex.set(index);
+      if (!this.embedded()) this.activeTab.set('fields');
+    }
   }
   private value(): LogicalModelWrite {
     const dataset = this.form.controls.dataset.getRawValue();

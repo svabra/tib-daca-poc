@@ -126,6 +126,7 @@ export class CatalogExpertSearchComponent {
   kindLabel(kind:SearchKind,plural=false):string{return this.i18n.t(({product:plural?'searchProducts':'searchProduct',logical:plural?'searchLogicalModels':'searchModel',structure:plural?'searchStructures':'searchStructure',field:plural?'searchFields':'searchField',term:plural?'searchTerms':'searchObjectTerm',domain:plural?'domains':'searchDomain',source:plural?'sourcePlural':'searchSource',organization:plural?'searchOrganizations':'organization'} as const)[kind]);}
   kindExplanation(kind:SearchKind|'all'):string{return this.i18n.t(({all:'searchAllExplanation',product:'searchProductExplanation',logical:'searchLogicalExplanation',structure:'searchStructureExplanation',field:'searchFieldExplanation',term:'searchTermExplanation',domain:'searchDomainExplanation',source:'searchSourceExplanation',organization:'searchOrganizationExplanation'} as const)[kind]);}
   assetTypeLabel(asset:CatalogSearchAsset):string{
+    if(asset.kind==='field'&&asset.parent?.kind==='logical')return this.i18n.t('searchLogicalField');
     if(asset.kind!=='structure')return this.kindLabel(asset.kind);
     if(asset.sourceType==='s3')return this.i18n.t(asset.physicalType==='parquet'?'searchS3ParquetObject':'searchS3Object');
     if(asset.physicalType==='parquet')return this.i18n.t('searchParquetObject');

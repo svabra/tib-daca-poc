@@ -68,6 +68,7 @@ from .modeling_service import (
     mapping_payload,
     mapping_write_from_payload,
     persist_physical_import,
+    physical_column_type,
     record_audit,
     snapshot_summary,
     snapshot_tree,
@@ -1253,7 +1254,7 @@ def create_modeling_router() -> APIRouter:
             {
                 "physicalColumnId": column.id,
                 "name": column.name,
-                "dataType": column.normalized_data_type,
+                "dataType": physical_column_type(column),
                 "length": column.character_length,
                 "precision": column.numeric_precision,
                 "scale": column.numeric_scale,
@@ -1749,7 +1750,7 @@ def create_modeling_router() -> APIRouter:
                         "fields": [
                             {
                                 "name": column.name,
-                                "dataType": column.normalized_data_type,
+                                "dataType": physical_column_type(column),
                                 "length": column.character_length,
                                 "precision": column.numeric_precision,
                                 "decimalPlaces": column.numeric_scale,
