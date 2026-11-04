@@ -1,10 +1,23 @@
 # Current status
 
+Release **0.3.9** (2026-11-04) fixes external organization card height in the data landscape.
+The German/English version overlay describes the correction; the five 0.3.8 notes remain
+archived. All managed package, API, PWA and OpenShift image versions are synchronized.
+
+Data-landscape organization card correction (2026-11-04): external organization cards now use
+the same content-driven height as inner cards. The obsolete 52-unit inline height compressed
+the name and product-count rows into the border; removing it preserves the existing 6px
+vertical padding across languages, fullscreen and narrow viewports. Reserved placement
+footprints, measured connection ports and saved anchors retain their existing behavior.
+Verified by the production Compose build and `npm run test:ui-regression -- --flow canvas-card-styles`:
+all five UI languages, fullscreen content fit, dark theme and mobile scrolling pass. Browser
+measurements show 14px of combined vertical padding/borders on external cards, matching inner cards.
+
 Release **0.3.8** (2026-11-03) groups permission search/revocation/audit, inline request history,
 Mapping warning-save correction, the renamed product catalog/adaptive filter and the expanded
 organization canvas. The current German/English version overlay contains these five changes;
 0.3.7 retains its seven release notes in the archive. Managed package/API/PWA/OpenShift version
-surfaces are synchronized. The BIT lightning Easter egg remains excluded from feature lists.
+surfaces are synchronized. The BIT Easter egg remains excluded from feature lists.
 
 Data-landscape bottom clearance (2026-11-03): the organization canvas is now 960 × 740 world
 units, extending its lower perimeter from 650 while retaining the blue boundary and existing
@@ -65,7 +78,7 @@ clear/cancel on product or identity changes and show explicit unavailable/activa
 Release **0.3.7** (2026-11-03) groups the access-request and notification improvements,
 Control-click context navigation and all three customer modelling fixes in its archived
 German/English release notes. Release 0.3.6 retains its own historical notes. Package/API
-versions, PWA metadata and presentation image pins are synchronized. The BIT lightning Easter
+versions, PWA metadata and presentation image pins are synchronized. The BIT Easter
 egg remains absent from the user-facing feature lists. Publishing images and applying the
 OpenShift manifests are separate steps; a Git push does not apply a PoC deployment.
 
@@ -92,7 +105,7 @@ URLs, unchanged source pages, normal in-tab routing without document reload, and
 on the local data-landscape visibility filter without opening a tab. Browser screenshots cover
 the same menu with and without Control.
 
-BIT's data-landscape organization box reveals three to four fine, short yellow lightning bolts on Control + hover. Four staggered channels alternate eight branching shapes in a 0.48-second cycle; each discharge disappears after roughly 0.2 seconds. The compact 8% perimeter and corresponding silhouette mask keep sparks close to the edge, behind the card and off its text. Office, satellite, focused BIT and fullscreen views share the effect. Key release, pointer leave, window blur and hidden documents clear it. Reduced motion shows four static bolts. It changes no layout anchors or catalog state.
+BIT’s display-only Easter egg now releases six staggered pink/red SVG hearts on Control + hover. They float upward, drift gently sideways, grow slightly and fade in a 2.2-second cycle. Office, satellite, focused BIT and fullscreen views share the effect. Key release, pointer leave, window blur and hidden documents hide it; reduced motion shows static hearts. It changes no layout anchors or catalog state and remains excluded from feature lists. The local preview was accepted. A focused browser check verified Control-hover, floating motion, removal on key release and reduced motion.
 
 Requester decision notifications close the previous gap where only the owner received a request task. Persistent information tasks distinguish approval pending technical activation, effective grant (original/modified), and rejection. The bell links to the exact personal request under Data & Usage, which reloads on decision changes and supports acknowledgement. Old decisions are reconciled recipient-privately; final grant backfill additionally requires current published policy coverage and confirmed deployments. Acknowledged messages do not return.
 

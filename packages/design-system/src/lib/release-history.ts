@@ -2,7 +2,7 @@ import { DacaFeatureLocale, DacaFeatureScope } from './feature-list';
 import { DACA_VERSION } from './version';
 
 // A version bump must supply new customer-facing notes before the UI can build.
-const CURRENT_RELEASE_VERSION: typeof DACA_VERSION = '0.3.8';
+const CURRENT_RELEASE_VERSION: typeof DACA_VERSION = '0.3.9';
 
 export interface DacaReleaseFeature {
   readonly title: string;
@@ -272,7 +272,7 @@ export function dacaReleaseHistory(scope: DacaFeatureScope, locale: DacaFeatureL
     { title: 'Bugfix: find logical fields in expert search', description: 'Search includes logical fields with model and entity context and organization/domain filters. Results open the selected field directly and are labelled Logical field. Bulk loading avoids a detail request for each model.', tags: ['Bugfix', 'Expert search', 'Data models'] },
   ];
 
-  const currentFeatures: readonly DacaReleaseFeature[] = locale === 'de' ? [
+  const release038Features: readonly DacaReleaseFeature[] = locale === 'de' ? [
     { title: 'Mehr Platz unterhalb der Organisationsbox', description: 'Der Datenraum-Canvas bietet unten Raum für mindestens eine vollständige Organisationskarte. Auch dort lassen sich Positionen verschieben, speichern und nach dem Neuladen wiederherstellen, einschliesslich Vollbild. Externe Karten bleiben ausserhalb der Organisationsgrenze.', tags: ['Datenraum', 'Canvas', 'Layout'] },
     { title: 'Datenprodukte mit passendem Startfilter', description: 'Der Katalog heisst Datenprodukte. Eigene Anbieter starten weiterhin mit Von mir angeboten; ohne eigene angebotene Produkte wird Alle Datenprodukte aktiviert. Bewusst gewählte Filter und Filter in Links haben Vorrang.', tags: ['Datenprodukte', 'Filter', 'Navigation'] },
     { title: 'Zugriffsanfragen direkt bei den Freigaben verfolgen', description: 'Offene und beantwortete Anfragen sind auf der Produktseite mit Eingang, letzter Bearbeitung und Ergebnis einsehbar. Die Liste startet mit den neuesten Eingängen, lässt sich umgekehrt sortieren und zeigt Antragsdetails ohne Seitennavigation.', tags: ['Zugriffsanfragen', 'Freigaben', 'Bedienung'] },
@@ -285,9 +285,14 @@ export function dacaReleaseHistory(scope: DacaFeatureScope, locale: DacaFeatureL
     { title: 'Bugfix: save mappings despite type conflicts', description: 'Save drafts directly in the mapping inspector or submit them after saving. Type conflicts and warnings remain visible without blocking storage. Failed submission retains the saved draft.', tags: ['Bugfix', 'Mapping', 'Data models'] },
     { title: 'Search permissions and revoke individual grants', description: 'Access management lists people, machines, groups and frozen members with search. Data Owners can confirm a single-grant revocation without deleting other rights, preserving required four-eyes review. Every product reader can search the permission log with before/after evidence and confirmed activation status.', tags: ['Permissions', 'Audit log', 'Access'] },
   ];
+  const currentFeatures: readonly DacaReleaseFeature[] = locale === 'de' ? [
+    { title: 'Bugfix: Organisationskarten ohne überlappenden Text', description: 'Auch externe Organisationen im Datenraum passen ihre Kartenhöhe an den Inhalt an. Organisationsname und beide Datenprodukt-Zähler behalten ausreichend Innenabstand, auch im Vollbild und bei übersetzten Beschriftungen.', tags: ['Bugfix', 'Datenraum', 'Organisationen', 'Layout'] },
+  ] : [
+    { title: 'Bugfix: organization cards without overlapping text', description: 'External organizations in the data landscape also size their cards to the content. Organization names and both product-count rows retain enough padding, including fullscreen and translated labels.', tags: ['Bugfix', 'Data landscape', 'Organizations', 'Layout'] },
+  ];
   const latest: DacaRelease = { version: CURRENT_RELEASE_VERSION, features: scope === 'catalog' ? currentFeatures : controlPlaneFeatures };
   const historical = scope === 'catalog' ? CATALOG_HISTORY : CONTROL_PLANE_HISTORY;
-  return [latest, { version: '0.3.7', features: scope === 'catalog' ? release037Features : controlPlaneFeatures }, { version: '0.3.6', features: scope === 'catalog' ? release036Features : controlPlaneFeatures }, { version: '0.3.5', features: scope === 'catalog' ? patchFeatures : controlPlaneFeatures }, { version: '0.3.4', features: scope === 'catalog' ? catalogFeatures : controlPlaneFeatures }, { version: '0.3.2', features: scope === 'catalog' ? catalog032Features : controlPlaneFeatures }, { version: '0.2.1', features: scope === 'catalog' ? catalog21Features : currentControlPlaneFeatures }, { version: '0.2.0', features: scope === 'catalog' ? catalog20Features : controlPlaneFeatures }, { version: '0.1.32', features: scope === 'catalog' ? catalog32Features : controlPlaneFeatures }, { version: '0.1.31', features: scope === 'catalog' ? catalog31Features : controlPlaneFeatures }, { version: '0.1.30', features: scope === 'catalog' ? previousCatalogFeatures : controlPlaneFeatures }, ...historical.map((item) => ({ version: item.version, features: [localizedFeature(item, locale)] }))];
+  return [latest, { version: '0.3.8', features: scope === 'catalog' ? release038Features : controlPlaneFeatures }, { version: '0.3.7', features: scope === 'catalog' ? release037Features : controlPlaneFeatures }, { version: '0.3.6', features: scope === 'catalog' ? release036Features : controlPlaneFeatures }, { version: '0.3.5', features: scope === 'catalog' ? patchFeatures : controlPlaneFeatures }, { version: '0.3.4', features: scope === 'catalog' ? catalogFeatures : controlPlaneFeatures }, { version: '0.3.2', features: scope === 'catalog' ? catalog032Features : controlPlaneFeatures }, { version: '0.2.1', features: scope === 'catalog' ? catalog21Features : currentControlPlaneFeatures }, { version: '0.2.0', features: scope === 'catalog' ? catalog20Features : controlPlaneFeatures }, { version: '0.1.32', features: scope === 'catalog' ? catalog32Features : controlPlaneFeatures }, { version: '0.1.31', features: scope === 'catalog' ? catalog31Features : controlPlaneFeatures }, { version: '0.1.30', features: scope === 'catalog' ? previousCatalogFeatures : controlPlaneFeatures }, ...historical.map((item) => ({ version: item.version, features: [localizedFeature(item, locale)] }))];
 }
 
 export function searchDacaReleases(scope: DacaFeatureScope, locale: DacaFeatureLocale, query: string): readonly DacaRelease[] {

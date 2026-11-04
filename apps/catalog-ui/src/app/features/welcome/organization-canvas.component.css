@@ -111,15 +111,16 @@ button:focus-visible,a:focus-visible,input:focus-visible { outline:2px solid var
 .org-office.is-own { border-left-color:var(--daca-canvas-organization); box-shadow:var(--daca-canvas-card-shadow); }
 .org-office.is-empty { border-left-color:var(--daca-canvas-organization); background:var(--daca-surface); }
 
-/* Hold Control over BIT to reveal its entirely decorative reserve of power. */
-.org-bit-power { display:none; position:absolute; z-index:-1; inset:-8%; width:116%; height:116%; overflow:visible; pointer-events:none; }
+/* Hold Control over BIT for a few entirely decorative floating hearts. */
+.org-bit-power { display:none; position:absolute; z-index:3; inset:0; overflow:visible; pointer-events:none; }
 :host(.is-bit-power-ready) button:hover > .org-bit-power { display:block; }
 :host(.is-bit-power-ready) button[data-organization-id="efd-bit"]:hover { overflow:visible; }
-.org-bit-discharge { --bolt-phase:0s; }
-.org-bit-discharge:nth-child(2) { --bolt-phase:-.06s; }
-.org-bit-discharge:nth-child(3) { --bolt-phase:-.12s; }
-.org-bit-discharge:nth-child(4) { --bolt-phase:-.18s; }
-.org-bit-discharge path { fill:none; stroke:#ffe500; stroke-width:1.2; stroke-linejoin:miter; stroke-linecap:round; filter:drop-shadow(0 0 .5px #fff8b0) drop-shadow(0 0 1.5px #ffd000); opacity:0; animation:org-bit-discharge .48s linear infinite; animation-delay:var(--bolt-phase); }
-.org-bit-discharge path:nth-child(2) { animation-delay:calc(var(--bolt-phase) - .24s); }
-@keyframes org-bit-discharge { 0% { opacity:.8; } 4%,34% { opacity:1; } 43% { opacity:.4; } 45%,100% { opacity:0; } }
-@media(prefers-reduced-motion:reduce) { .org-bit-discharge path { animation:none; }.org-bit-discharge path:first-child { opacity:1; } }
+.org-bit-heart { position:absolute; top:var(--heart-top,-6px); left:var(--heart-x,50%); width:var(--heart-size,12px); height:var(--heart-size,12px); fill:var(--heart-color,#ed577d); opacity:0; filter:drop-shadow(0 2px 2px #a62d4920); animation:org-bit-heart-rise 2.2s ease-out infinite; animation-delay:var(--heart-phase,0s); --heart-drift:0px; --heart-turn:12deg; }
+.org-bit-heart:nth-child(1) { --heart-x:0%; --heart-top:25%; --heart-drift:-24px; --heart-turn:-18deg; --heart-phase:-.2s; }
+.org-bit-heart:nth-child(2) { --heart-x:22%; --heart-size:10px; --heart-drift:-12px; --heart-turn:-12deg; --heart-phase:-1.3s; --heart-color:#f18ba5; }
+.org-bit-heart:nth-child(3) { --heart-x:43%; --heart-size:14px; --heart-drift:6px; --heart-phase:-.7s; }
+.org-bit-heart:nth-child(4) { --heart-x:68%; --heart-size:11px; --heart-drift:20px; --heart-phase:-1.7s; --heart-color:#f18ba5; }
+.org-bit-heart:nth-child(5) { --heart-x:100%; --heart-top:30%; --heart-drift:26px; --heart-turn:22deg; --heart-phase:-1s; }
+.org-bit-heart:nth-child(6) { --heart-x:86%; --heart-size:9px; --heart-drift:10px; --heart-turn:-8deg; --heart-phase:-2s; --heart-color:#e63768; }
+@keyframes org-bit-heart-rise { 0% { opacity:0; transform:translate(-50%,8px) scale(.55) rotate(0); } 12% { opacity:.95; } 70% { opacity:.8; } 100% { opacity:0; transform:translate(calc(-50% + var(--heart-drift)),-90px) scale(1.05) rotate(var(--heart-turn)); } }
+@media(prefers-reduced-motion:reduce) { .org-bit-heart { animation:none; opacity:.85; transform:translate(-50%,-12px); } }

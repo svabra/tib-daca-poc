@@ -1,5 +1,13 @@
 # BIT DaCa
 
+Release **0.3.9** corrects the height of external organization cards in the data landscape.
+German/English release notes describe the fix; 0.3.8 remains archived. Managed application,
+API, PWA and OpenShift image versions are synchronized.
+
+Organization cards in the data landscape size to their content, including external organizations.
+The obsolete fixed satellite height has been removed so organization names and both product-count
+rows retain their padding in normal, fullscreen and narrow views, including translated labels.
+
 Release **0.3.8** adds searchable current permissions, individual revocation and public
 permission logs, inline open/answered access-request history, Mapping draft saving despite
 type warnings, the **Datenprodukte** label with an adaptive start filter, and space below
@@ -49,7 +57,7 @@ context, inherited organization/domain filters and direct links to the selected 
 
 Context-menu navigation now stays in the current tab by default. Hold Control to reveal the new-tab icon and use native Control-click to open the linked destination separately. The icon has permanently reserved space, so showing it never changes text wrapping or row heights. Filters, editing/selection dialogs, copying, downloads and other local actions never advertise a new tab. This also applies to navigation results opened from context-menu searches; explicit object selection still changes the current workspace.
 
-The data-landscape canvas hides a BIT Easter egg: hold Control while hovering BIT to reveal three to four fine, short yellow lightning bolts that snap on and off behind its organization card, close to the edges. Each discharge lasts about 0.2 seconds; the overlay extends only 8% beyond the card. It works in fullscreen and focused BIT views. Releasing Control, leaving the card or losing window focus removes it; reduced motion keeps four static bolts.
+The data-landscape canvas hides a BIT Easter egg: hold Control while hovering BIT to release small pink/red hearts that drift upwards, spread gently and fade. It works for office/satellite cards, focused BIT and fullscreen. Releasing Control, leaving the card or losing focus hides the hearts; reduced motion shows static hearts. This Easter egg is intentionally absent from feature lists.
 
 Requesters receive private, acknowledgeable bell messages when their product-access request is approved pending activation, technically granted, or rejected. Messages link directly to that personal request under Data & Usage and refresh while the page is open. Final grant messages follow confirmed policy deployment; existing confirmed decisions are reconciled without duplicates or reopening acknowledged notices.
 

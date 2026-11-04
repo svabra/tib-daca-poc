@@ -29,11 +29,12 @@ describe('Catalog runtime version overlay', () => {
     const dialog = fixture.nativeElement.querySelector('.daca-feature-dialog') as HTMLDialogElement;
     expect(dialog.hasAttribute('open')).toBe(true);
     expect(dialog.textContent).toContain(`V${DACA_VERSION}`);
-    expect(dialog.textContent).toContain('Mehr Platz unterhalb der Organisationsbox');
-    expect(dialog.textContent).toContain('Datenprodukte mit passendem Startfilter');
-    expect(dialog.textContent).toContain('Zugriffsanfragen direkt bei den Freigaben verfolgen');
-    expect(dialog.textContent).toContain('Bugfix: Mappings trotz Typkonflikten speichern');
-    expect(dialog.textContent).toContain('Berechtigte durchsuchen und einzelne Freigaben entziehen');
+    expect(dialog.textContent).toContain('Bugfix: Organisationskarten ohne überlappenden Text');
+    expect(dialog.textContent).not.toContain('Mehr Platz unterhalb der Organisationsbox');
+    expect(dialog.textContent).not.toContain('Datenprodukte mit passendem Startfilter');
+    expect(dialog.textContent).not.toContain('Zugriffsanfragen direkt bei den Freigaben verfolgen');
+    expect(dialog.textContent).not.toContain('Bugfix: Mappings trotz Typkonflikten speichern');
+    expect(dialog.textContent).not.toContain('Berechtigte durchsuchen und einzelne Freigaben entziehen');
     expect(dialog.textContent).not.toContain('Zugriff direkt auf der Produktseite anfragen');
     expect(dialog.textContent).not.toContain('Bugfix: logische Felder in der Expertensuche finden');
     expect(dialog.textContent).not.toContain('Externe Organisationen ausserhalb der Grenze halten');

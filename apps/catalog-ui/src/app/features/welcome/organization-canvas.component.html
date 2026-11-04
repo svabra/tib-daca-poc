@@ -1,28 +1,9 @@
 <ng-template #bitPower>
-  <svg class="org-bit-power" viewBox="0 0 200 120" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-    <defs><mask [attr.id]="packetTailId+'-bit-mask'" maskUnits="userSpaceOnUse" x="-20" y="-20" width="240" height="160">
-      <rect x="-20" y="-20" width="240" height="160" fill="white"/>
-      <rect x="13.793" y="8.276" width="172.414" height="103.448" fill="black"/>
-    </mask></defs>
-    <g [attr.mask]="'url(#'+packetTailId+'-bit-mask)'">
-      <g class="org-bit-discharge">
-        <path d="M48 15 43 5 51 8 46 1 60 10 55 5 70 12 M48 4 37 2"/>
-        <path d="M117 14 108 6 118 8 112 0 133 9 126 3 140 10 M123 5 137 1"/>
-      </g>
-      <g class="org-bit-discharge">
-        <path d="M178 35 190 28 187 36 199 27 193 42 198 39 184 51 M195 33 200 40"/>
-        <path d="M178 70 191 61 188 70 200 62 194 80 199 76 183 88 M197 69 200 83"/>
-      </g>
-      <g class="org-bit-discharge">
-        <path d="M140 105 149 115 138 112 151 120 132 115 139 119 121 109 M143 117 157 120"/>
-        <path d="M83 105 73 115 83 112 68 120 72 113 58 118 69 108 M67 118 52 120"/>
-      </g>
-      <g class="org-bit-discharge">
-        <path d="M23 78 10 87 13 78 0 91 7 73 1 78 17 64 M5 84 0 73"/>
-        <path d="M24 48 10 39 13 48 0 35 6 53 1 49 18 62 M5 42 0 56"/>
-      </g>
-    </g>
-  </svg>
+  <span class="org-bit-power org-bit-hearts" aria-hidden="true">
+    @for (heart of [0, 1, 2, 3, 4, 5]; track heart) {
+      <svg class="org-bit-heart" viewBox="0 0 24 24" focusable="false"><path d="M12 21 3.4 12.6C-2.2 7 5.7-1.2 12 5.2 18.3-1.2 26.2 7 20.6 12.6Z"/></svg>
+    }
+  </span>
 </ng-template>
 <section class="organization-explorer" [class.is-fullscreen]="fullscreen()" [attr.role]="fullscreen() ? 'dialog' : null" [attr.aria-modal]="fullscreen() ? 'true' : null" aria-labelledby="organization-explorer-title" #explorer>
   <header class="org-heading">
@@ -88,7 +69,7 @@
           @for (thread of domainThreads(); track thread.id) { <line class="org-domain-thread" aria-hidden="true" [attr.data-source-id]="thread.sourceId" [attr.data-domain-id]="thread.domainId" [attr.x1]="thread.from.x" [attr.y1]="thread.from.y" [attr.x2]="thread.to.x" [attr.y2]="thread.to.y"><title>{{ thread.label }}</title></line> }
         </svg>
         @for (satellite of satellites(); track satellite.node.id) {
-          <button type="button" class="org-satellite daca-canvas-card" [style.height.%]="52 / canvasHeight * 100" data-canvas-kind="organization" [class.is-connected]="satellite.connected" [attr.data-organization-id]="satellite.node.id" [attr.data-canvas-object]="satellite.node.id" [style.left.%]="satellite.x / 9.6" [style.top.%]="satellite.y / canvasHeight * 100" [style.animation-delay]="satellite.delay" [style.animation-duration]="satellite.duration" [dacaTooltip]="organizationTooltip(satellite.node)" (click)="cardClick($event, satellite.node)" [class.is-dragging]="draggingId() === satellite.node.id" (pointerdown)="startDrag($event, satellite.node.id, 'satellites', satellite, organizationCard.width, organizationCard.height)" (keydown)="cardKey($event, satellite.node.id, 'satellites', satellite, organizationCard.width, organizationCard.height)" aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown" aria-describedby="organization-canvas-instructions" (contextmenu)="openMenu($event, satellite.node)" (keydown.shift.f10)="openMenu($event, satellite.node)" [attr.aria-label]="satellite.node.label + ' · ' + productCountsLabel(satellite.node)">
+          <button type="button" class="org-satellite daca-canvas-card" data-canvas-kind="organization" [class.is-connected]="satellite.connected" [attr.data-organization-id]="satellite.node.id" [attr.data-canvas-object]="satellite.node.id" [style.left.%]="satellite.x / 9.6" [style.top.%]="satellite.y / canvasHeight * 100" [style.animation-delay]="satellite.delay" [style.animation-duration]="satellite.duration" [dacaTooltip]="organizationTooltip(satellite.node)" (click)="cardClick($event, satellite.node)" [class.is-dragging]="draggingId() === satellite.node.id" (pointerdown)="startDrag($event, satellite.node.id, 'satellites', satellite, organizationCard.width, organizationCard.height)" (keydown)="cardKey($event, satellite.node.id, 'satellites', satellite, organizationCard.width, organizationCard.height)" aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown" aria-describedby="organization-canvas-instructions" (contextmenu)="openMenu($event, satellite.node)" (keydown.shift.f10)="openMenu($event, satellite.node)" [attr.aria-label]="satellite.node.label + ' · ' + productCountsLabel(satellite.node)">
             <daca-organization-card-content [name]="satellite.node.code" [canton]="isCanton(satellite.node)" [offered]="satellite.node.productCount" [consumed]="satellite.node.consumedProductCount"/>
             @if (satellite.node.id === 'efd-bit') { <ng-container [ngTemplateOutlet]="bitPower"/> }
           </button>
