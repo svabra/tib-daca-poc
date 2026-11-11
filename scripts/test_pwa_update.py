@@ -300,7 +300,12 @@ EVIDENCE_RECORDER = """
 
 
 def new_context(playwright: Playwright) -> BrowserContext:
-    browser = playwright.chromium.launch(headless=True)
+    # CI supplies the browser from setup-chrome; local runs can still use the
+    # Playwright-managed Chromium when no explicit executable is configured.
+    browser = playwright.chromium.launch(
+        headless=True,
+        executable_path=os.environ.get("DACA_PWA_BROWSER_EXECUTABLE") or None,
+    )
     context = browser.new_context(service_workers="allow")
     context.route(
         "**/api/v1/session",

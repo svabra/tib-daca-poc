@@ -10,6 +10,22 @@ production web builds and their PWA release metadata checks pass, and canonical-
 runtime-version and generated data-model/OpenAPI checks pass. The required UI regression
 gate runs through the versioned pre-commit hook before creating the release commit.
 
+Release CI recovery (2026-11-11): the first 0.3.11 run stopped during Playwright's apt
+dependency installation because `azure.archive.ubuntu.com` could not be resolved; the PWA
+smoke, application tests and image publication had not started. PostgreSQL compatibility
+passed. The release workflow now uses the same `browser-actions/setup-chrome@v2` action as
+UI regression, without apt dependency installation, and passes its browser path through
+`DACA_PWA_BROWSER_EXECUTABLE`. The PWA smoke retains Playwright-managed Chromium as the local
+default and still requires both production update scenarios. The original version-bump run
+is retried separately so its existing release-tag rule can publish the 0.3.11 images.
+For recovery after a CI-only correction, manual workflow dispatch accepts an explicit
+`publish-release` version, validates it against `VERSION`, and publishes that version only
+after the usual tests and builds. Empty input retains commit-image-only publication.
+Validation: both production PWA update scenarios (startup and mid-session, 0.3.10 to 0.3.11)
+pass with an explicit Chrome executable; Python lint and canonical-version checks pass.
+Executing the workflow's Bash guards confirms exact-version retries, mismatch rejection,
+empty manual dispatch, ordinary pushes, version-bump pushes and matching release tags.
+
 Animation icon consistency (2026-11-11): audited all four scenes and their legends, plus the
 source hub and metadata explanation. All standalone people already referenced the canonical
 `person` symbol. Remaining inline check/cross, catalog, REST, analytics and application glyphs

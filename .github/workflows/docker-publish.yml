@@ -10,12 +10,19 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      publish-release:
+        description: "Retry publication of this exact VERSION (leave empty for commit images only)"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
 
 env:
   DOCKER_BUILD_RECORD_UPLOAD: "false"
+  DACA_PUBLISH_RELEASE: ${{ inputs.publish-release }}
 
 jobs:
   test:
@@ -43,13 +50,24 @@ jobs:
         run: |
           python scripts/versioning.py check
           version="$(tr -d '\r\n' < VERSION)"
+          if [[ -n "${DACA_PUBLISH_RELEASE}" && "${DACA_PUBLISH_RELEASE}" != "${version}" ]]; then
+            echo "Requested release ${DACA_PUBLISH_RELEASE} does not match VERSION (${version})." >&2
+            exit 1
+          fi
           if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" != "v${version}" ]]; then
             echo "Git tag ${GITHUB_REF_NAME} does not match VERSION (${version}); expected v${version}." >&2
             exit 1
           fi
-      - name: Install Chromium for the production PWA update smoke
-        run: uv run --package daca-journey-runner playwright install --with-deps chromium
+      - name: Set up Chrome for the production PWA update smoke
+        id: chromium
+        uses: browser-actions/setup-chrome@v2
+        with:
+          # Hosted Ubuntu runners already provide the required runtime libraries.
+          # Avoid apt/mirror availability for optional browser fonts.
+          install-dependencies: false
       - name: Verify production PWA updates across two releases
+        env:
+          DACA_PWA_BROWSER_EXECUTABLE: ${{ steps.chromium.outputs.chrome-path }}
         run: uv run --package daca-journey-runner python scripts/test_pwa_update.py
       - name: Run complete test suite
         run: npm test
@@ -259,6 +277,8 @@ jobs:
               exit 1
             fi
             publish=true
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${DACA_PUBLISH_RELEASE}" ]]; then
+            publish=true
           elif [[ "${{ github.event_name }}" == "push" && "${GITHUB_REF_TYPE}" == "branch" && -n "${{ github.event.before }}" && "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
             if ! git diff --quiet "${{ github.event.before }}" "${{ github.sha }}" -- VERSION; then
               publish=true
@@ -342,6 +362,8 @@ jobs:
               echo "Git tag ${GITHUB_REF_NAME} does not match VERSION; expected v${{ steps.version.outputs.value }}." >&2
               exit 1
             fi
+            publish=true
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${DACA_PUBLISH_RELEASE}" ]]; then
             publish=true
           elif [[ "${{ github.event_name }}" == "push" && "${GITHUB_REF_TYPE}" == "branch" && -n "${{ github.event.before }}" && "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
             if ! git diff --quiet "${{ github.event.before }}" "${{ github.sha }}" -- VERSION; then

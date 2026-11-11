@@ -1271,6 +1271,14 @@ update dialog once per build. It shows the current and target versions, warns th
 content will be lost, offers the target release notes and links to the feature list. Users can
 apply the update with a full reload or leave their current work open and update later from the
 footer version controls.
+
+The release workflow verifies both startup and mid-session updates against two production
+PWA builds. It uses `browser-actions/setup-chrome` and passes the executable through
+`DACA_PWA_BROWSER_EXECUTABLE`, avoiding an apt install for browser dependencies on hosted
+Ubuntu runners. Run `uv run --package daca-journey-runner python scripts/test_pwa_update.py`
+locally with the same environment variable pointing to Chrome/Chromium, or leave it unset
+to use Playwright-managed Chromium. Both update checks remain mandatory before publication.
+
 The settings icon beside the theme control opens `/settings` and its DAAIF-style submenu with
 personal language settings, appearance, and the feature list. Tenant language settings are absent
 because DaCa has no tenancy. Both the settings and day/night icons show translated hover/focus
@@ -1292,8 +1300,12 @@ svabra/tib-daca-sample-data-product
 ```
 
 Each repository receives `sha-<commit>` on every successful non-PR run and the exact release
-version, for example `0.1.1`, only when `VERSION` changes on `main` or a matching `v<version>` Git
-tag is built. No mutable `latest` tag is published. The repository secret `DOCKERHUB_TOKEN` must
+version, for example `0.1.1`, when `VERSION` changes on `main` or a matching `v<version>` Git
+tag is built. To recover a failed release after a CI-only correction, manually dispatch
+`docker-publish.yml` on `main` with `publish-release` set to the exact current `VERSION`.
+A mismatch fails validation; an empty input publishes commit images only. The same test,
+PostgreSQL compatibility and image-build gates apply to this explicit release retry.
+No mutable `latest` tag is published. The repository secret `DOCKERHUB_TOKEN` must
 contain one Docker Hub personal access token with read/write permission. The optional repository
 variable `DOCKERHUB_USERNAME` defaults to `svabra`; account passwords and email addresses are
 never stored in the workflow.
