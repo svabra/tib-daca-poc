@@ -1,0 +1,19 @@
+:host{display:grid;grid-template-columns:repeat(var(--station-columns),minmax(0,1fr));gap:6px;list-style:none;margin:8px 4px 20px;padding:0}
+li{--station-tip:14px;--station-notch:14px;--station-start:26px;--station-shape:polygon(0 0,calc(100% - var(--station-tip)) 0,100% 50%,calc(100% - var(--station-tip)) 100%,0 100%,var(--station-notch) 50%);min-width:0;margin-left:-14px}
+li:first-child{--station-notch:0px;--station-start:12px;margin-left:0}
+button{--station-frame:1px;--station-stroke:var(--daca-border-strong);position:relative;isolation:isolate;display:flex;align-items:center;gap:8px;width:100%;height:100%;min-width:0;min-height:56px;padding:8px 24px 8px var(--station-start);border:0;border-radius:0;background:transparent;color:var(--daca-ink);font:inherit;text-align:left;cursor:pointer;overflow-wrap:anywhere;clip-path:var(--station-shape)}
+/* Clip the hit area too, so a following notch cannot intercept the preceding tip. */
+button::before,button::after{content:"";position:absolute;inset:0;z-index:-2;pointer-events:none;clip-path:var(--station-shape)}
+button::before{background:var(--station-stroke)}
+button::after{inset:var(--station-frame);z-index:-1;background:var(--daca-surface)}
+button>span{min-width:0}
+button:hover{--station-stroke:var(--daca-blue)}
+button[aria-current=step]{--station-frame:3px;--station-stroke:color-mix(in srgb,var(--daca-blue) 55%,var(--daca-surface))}
+/* The wrapper keeps keyboard focus outside the clipped button. */
+li:has(button:focus-visible){position:relative;outline:2px solid var(--daca-blue);outline-offset:3px;z-index:1}
+b{display:grid;place-items:center;flex:0 0 1.625rem;width:1.625rem;height:1.625rem;border:1px solid var(--daca-border-strong);border-radius:50%;color:var(--daca-blue);font-size:.67rem;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+strong{display:block;font-size:.72rem;line-height:1.45;font-weight:600}
+small{display:block;margin-top:2px;color:var(--daca-muted);font-size:.62rem;line-height:1.4;font-variant-numeric:tabular-nums}
+@media(max-width:1100px){:host{grid-template-columns:repeat(2,minmax(0,1fr))}li:nth-child(odd){--station-notch:0px;--station-start:12px;margin-left:0}}
+@media(max-width:700px){:host{grid-template-columns:1fr}li{--station-notch:0px;--station-start:12px;margin-left:0}}
+@media(forced-colors:active){button::before,button::after{forced-color-adjust:none}button::before{background:ButtonText}button::after{background:Canvas}button[aria-current=step]::before{background:Highlight}li:has(button:focus-visible){outline-color:Highlight}}

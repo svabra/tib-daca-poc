@@ -1,0 +1,95 @@
+<nav class="documentation-breadcrumb" [attr.aria-label]="tr(['Brotkrümelnavigation', 'Fil d’Ariane', 'Percorso di navigazione', 'Breadcrumb'])">
+  <a routerLink="/documentation">{{ tr(['Dokumentation', 'Documentation', 'Documentazione', 'Documentation']) }}</a><span aria-hidden="true">/</span>
+  <a routerLink="/documentation/animated">{{ tr(['Animierte Dokumentation', 'Documentation animée', 'Documentazione animata', 'Animated documentation']) }}</a><span aria-hidden="true">/</span>
+  <span aria-current="page">{{ tr(['Zugriff beantragen', 'Demander l’accès', 'Richiedere l’accesso', 'Request access']) }}</span>
+</nav>
+<section class="daca-page-heading"><div>
+  <p class="daca-eyebrow">06 / {{ tr(['Datenkonsumenten', 'Consommateurs de données', 'Consumatori di dati', 'Data consumers']) }}</p>
+  <h1>{{ tr(title) }}</h1>
+  <p>{{ tr(['Erst entdecken, dann verstehen, schliesslich gezielt Zugriff beantragen. DaCa begleitet den Data Analyst vom fachlichen Überblick bis zum elektronischen Antrag auf Nutzlastdaten.', 'Découvrir, comprendre, puis demander un accès ciblé. DaCa accompagne le Data Analyst de la vue métier à la demande électronique de données utiles.', 'Scoprire, comprendere e infine richiedere un accesso mirato. DaCa accompagna il Data Analyst dalla panoramica funzionale alla richiesta elettronica dei dati effettivi.', 'Discover, understand, then request the access you need. DaCa guides the Data Analyst from business context to an electronic request for payload data.']) }}</p>
+</div></section>
+
+<section class="pipeline request-pipeline" [class.is-paused]="!running()" aria-labelledby="request-title">
+  <header class="pipeline-header">
+    <div><p class="daca-eyebrow">DaCa / Data Analyst</p><h2 id="request-title">{{ tr(['Vom Finden zum Antrag', 'De la découverte à la demande', 'Dalla scoperta alla richiesta', 'From discovery to request']) }}</h2></div>
+    <div class="pipeline-controls">
+      <button class="daca-button is-secondary request-restart" type="button" (click)="restart()"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="/assets/documentation/animation-icons.svg#restart" width="24" height="24"/></svg>{{ tr(['Neu starten', 'Recommencer', 'Ricomincia', 'Restart']) }}</button>
+      <button class="daca-button is-secondary request-playback" type="button" [disabled]="reducedMotion()" (click)="togglePlayback()"><svg viewBox="0 0 24 24" aria-hidden="true">@if (running()) { <use href="/assets/documentation/animation-icons.svg#pause" width="24" height="24"/> } @else { <use href="/assets/documentation/animation-icons.svg#play" width="24" height="24"/> }</svg>{{ reducedMotion() ? tr(['Bewegung reduziert', 'Mouvement réduit', 'Movimento ridotto', 'Reduced motion']) : running() ? tr(['Pausieren', 'Pause', 'Pausa', 'Pause']) : tr(['Abspielen', 'Lire', 'Riprendi', 'Play']) }}</button>
+    </div>
+  </header>
+  <div class="pipeline-timeline">
+    <label for="request-position">{{ tr(['Station', 'Étape', 'Stazione', 'Station']) }} {{ state().station + 1 }} / 3</label>
+    <input id="request-position" type="range" min="0" [max]="duration" step="0.1" [value]="position()" [style.--pipeline-progress]="position() / duration * 100 + '%'" [attr.aria-valuetext]="seconds(position()) + ' / ' + seconds(duration) + ' ' + tr(['Sekunden', 'secondes', 'secondi', 'seconds'])" aria-controls="request-scene" (input)="seekInput($event)">
+    <output class="pipeline-time" for="request-position" aria-live="off">{{ seconds(position()) }} s <span>/ {{ seconds(duration) }} s</span></output>
+  </div>
+  <ol daca-animation-stations class="request-stations" [steps]="stations" [times]="stationTimes" [duration]="duration" [active]="state().station" controls="request-scene" (stepSelected)="selectStation($event)"></ol>
+  <div id="request-scene" class="request-layers">
+    @for (station of stations; track $index; let index = $index) {
+      <article class="request-layer" [class.is-current]="state().station === index" [attr.data-station]="index + 1">
+        <header><p class="request-step">0{{ index + 1 }} / {{ tr(station.title) }}</p><h3>{{ tr(station.subtitle) }}</h3></header>
+        <svg class="request-art" viewBox="0 0 300 235" aria-hidden="true" focusable="false">
+          @if (index === 0) {
+            <rect class="art-surface" x="36" y="20" width="228" height="183" rx="6"/>
+            <path class="art-muted" d="M36 57h228"/><text class="art-label" x="59" y="44">DaCa</text>
+            <rect class="art-muted" x="123" y="33" width="123" height="13" rx="6"/>
+            @for (row of [0, 1, 2]; track row) {
+              <g [attr.transform]="'translate(55 ' + (74 + row * 40) + ')'">
+                <rect class="art-result" [class.selected]="row === 1 && state().found" width="190" height="31" rx="3"/>
+                <path class="art-muted" d="M13 11h101m-101 9h156"/>
+              </g>
+            }
+            <g class="art-search" [attr.transform]="'translate(' + (94 + state().search * 91) + ' ' + (82 + state().search * 40) + ')'" [attr.opacity]="state().found ? 0 : 1">
+              <use href="/assets/documentation/animation-icons.svg#search" x="-29" y="-29" width="68" height="68"/>
+            </g>
+            <g class="art-check" transform="translate(224 130)" [attr.opacity]="state().found ? 1 : 0"><use href="/assets/documentation/animation-icons.svg#check" x="-17" y="-17" width="34" height="34"/></g>
+            <g class="art-document" [attr.opacity]="state().proseTransfer > 0 && state().proseTransfer < 1 ? 1 : 0" [attr.transform]="'translate(' + (190 + state().proseTransfer * 95) + ' 126)'"><use href="/assets/documentation/animation-icons.svg#document" x="-18" y="-18" width="36" height="36"/></g>
+          } @else if (index === 1) {
+            <path class="art-route" d="M48 64C98 27 202 27 252 64M252 64C205 116 95 116 48 64"/>
+            <g class="art-person" transform="translate(48 64)"><use href="/assets/documentation/animation-icons.svg#person" x="-35" y="-35" width="70" height="70"/></g>
+            <g class="art-person" transform="translate(252 64)"><use href="/assets/documentation/animation-icons.svg#person" x="-35" y="-35" width="70" height="70"/></g>
+            <text class="art-small" x="12" y="104">Data Analyst</text><text class="art-small" x="218" y="104">Data Owner</text>
+            <g class="art-document" [attr.opacity]="state().introspectionRequest > 0 && state().introspectionRequest < 1 ? 1 : 0" [attr.transform]="'translate(' + (48 + state().introspectionRequest * 204) + ' ' + (64 - 30 * (1 - (2 * state().introspectionRequest - 1) ** 2)) + ')'">
+              <use href="/assets/documentation/animation-icons.svg#document" x="-18" y="-18" width="36" height="36"/>
+            </g>
+            <g class="art-check" transform="translate(275 45)" [attr.opacity]="state().introspectionApproved ? 1 : 0"><use href="/assets/documentation/animation-icons.svg#check" x="-14" y="-14" width="28" height="28"/></g>
+            <g class="art-document" [attr.opacity]="state().metadataTransfer > 0 && state().metadataTransfer < 1 ? 1 : 0" [attr.transform]="'translate(' + (252 - state().metadataTransfer * 204) + ' ' + (64 + 30 * (1 - (2 * state().metadataTransfer - 1) ** 2)) + ')'">
+              <use href="/assets/documentation/animation-icons.svg#table" x="-16" y="-16" width="32" height="32"/>
+            </g>
+            <rect class="art-surface" x="36" y="125" width="228" height="94" rx="5"/>
+            @for (field of fields; track $index; let row = $index) {
+              <g [attr.opacity]="state().metadataVisible ? 1 : .18"><text class="art-small" x="51" [attr.y]="148 + row * 27">{{ tr(field) }}</text><path class="art-muted" [attr.d]="'M174 ' + (145 + row * 27) + 'h70'"/></g>
+            }
+            <g class="art-lock" transform="translate(150 173)" [attr.opacity]="state().metadataVisible ? 0 : 1"><use href="/assets/documentation/animation-icons.svg#lock" x="-22" y="-22" width="44" height="44"/></g>
+          } @else {
+            <g class="art-document" [attr.opacity]="1 - state().submission" [attr.transform]="'translate(' + (93 + state().submission * 135) + ' ' + (100 - state().submission * 20) + ') scale(' + (1 - state().submission * .7) + ')'">
+              <rect x="-57" y="-69" width="114" height="139" rx="5"/>
+              <path class="art-muted" d="M-38-42h76M-38-11h76M-38 20h76M-38 48h50"/>
+              @for (row of [0, 1, 2]; track row) { <path class="art-ink" [attr.d]="'M-37 ' + (-43 + row * 31) + 'h' + formWidth(row)"/> }
+            </g>
+            <g transform="translate(230 80)"><rect class="art-surface" x="-34" y="-40" width="68" height="80" rx="5"/><text class="art-label" x="-21" y="-12">DaCa</text><path class="art-muted" d="M-22 7h44m-44 12h44"/></g>
+            <g class="art-check" transform="translate(253 42)" [attr.opacity]="state().payloadSubmitted ? 1 : 0"><use href="/assets/documentation/animation-icons.svg#check" x="-17" y="-17" width="34" height="34"/></g>
+            <g class="art-lock" transform="translate(230 181)"><circle class="art-protected" r="34"/><use href="/assets/documentation/animation-icons.svg#lock" x="-22" y="-22" width="44" height="44"/></g>
+            <path class="art-route" d="M230 125v17"/>
+          }
+        </svg>
+        <div class="request-stage-status" aria-live="off">
+          @if (index === 0) { {{ state().found ? tr(['Passende Daten gefunden', 'Données pertinentes trouvées', 'Dati pertinenti trovati', 'Relevant data found']) : tr(['Thema · Beschreibung · Zweck', 'Thème · Description · Finalité', 'Tema · Descrizione · Scopo', 'Topic · Description · Purpose']) }} }
+          @else if (index === 1) { {{ state().metadataVisible ? tr(['Introspektion freigegeben', 'Introspection autorisée', 'Introspezione autorizzata', 'Introspection approved']) : state().introspectionRequest >= 1 ? tr(['Data Owner prüft', 'Examen par le Data Owner', 'Verifica del Data Owner', 'Data Owner reviewing']) : tr(['Separater Antrag erforderlich', 'Demande distincte requise', 'Richiesta separata necessaria', 'Separate request required']) }} }
+          @else { {{ state().payloadSubmitted ? tr(['Antrag eingereicht', 'Demande soumise', 'Richiesta inviata', 'Request submitted']) : tr(['Queries · Data Sourcing Tasks', 'Requêtes · Data Sourcing Tasks', 'Query · Data Sourcing Tasks', 'Queries · Data Sourcing Tasks']) }} }
+        </div>
+        <p class="request-description">{{ tr(station.detail) }}</p>
+      </article>
+    }
+  </div>
+  <div class="request-outcome" [attr.data-submitted]="state().payloadSubmitted" aria-live="off">
+    <svg viewBox="-20 -20 40 40" aria-hidden="true" focusable="false"><use href="/assets/documentation/animation-icons.svg#lock" x="-20" y="-20" width="40" height="40"/></svg>
+    <div><strong>{{ state().payloadSubmitted ? tr(['Entscheidung über Nutzlastdaten ausstehend', 'Décision sur les données utiles en attente', 'Decisione sui dati effettivi in attesa', 'Payload decision pending']) : tr(['Metadatenzugriff und Datenzugriff sind getrennt', 'Métadonnées et données : des accès distincts', 'Accesso ai metadati e ai dati separati', 'Metadata and payload access are separate']) }}</strong>
+      <p>{{ tr(['Introspektionsmetadaten zeigen die Struktur. Erst eine gesonderte Freigabe erlaubt den beantragten Zugriff auf Nutzlastdaten. Die Zugriffsrichtlinie des Data Owner bleibt im DaCa (PAP); SDAL prüft den Zugriff, alle Zugriffe werden automatisch protokolliert.', 'Les métadonnées d’introspection décrivent la structure. Seule une autorisation distincte permet l’accès demandé aux données utiles. La politique du Data Owner reste dans DaCa (PAP) ; SDAL contrôle l’accès et tous les accès sont journalisés automatiquement.', 'I metadati di introspezione mostrano la struttura. Solo un’autorizzazione separata consente l’accesso richiesto ai dati effettivi. La policy del Data Owner resta in DaCa (PAP); SDAL verifica l’accesso e tutti gli accessi sono registrati automaticamente.', 'Introspection metadata describes structure. Only a separate approval permits the requested payload access. The Data Owner’s policy remains in DaCa (PAP); SDAL checks access and all accesses are logged automatically.']) }}</p>
+    </div>
+  </div>
+</section>
+<p class="pipeline-note">{{ tr(['Illustrativer Ablauf. Die gezeigte Introspektionsfreigabe und der Nutzlast-Antrag sind animierte Beispiele; es werden keine echten Anträge, Zugriffsrichtlinien, Freigaben oder Datenzugriffe erzeugt.', 'Parcours illustratif. L’autorisation d’introspection et la demande de données sont des exemples animés ; aucune demande, politique, autorisation ou consultation réelle n’est créée.', 'Percorso illustrativo. L’autorizzazione di introspezione e la richiesta di dati sono esempi animati; non vengono create richieste, policy, autorizzazioni o accessi reali.', 'Illustrative flow. Introspection approval and the payload request are animated examples; no real requests, policies, permissions or data accesses are created.']) }}</p>
+<nav class="request-links" [attr.aria-label]="tr(['Weitere Animationen', 'Autres animations', 'Altre animazioni', 'More animations'])">
+  <a routerLink="/documentation/animated/data-sources/sourcing">{{ tr(['Zurück zu Data Sourcing', 'Retour à Data Sourcing', 'Torna a Data Sourcing', 'Back to Data Sourcing']) }}</a>
+  <a routerLink="/documentation/animated/data-consumers/access-management">{{ tr(['Freigaben durch den Data Owner', 'Autorisations du Data Owner', 'Autorizzazioni del Data Owner', 'Data Owner permissions']) }}</a>
+</nav>

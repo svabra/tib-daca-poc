@@ -1,0 +1,90 @@
+<nav class="documentation-breadcrumb" [attr.aria-label]="tr(['Brotkrümelnavigation', 'Fil d’Ariane', 'Percorso di navigazione', 'Breadcrumb'])">
+  <a routerLink="/documentation">{{ tr(['Dokumentation Datenkatalog', 'Documentation du catalogue', 'Documentazione del catalogo', 'Catalog documentation']) }}</a><span aria-hidden="true">›</span>
+  <span>{{ tr(['Animierte Dokumentation', 'Documentation animée', 'Documentazione animata', 'Animated documentation']) }}</span>
+</nav>
+<section class="daca-page-heading"><div>
+  <p class="daca-eyebrow">{{ tr(['Architektur in Bewegung', 'L’architecture en mouvement', 'Architettura in movimento', 'Architecture in motion']) }}</p>
+  <h1>{{ tr(['Vom Ursprung zum Datenprodukt', 'De la source au produit de données', 'Dall’origine al prodotto di dati', 'From source to data product']) }}</h1>
+  <p>{{ tr(['Aus Daten werden Informationen. Aus Informationen entsteht Wissen – die Grundlage für fundierte Entscheidungen.', 'Les données deviennent des informations. Les informations deviennent des connaissances – la base de décisions éclairées.', 'Dai dati nascono informazioni. Dalle informazioni nasce conoscenza: la base per decisioni consapevoli.', 'Data becomes information. Information becomes knowledge – the foundation for informed decisions.']) }}</p>
+</div></section>
+
+<nav class="animation-index" aria-labelledby="animation-index-title">
+  <h2 id="animation-index-title">{{ tr(['Alle Animationen', 'Toutes les animations', 'Tutte le animazioni', 'All animations']) }}</h2>
+  <ul>@for (animation of animations; track animation.route) {
+    <li><a [routerLink]="animation.route" [fragment]="animation.fragment" (click)="paused.set(true)">
+      <svg viewBox="-20 -20 40 40" aria-hidden="true" focusable="false"><use [attr.href]="'/assets/documentation/animation-icons.svg#' + animation.icon" x="-20" y="-20" width="40" height="40"/></svg>
+      <span><strong>{{ tr(animation.title) }}</strong><small>{{ tr(animation.detail) }}</small></span>
+      <span class="animation-duration">{{ animation.duration }} s</span>
+    </a></li>
+  }</ul>
+</nav>
+
+<section class="pipeline" [class.is-paused]="!running()" aria-labelledby="pipeline-title">
+  <header class="pipeline-header">
+    <div><p class="daca-eyebrow">01 / {{ tr(['Meta-Architektur', 'Méta-architecture', 'Meta-architettura', 'Meta architecture']) }}</p><h2 id="pipeline-title">Data Pipeline</h2></div>
+    <div class="pipeline-controls">
+      <span class="pipeline-status"><i [class.is-running]="running()" aria-hidden="true"></i>{{ running() ? tr(['Daten im Fluss', 'Flux de données', 'Dati in movimento', 'Data in motion']) : tr(['In Ruhe entdecken', 'Explorer à son rythme', 'Esplorare con calma', 'Explore at your own pace']) }}</span>
+      <button class="daca-button is-secondary pipeline-restart" type="button" (click)="restart()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="/assets/documentation/animation-icons.svg#restart" width="24" height="24"/></svg>
+        {{ tr(['Neu starten', 'Recommencer', 'Ricomincia', 'Restart']) }}
+      </button>
+      <button class="daca-button is-secondary pipeline-playback" type="button" [disabled]="reducedMotion()" (click)="togglePlayback()">
+        <svg viewBox="0 0 24 24" aria-hidden="true">@if (running()) { <use href="/assets/documentation/animation-icons.svg#pause" width="24" height="24"/> } @else { <use href="/assets/documentation/animation-icons.svg#play" width="24" height="24"/> }</svg>
+        {{ reducedMotion() ? tr(['Bewegung reduziert', 'Mouvement réduit', 'Movimento ridotto', 'Reduced motion']) : running() ? tr(['Pausieren', 'Pause', 'Pausa', 'Pause']) : tr(['Abspielen', 'Lire', 'Riprendi', 'Play']) }}
+      </button>
+    </div>
+  </header>
+
+  <div class="pipeline-timeline">
+    <label for="pipeline-position">{{ tr(['Zeitposition', 'Position temporelle', 'Posizione temporale', 'Time position']) }}</label>
+    <input id="pipeline-position" type="range" min="0" [max]="duration" step="0.1" [value]="position()" [style.--pipeline-progress]="position() / duration * 100 + '%'" [attr.aria-valuetext]="seconds(position()) + ' / ' + seconds(duration) + ' ' + tr(['Sekunden', 'secondes', 'secondi', 'seconds'])" aria-controls="pipeline-animation-scene" (input)="seekInput($event)">
+    <output for="pipeline-position" class="pipeline-time" aria-live="off">{{ seconds(position()) }} s <span>/ {{ seconds(duration) }} s</span></output>
+  </div>
+  <p class="pipeline-scroll-hint">{{ tr(['Von links nach rechts durch die Layer. Auf kleinen Bildschirmen seitlich scrollen.', 'Parcourez les couches de gauche à droite. Sur petit écran, faites défiler horizontalement.', 'Segui i livelli da sinistra a destra. Su schermi piccoli, scorri orizzontalmente.', 'Follow the layers from left to right. Scroll sideways on smaller screens.']) }}</p>
+  <div class="pipeline-scroll" tabindex="0" role="region" [attr.aria-label]="tr(['Horizontale Datenpipeline', 'Pipeline horizontal', 'Pipeline orizzontale', 'Horizontal data pipeline'])">
+    <div class="pipeline-canvas">
+      <ol class="pipeline-stages" [attr.aria-label]="tr(['Layer der Datenpipeline', 'Couches du pipeline', 'Livelli della pipeline', 'Data pipeline layers'])">
+        @for (stage of stages; track $index; let index = $index) {
+          <li class="pipeline-stage" [class.is-active]="step() === index">
+            @if (index === 0) {
+            <a class="pipeline-node pipeline-drilldown" routerLink="/documentation/animated/data-sources/sourcing" (click)="pauseForSourceSourcing()" [attr.aria-current]="step() === 0 ? 'step' : null" [attr.aria-label]="tr(['Data Sourcing entdecken', 'Explorer le Data Sourcing', 'Esplora il Data Sourcing', 'Explore Data Sourcing'])">
+              <span class="node-heading"><span class="node-number">0{{ index + 1 }}</span><span class="node-caption">{{ tr(stage.caption) }}</span></span>
+              <strong class="node-title">{{ tr(stage.title) }}</strong>
+              <span class="node-foot"><span class="node-summary">{{ tr(stage.summary) }}</span><span class="node-tags">@for (tag of stage.tags; track $index) { <span>{{ tr(tag) }}</span> }</span></span>
+            </a>
+            } @else if (index === 5) {
+            <a class="pipeline-node pipeline-drilldown pipeline-consumer-drilldown" routerLink="/documentation/animated/data-consumers/access-management" (click)="pauseForConsumerAccess()" [attr.aria-current]="step() === 5 ? 'step' : null" [attr.aria-label]="tr(['Data Access Management entdecken', 'Découvrir Data Access Management', 'Scopri Data Access Management', 'Explore Data Access Management'])">
+              <span class="node-heading"><span class="node-number">0{{ index + 1 }}</span><span class="node-caption">{{ tr(stage.caption) }}</span></span>
+              <strong class="node-title">{{ tr(stage.title) }}</strong>
+              <span class="node-foot"><span class="node-summary">{{ tr(stage.summary) }}</span><span class="node-tags">@for (tag of stage.tags; track $index) { <span>{{ tr(tag) }}</span> }</span></span>
+            </a>
+            } @else {
+            <button type="button" class="pipeline-node" [attr.aria-pressed]="step() === index" aria-controls="pipeline-detail" (click)="selectStep(index)">
+              <span class="node-heading"><span class="node-number">0{{ index + 1 }}</span><span class="node-caption">{{ tr(stage.caption) }}</span></span>
+              <strong class="node-title">{{ tr(stage.title) }}</strong>
+              <span class="node-foot"><span class="node-summary">{{ tr(stage.summary) }}</span><span class="node-tags">@for (tag of stage.tags; track $index) { <span>{{ tr(tag) }}</span> }</span></span>
+            </button>
+            }
+          </li>
+        }
+      </ol>
+      <daca-pipeline-scene id="pipeline-animation-scene" [running]="running()" [reducedMotion]="reducedMotion()" (positionChange)="updatePosition($event)" />
+    </div>
+  </div>
+  <div class="pipeline-legend"><span><i class="legend-raw" aria-hidden="true"></i>{{ tr(['Unterschiedliche Rohdaten', 'Données brutes hétérogènes', 'Dati grezzi eterogenei', 'Diverse raw data']) }}</span><span><i class="legend-gold" aria-hidden="true"></i>{{ tr(['Veredelt und vereinheitlicht', 'Données valorisées et harmonisées', 'Dati raffinati e armonizzati', 'Refined and harmonized']) }}</span><span><i class="legend-product" aria-hidden="true">✓</i>{{ tr(['Datenprodukt mit Zugriffsschutz', 'Produit avec protection d’accès', 'Prodotto con accesso protetto', 'Product with access protection']) }}</span></div>
+
+  <div class="catalog-band"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v15H4ZM8 5V2h8v3M8 10h8m-8 5h8"/></svg><span><strong>DaCa</strong> {{ tr(['begleitet: Metadaten · Verantwortlichkeit · Lineage · Zugriffsregeln', 'accompagne : métadonnées · responsabilité · lignage · règles d’accès', 'accompagna: metadati · responsabilità · lineage · regole di accesso', 'provides context: metadata · responsibility · lineage · access rules']) }}</span></div>
+</section>
+
+<section id="pipeline-detail" class="pipeline-detail" aria-labelledby="pipeline-detail-title">
+  <span class="detail-number" aria-hidden="true">0{{ step() + 1 }}</span>
+  <div><p class="daca-eyebrow">{{ tr(['Schritt', 'Étape', 'Passo', 'Step']) }} {{ step() + 1 }} / 6</p><h2 id="pipeline-detail-title">{{ tr(selected().title) }}</h2><p>{{ tr(selected().detail) }}</p></div>
+  @if (step() === 0) {
+    <a class="daca-button is-secondary" routerLink="/documentation/animated/data-sources/sourcing" (click)="pauseForSourceSourcing()">{{ tr(['Data Sourcing entdecken', 'Explorer le Data Sourcing', 'Esplora il Data Sourcing', 'Explore Data Sourcing']) }}</a>
+  }
+  @if (step() === 5) {
+    <a class="daca-button is-secondary" routerLink="/documentation/animated/data-consumers/access-management" (click)="pauseForConsumerAccess()">Data Access Management</a>
+  }
+  <button class="daca-button is-secondary" type="button" (click)="nextStep()">{{ tr(['Nächster Schritt', 'Étape suivante', 'Passo successivo', 'Next step']) }} <span aria-hidden="true">→</span></button>
+</section>
+<p class="pipeline-note">{{ tr(['Vereinfachtes Erklärbild der Data Platform BIT. Die Plattform verarbeitet und liefert die Daten; DaCa führt den zentralen Katalog. Die Animation zeigt einen beispielhaften Ablauf und keinen Live-Datenverkehr. Jede Station lässt sich anklicken und in Ruhe erkunden.', 'Vue simplifiée de la Data Platform BIT. La plateforme traite et livre les données ; DaCa tient le catalogue central. L’animation illustre un exemple, sans trafic réel. Chaque étape peut être sélectionnée et explorée à son rythme.', 'Vista semplificata della Data Platform BIT. La piattaforma elabora e fornisce i dati; DaCa gestisce il catalogo centrale. L’animazione illustra un esempio, senza traffico reale. Ogni tappa può essere selezionata ed esplorata con calma.', 'Simplified explanation of the Data Platform BIT. The platform processes and delivers data; DaCa maintains the central catalog. The animation illustrates an example rather than live traffic. Select any stage to explore it at your own pace.']) }}</p>

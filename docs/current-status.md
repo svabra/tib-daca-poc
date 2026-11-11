@@ -1,5 +1,289 @@
 # Current status
 
+Release **0.3.10** (2026-11-11) packages the animated documentation: 26-second Data Pipeline,
+24-second PostgreSQL sourcing, 24-second metadata/access request and 32-second access management.
+It includes the shared animation index, chevron stations, icons, legends, seekable clocks,
+PG/S3 labels and German Zugriffsrichtlinie vocabulary. Canonical package/runtime/PWA/OpenAPI
+versions and the three OpenShift image pins are synchronized; DE/EN release notes archive 0.3.9.
+Validation: all 828 frontend tests, version/runtime contract checks and generated documentation
+checks pass; all five production images build locally. The release commit must pass the
+required pre-commit UI regression gate before push. Publication runs through the existing
+GitHub workflow; the OpenShift rollout is performed manually by the operator.
+
+Sourcing icon labels (2026-11-11): the DAAIF wizard's database glyph now includes a small
+**PG**, revealed together with the source icon. The unstructured Data Lake bucket contains
+**S3**, matching the wizard target, with its label below stored data points. Both labels use
+the existing theme colors and follow their containing icon/target states.
+Production build and browser checks pass: PG fits between the cylinder lines; S3 remains
+clear of all six stored dots and the bucket base. Light/dark evidence is in
+`output/playwright/sourcing-wizard-pg*.png` and `output/playwright/sourcing-lake-s3*.png`.
+
+Animation terminology (2026-11-11): German steps, diagrams, legends, status, audit reasons and
+explanations now use **Zugriffsrichtlinie** / **Zugriffsrichtlinien** consistently. This includes
+the pipeline overview, sourcing, access requests, access management and the source-topic hub.
+The standard PAP, PEP and PDP expansions keep their established English names; animation
+timing and permissions are unchanged. The version-overlay descriptions use the same vocabulary.
+Validation: the four source-topic tests and production UI build pass. Browser checks cover
+all five documentation routes, the authoring/active access phases, PAP label widths and
+390 px mobile step wrapping; no standalone German Policy/Policies labels remain outside
+the standard technical expansions. Evidence: `output/playwright/verify-access-vocabulary.cjs`.
+
+Animation navigation and visual consistency (2026-11-11): `/documentation/animated` now lists
+all four animations above the large overview: Data Pipeline (26 s), Data Sourcing (24 s),
+Find data and request access (24 s), and Data Access Management (32 s). The overview link
+scrolls to its own pipeline heading; the remaining rows open their canonical use cases.
+Localized descriptions, durations and icons accompany the links without decorative arrows
+or underlining. Selecting a link pauses the overview.
+
+The three detailed use cases use one `DocumentationAnimationStationsComponent` for numbered
+task boxes. Circular two-digit numbers, title/time typography, start/end seconds, padding,
+56 px minimum height, keyboard focus and the translucent active frame now match everywhere.
+The compact controls are chevrons with interlocking 14 px tips, 6 px gaps and 8 px vertical
+padding. Each row starts with a flat edge. The 3 px active frame follows the chevron outline
+without changing the surface color or shifting content; forced colors retain the frame.
+One responsive rule switches from equal columns to two columns at 1100 px and a single column
+at 700 px. All controls use `aria-current="step"` and retain each scene's seek/pause behavior.
+One SVG sprite supplies repeated people, databases, buckets, files, documents, identity cards,
+tables, shields, locks, checks and playback controls across all four animations and legends.
+Specialized moving geometry retains its existing animation clock. Shared outlines use
+non-scaling strokes so large icons keep the same line weight as their legend counterparts.
+
+Validation: 73 documentation tests across nine files pass, including directory order,
+destinations, localized titles and the existing station/clock behavior. Edge browser QA
+confirms identical computed number, title, time, padding, gap and radius styles in all three
+station lists. All four directory links work, including the local overview anchor. Native
+Enter selects a station; its range matches the scene clock. Desktop, 900 px tablet, 390 px
+mobile and 320 px French layouts pass without page overflow. Dark mode, reduced motion and
+sprite rendering pass without browser runtime errors. The production Compose UI build and
+data-model/OpenAPI documentation checks pass. Evidence and the repeatable script are local
+in `output/playwright/verify-animation-consistency.cjs`.
+
+Chevron follow-up validation: the production UI build and data-model documentation check
+pass. Browser QA confirms matching 56 px controls across all three detailed use cases,
+responsive wrapping, French mobile text and dark mode. Each arrow tip selects its own
+station; selection does not shift the layout. Keyboard focus and Windows forced-colors
+selection remain visible. At 200 percent text size, number circles scale with their labels
+and all content fits the mobile layout. Additional evidence is in
+`output/playwright/verify-chevron-stations.cjs` and the `chevron-steps-*.png` captures.
+
+Single PostgreSQL Sourcing Task (2026-11-11): **01 Datenquellen** opens
+`/documentation/animated/data-sources/sourcing`. The explanation now focuses on one
+PostgreSQL source, one SDAL PG and one SC PG. Other source types, merge animation and the
+three repeated acquisition-mode episodes have been removed from this scene.
+
+Sourcing illustration update (2026-11-11): the UI now spells out **Secure Data Access Layer
+PostgreSQL** and **Source Connector PostgreSQL**. DAAIF is centered directly above the
+connector and passes its task straight down. A hinged door in the access layer stays closed
+until the successful policy decision, opens at 12-12.9 s, lets all six records pass, and closes
+at 19.1-19.8 s after the last packet halo clears the opening. The conveyor starts upright,
+then lowers and telescopes left at 12-12.9 s in sync with the door. Its deployed belt forms
+a bridge ending just before the door frame with a small visible gap; its rounded end never
+enters the opening. Moving treads and rollers run at
+14-21.5 s. It stays down while data is still crossing, even after the door closes, then
+retracts and folds upright at 21.6-22.5 s. Every pose derives from the seekable scene clock;
+denial leaves the door closed and the conveyor raised and idle. Neutral cards and existing
+active borders are preserved.
+
+Door-clearance adjustment: the end roller now lands at x=440 (252 px deployed span),
+leaving the rounded belt cap outside the door sill. All 18 sourcing tests, a fresh production
+build and Edge checks pass, including visible frame clearance, synchronized lowering,
+reverse seek, pause, restart, reduced motion and repeat.
+
+The Data Analyst above DAAIF now has the same person icon as the personalized-permission
+actor below. Three labeled icons replace the wizard's lines and task badge: a database
+(Source), cogwheel (Transformation) and S3 bucket (Target). They fade/slide into place
+successively at 0.4-1.2, 1.6-2.4 and 2.8-3.6 s, then stay visible. The same scene clock
+reconstructs their visibility on pause, reverse seek, restart and reduced-motion exploration.
+
+The sourcing scene now includes a compact, labeled legend directly beneath the diagram.
+Eleven actual SVG symbols explain the Data Analyst, PostgreSQL source, transformation,
+unstructured and structured storage, policy-controlled door, extraction conveyor, submitted
+task, personalized policy check, permission/introspection and transferred data. Short labels
+and descriptions support DE/FR/IT/EN with RM fallback; the grid wraps outside the horizontal
+scene scroll area, using theme colors and decorative, non-focusable icons.
+Legend validation passes: 18 sourcing tests, production build and Edge checks of all eleven
+explanations, desktop/dark presentation, 390 px mobile, 320 px French and enlarged text.
+The legend has no horizontal overflow or browser runtime errors; existing unrelated build
+budget warnings remain.
+
+Four numbered stations have clear intervals within one 24-second task:
+1. 0-5 s: Data Analyst describes source, transformation and target in DAAIF; icons appear sequentially.
+2. 5-9 s: DAAIF hands one task to SC PG.
+3. 9-14 s: SC PG uses the Data Analyst's personalized permission for an SDAL PG policy check.
+   SDAL PG decides at 12 s and returns permission/introspection by 13.5 s.
+4. 14-24 s: data flows PostgreSQL -> SDAL PG -> SC PG -> selected target in the Data Lake.
+
+Six illustrative PG records start at 14 + 0.7 * index seconds. Each passes SDAL PG after
+1.2 seconds, SC PG after 2.4 and arrives after 4 seconds. Storage counts increase only on
+arrival. Select either a structured container with six cells or an unstructured bucket;
+one task has one target and the alternative remains empty. Target changes pause at the
+retained time. Restart and looping clear the scene. The active actor keeps its neutral
+background with a thick translucent frame.
+
+The Policy question mark and its separate 24-second access-request animation remain:
+prose-metadata discovery, introspection request/approval, then a distinct electronic payload
+request pending a Data Owner decision. The main 26-second overview and consumer/PAP/audit
+scene keep their routes and roles. No actual tasks, credentials, data access, policies,
+persisted DAAIF structures or protocols are introduced.
+
+Validation passed: 70 focused documentation tests across nine files, production catalog-UI
+build, data-model/OpenAPI documentation checks and whitespace check. Fresh Edge checks verify
+one PG source/SDAL/SC, all four station jumps, policy-before-payload ordering, transit through
+SDAL PG and SC PG, both exclusive targets, arrival-only counts, deterministic reverse seek,
+pause/restart/repeat, reduced motion, keyboard controls and the Policy cross-link. No unexpected
+API writes or browser runtime errors occur. New checks cover centered DAAIF placement,
+full-name heading containment, closed/open/closing door poses, clear passage for all packet
+halos, conveyor motion/stop and identical poses on pause and reverse seek. Bridge checks
+confirm synchronized lowering, stopping outside the doorway, heading clearance throughout
+folding, remaining deployed while data crosses, folding only after completion, and reset
+on restart/repeat. No unexpected
+motion occurs in reduced-motion mode. The wizard's person icon, Source / Transformation /
+Target reveal order, label spacing, partial-pose pause/reverse seek, empty restart and loop
+reset are verified in Edge. Desktop/dark, 390 px touch, French 320 px and
+enlarged-font content checks pass. The existing shared header overflow at extreme enlarged
+sizes is outside this scene; the scene content stays contained. Existing unrelated build
+budget warnings remain. The local catalog UI is running at port 8080. Previous multi-source
+timing/count evidence has been superseded by this single-task explanation.
+
+Overview layer-link styling (2026-11-10): linked titles in Datenquellen (01) and
+Datenkonsumenten (06), plus their overview detail actions, use plain text without decorative
+entry arrows or underlining in normal, hover and focus states. Native pointer/keyboard link
+activation and a visible focus outline remain available. This styling is scoped to the
+animated overview.
+The production build, data-model documentation check and focused browser QA pass. Both
+layer links render without arrows or underlining on hover; keyboard focus stays visible
+and Enter still opens their respective topics. Local evidence is in `output/playwright/`.
+
+Consumer access-management explanation (updated 2026-11-11): the **06 Datenkonsumenten** layer
+and its detail action open the canonical route
+`/documentation/animated/data-consumers/access-management`. Breadcrumbs classify this
+32-second SDAL use case under Data Consumers. The old
+`/documentation/animated/data-sources/access-management` route redirects there for existing
+links. The optional source hub remains at `/documentation/animated/data-sources`
+with exactly two cards: Meta Daten and a retained Data Access Management cross-link explicitly
+pointing to section 06. The metadata page at `/documentation/animated/data-sources/metadata`
+keeps its read-only central-catalog explanation and links to the new consumer route. The
+main navigation's Datenquellen destination remains physical models.
+
+The diagram groups object storage/S3, files and a database under Logical model A. Each
+associated persistence has its own SDAL. Policy scope is selectable: logical model is the
+default and covers all three associated physical representations/persistences; persistence
+scope uses a checkbox subset and initially selects files only. Unselected resources remain
+visible and blocked even after policy activation. Selecting none denies every request.
+Changing scope or the subset pauses at the current scene time, retaining that position and
+recomputing the illustrative policy, gate states, data return and audit view.
+
+Consumer A initially receives three denials. At 6-10 seconds the consumer applies for access
+through DaCa; a person/document token reaches DaCa at 9.2 seconds. DaCa forwards the application
+to the Data Owner during 10.4-12.2 seconds; review lasts until 14 seconds. Both steps keep all
+gates denied and the policy absent. Only then does the Data Owner approve and author the
+Consumer A / Read policy centrally in DaCa's **Policy Administration Point (PAP)** at 14-16.4
+seconds. From 16.4 seconds the policy remains stored in the PAP, while assignment
+to the selected SDAL projections runs at 16.4-19.2. At 20 seconds matching access becomes
+active only for covered resources. Requests and gold data traverse those SDAL gates during
+20.8-28.4 seconds; unselected branches remain denied and return no data. Receipt counts
+reflect only covered resources. The final state holds before the 32-second loop resets to
+deny and clears the simulated application and stored-policy state.
+
+An illustrative audit records the outcome of every scripted request, including denials.
+The first three decisions occur at 2.2, 2.38 and 2.56 seconds; the later three occur at
+22.4, 22.58 and 22.76. By 22.76 seconds logical-model scope shows three denials and three
+allows; the default files-only persistence example shows five denials and one allow. Each
+row shows identity, time, resource, action, result and reason without credentials, secrets
+or protected payloads. This is a clock-derived explanatory view, recomputed on reverse seek
+and scope changes, not a real persisted audit log or production logging service.
+
+The native compact timeline, restart, pause/play and five 0/6/10/14/20 story buttons use the same scene
+clock. Hidden tabs freeze playback, cleanup stops callbacks, and reduced motion starts at
+static zero while allowing manual seeking. Localized DE/FR/IT/EN copy and RM fallback retain
+the English role name Data Owner. Back links lead to the pipeline and source metadata.
+The overview bucket retains its clean outline without the former faint U-shaped grip path.
+
+The PAP and SDAL states are illustrative: no actual policy writes, decisions, protected data
+requests or audit records are created. Real enforcement remains HTTP PEP plus OPA and
+PostgreSQL ACLs plus forced RLS. Publication is complete only when OPA and PostgreSQL
+projections confirm the same revision. S3 remains illustrative persistence, not a new product
+delivery endpoint. There are no backend, persistence-schema or protocol changes.
+Validation (2026-11-11): all 72 documentation tests across nine files pass, including 25
+access-management model/animator/component tests. The first run exposed one stale time-label
+expectation (corrected) and four 5-second timeouts under parallel machine load. The repeat
+used one worker and a local 30-second timeout; all assertions passed in 23.88 seconds overall.
+The production Compose UI build and data-model/OpenAPI documentation checks pass. Existing
+bundle-size warnings remain outside this scene. The rebuilt catalog UI is running on port 8080.
+
+Edge browser QA verifies all five stations and 13 sampled times: consumer-to-DaCa application,
+DaCa-to-owner forwarding, pending review with no permission, approval at 14 s, stored policy
+at 16.4 s, and activation at 20 s. At 26.4 s model scope returns three gold points; files-only
+scope retains that time with one point, one allowed audit event and five denials. An empty
+scope returns nothing and shows six denials. Three receipts are visible at 31 s. Pause and
+reverse seeking reproduce packet positions and remove future approval state; restart clears
+the illustrative application, policy and audit. Reduced motion keeps the start still and
+allows manual review. Dark desktop, 390 px mobile and 320 px French layout pass without page
+overflow or browser runtime errors. Data Owner and the expanded PAP name remain intact.
+The earlier route/redirect and touch-target checks remain applicable. Screenshots and the
+`verify-access-approval.cjs` QA script are local in `output/playwright/`.
+The completed 26-second overview validation below retains its original scope.
+
+Animated documentation (2026-11-10): the fourth documentation tile opens
+`/documentation/animated`. The tile and introduction explain data becoming information and
+knowledge as the foundation for informed decisions, with DE/FR/IT/EN copy and the RM fallback.
+Six vertical layers remain side by side in source-to-consumer order. Six colored particles
+flow from S3, files, databases and REST API into a bucket, swirl inside and follow distinct
+curved routes into Veredelung. Each makes 1.5 turns through the gear and emerges gold.
+The 12/8-tooth gears have symmetric profiles, concentric bores, matched pitch and correctly
+phased opposite rotation. The stage titles remain Veredelung and Datenschutz.
+
+A pass now lasts 26 seconds. The small gold points arrive at the product center from
+11.4 to 14.3 seconds, then expand over 0.25 seconds onto a 24-unit-radius circular orbit.
+Six positions are spaced by 60 degrees and share a 1.8-second rotation period. The points
+remain individually visible while gathering; no large product appears before 15.4 seconds.
+From 15.4 to 16.8 seconds the processing ring contracts from radius 48 to 31 and rotates
+360 degrees while all points spiral inward together. The product grows underneath them
+from radius zero to 29; the individual points fade only during the final 0.35 seconds.
+The ring becomes solid during the final 0.3 seconds of welding. A gold completion wave runs
+from 16.8 to 17.6 seconds while the finished product stays centered.
+
+Departure is at 17.6 seconds, arrival at Datenschutz at 19.6, and shield attachment at
+19.8-20.45. At 20.8 seconds the same protected product branches simultaneously to specialist,
+analytics and application consumers. All three copies retain the full product size and
+contrasting dark shield; they follow separate curves and fade together by 24.4 seconds.
+Initial load, seek to zero, restart and the 26-second loop boundary all start empty.
+
+The active layer uses a 4 px outer frame at 55 percent theme-blue opacity and a blue title,
+with the same regular card surface as the other layers. All layers reserve 4 px vertical and
+9 px horizontal spacing, so selection changes do not resize or shift the diagram. The frame
+transition takes 160 ms; reduced motion removes it and the keyboard focus remains visible.
+The compact timeline has a 3 px track, 12 px thumb, adjacent current/total seconds and no
+surrounding card. The inactive track uses the muted theme color for visibility. Desktop is
+one row; below 560 px the label and time sit above the full-width track and wrap independently
+for enlarged text. The input retains
+a 32 px pointer target, increasing to 44 px for coarse pointers, and system colors in
+high-contrast mode. Native keyboard behavior, localized time and visible focus remain.
+
+One requestAnimationFrame clock updates decorative SVG attributes outside Angular, including
+points, products, ring, wave and both gears. Clock reports are limited to ten per second;
+seeks report immediately. The 0-26 second slider uses 0.1-second steps and pauses on seeking.
+Play resumes there; Play at the endpoint starts at zero. Restart resets the entire scene and
+selected explanation to zero. Pause and hidden tabs stop the clock. Reduced motion starts
+at the static zero-second frame and permits manual seeking without automatic playback.
+Narrow screens preserve one horizontal layer row in a keyboard-accessible scroll region.
+
+DaCa remains the central catalog. This explanatory page fetches no product records, changes
+no persistence or policies and represents no live traffic or access confirmation. S3 is an
+illustrative platform input; product delivery remains HTTP/REST or PostgreSQL.
+Validation: all sixteen targeted component/timeline tests, the production Compose UI build
+and the data-model documentation check pass. Browser QA confirms six separate gold points on
+the 24-unit orbit at 14.6 s, no formed product at 15.3 s, simultaneous inward motion and a
+growing product at 16.1 s, then the completion wave at 17.2 s. One shielded product at 20.6 s
+becomes three full-size protected copies at 22.6 s. Reverse seeking, freeze/resume, native
+Home/End/0.1-second arrow steps, empty 26-second looping and manual reduced-motion seeking pass.
+All six active states keep identical layer geometry. The active card uses the same surface
+as its neighbors in both themes, with a 4 px frame at 55 percent opacity and distinct keyboard
+focus. A 390 px coarse-pointer viewport has a 44 px slider target and no page overflow.
+High-contrast mode uses system track colors and a visible selected-layer outline. French text
+at 320 px and 200 percent root text size wraps above the track without overlapping the time.
+Browser screenshots and QA scripts remain local artifacts under `output/playwright/`.
+
 Release **0.3.9** (2026-11-04) fixes external organization card height in the data landscape.
 The German/English version overlay describes the correction; the five 0.3.8 notes remain
 archived. All managed package, API, PWA and OpenShift image versions are synchronized.

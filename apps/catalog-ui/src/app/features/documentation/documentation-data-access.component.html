@@ -1,0 +1,179 @@
+<nav class="documentation-breadcrumb" [attr.aria-label]="tr(['Brotkrümelnavigation', 'Fil d’Ariane', 'Percorso di navigazione', 'Breadcrumb'])">
+  <a routerLink="/documentation">{{ tr(['Dokumentation', 'Documentation', 'Documentazione', 'Documentation']) }}</a><span aria-hidden="true">›</span>
+  <a routerLink="/documentation/animated">{{ tr(['Animierte Dokumentation', 'Documentation animée', 'Documentazione animata', 'Animated documentation']) }}</a><span aria-hidden="true">›</span>
+  <span>06 – {{ tr(['Datenkonsumenten', 'Consommateurs de données', 'Consumatori di dati', 'Data consumers']) }}</span><span aria-hidden="true">›</span>
+  <span aria-current="page">Data Access Management</span>
+</nav>
+<section class="daca-page-heading"><div>
+  <p class="daca-eyebrow">{{ tr(['Zugriff verstehen', 'Comprendre l’accès', 'Comprendere l’accesso', 'Understand access']) }}</p>
+  <h1>Data Access Management</h1>
+  <p>{{ tr(['Nach einem abgelehnten Zugriff beantragt Consumer A die Berechtigung über DaCa beim Data Owner. Erst dessen Zustimmung und die Aktivierung der Zugriffsrichtlinie ermöglichen den kontrollierten Lesezugriff.', 'Après un refus, Consumer A demande une autorisation au Data Owner via DaCa. Seuls son accord et l’activation de la politique permettent un accès contrôlé en lecture.', 'Dopo un rifiuto, Consumer A richiede il permesso al Data Owner tramite DaCa. Solo il suo consenso e l’attivazione della policy consentono l’accesso controllato in lettura.', 'After access is denied, Consumer A requests permission from the Data Owner through DaCa. Only approval and policy activation enable controlled read access.']) }}</p>
+</div></section>
+
+<section class="pipeline access-pipeline" [class.is-paused]="!running()" aria-labelledby="access-title">
+  <header class="pipeline-header">
+    <div><p class="daca-eyebrow">06 / Secure Data Access Layer</p><h2 id="access-title">SDAL</h2></div>
+    <div class="pipeline-controls">
+      <span class="pipeline-status"><i [class.is-running]="running()" aria-hidden="true"></i>{{ running() ? tr(['Zugriff im Ablauf', 'Accès en mouvement', 'Accesso in movimento', 'Access in motion']) : tr(['In Ruhe entdecken', 'Explorer à son rythme', 'Esplorare con calma', 'Explore at your own pace']) }}</span>
+      <button class="daca-button is-secondary access-restart" type="button" (click)="restart()"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="/assets/documentation/animation-icons.svg#restart" width="24" height="24"/></svg>{{ tr(['Neu starten', 'Recommencer', 'Ricomincia', 'Restart']) }}</button>
+      <button class="daca-button is-secondary access-playback" type="button" [disabled]="reducedMotion()" (click)="togglePlayback()"><svg viewBox="0 0 24 24" aria-hidden="true">@if (running()) { <use href="/assets/documentation/animation-icons.svg#pause" width="24" height="24"/> } @else { <use href="/assets/documentation/animation-icons.svg#play" width="24" height="24"/> }</svg>{{ reducedMotion() ? tr(['Bewegung reduziert', 'Mouvement réduit', 'Movimento ridotto', 'Reduced motion']) : running() ? tr(['Pausieren', 'Pause', 'Pausa', 'Pause']) : tr(['Abspielen', 'Lire', 'Riprendi', 'Play']) }}</button>
+    </div>
+  </header>
+  <fieldset class="access-scope">
+    <legend>{{ tr(['Wo gilt die Freigabe?', 'Quel est le périmètre autorisé ?', 'Dove si applica l’autorizzazione?', 'What does the permission cover?']) }}</legend>
+    <div class="access-scope-options">
+      <label [class.is-selected]="scope() === 'logical-model'">
+        <input type="radio" name="access-scope" value="logical-model" [checked]="scope() === 'logical-model'" (change)="selectScope('logical-model')">
+        <span><strong>{{ tr(['Logisches Modell', 'Modèle logique', 'Modello logico', 'Logical model']) }}</strong><small>{{ tr(['Alle zugeordneten physischen Modelle, Repräsentationen und Persistenzen.', 'Tous les modèles physiques, représentations et stockages associés.', 'Tutti i modelli fisici, le rappresentazioni e gli archivi associati.', 'All associated physical models, representations and persistent stores.']) }}</small></span>
+      </label>
+      <label [class.is-selected]="scope() === 'persistences'">
+        <input type="radio" name="access-scope" value="persistences" [checked]="scope() === 'persistences'" (change)="selectScope('persistences')">
+        <span><strong>{{ tr(['Einzelne Persistenzen', 'Stockages sélectionnés', 'Archivi selezionati', 'Selected persistent stores']) }}</strong><small>{{ tr(['Nur ausgewählte Persistenzen freigeben – auch eine einzige.', 'Autoriser uniquement certains stockages, y compris un seul.', 'Autorizzare solo alcuni archivi, anche uno solo.', 'Permit selected stores, including just one.']) }}</small></span>
+      </label>
+    </div>
+  </fieldset>
+  @if (scope() === 'persistences') {
+    <fieldset class="access-persistence-choice">
+      <legend>{{ tr(['Welche Persistenzen darf Consumer A lesen?', 'Quels stockages Consumer A peut-il lire ?', 'Quali archivi può leggere Consumer A?', 'Which stores may Consumer A read?']) }}</legend>
+      <div>@for (store of stores; track $index; let index = $index) {
+        <label><input type="checkbox" [checked]="selectedPersistences().includes(index)" (change)="togglePersistence(index)">{{ tr(store) }}</label>
+      }</div>
+    </fieldset>
+    @if (state().scopeCount === 0) {
+      <p class="access-scope-note">{{ tr(['Keine Persistenz ausgewählt: Alle Zugriffe bleiben abgelehnt.', 'Aucun stockage sélectionné : tous les accès restent refusés.', 'Nessun archivio selezionato: tutti gli accessi rimangono negati.', 'No store selected: all access remains denied.']) }}</p>
+    }
+  }
+  <p class="access-scope-note">{{ tr(['Der Data Owner speichert die Zugriffsrichtlinie dauerhaft im', 'Le Data Owner conserve la politique dans le', 'Il Data Owner conserva la policy nel', 'The Data Owner keeps the policy in the']) }} <strong>DaCa-PAP (Policy Administration Point)</strong>. {{ tr(['Die SDALs setzen deren Freigaben durch. Ein Auswahlwechsel pausiert den Ablauf zum Vergleichen.', 'Les SDAL appliquent ses autorisations. Changer la sélection met le déroulement en pause pour comparer.', 'Gli SDAL applicano le autorizzazioni. Cambiare la selezione mette in pausa il flusso per confrontare.', 'SDALs enforce its permissions. Changing the selection pauses the flow for comparison.']) }}</p>
+  <div class="pipeline-timeline">
+    <label for="access-position">{{ tr(['Zeitposition', 'Position temporelle', 'Posizione temporale', 'Time position']) }}</label>
+    <input id="access-position" type="range" min="0" [max]="duration" step="0.1" [value]="position()" [style.--pipeline-progress]="position() / duration * 100 + '%'" [attr.aria-valuetext]="seconds(position()) + ' / ' + seconds(duration) + ' ' + tr(['Sekunden', 'secondes', 'secondi', 'seconds'])" aria-controls="access-scene" (input)="seekInput($event)">
+    <output for="access-position" class="pipeline-time" aria-live="off">{{ seconds(position()) }} s <span>/ {{ seconds(duration) }} s</span></output>
+  </div>
+  <ol daca-animation-stations class="access-story" [steps]="steps" [times]="stationTimes" [duration]="duration" [active]="state().phase" controls="access-detail access-scene" (stepSelected)="selectStep($event)"></ol>
+  <p class="pipeline-scroll-hint">{{ tr(['Drei Speicher, drei Schutzpunkte. Auf kleinen Bildschirmen seitlich scrollen.', 'Trois stockages, trois points de protection. Sur petit écran, faites défiler horizontalement.', 'Tre archivi, tre punti di protezione. Su schermi piccoli, scorri orizzontalmente.', 'Three stores, three protection points. Scroll sideways on smaller screens.']) }}</p>
+  <div class="pipeline-scroll access-scroll" tabindex="0" role="region" [attr.aria-label]="tr(['SDAL-Zugriffsanimation', 'Animation de l’accès SDAL', 'Animazione dell’accesso SDAL', 'SDAL access animation'])">
+    <svg #scene id="access-scene" class="access-scene" viewBox="0 0 1200 610" aria-hidden="true" focusable="false">
+      <g class="access-model-context"><rect x="685" y="112" width="465" height="476" rx="12"/><text class="model-caption" x="920" y="99">{{ tr(['Logisches Modell A', 'Modèle logique A', 'Modello logico A', 'Logical model A']) }}</text></g>
+      <g class="access-routes">
+        <path class="access-application-route" [class.is-current]="state().phase === 1" d="M250 315C315 315 325 135 400 135"/>
+        <path class="access-application-route" [class.is-current]="state().phase === 2" d="M535 35C535 12 232 12 232 40"/>
+        <path d="M315 85H400"/>
+        @for (lane of state().lanes; track $index) {
+          <path class="access-governed-route" [attr.d]="'M250 350C430 350 520 ' + lane.y + ' 760 ' + lane.y + 'H1010'"/>
+          <path class="access-policy-route" [attr.d]="'M535 155C595 185 645 ' + lane.y + ' 760 ' + lane.y"/>
+        }
+      </g>
+      @for (lane of state().lanes; track $index; let index = $index) {
+        <g class="access-gate" [attr.data-lane]="index" data-active="false" [attr.transform]="'translate(760 ' + lane.y + ')'">
+          <rect class="gate-frame" x="-60" y="-65" width="120" height="130" rx="5"/>
+          <text class="svg-heading" y="-41">SDAL</text>
+          <use class="gate-shield" href="/assets/documentation/animation-icons.svg#shield" x="-35" y="-36" width="70" height="70"/>
+          <path class="gate-cross" d="m-8-4 16 16m0-16L-8 12"/>
+          <path class="gate-tick" d="m-9 2 6 7L10-7" opacity="0"/>
+          <g class="gate-policy-check" transform="translate(42 -42)" opacity="0"><circle r="7"/><path d="m-3 0 2 2 4-5"/></g>
+          @if (lane.assigned && !lane.allowed) {
+            <text class="svg-status" y="37">{{ tr(['Zugewiesen', 'Attribuée', 'Assegnata', 'Assigned']) }}</text>
+            <text class="svg-status is-denied" y="54">{{ tr(['Blockiert', 'Bloqué', 'Bloccato', 'Blocked']) }}</text>
+          } @else {
+            <text class="svg-status" [class.is-denied]="!lane.allowed" y="45">{{ gateStatus(index) }}</text>
+          }
+        </g>
+        <g class="access-request" data-packet="request" [attr.data-lane]="index" opacity="0"><circle class="request-halo" r="13"/><circle class="request-core" r="6"/></g>
+        <g class="access-rejection" data-packet="rejection" [attr.data-lane]="index" opacity="0"><circle r="12"/><path d="m-4-4 8 8m0-8-8 8"/></g>
+        <g class="access-data" data-packet="data" [attr.data-lane]="index" opacity="0"><circle class="data-halo" r="14"/><circle class="data-core" r="7"/></g>
+        <g class="access-policy-token" data-packet="policy" [attr.data-lane]="index" opacity="0"><use href="/assets/documentation/animation-icons.svg#document" x="-16" y="-16" width="32" height="32"/></g>
+      }
+      @for (lane of state().lanes; track $index; let index = $index) {
+        <g class="access-store" [attr.data-lane]="index" [attr.data-in-scope]="lane.inScope" [attr.transform]="'translate(1010 ' + lane.y + ')'">
+          <rect class="access-surface" x="-100" y="-52" width="220" height="104" rx="5"/>
+          <text class="svg-heading" y="-25">{{ tr(stores[index]) }}</text>
+          <g class="store-icon" transform="translate(10 11)">
+            <use [attr.href]="'/assets/documentation/animation-icons.svg#' + ['bucket', 'file', 'database'][index]" x="-31" y="-31" width="62" height="62"/>
+          </g>
+        </g>
+      }
+      <g class="access-consumer" [class.is-current]="state().phase === 1" transform="translate(150 350)">
+        <rect class="access-surface" x="-100" y="-60" width="200" height="120" rx="5"/>
+        <text class="svg-heading" y="-33">Consumer A</text>
+        <use href="/assets/documentation/animation-icons.svg#person" x="-36" y="-28" width="72" height="72"/>
+        <text class="svg-label" y="84">Data Consumer</text>
+        <g class="access-receipt" transform="translate(0 114)" opacity="0"><circle data-receipt-lane="0" cx="-20" r="6" opacity="0"/><circle data-receipt-lane="1" r="6" opacity="0"/><circle data-receipt-lane="2" cx="20" r="6" opacity="0"/></g>
+      </g>
+      <g class="access-owner" [class.is-current]="state().phase === 2 || state().phase === 3" transform="translate(232 85)">
+        <rect class="access-surface" x="-82" y="-45" width="165" height="100" rx="5"/>
+        <text class="svg-heading" y="-20">Data Owner</text>
+        <use href="/assets/documentation/animation-icons.svg#person" x="-30" y="-14" width="60" height="60"/>
+        @if (state().applicationStage === 'review') {
+          <text class="svg-label access-owner-status" y="77">{{ tr(['Prüft den Antrag', 'Examine la demande', 'Esamina la richiesta', 'Reviewing application']) }}</text>
+        } @else if (state().applicationStage === 'approved') {
+          <text class="svg-status access-owner-status" y="77">{{ tr(['Zustimmung erteilt', 'Accord donné', 'Consenso concesso', 'Approval granted']) }}</text>
+          <path class="gate-tick" d="m50 12 5 5 10-12"/>
+        }
+      </g>
+      <g class="access-policy-card" [class.is-current]="state().phase === 1 || state().phase === 2 || state().phase === 3">
+        <rect class="access-surface" x="400" y="35" width="270" height="148" rx="5"/>
+        <text class="svg-heading" x="535" y="62">DaCa · PAP</text>
+        <text class="pap-subtitle" x="535" y="80">Policy Administration Point</text>
+        @if (state().policyStage === 'absent') {
+          <text class="svg-label access-application-status" x="535" y="118">{{ applicationStatus() }}</text>
+          @if (state().applicationStage !== 'none') {
+            <text class="pap-scope is-denied" x="535" y="143">{{ tr(['Noch keine Freigabe', 'Aucune autorisation à ce stade', 'Nessun permesso ancora', 'No permission yet']) }}</text>
+          }
+        } @else if (state().authoring) {
+          <text class="svg-label" x="535" y="118">{{ tr(['Zugriffsrichtlinie wird formuliert', 'Politique en rédaction', 'Policy in preparazione', 'Authoring the policy']) }}</text>
+        }
+        <g class="access-policy-rule" opacity="0">
+          <text class="svg-label" x="535" y="103">Consumer A</text>
+          <text class="svg-heading" x="535" y="123">{{ tr(['Lesen erlaubt', 'Lecture autorisée', 'Lettura consentita', 'Read allowed']) }}</text>
+          <text class="pap-scope" x="535" y="143">{{ scope() === 'logical-model' ? tr(['Logisches Modell A · alle', 'Modèle logique A · tous', 'Modello logico A · tutti', 'Logical model A · all']) : tr(['Gewählte Persistenzen', 'Stockages sélectionnés', 'Archivi selezionati', 'Selected persistent stores']) }}</text>
+        </g>
+        <g class="access-pap-stored" [attr.opacity]="state().policyStored ? 1 : 0"><text x="535" y="163">{{ tr(['Zugriffsrichtlinie bleibt im PAP', 'Politique conservée dans le PAP', 'Policy conservata nel PAP', 'Policy remains in the PAP']) }}</text></g>
+        <line class="access-author-line" x1="445" y1="175" x2="445" y2="175"/>
+      </g>
+      <g class="access-application-token access-application-icon" opacity="0"><use href="/assets/documentation/animation-icons.svg#identity" x="-17" y="-17" width="34" height="34"/></g>
+      <g class="access-review-token access-application-icon" opacity="0"><use href="/assets/documentation/animation-icons.svg#identity" x="-17" y="-17" width="34" height="34"/></g>
+      <g class="access-author-token access-policy-token" opacity="0"><use href="/assets/documentation/animation-icons.svg#document" x="-16" y="-16" width="32" height="32"/></g>
+      <text class="svg-label access-caption" x="760" y="594">{{ tr(['Jeder Zugriff passiert seinen SDAL', 'Chaque accès traverse son SDAL', 'Ogni accesso attraversa il proprio SDAL', 'Every access passes its SDAL']) }}</text>
+    </svg>
+  </div>
+  <div class="access-legend">
+    <span><i class="legend-request" aria-hidden="true"></i>{{ tr(['Leseanfrage', 'Demande de lecture', 'Richiesta di lettura', 'Read request']) }}</span>
+    <span><i class="legend-rejection" aria-hidden="true">×</i>{{ tr(['Abgelehnt', 'Refusé', 'Negato', 'Denied']) }}</span>
+    <span><svg class="access-application-icon" viewBox="-20 -20 40 40" aria-hidden="true" focusable="false"><use href="/assets/documentation/animation-icons.svg#identity" x="-17" y="-17" width="34" height="34"/></svg>{{ tr(['Zugriffsantrag', 'Demande d’accès', 'Richiesta di accesso', 'Access application']) }}</span>
+    <span><svg class="access-application-icon" viewBox="-20 -20 40 40" aria-hidden="true" focusable="false"><use href="/assets/documentation/animation-icons.svg#document" x="-20" y="-20" width="40" height="40"/></svg>{{ tr(['Zugriffsrichtlinie', 'Politique', 'Policy', 'Policy']) }} <daca-policy-help /></span>
+    <span><i class="legend-data" [class.is-available]="state().allowed" aria-hidden="true"></i>{{ tr(['Datenrückgabe nach Freigabe', 'Retour des données après autorisation', 'Dati restituiti dopo l’autorizzazione', 'Data returned after permission']) }}</span>
+  </div>
+  <dl class="access-facts" aria-live="off">
+    <div><dt>DaCa · PAP</dt><dd>{{ state().policyStored ? tr(['Zugriffsrichtlinie gespeichert', 'Politique conservée', 'Policy conservata', 'Policy stored']) : tr(['Noch keine gespeicherte Zugriffsrichtlinie', 'Aucune politique conservée', 'Nessuna policy conservata', 'No stored policy yet']) }}<small>Policy Administration Point</small></dd></div>
+    <div><dt>{{ tr(['Regel', 'Règle', 'Regola', 'Rule']) }}</dt><dd>Consumer A · {{ tr(['Lesen', 'Lire', 'Leggere', 'Read']) }}<small>{{ state().scopeCount }} / {{ stores.length }} {{ tr(['Persistenzen im Geltungsbereich', 'stockages dans le périmètre', 'archivi nell’ambito', 'stores in scope']) }}</small></dd></div>
+    <div><dt>{{ tr(['Entscheidung', 'Décision', 'Decisione', 'Decision']) }}</dt><dd class="access-decision" [class.is-allowed]="state().allowed">{{ state().allowed ? tr(['Erlaubt für diese Anfrage', 'Autorisé pour cette demande', 'Consentito per questa richiesta', 'Allowed for this request']) : tr(['Blockiert · keine Daten', 'Bloqué · aucune donnée', 'Bloccato · nessun dato', 'Blocked · no data']) }}</dd></div>
+  </dl>
+</section>
+
+<section id="access-detail" class="access-detail" aria-labelledby="access-detail-title">
+  <p class="daca-eyebrow">{{ tr(['Schritt', 'Étape', 'Passo', 'Step']) }} {{ state().phase + 1 }} / {{ steps.length }}</p>
+  <h2 id="access-detail-title">{{ tr(steps[state().phase].title) }}</h2>
+  <p>{{ tr(steps[state().phase].detail) }}</p>
+  <ul class="access-gate-list">@for (store of stores; track $index; let index = $index) { <li>{{ tr(store) }} · SDAL: <strong>{{ gateStatus(index) }}</strong></li> }</ul>
+</section>
+<section class="access-audit" aria-labelledby="access-audit-title" aria-live="off">
+  <header><h2 id="access-audit-title">{{ tr(['Automatisches Zugriffsprotokoll', 'Journal automatique des accès', 'Registro automatico degli accessi', 'Automatic access log']) }}</h2><span>{{ audit().length }} {{ tr(['Einträge', 'entrées', 'voci', 'entries']) }}</span></header>
+  <p>{{ tr(['Alle Zugriffsversuche werden vollautomatisch protokolliert – erlaubte ebenso wie abgelehnte. Das Protokoll hält Zeit, Identität, Ziel, Aktion und Entscheidung fest. Hier sind die simulierten Einträge des aktuellen Durchlaufs zu sehen.', 'Toutes les tentatives d’accès sont journalisées automatiquement, autorisées comme refusées. Le journal conserve l’heure, l’identité, la cible, l’action et la décision. Les entrées affichées illustrent le cycle actuel.', 'Tutti i tentativi di accesso vengono registrati automaticamente, consentiti o negati. Il registro conserva ora, identità, destinazione, azione e decisione. Qui sono mostrate le voci simulate del ciclo attuale.', 'Every access attempt is logged automatically, whether allowed or denied. The log records time, identity, target, action and decision. These simulated entries describe the current animation cycle.']) }}</p>
+  <div class="access-audit-scroll" tabindex="0" role="region" [attr.aria-label]="tr(['Protokolleinträge', 'Entrées du journal', 'Voci del registro', 'Log entries'])">
+    <table>
+      <thead><tr><th scope="col">{{ tr(['Zeit im Ablauf', 'Temps écoulé', 'Tempo trascorso', 'Elapsed time']) }}</th><th scope="col">{{ tr(['Konsument', 'Consommateur', 'Consumatore', 'Consumer']) }}</th><th scope="col">{{ tr(['Persistenz', 'Stockage', 'Archivio', 'Persistence']) }}</th><th scope="col">{{ tr(['Aktion', 'Action', 'Azione', 'Action']) }}</th><th scope="col">{{ tr(['Entscheidung', 'Décision', 'Decisione', 'Decision']) }}</th><th scope="col">{{ tr(['Grund', 'Motif', 'Motivo', 'Reason']) }}</th></tr></thead>
+      <tbody>
+        @for (entry of audit(); track entry.id) {
+          <tr [attr.data-decision]="entry.decision"><td>{{ seconds(entry.at) }} s</td><td>{{ entry.consumer === 'consumer-a' ? 'Consumer A' : entry.consumer }}</td><td>{{ tr(stores[entry.lane]) }}</td><td>{{ entry.action === 'read' ? tr(['Lesen', 'Lire', 'Leggere', 'Read']) : entry.action }}</td><td class="audit-decision">{{ auditDecision(entry) }}</td><td>{{ auditReason(entry) }}</td></tr>
+        } @empty {
+          <tr><td class="audit-empty" colspan="6">{{ tr(['Noch keine Anfrage entschieden.', 'Aucune demande traitée pour le moment.', 'Nessuna richiesta ancora valutata.', 'No request has been decided yet.']) }}</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+<p class="pipeline-note">{{ tr(['SDAL ist hier das konzeptionelle Schutz-Gateway vor jeder Persistenz. Die zentrale Zugriffsrichtlinie bleibt im DaCa-PAP; die SDALs setzen ihren Geltungsbereich durch. Der PoC nutzt HTTP PEP/OPA und PostgreSQL ACL/RLS. S3 illustriert nur Persistenz. Diese Erklärung erzeugt keine realen Zugriffsrichtlinien, Datenzugriffe oder Auditdatensätze.', 'Le SDAL représente ici la protection conceptuelle de chaque stockage. La politique reste dans le PAP de DaCa ; les SDAL appliquent son périmètre. Le PoC utilise HTTP PEP/OPA et PostgreSQL ACL/RLS. S3 illustre uniquement la persistance. Cette explication ne crée aucune politique, aucun accès ni aucune entrée d’audit réelle.', 'SDAL rappresenta la protezione concettuale di ogni archivio. La policy rimane nel PAP di DaCa; gli SDAL ne applicano l’ambito. Il PoC usa HTTP PEP/OPA e PostgreSQL ACL/RLS. S3 illustra solo la persistenza. Questa spiegazione non crea policy, accessi o voci di audit reali.', 'SDAL illustrates protection before each store. The central policy remains in the DaCa PAP; SDALs enforce its scope. The PoC uses HTTP PEP/OPA and PostgreSQL ACL/RLS. S3 illustrates persistence only. This explanation creates no real policies, data accesses or audit records.']) }}</p>
+<nav class="access-backlinks" [attr.aria-label]="tr(['Zurück zur Übersicht', 'Retour à la vue d’ensemble', 'Torna alla panoramica', 'Back to the overview'])">
+  <a routerLink="/documentation/animated">← {{ tr(['Zur Datenpipeline', 'Retour au pipeline', 'Torna alla pipeline', 'Back to the pipeline']) }}</a>
+  <a routerLink="/documentation/animated/data-sources/metadata">{{ tr(['Meta Daten der Datenquellen', 'Métadonnées des sources', 'Metadati delle fonti', 'Source metadata']) }} →</a>
+</nav>

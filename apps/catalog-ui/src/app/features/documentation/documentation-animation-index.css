@@ -1,0 +1,14 @@
+.animation-index{margin:0 0 30px;padding:20px 24px;border:1px solid var(--daca-border);border-radius:6px;background:var(--daca-surface)}
+.animation-index h2{margin:0 0 12px;color:var(--daca-blue);font-size:1rem}
+.animation-index ul{list-style:none;margin:0;padding:0}
+.animation-index li+li{border-top:1px solid var(--daca-border)}
+.animation-index a{display:flex;align-items:center;gap:14px;padding:13px 0;color:var(--daca-ink);text-decoration:none}
+.animation-index a:hover strong{color:var(--daca-blue)}
+.animation-index a:focus-visible{outline:3px solid var(--daca-blue);outline-offset:4px;border-radius:3px}
+.animation-index svg{flex:0 0 28px;width:28px;height:28px;fill:none;stroke:currentColor;color:var(--daca-blue)}
+.animation-index a>span:first-of-type{flex:1;min-width:0;overflow-wrap:anywhere}
+.animation-index strong{display:block;font-size:.8rem;line-height:1.5;font-weight:650}
+.animation-index small{display:block;margin-top:3px;color:var(--daca-muted);font-size:.7rem;line-height:1.55}
+.animation-duration{align-self:flex-start;padding-top:3px;color:var(--daca-muted);font-size:.7rem;white-space:nowrap;font-variant-numeric:tabular-nums}
+#pipeline-title{scroll-margin-top:24px}
+@media(max-width:700px){.animation-index{padding:16px}.animation-index a{gap:10px;align-items:flex-start}.animation-index svg{flex-basis:24px;width:24px;height:24px}}

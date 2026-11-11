@@ -29,7 +29,9 @@ describe('Catalog runtime version overlay', () => {
     const dialog = fixture.nativeElement.querySelector('.daca-feature-dialog') as HTMLDialogElement;
     expect(dialog.hasAttribute('open')).toBe(true);
     expect(dialog.textContent).toContain(`V${DACA_VERSION}`);
-    expect(dialog.textContent).toContain('Bugfix: Organisationskarten ohne überlappenden Text');
+    expect(dialog.textContent).toContain('Die Data Pipeline als Animation entdecken');
+    expect(dialog.textContent).toContain('PostgreSQL Data Sourcing nachvollziehen');
+    expect(dialog.textContent).not.toContain('Bugfix: Organisationskarten ohne überlappenden Text');
     expect(dialog.textContent).not.toContain('Mehr Platz unterhalb der Organisationsbox');
     expect(dialog.textContent).not.toContain('Datenprodukte mit passendem Startfilter');
     expect(dialog.textContent).not.toContain('Zugriffsanfragen direkt bei den Freigaben verfolgen');

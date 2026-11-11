@@ -1,5 +1,128 @@
 # BIT DaCa
 
+Release **0.3.10** adds four interactive documentation animations, a complete animation index,
+shared chevron steps and icons, the PostgreSQL sourcing door/conveyor, explicit Data Owner
+approval flows and consistent German access-policy vocabulary. The version overlay summarizes
+these changes in DE/EN and preserves 0.3.9 in the searchable release archive.
+
+The documentation hub includes **Animierte Dokumentation** at `/documentation/animated`:
+an **All animations** list above the overview links directly to Data Pipeline (26 s),
+Data Sourcing (24 s), Find data and request access (24 s), and Data Access Management (32 s).
+The overview entry scrolls to the pipeline on the same page. Links have visible keyboard
+focus and no decorative arrows or underlining.
+
+The three detailed use cases share one compact chevron station component: circular two-digit
+numbers, title, localized start/end seconds, a 56 px minimum height, and a translucent active
+frame following the arrow outline. Chevrons interlock with narrow gaps; each wrapped row starts
+with a flat edge. All station lists wrap at the same breakpoints. Reused persons,
+databases, buckets, files, documents, identity cards, tables, locks, shields and playback
+controls come from one SVG sprite, keeping their proportions consistent across scenes,
+legends and sizes.
+
+German animation copy consistently uses **Zugriffsrichtlinie** for access policies, including
+steps, legends, status and audit explanations. The standard names Policy Administration Point,
+Policy Enforcement Point and Policy Decision Point retain their established expansions.
+
+The main Data Pipeline shows
+six tall layers arranged from left to right. Its introduction describes how data becomes
+information, information becomes knowledge, and knowledge supports informed decisions.
+Multicolored data flows from S3, files, databases and REST API into a raw-data bucket,
+follows different paths through refinement gears and emerges uniformly gold. The small gold
+points arrive at the product center, then remain visible on small circular orbits. Only after
+all six have gathered does a rotating ring weld them into one growing product, followed by a
+completion pulse. The product receives a shield in the protection layer and is distributed
+simultaneously to all three consumers. Each branch keeps the same full-size gold product
+and shield, illustrating reuse by multiple consumers.
+
+One animation clock aligns the complete 26-second pass. No large product appears before
+welding starts at 15.4 seconds; initial load, restart, seeking to zero and the loop boundary
+all show an empty start. Restart, pause/play and a compact 0-26 second timeline support
+self-paced reading. A thin track, small thumb and adjacent current/total seconds share one
+unboxed desktop row; narrow screens place the full-width track below its label and time,
+which can wrap for enlarged text.
+Seeking pauses and Play resumes there. The active layer has a 4 px outer frame at 55 percent
+theme-blue opacity and a blue title, using the regular card surface. Reserved spacing keeps
+selection changes from shifting the diagram; the frame transition takes 160 ms. On this
+overview, linked layer titles and their detail actions use plain text without decorative
+arrows or underlining, with native link activation and visible keyboard focus.
+Gears share the same clock; their symmetric 12/8-tooth profiles have concentric hubs and
+matched pitch, spacing and opposite rotation. Selectable explanations and static reduced-motion
+mode remain available. Narrow viewports keep the same horizontal architecture in a
+keyboard-accessible scroll area. DaCa's central metadata, lineage and policy role is distinct
+from platform processing and delivery. This illustrates the architecture, not live traffic.
+See [the documentation design](docs/catalog-documentation-and-responsibilities.md).
+
+The overview's **06 Datenkonsumenten** layer and its detail action open the 32-second
+**Data Access Management** explanation at
+`/documentation/animated/data-consumers/access-management`. Five stations show initial denial
+(0 s), Consumer A applying through DaCa (6 s), forwarding to and review by the Data Owner
+(10 s), approval recorded as a policy (14 s), and renewed data access (20 s). Submitting an
+application does not grant access. After approval, the Data Owner authors the Consumer A /
+Read policy in DaCa's **Policy Administration Point (PAP)**. The policy remains
+stored there while each persistence's SDAL enforces its assigned projection. A logical-model
+scope covers all three illustrated resources; a persistence scope lets the reader select a
+subset, initially files only. Unselected resources stay visible and deny access. An empty
+selection denies all requests. The scene also reconstructs an illustrative audit of every
+request, including denials, with identity, time, resource, action, result and reason.
+
+The **01 Datenquellen** layer opens **Data Sourcing** at
+`/documentation/animated/data-sources/sourcing`. The focused 24-second scene shows one task
+with exactly one **PostgreSQL** source, **Secure Data Access Layer PostgreSQL** (SDAL PG)
+and **Source Connector PostgreSQL** (SC PG). The UI spells out both names. Four numbered stations
+pause and seek to the task description in DAAIF (0 s), handover to SC PG (5 s), personalized
+permission checked at SDAL PG (9 s), and the protected data flow (14 s).
+The data path is **PostgreSQL -> SDAL PG -> SC PG -> selected Data Lake target**.
+SDAL PG provides PEP/PDP enforcement and permitted introspection metadata; SC PG extracts.
+The other source types, merge stage and repeated acquisition-mode episodes have been removed
+from this explanation so it follows a single task.
+
+DAAIF sits directly above the Source Connector; its task travels vertically downwards.
+A person icon identifies the Data Analyst. In the wizard, a database, cogwheel and S3 bucket
+replace the form lines, with Source / Transformation / Target labels. They appear one after
+another during the first four seconds and remain visible for the rest of the task.
+The wizard's database icon carries a small **PG** label; the Data Lake bucket is marked
+**S3** to match the wizard's target icon, with space reserved below incoming data points.
+The access layer's door starts closed, opens after the policy decision (12-12.9 s), remains
+open while all six data points pass through, and closes at 19.1-19.8 s. The Source Connector's
+conveyor starts folded upright. As the door opens, it lowers and telescopes left into a
+bridge stopping just before the door frame, with its rounded end clear of the opening.
+Moving treads and rollers carry the
+points during extraction (14-21.5 s). The bridge stays down after the door closes until all
+data has cleared, then folds up at 21.6-22.5 s. Door, bridge, conveyor and data points all use
+the same clock, including reverse seeking, pause and restart.
+A compact legend below the scene pairs the actual symbols with short explanations for
+the analyst, source, transformation, storage targets, door, conveyor, task, personalized
+policy check, permission/introspection and transferred data. It wraps for narrow screens.
+
+Choose structured or unstructured target: six illustrative records enter either the container
+with inner cells or the open bucket. The other target stays empty. Switching target pauses at
+the retained scene time for comparison. One clock drives all movement, counts, station state,
+seeking, pause, restart and looping. Reduced motion permits static manual exploration;
+dark styling and mobile horizontal scrolling preserve the diagram.
+
+The question mark beside Policy links to a separate 24-second animation at
+`/documentation/animated/data-consumers/access-request`: find data using prose metadata,
+request introspection metadata, then submit a separate electronic payload request in DaCa
+for queries or Data Sourcing Tasks. Introspection approval does not authorize payload access;
+the final payload request remains pending. The same Policy help appears in Data Access
+Management. All tasks, permissions and data flows are explanatory frontend state, without
+real jobs, credentials, protected data calls, persisted DAAIF structures or new protocols.
+Central DaCa policy authority and actual HTTP/REST and PostgreSQL security remain unchanged.
+
+The optional source hub at `/documentation/animated/data-sources` retains exactly two cards:
+**Meta Daten** and a **Data Access Management** cross-link to section 06. Metadata
+at `/documentation/animated/data-sources/metadata` explains source name, schema, provenance,
+Data Owner, classification and endpoint descriptions in the central catalog.
+Both source pages also provide a direct Data Sourcing link. The former
+`/documentation/animated/data-sources/access-management` address redirects to the consumer
+explanation. The main navigation's Datenquellen page remains the physical-model view.
+Compact playback controls, story steps, reduced motion and back links support exploration.
+Scope changes pause at the current time and reconstruct the scenario without API writes,
+real grants, protected data requests or persisted audit events. Actual PoC enforcement remains
+HTTP PEP/OPA and PostgreSQL ACLs plus forced RLS; publication requires matching confirmed
+OPA/PostgreSQL revisions. S3 illustrates storage rather than a new delivery endpoint.
+The raw-data bucket uses a clean outline without the former faint U-shaped grip line.
+
 Release **0.3.9** corrects the height of external organization cards in the data landscape.
 German/English release notes describe the fix; 0.3.8 remains archived. Managed application,
 API, PWA and OpenShift image versions are synchronized.

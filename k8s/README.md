@@ -6,12 +6,12 @@ be indefinite; renewals retain a finite end date. The migration preserves existi
 and refuses downgrade while unbounded requests exist. No manual data rewrite or database
 reset is required. See [the Catalog data model](../docs/data-model/catalog.md).
 
-The **0.3.9** release pins Catalog UI, Catalog API and Sample Data Product to matching
-0.3.9 images. Wait for the image-publication workflow to succeed before applying these
-manifests. This release fixes external organization cards whose fixed height compressed
-their text. It retains the 0.3.8 permissions, request-history, Mapping-save and catalog-filter
-improvements, the external-organization placement fix and verified ROHS CPS backfill
-procedure below; applying a manifest remains a separate PoC rollout.
+The **0.3.10** release pins Catalog UI, Catalog API and Sample Data Product to matching
+0.3.10 images. Wait for the image-publication workflow to succeed before applying these
+manifests. This release adds four interactive documentation animations with shared chevron
+steps, icons, PostgreSQL sourcing and explicit Data Owner approval flows. It retains the
+0.3.9 organization-card fix and previous access/modeling improvements. It introduces no
+database migration or delivery protocol; applying a manifest remains a separate PoC rollout.
 
 These manifests deploy the DaCa presentation workloads into `daai-brs-d`. They intentionally
 contain no PostgreSQL, pgAdmin, PVC or database-service resource. The deployed workloads are

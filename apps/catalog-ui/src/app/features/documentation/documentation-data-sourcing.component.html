@@ -1,0 +1,180 @@
+<nav class="documentation-breadcrumb" [attr.aria-label]="tr(['Brotkrümelnavigation', 'Fil d’Ariane', 'Percorso di navigazione', 'Breadcrumb'])">
+  <a routerLink="/documentation">{{ tr(['Dokumentation', 'Documentation', 'Documentazione', 'Documentation']) }}</a><span aria-hidden="true">/</span>
+  <a routerLink="/documentation/animated">{{ tr(['Animierte Dokumentation', 'Documentation animée', 'Documentazione animata', 'Animated documentation']) }}</a><span aria-hidden="true">/</span>
+  <a routerLink="/documentation/animated/data-sources">01 · {{ tr(['Datenquellen', 'Sources de données', 'Fonti di dati', 'Data sources']) }}</a><span aria-hidden="true">/</span>
+  <span aria-current="page">Data Sourcing</span>
+</nav>
+<section class="daca-page-heading"><div>
+  <p class="daca-eyebrow">01 / {{ tr(['Datenquellen', 'Sources de données', 'Fonti di dati', 'Data sources']) }}</p>
+  <h1>Data Sourcing</h1>
+  <p>{{ tr(['Ein Data Analyst beschreibt einen Sourcing Task in DAAIF. Source Connector PostgreSQL führt ihn mit personalisierter Berechtigung aus: Die Daten fliessen aus PostgreSQL durch Secure Data Access Layer PostgreSQL und Source Connector PostgreSQL in das gewählte Ziel im Data Lake.', 'Un Data Analyst décrit une Sourcing Task dans DAAIF. Source Connector PostgreSQL l’exécute avec une autorisation personnelle : les données passent de PostgreSQL par Secure Data Access Layer PostgreSQL et Source Connector PostgreSQL vers la cible choisie dans le Data Lake.', 'Un Data Analyst descrive una Sourcing Task in DAAIF. Source Connector PostgreSQL la esegue con un’autorizzazione personale: i dati passano da PostgreSQL attraverso Secure Data Access Layer PostgreSQL e Source Connector PostgreSQL verso la destinazione scelta nel Data Lake.', 'A Data Analyst describes a Sourcing Task in DAAIF. Source Connector PostgreSQL executes it with personalized permission: data flows from PostgreSQL through Secure Data Access Layer PostgreSQL and Source Connector PostgreSQL into the selected target in the Data Lake.']) }}</p>
+</div></section>
+
+<section class="pipeline sourcing-pipeline" [class.is-paused]="!running()" aria-labelledby="sourcing-title">
+  <header class="pipeline-header">
+    <div><p class="daca-eyebrow">01 / Data Sourcing</p><h2 id="sourcing-title">{{ tr(['Von der Quelle zu den Rohdaten', 'De la source aux données brutes', 'Dalla fonte ai dati grezzi', 'From source to raw data']) }}</h2></div>
+    <div class="pipeline-controls">
+      <span class="pipeline-status"><i [class.is-running]="running()" aria-hidden="true"></i>{{ running() ? tr(['Daten im Fluss', 'Flux de données', 'Dati in movimento', 'Data in motion']) : tr(['In Ruhe entdecken', 'Explorer à son rythme', 'Esplorare con calma', 'Explore at your own pace']) }}</span>
+      <button class="daca-button is-secondary sourcing-restart" type="button" (click)="restart()"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="/assets/documentation/animation-icons.svg#restart" width="24" height="24"/></svg>{{ tr(['Neu starten', 'Recommencer', 'Ricomincia', 'Restart']) }}</button>
+      <button class="daca-button is-secondary sourcing-playback" type="button" [disabled]="reducedMotion()" (click)="togglePlayback()"><svg viewBox="0 0 24 24" aria-hidden="true">@if (running()) { <use href="/assets/documentation/animation-icons.svg#pause" width="24" height="24"/> } @else { <use href="/assets/documentation/animation-icons.svg#play" width="24" height="24"/> }</svg>{{ reducedMotion() ? tr(['Bewegung reduziert', 'Mouvement réduit', 'Movimento ridotto', 'Reduced motion']) : running() ? tr(['Pausieren', 'Pause', 'Pausa', 'Pause']) : tr(['Abspielen', 'Lire', 'Riprendi', 'Play']) }}</button>
+    </div>
+  </header>
+  <div class="pipeline-timeline">
+    <label for="sourcing-position">{{ tr(['Station', 'Étape', 'Stazione', 'Station']) }} {{ state().station + 1 }} / 4</label>
+    <input id="sourcing-position" type="range" min="0" [max]="duration" step="0.1" [value]="position()" [style.--pipeline-progress]="position() / duration * 100 + '%'" [attr.aria-valuetext]="seconds(position()) + ' / ' + seconds(duration) + ' ' + tr(['Sekunden', 'secondes', 'secondi', 'seconds'])" aria-controls="sourcing-scene" (input)="seekInput($event)">
+    <output for="sourcing-position" class="pipeline-time" aria-live="off">{{ seconds(position()) }} s <span>/ {{ seconds(duration) }} s</span></output>
+  </div>
+  <ol daca-animation-stations [steps]="stations" [times]="stationTimes" [duration]="duration" [active]="state().station" controls="sourcing-station-detail sourcing-scene" (stepSelected)="selectStation($event)"></ol>
+  <div class="station-caption">
+    <p id="sourcing-station-detail"><strong>{{ state().station + 1 }} · </strong>{{ tr(stations[state().station].detail) }}</p>
+    <span class="sourcing-policy-label">{{ tr(['Zugriffsrichtlinie', 'Politique', 'Policy', 'Policy']) }} · Secure Data Access Layer PostgreSQL <daca-policy-help /></span>
+  </div>
+  <fieldset class="sourcing-targets">
+    <legend>{{ tr(['Ziel des Sourcing Tasks', 'Cible de la Sourcing Task', 'Destinazione della Sourcing Task', 'Sourcing Task target']) }}</legend>
+    @for (option of targets; track option.id) {
+      <label [class.is-selected]="target() === option.id"><input type="radio" name="sourcing-target" [value]="option.id" [checked]="target() === option.id" (change)="selectTarget(option.id)">{{ tr(option.title) }}</label>
+    }
+    <p>{{ tr(['Ziel wechseln und dieselbe Station vergleichen.', 'Changer de cible et comparer la même étape.', 'Cambia destinazione e confronta la stessa stazione.', 'Switch target and compare the same station.']) }}</p>
+  </fieldset>
+  <p class="pipeline-scroll-hint">{{ tr(['Datenweg: PostgreSQL · Secure Data Access Layer PostgreSQL · Source Connector PostgreSQL · Data Lake. Auf kleinen Bildschirmen seitlich scrollen.', 'Parcours : PostgreSQL · Secure Data Access Layer PostgreSQL · Source Connector PostgreSQL · Data Lake. Sur petit écran, faites défiler horizontalement.', 'Percorso: PostgreSQL · Secure Data Access Layer PostgreSQL · Source Connector PostgreSQL · Data Lake. Su schermi piccoli, scorri orizzontalmente.', 'Data path: PostgreSQL · Secure Data Access Layer PostgreSQL · Source Connector PostgreSQL · Data Lake. Scroll sideways on smaller screens.']) }}</p>
+  <div class="pipeline-scroll sourcing-scroll" tabindex="0" role="region" [attr.aria-label]="tr(['Data Sourcing Animation', 'Animation Data Sourcing', 'Animazione Data Sourcing', 'Data Sourcing animation'])">
+    <svg #scene id="sourcing-scene" class="sourcing-scene" viewBox="0 0 1200 580" aria-hidden="true" focusable="false">
+      <g class="sourcing-routes">
+        <path class="sourcing-task-route" [class.route-active]="state().station === 1" d="M650 190V250"/>
+        <path class="sourcing-security-route" [class.route-active]="state().station === 2" d="M650 250C610 205 430 205 390 245"/>
+        <path class="sourcing-data-route" [class.route-active]="state().station === 3" d="M145 330H650"/>
+        <path class="sourcing-data-route" [class.route-active]="state().station === 3 && target() === 'structured'" d="M650 330C805 330 875 215 1035 215"/>
+        <path class="sourcing-data-route" [class.route-active]="state().station === 3 && target() === 'unstructured'" d="M650 330C805 330 875 450 1035 450"/>
+      </g>
+      <g class="sourcing-wizard" transform="translate(460 0)" [class.is-active]="state().station === 0">
+        <g class="wizard-analyst">
+          <use href="/assets/documentation/animation-icons.svg#person" x="135" y="12" width="32" height="32"/>
+          <text class="sourcing-svg-label" x="205" y="30">Data Analyst</text>
+        </g>
+        <rect class="sourcing-surface actor-frame" x="50" y="50" width="280" height="140" rx="6"/>
+        <text class="sourcing-svg-heading" x="190" y="78">DAAIF</text>
+        <text class="sourcing-svg-label" x="190" y="101">Data Sourcing Wizard</text>
+        <g transform="translate(100 138)"><g data-sourcing-wizard-step="0" opacity="0">
+          <use href="/assets/documentation/animation-icons.svg#database" x="-20" y="-20" width="40" height="40"/>
+          <text class="wizard-pg-mark" y="2">PG</text>
+          <text class="sourcing-svg-status" y="35">{{ tr(['Quelle', 'Source', 'Fonte', 'Source']) }}</text>
+        </g></g>
+        <g transform="translate(190 138)"><g data-sourcing-wizard-step="1" opacity="0">
+          <use href="/assets/documentation/animation-icons.svg#gear" x="-20" y="-20" width="40" height="40"/>
+          <text class="sourcing-svg-status" y="35">{{ tr(['Transformation', 'Transformation', 'Trasformazione', 'Transformation']) }}</text>
+        </g></g>
+        <g transform="translate(280 138)"><g data-sourcing-wizard-step="2" opacity="0">
+          <use href="/assets/documentation/animation-icons.svg#bucket" x="-20" y="-20" width="40" height="40"/>
+          <text class="wizard-s3-mark" y="8">S3</text>
+          <text class="sourcing-svg-status" y="35">{{ tr(['Ziel', 'Cible', 'Destinazione', 'Target']) }}</text>
+        </g></g>
+      </g>
+      <text class="sourcing-svg-label" x="390" y="204">{{ tr(['Prüfung der Zugriffsrichtlinie', 'Contrôle de la politique', 'Verifica della policy', 'Policy check']) }}</text>
+      <g class="sourcing-source" [class.is-active]="state().station === 3">
+        <rect class="sourcing-surface actor-frame" x="55" y="245" width="180" height="220" rx="6"/>
+        <text class="sourcing-svg-heading sourcing-source-name" x="145" y="277">PostgreSQL</text>
+        <use href="/assets/documentation/animation-icons.svg#database" x="100" y="285" width="90" height="90"/>
+        <text class="sourcing-svg-label" x="145" y="425">Data Source</text>
+      </g>
+      <g class="sourcing-sdal" [class.is-active]="state().station === 2" [attr.data-ready]="state().securityChecked">
+        <rect class="sourcing-surface actor-frame" x="285" y="245" width="210" height="220" rx="6"/>
+        <text class="sourcing-svg-heading sourcing-sdal-name" x="390" y="270"><tspan x="390">Secure Data Access Layer</tspan><tspan x="390" dy="20">PostgreSQL</tspan></text>
+        <g class="sourcing-door" data-sourcing-door data-open="0">
+          <path class="door-frame" d="M362 362V298H418V362M358 362H422"/>
+          <path class="door-passage" d="M366 330H414"/>
+          <path class="door-leaf" data-sourcing-door-leaf d="M366 302H414V358H366Z"/>
+          <circle class="door-handle" data-sourcing-door-handle cx="403.44" cy="332" r="2"/>
+        </g>
+        <g class="sourcing-pep"><rect class="security-field" x="307" y="380" width="72" height="29" rx="3"/><text class="sourcing-svg-label" x="343" y="400">PEP</text></g>
+        <g class="sourcing-pdp"><rect class="security-field" x="401" y="380" width="72" height="29" rx="3"/><text class="sourcing-svg-label" x="437" y="400">PDP</text></g>
+        <text class="sourcing-svg-status" x="390" y="429">{{ tr(['Introspektionsmetadaten', 'Métadonnées d’introspection', 'Metadati di introspezione', 'Introspection metadata']) }}</text>
+        <text class="sourcing-svg-status" x="390" y="449">{{ doorLabel() }}</text>
+      </g>
+      <g class="sourcing-connector" [class.is-active]="state().station === 1" [attr.data-ready]="state().jobReady">
+        <rect class="sourcing-surface actor-frame" x="560" y="250" width="180" height="215" rx="6"/>
+        <text class="sourcing-svg-heading sourcing-connector-name" x="650" y="275"><tspan x="650">Source Connector</tspan><tspan x="650" dy="20">PostgreSQL</tspan></text>
+        <g class="sourcing-conveyor" data-sourcing-belt data-running="false" transform="translate(692 349)">
+          <path class="conveyor-legs" d="M0 12V24M-10 24H10"/>
+          <g data-sourcing-bridge transform="rotate(90)" data-deployment="0" data-length="32">
+            <rect class="conveyor-track" data-sourcing-bridge-track x="-43" y="-11" width="54" height="22" rx="11"/>
+            <path class="conveyor-tread" data-sourcing-belt-tread d="M-32-11H0A11 11 0 0 1 0 11H-32A11 11 0 0 1-32-11Z"/>
+            @for (distance of [0, 28, 56, 84, 112, 140, 168, 196, 224, 252, 280]; track distance) {
+              <g [attr.data-sourcing-roller-mount]="distance" [attr.transform]="'translate(' + -distance + ' 0)'" [attr.opacity]="distance === 0 ? 1 : 0">
+                <circle class="conveyor-roller" r="7"/>
+                <path class="conveyor-spokes" data-sourcing-roller d="M-5 0H5M0-5V5"/>
+              </g>
+            }
+            <g data-sourcing-bridge-end transform="translate(-32 0)">
+              <circle class="conveyor-roller" r="7"/>
+              <path class="conveyor-spokes" data-sourcing-roller d="M-5 0H5M0-5V5"/>
+            </g>
+          </g>
+        </g>
+        <text class="sourcing-svg-label" x="650" y="425">{{ tr(['Extraktion', 'Extraction', 'Estrazione', 'Extraction']) }}</text>
+        <text class="sourcing-svg-status" x="650" y="449">{{ connectorLabel() }}</text>
+      </g>
+      <g class="sourcing-identity" transform="translate(0 55)" [attr.opacity]="state().station >= 2 ? 1 : .35">
+        <use href="/assets/documentation/animation-icons.svg#person" x="563" y="433" width="32" height="32"/>
+        <text class="sourcing-svg-status" x="668" y="443">{{ tr(['Personalisierte Berechtigung', 'Autorisation personnelle', 'Autorizzazione personale', 'Personalized permission']) }}</text>
+        <text class="sourcing-svg-status" x="668" y="460">Data Analyst</text>
+      </g>
+      <g class="sourcing-data-lake" [class.is-active]="state().station === 3">
+        <rect class="data-lake-frame actor-frame" x="895" y="55" width="280" height="490" rx="8"/>
+        <text class="sourcing-svg-heading" x="1035" y="83">Data Lake</text>
+        <g class="sourcing-structured-store" [attr.opacity]="target() === 'structured' ? 1 : .38">
+          <text class="sourcing-svg-heading" x="1035" y="120">{{ tr(['Strukturiertes Target', 'Cible structurée', 'Destinazione strutturata', 'Structured target']) }}</text>
+          <rect class="sourcing-surface raw-frame" x="920" y="135" width="230" height="142" rx="6"/>
+          @for (slot of cellSlots; track slot) {
+            <g [attr.transform]="'translate(' + cellX(slot) + ' ' + cellY(slot) + ')'">
+              <rect class="structured-cell-frame" x="-27" y="-19" width="54" height="38" rx="3"/>
+              <g class="sourcing-structured-cell" [attr.data-slot]="slot" [attr.fill]="sourceColor" opacity="0">
+                <rect x="-17" y="-10" width="34" height="5" rx="1"/><rect x="-17" y="0" width="13" height="4" rx="1" opacity=".6"/><rect x="2" y="0" width="15" height="4" rx="1" opacity=".6"/><rect x="-17" y="9" width="34" height="3" rx="1" opacity=".6"/>
+              </g>
+            </g>
+          }
+          <text class="sourcing-svg-count" x="1035" y="299">{{ state().stored.structured }} {{ tr(['übernommen', 'acquis', 'acquisiti', 'acquired']) }}</text>
+        </g>
+        <g class="sourcing-unstructured-store" [attr.opacity]="target() === 'unstructured' ? 1 : .38">
+          <text class="sourcing-svg-heading" x="1035" y="347">{{ tr(['Unstrukturiertes Target', 'Cible non structurée', 'Destinazione non strutturata', 'Unstructured target']) }}</text>
+          <path class="sourcing-surface raw-bucket" d="M939 385 958 491Q1035 525 1112 491L1131 385Z"/>
+          <ellipse class="sourcing-surface" cx="1035" cy="385" rx="96" ry="20"/>
+          <text class="lake-s3-mark" x="1035" y="497">S3</text>
+          @for (slot of cellSlots; track slot) { <circle class="sourcing-unstructured-dot" [attr.data-slot]="slot" [attr.cx]="bucketX(slot)" [attr.cy]="bucketY(slot)" [attr.fill]="sourceColor" r="8" opacity="0"/> }
+          <text class="sourcing-svg-count" x="1035" y="533">{{ state().stored.unstructured }} {{ tr(['übernommen', 'acquis', 'acquisiti', 'acquired']) }}</text>
+        </g>
+      </g>
+      <g class="sourcing-control" data-sourcing-control opacity="0"><use href="/assets/documentation/animation-icons.svg#document" x="-16.0" y="-16.0" width="32" height="32"/></g>
+      <g class="sourcing-check" data-sourcing-check opacity="0"><use href="/assets/documentation/animation-icons.svg#identity" x="-20.0" y="-20.0" width="40" height="40"/></g>
+      <g class="sourcing-introspection" data-sourcing-introspection opacity="0"><use href="/assets/documentation/animation-icons.svg#permission" x="-16.0" y="-16.0" width="32" height="32"/></g>
+      @for (event of events; track event.id) {
+        <g class="sourcing-raw-packet" [attr.data-sourcing-packet]="event.id" [attr.fill]="sourceColor" opacity="0"><circle class="raw-packet-halo" r="14"/><circle class="raw-packet-core" r="6"/></g>
+      }
+    </svg>
+  </div>
+  <section class="sourcing-legend" aria-labelledby="sourcing-legend-title">
+    <h3 id="sourcing-legend-title">{{ tr(['Legende', 'Légende', 'Legenda', 'Legend']) }}</h3>
+    <ul>
+      @for (item of legend; track item.id) {
+        <li>
+<svg viewBox="-20 -20 40 40" aria-hidden="true" focusable="false"><use [attr.href]="'/assets/documentation/animation-icons.svg#' + item.id" x="-20" y="-20" width="40" height="40"/></svg>
+          <span><strong>{{ tr(item.title) }}</strong><span>{{ tr(item.detail) }}</span></span>
+        </li>
+      }
+    </ul>
+  </section>
+  <dl class="sourcing-counts" aria-live="off">
+    <div><dt>{{ tr(['Auftragsstatus', 'État de la tâche', 'Stato del job', 'Job status']) }}</dt><dd class="sourcing-job-state">{{ jobLabel() }}</dd></div>
+    <div><dt>{{ tr(['Strukturiertes Target', 'Cible structurée', 'Destinazione strutturata', 'Structured target']) }}</dt><dd data-count="structured">{{ state().stored.structured }}</dd></div>
+    <div><dt>{{ tr(['Unstrukturiertes Target', 'Cible non structurée', 'Destinazione non strutturata', 'Unstructured target']) }}</dt><dd data-count="unstructured">{{ state().stored.unstructured }}</dd></div>
+  </dl>
+</section>
+<dl class="sourcing-responsibilities">
+  <div><dt>DAAIF · Data Analyst</dt><dd>{{ tr(stations[0].detail) }} {{ tr(stations[1].detail) }}</dd></div>
+  <div><dt>Secure Data Access Layer PostgreSQL · PEP / PDP</dt><dd>{{ tr(['PEP (Policy Enforcement Point) setzt die Zugriffsrichtlinie durch. PDP (Policy Decision Point) entscheidet über die personalisierte Berechtigung. Secure Data Access Layer PostgreSQL stellt freigegebene Introspektionsmetadaten bereit.', 'PEP (Policy Enforcement Point) applique la politique. PDP (Policy Decision Point) décide de l’autorisation personnelle. Secure Data Access Layer PostgreSQL fournit les métadonnées d’introspection autorisées.', 'PEP (Policy Enforcement Point) applica la policy. PDP (Policy Decision Point) decide sull’autorizzazione personale. Secure Data Access Layer PostgreSQL fornisce i metadati di introspezione autorizzati.', 'PEP (Policy Enforcement Point) enforces policy. PDP (Policy Decision Point) decides on personalized permission. Secure Data Access Layer PostgreSQL supplies permitted introspection metadata.']) }}</dd></div>
+  <div><dt>Source Connector PostgreSQL · Data Lake</dt><dd>{{ tr(['Source Connector PostgreSQL führt die Extraktion aus PostgreSQL aus und speichert die Sourced Data im gewählten Target. Dargestellt ist jeweils ein Task mit einem Ziel; die alternative Ablage bleibt leer.', 'Source Connector PostgreSQL extrait les données de PostgreSQL et les stocke dans la cible choisie. Un seul task avec une seule cible est illustré ; l’autre stockage reste vide.', 'Source Connector PostgreSQL estrae i dati da PostgreSQL e li salva nella destinazione scelta. È illustrato un task con una destinazione; l’altro archivio resta vuoto.', 'Source Connector PostgreSQL extracts from PostgreSQL and stores sourced data in the selected target. One task with one target is illustrated; the alternative store remains empty.']) }}</dd></div>
+</dl>
+<p class="pipeline-note">{{ tr(['Illustrativer Sourcing Task mit PostgreSQL. Die Animation erzeugt keine echten Aufträge, Berechtigungen oder Datenzugriffe. Ohne Freigabe beginnt keine Extraktion. DaCa bleibt der zentrale Katalog und PAP.', 'Sourcing Task illustrative avec PostgreSQL. L’animation ne crée aucune tâche, autorisation ou consultation réelle. Sans autorisation, aucune extraction ne commence. DaCa reste le catalogue central et PAP.', 'Sourcing Task illustrativa con PostgreSQL. L’animazione non crea task, autorizzazioni o accessi reali. Senza autorizzazione non inizia alcuna estrazione. DaCa rimane il catalogo centrale e PAP.', 'Illustrative PostgreSQL Sourcing Task. The animation creates no real tasks, permissions or data access. Extraction starts only after permission. DaCa remains the central catalog and PAP.']) }}</p>
+<nav class="sourcing-backlinks" [attr.aria-label]="tr(['Weitere Themen', 'Autres sujets', 'Altri temi', 'Related topics'])">
+  <a routerLink="/documentation/animated">{{ tr(['Zur Datenpipeline', 'Retour au pipeline', 'Torna alla pipeline', 'Back to the data pipeline']) }}</a>
+  <a routerLink="/documentation/animated/data-sources/metadata">{{ tr(['Meta Daten der Datenquellen', 'Métadonnées des sources', 'Metadati delle fonti', 'Source metadata']) }}</a>
+</nav>

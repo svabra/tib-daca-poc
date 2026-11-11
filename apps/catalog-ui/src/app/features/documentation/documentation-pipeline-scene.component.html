@@ -1,0 +1,72 @@
+<svg #scene viewBox="0 0 1440 600" aria-hidden="true" focusable="false">
+  <defs>
+    <radialGradient id="pipeline-product-gold" cx="32%" cy="25%" r="80%"><stop stop-color="#fff2bb"/><stop offset=".6" stop-color="#e3b33d"/><stop offset="1" stop-color="#a96e13"/></radialGradient>
+  </defs>
+  <!-- Faint routes support the moving dots without turning the layers into boxes in a chain. -->
+  @for (y of sourceY; track y) {
+    <path class="route source-route" [attr.d]="'M145 '+y+' C225 '+y+' 275 320 360 320'"/>
+  }
+  @for (y of consumerY; track y) {
+    <path class="route secure-route" [attr.d]="'M1080 320 C1150 '+y+' 1240 '+y+' 1320 '+y"/>
+  }
+  <path class="route raw-route" d="M360 320 C470 165 490 475 566 320 M360 320 C470 455 490 185 566 320 M360 320 C470 230 490 410 566 320"/>
+  <path class="route" d="M634 320H840M840 320H1080"/>
+  <g class="scene-line">
+    <!-- An open raw-data bucket keeps the colors visible inside. -->
+    <path d="M306 266 320 374Q360 393 400 374L414 266" fill="var(--daca-blue-soft)" fill-opacity=".5"/>
+    <ellipse cx="360" cy="266" rx="54" ry="15"/>
+    @for (color of colors; track color; let index = $index) {
+      <circle [attr.cx]="336 + (index % 3) * 23" [attr.cy]="324 + (index > 2 ? 24 : 0)" r="4" [attr.fill]="color" stroke="none" opacity=".35"/>
+    }
+    <text class="scene-label" x="360" y="416">{{ tr(['Rohdaten-Bucket', 'Bucket de données brutes', 'Bucket di dati grezzi', 'Raw data bucket']) }}</text>
+    <!-- Matched 12/8-tooth profiles: concentric bores, pitch radii 36/24, center distance 60. -->
+    <g class="refinement-gears">
+    <g transform="translate(600 320)">
+      <g class="gear-rotor"><path fill="var(--daca-surface)" d="M 28.220 -3.984 L 33.497 -4.729 L 34.881 -4.658 L 36.292 -4.356 L 37.715 -3.886 L 39.140 -3.268 L 40.560 -2.514 L 41.968 -1.629 A 42 42 0 0 1 41.968 1.629 L 41.968 1.629 L 40.560 2.514 L 39.140 3.268 L 37.715 3.886 L 36.292 4.356 L 34.881 4.658 L 33.497 4.729 L 28.220 3.984 A 28.5 28.5 0 0 1 26.431 10.660 L 26.431 10.660 L 31.374 12.653 L 32.537 13.406 L 33.608 14.374 L 34.605 15.492 L 35.530 16.740 L 36.383 18.103 L 37.160 19.573 A 42 42 0 0 1 35.531 22.395 L 35.531 22.395 L 33.869 22.457 L 32.262 22.400 L 30.719 22.223 L 29.252 21.918 L 27.879 21.475 L 26.645 20.844 L 22.447 17.560 A 28.5 28.5 0 0 1 17.560 22.447 L 17.560 22.447 L 20.844 26.645 L 21.475 27.879 L 21.918 29.252 L 22.223 30.719 L 22.400 32.262 L 22.457 33.869 L 22.395 35.531 A 42 42 0 0 1 19.573 37.160 L 19.573 37.160 L 18.103 36.383 L 16.740 35.530 L 15.492 34.605 L 14.374 33.608 L 13.406 32.537 L 12.653 31.374 L 10.660 26.431 A 28.5 28.5 0 0 1 3.984 28.220 L 3.984 28.220 L 4.729 33.497 L 4.658 34.881 L 4.356 36.292 L 3.886 37.715 L 3.268 39.140 L 2.514 40.560 L 1.629 41.968 A 42 42 0 0 1 -1.629 41.968 L -1.629 41.968 L -2.514 40.560 L -3.268 39.140 L -3.886 37.715 L -4.356 36.292 L -4.658 34.881 L -4.729 33.497 L -3.984 28.220 A 28.5 28.5 0 0 1 -10.660 26.431 L -10.660 26.431 L -12.653 31.374 L -13.406 32.537 L -14.374 33.608 L -15.492 34.605 L -16.740 35.530 L -18.103 36.383 L -19.573 37.160 A 42 42 0 0 1 -22.395 35.531 L -22.395 35.531 L -22.457 33.869 L -22.400 32.262 L -22.223 30.719 L -21.918 29.252 L -21.475 27.879 L -20.844 26.645 L -17.560 22.447 A 28.5 28.5 0 0 1 -22.447 17.560 L -22.447 17.560 L -26.645 20.844 L -27.879 21.475 L -29.252 21.918 L -30.719 22.223 L -32.262 22.400 L -33.869 22.457 L -35.531 22.395 A 42 42 0 0 1 -37.160 19.573 L -37.160 19.573 L -36.383 18.103 L -35.530 16.740 L -34.605 15.492 L -33.608 14.374 L -32.537 13.406 L -31.374 12.653 L -26.431 10.660 A 28.5 28.5 0 0 1 -28.220 3.984 L -28.220 3.984 L -33.497 4.729 L -34.881 4.658 L -36.292 4.356 L -37.715 3.886 L -39.140 3.268 L -40.560 2.514 L -41.968 1.629 A 42 42 0 0 1 -41.968 -1.629 L -41.968 -1.629 L -40.560 -2.514 L -39.140 -3.268 L -37.715 -3.886 L -36.292 -4.356 L -34.881 -4.658 L -33.497 -4.729 L -28.220 -3.984 A 28.5 28.5 0 0 1 -26.431 -10.660 L -26.431 -10.660 L -31.374 -12.653 L -32.537 -13.406 L -33.608 -14.374 L -34.605 -15.492 L -35.530 -16.740 L -36.383 -18.103 L -37.160 -19.573 A 42 42 0 0 1 -35.531 -22.395 L -35.531 -22.395 L -33.869 -22.457 L -32.262 -22.400 L -30.719 -22.223 L -29.252 -21.918 L -27.879 -21.475 L -26.645 -20.844 L -22.447 -17.560 A 28.5 28.5 0 0 1 -17.560 -22.447 L -17.560 -22.447 L -20.844 -26.645 L -21.475 -27.879 L -21.918 -29.252 L -22.223 -30.719 L -22.400 -32.262 L -22.457 -33.869 L -22.395 -35.531 A 42 42 0 0 1 -19.573 -37.160 L -19.573 -37.160 L -18.103 -36.383 L -16.740 -35.530 L -15.492 -34.605 L -14.374 -33.608 L -13.406 -32.537 L -12.653 -31.374 L -10.660 -26.431 A 28.5 28.5 0 0 1 -3.984 -28.220 L -3.984 -28.220 L -4.729 -33.497 L -4.658 -34.881 L -4.356 -36.292 L -3.886 -37.715 L -3.268 -39.140 L -2.514 -40.560 L -1.629 -41.968 A 42 42 0 0 1 1.629 -41.968 L 1.629 -41.968 L 2.514 -40.560 L 3.268 -39.140 L 3.886 -37.715 L 4.356 -36.292 L 4.658 -34.881 L 4.729 -33.497 L 3.984 -28.220 A 28.5 28.5 0 0 1 10.660 -26.431 L 10.660 -26.431 L 12.653 -31.374 L 13.406 -32.537 L 14.374 -33.608 L 15.492 -34.605 L 16.740 -35.530 L 18.103 -36.383 L 19.573 -37.160 A 42 42 0 0 1 22.395 -35.531 L 22.395 -35.531 L 22.457 -33.869 L 22.400 -32.262 L 22.223 -30.719 L 21.918 -29.252 L 21.475 -27.879 L 20.844 -26.645 L 17.560 -22.447 A 28.5 28.5 0 0 1 22.447 -17.560 L 22.447 -17.560 L 26.645 -20.844 L 27.879 -21.475 L 29.252 -21.918 L 30.719 -22.223 L 32.262 -22.400 L 33.869 -22.457 L 35.531 -22.395 A 42 42 0 0 1 37.160 -19.573 L 37.160 -19.573 L 36.383 -18.103 L 35.530 -16.740 L 34.605 -15.492 L 33.608 -14.374 L 32.537 -13.406 L 31.374 -12.653 L 26.431 -10.660 A 28.5 28.5 0 0 1 28.220 -3.984 Z"/><circle r="20"/><circle r="8" opacity=".3"/></g>
+    </g>
+    <g transform="translate(636 368)"><g class="gear-rotor gear-small"><path fill="var(--daca-surface)" d="M 16.161 -3.325 L 22.090 -4.545 L 23.361 -4.518 L 24.674 -4.237 L 26.005 -3.768 L 27.339 -3.128 L 28.664 -2.328 L 29.969 -1.373 A 30 30 0 0 1 29.969 1.373 L 29.969 1.373 L 28.664 2.328 L 27.339 3.128 L 26.005 3.768 L 24.674 4.237 L 23.361 4.518 L 22.090 4.545 L 16.161 3.325 A 16.5 16.5 0 0 1 13.779 9.077 L 13.779 9.077 L 18.834 12.406 L 19.713 13.324 L 20.443 14.451 L 21.053 15.724 L 21.544 17.119 L 21.915 18.622 L 22.162 20.220 A 30 30 0 0 1 20.220 22.162 L 20.220 22.162 L 18.622 21.915 L 17.119 21.544 L 15.724 21.053 L 14.451 20.443 L 13.324 19.713 L 12.406 18.834 L 9.077 13.779 A 16.5 16.5 0 0 1 3.325 16.161 L 3.325 16.161 L 4.545 22.090 L 4.518 23.361 L 4.237 24.674 L 3.768 26.005 L 3.128 27.339 L 2.328 28.664 L 1.373 29.969 A 30 30 0 0 1 -1.373 29.969 L -1.373 29.969 L -2.328 28.664 L -3.128 27.339 L -3.768 26.005 L -4.237 24.674 L -4.518 23.361 L -4.545 22.090 L -3.325 16.161 A 16.5 16.5 0 0 1 -9.077 13.779 L -9.077 13.779 L -12.406 18.834 L -13.324 19.713 L -14.451 20.443 L -15.724 21.053 L -17.119 21.544 L -18.622 21.915 L -20.220 22.162 A 30 30 0 0 1 -22.162 20.220 L -22.162 20.220 L -21.915 18.622 L -21.544 17.119 L -21.053 15.724 L -20.443 14.451 L -19.713 13.324 L -18.834 12.406 L -13.779 9.077 A 16.5 16.5 0 0 1 -16.161 3.325 L -16.161 3.325 L -22.090 4.545 L -23.361 4.518 L -24.674 4.237 L -26.005 3.768 L -27.339 3.128 L -28.664 2.328 L -29.969 1.373 A 30 30 0 0 1 -29.969 -1.373 L -29.969 -1.373 L -28.664 -2.328 L -27.339 -3.128 L -26.005 -3.768 L -24.674 -4.237 L -23.361 -4.518 L -22.090 -4.545 L -16.161 -3.325 A 16.5 16.5 0 0 1 -13.779 -9.077 L -13.779 -9.077 L -18.834 -12.406 L -19.713 -13.324 L -20.443 -14.451 L -21.053 -15.724 L -21.544 -17.119 L -21.915 -18.622 L -22.162 -20.220 A 30 30 0 0 1 -20.220 -22.162 L -20.220 -22.162 L -18.622 -21.915 L -17.119 -21.544 L -15.724 -21.053 L -14.451 -20.443 L -13.324 -19.713 L -12.406 -18.834 L -9.077 -13.779 A 16.5 16.5 0 0 1 -3.325 -16.161 L -3.325 -16.161 L -4.545 -22.090 L -4.518 -23.361 L -4.237 -24.674 L -3.768 -26.005 L -3.128 -27.339 L -2.328 -28.664 L -1.373 -29.969 A 30 30 0 0 1 1.373 -29.969 L 1.373 -29.969 L 2.328 -28.664 L 3.128 -27.339 L 3.768 -26.005 L 4.237 -24.674 L 4.518 -23.361 L 4.545 -22.090 L 3.325 -16.161 A 16.5 16.5 0 0 1 9.077 -13.779 L 9.077 -13.779 L 12.406 -18.834 L 13.324 -19.713 L 14.451 -20.443 L 15.724 -21.053 L 17.119 -21.544 L 18.622 -21.915 L 20.220 -22.162 A 30 30 0 0 1 22.162 -20.220 L 22.162 -20.220 L 21.915 -18.622 L 21.544 -17.119 L 21.053 -15.724 L 20.443 -14.451 L 19.713 -13.324 L 18.834 -12.406 L 13.779 -9.077 A 16.5 16.5 0 0 1 16.161 -3.325 Z"/><circle r="9"/></g></g>
+    </g>
+    <text class="scene-label" x="600" y="428">{{ tr(['Prüfen · Harmonisieren', 'Vérifier · Harmoniser', 'Verificare · Armonizzare', 'Validate · Harmonize']) }}</text>
+    <!-- Product cradle: collected gold points orbit, weld, then release one product. -->
+    <circle class="product-union-wave" cx="840" cy="320" r="34" opacity="0"/>
+    <circle class="product-union-ring" cx="840" cy="320" r="48" stroke-dasharray="2 7" opacity=".25" fill-opacity="0"/>
+    <path d="M800 374h80m-66 6h52" opacity=".35"/>
+    <text class="scene-label" x="840" y="416">{{ tr(['Zusammenführen', 'Assembler', 'Aggregare', 'Combine']) }}</text>
+    <!-- The protection station stamps a shield onto each arriving product. -->
+    <use href="/assets/documentation/animation-icons.svg#shield-check" x="1043" y="208" width="74" height="74"/><path d="M1080 280v10"/>
+    <path d="M1034 320a46 46 0 0 1 92 0" stroke-dasharray="3 6" opacity=".3"/>
+    <text class="scene-label" x="1080" y="416">{{ tr(['Zugriffsrichtlinie · Freigabe', 'Politique · Autorisation', 'Policy · Autorizzazione', 'Policy · Authorization']) }}</text>
+  </g>
+  <!-- One complete pass starts empty; its protected product reaches all consumers together. -->
+  @for (batch of batches; track batch) {
+    @for (consumer of consumers; track consumer) {
+      <g class="flow-product" [attr.data-batch]="batch" [attr.data-consumer]="consumer" opacity="0">
+        <circle class="product-halo" r="0"/><circle class="product-body" r="0"/>
+        <g class="product-shield" transform="scale(0)"><use href="/assets/documentation/animation-icons.svg#shield-check" x="-18.5" y="-18.5" width="37" height="37"/></g>
+      </g>
+    }
+  }
+  <!-- Keep collected points visible above the product while they are being welded. -->
+  @for (batch of batches; track batch) {
+    @for (color of colors; track color) {
+      <g class="flow-particle" opacity="0"><circle class="particle-halo" r="12"/><circle class="particle-core" r="5"/></g>
+    }
+  }
+  <!-- Source and destination plates cover particle endpoints for natural entry/exit. -->
+  <g class="scene-line">
+    <g class="source-plate" transform="translate(120 170)"><rect class="scene-surface" x="-46" y="-28" width="92" height="56" rx="5"/><use href="/assets/documentation/animation-icons.svg#bucket" x="-25" y="-25" width="50" height="50"/><path d="M-46-14v28" stroke="#e66a47" stroke-width="3"/></g>
+    <text class="scene-label source-label" x="120" y="212">S3</text>
+    <g class="source-plate" transform="translate(120 260)"><rect class="scene-surface" x="-46" y="-28" width="92" height="56" rx="5"/><use href="/assets/documentation/animation-icons.svg#file" x="-25" y="-25" width="50" height="50"/><path d="M-46-14v28" stroke="#a779df" stroke-width="3"/></g>
+    <text class="scene-label source-label" x="120" y="302">{{ tr(['Dateien', 'Fichiers', 'File', 'Files']) }}</text>
+    <g class="source-plate" transform="translate(120 350)"><rect class="scene-surface" x="-46" y="-28" width="92" height="56" rx="5"/><use href="/assets/documentation/animation-icons.svg#database" x="-25" y="-25" width="50" height="50"/><path d="M-46-14v28" stroke="#25af9b" stroke-width="3"/></g>
+    <text class="scene-label source-label" x="120" y="392">{{ tr(['Datenbanken', 'Bases de données', 'Banche dati', 'Databases']) }}</text>
+    <g class="source-plate" transform="translate(120 440)"><rect class="scene-surface" x="-46" y="-28" width="92" height="56" rx="5"/><path d="M-14-17h-4q-6 0-6 6v5q0 6-6 6 6 0 6 6v5q0 6 6 6h4M14-17h4q6 0 6 6v5q0 6 6 6-6 0-6 6v5q0 6-6 6h-4M-8-6H8m-5-5 5 5-5 5M8 8H-8m5-5-5 5 5 5"/><path d="M-46-14v28" stroke="#e5ad32" stroke-width="3"/></g>
+    <text class="scene-label source-label" x="120" y="482">REST API</text>
+    <g transform="translate(1320 190)"><rect class="scene-surface" x="-46" y="-28" width="92" height="56" rx="5"/><use href="/assets/documentation/animation-icons.svg#person" x="-27" y="-27" width="54" height="54"/></g>
+    <text class="scene-label" x="1320" y="240">{{ tr(['Fachpersonen', 'Spécialistes', 'Specialisti', 'Specialists']) }}</text>
+    <g transform="translate(1320 310)"><rect class="scene-surface" x="-46" y="-28" width="92" height="56" rx="5"/><path d="M-23-17h46v28h-46ZM0 11v8m-11 0h22m-35-16 11-9 10 5 13-11"/></g>
+    <text class="scene-label" x="1320" y="360">{{ tr(['Analysen', 'Analyses', 'Analisi', 'Analytics']) }}</text>
+    <g transform="translate(1320 430)"><rect class="scene-surface" x="-46" y="-28" width="92" height="56" rx="5"/><path d="m-12-10-10 10 10 10m24-20 10 10-10 10M5-16-5 16"/></g>
+    <text class="scene-label" x="1320" y="480">{{ tr(['Anwendungen', 'Applications', 'Applicazioni', 'Applications']) }}</text>
+  </g>
+</svg>

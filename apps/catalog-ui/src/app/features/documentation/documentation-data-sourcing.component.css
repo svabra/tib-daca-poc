@@ -1,0 +1,68 @@
+:host{display:block}
+a,a:hover,a:focus-visible{text-decoration:none}
+a:focus-visible{outline:3px solid var(--daca-blue);outline-offset:4px;border-radius:3px}
+.daca-page-heading>div{min-width:0;overflow-wrap:anywhere}
+.sourcing-pipeline{padding-bottom:22px}
+.sourcing-pipeline .sourcing-policy-label{white-space:normal;max-width:100%}
+.sourcing-pipeline .pipeline-header{align-items:flex-start;flex-wrap:wrap}
+.sourcing-pipeline .pipeline-header h2{font-size:1.4rem;line-height:1.35}
+.sourcing-pipeline .pipeline-controls button{max-width:100%;white-space:normal}
+.sourcing-targets{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;min-width:0;margin:0 0 24px;padding:12px 0 0;border:0;border-top:1px solid var(--daca-border)}
+.sourcing-targets legend{padding:0 10px 0 0;font-size:.74rem;font-weight:650;color:var(--daca-blue)}
+.sourcing-targets label{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--daca-border);border-radius:4px;background:var(--daca-surface);color:var(--daca-ink);font-size:.72rem;cursor:pointer}
+.sourcing-targets label.is-selected{border-color:var(--daca-blue)}.sourcing-targets input{accent-color:var(--daca-blue)}
+.sourcing-targets input:focus-visible{outline:2px solid var(--daca-blue);outline-offset:3px}
+.sourcing-targets p{margin:0;color:var(--daca-muted);font-size:.68rem;line-height:1.5}
+.sourcing-scene{display:block;min-width:1050px;width:100%;height:auto;color:var(--daca-blue)}
+.sourcing-routes path{fill:none;stroke:var(--daca-blue);stroke-width:1.4;opacity:.2}
+.sourcing-routes .sourcing-task-route{stroke-dasharray:5 6}
+.sourcing-routes .sourcing-security-route{stroke-dasharray:2 5}
+.sourcing-routes .route-active{stroke-width:2;opacity:.6}
+.sourcing-scene text{text-anchor:middle;fill:var(--daca-ink);font:13px var(--daca-font,sans-serif)}
+.sourcing-scene .sourcing-svg-heading{fill:var(--daca-blue);font-size:15px;font-weight:700}
+.sourcing-scene .sourcing-svg-label,.sourcing-scene .sourcing-svg-count{fill:var(--daca-muted);font-size:12px}
+.sourcing-scene .sourcing-svg-status{fill:var(--daca-muted);font-size:11px}
+.sourcing-surface{fill:var(--daca-surface);stroke:var(--daca-border-strong);stroke-width:1.3}
+.source-icon,.connector-icon{fill:none;stroke:var(--daca-blue);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.sourcing-scene .sourcing-sdal-name{font-size:14px}
+.sourcing-door,.sourcing-conveyor{fill:none;stroke:var(--daca-blue);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.door-frame{stroke-width:2}.door-passage{stroke-dasharray:2 4;opacity:.3}
+.door-leaf{fill:var(--daca-surface)}.door-handle{fill:var(--daca-blue);stroke:none}
+.conveyor-track,.conveyor-roller{fill:var(--daca-surface)}
+.conveyor-track{stroke:var(--daca-border-strong)}
+.conveyor-tread{stroke-dasharray:3 8;stroke-width:2.4;stroke-linecap:butt}
+.conveyor-spokes{stroke-width:1.2}.conveyor-legs{stroke:var(--daca-muted)}
+.is-active>.actor-frame{stroke:color-mix(in srgb,var(--daca-blue) 52%,transparent);stroke-width:4}
+.security-field,.structured-cell-frame{fill:var(--daca-surface);stroke:var(--daca-border);stroke-width:1}
+.sourcing-scene .wizard-s3-mark{fill:var(--daca-blue);font-size:9px;font-weight:600}
+.sourcing-scene .wizard-pg-mark{fill:var(--daca-blue);font-size:7px;font-weight:600}
+.sourcing-scene .lake-s3-mark{fill:var(--daca-blue);font-size:14px;font-weight:600}
+.data-lake-frame{fill:none;stroke:var(--daca-border-strong);stroke-width:1.3}
+.sourcing-unstructured-dot{stroke:var(--daca-surface);stroke-width:1}
+.sourcing-control{fill:var(--daca-blue);stroke:var(--daca-surface);stroke-width:1.5}
+.sourcing-control path{fill:none}
+.sourcing-check,.sourcing-introspection{fill:var(--daca-surface);stroke:var(--daca-blue);stroke-width:1.7;stroke-linecap:round}
+.sourcing-check path,.sourcing-introspection path{fill:none}
+.raw-packet-halo{opacity:.15}.raw-packet-core{stroke:var(--daca-surface);stroke-width:1.4}
+.sourcing-legend{margin:8px 0 20px;padding-top:14px;border-top:1px solid var(--daca-border);color:var(--daca-muted)}
+.sourcing-legend h3{margin:0 0 12px;color:var(--daca-blue);font-size:.75rem}
+.sourcing-legend ul{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:12px 18px;margin:0;padding:0;list-style:none}
+.sourcing-legend li{display:flex;align-items:center;gap:9px;min-width:0;font-size:.65rem;line-height:1.5;overflow-wrap:anywhere}
+.sourcing-legend li>span{min-width:0}.sourcing-legend strong,.sourcing-legend li>span>span{display:block}
+.sourcing-legend strong{color:var(--daca-ink);font-size:.68rem;font-weight:600}
+.sourcing-legend svg{flex:0 0 28px;width:28px;height:28px;fill:none;stroke:var(--daca-blue);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sourcing-legend svg text{fill:var(--daca-blue);stroke:none;text-anchor:middle;font:600 9px var(--daca-font,sans-serif)}
+.sourcing-counts{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:18px;margin:8px 0 0;padding-top:18px;border-top:1px solid var(--daca-border)}
+.sourcing-counts dt{margin-bottom:6px;color:var(--daca-muted);font-size:.67rem}
+.sourcing-counts dd{margin:0;color:var(--daca-blue);font-size:1.15rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.4}
+.sourcing-counts .sourcing-job-state{font-size:.8rem}
+.sourcing-responsibilities{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin:28px 0 0}
+.sourcing-responsibilities>div{padding-top:14px;border-top:2px solid var(--daca-border)}
+.sourcing-responsibilities dt{margin-bottom:8px;color:var(--daca-blue);font-size:.8rem;font-weight:700}
+.sourcing-responsibilities dd{margin:0;color:var(--daca-muted);font-size:.76rem;line-height:1.65}
+.sourcing-backlinks{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px 24px;margin-top:22px;font-size:.8rem;font-weight:600}
+.sourcing-backlinks a{padding:8px 0;color:var(--daca-blue)}
+@media(max-width:1000px){.sourcing-pipeline .pipeline-controls{justify-content:flex-start;min-width:0;width:100%}}
+@media(max-width:700px){.sourcing-pipeline .pipeline-header h2{font-size:1.2rem}.sourcing-counts{grid-template-columns:1fr;gap:12px}.sourcing-counts>div{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px}.sourcing-counts dt{margin:0}.sourcing-counts dd{font-size:1rem}.sourcing-responsibilities{grid-template-columns:1fr;gap:18px}.sourcing-backlinks{flex-direction:column;align-items:flex-start}}
+@media(pointer:coarse){.sourcing-targets label{min-height:44px}}
+@media(forced-colors:active){.is-active>.actor-frame{stroke:Highlight}.sourcing-targets label.is-selected{outline:2px solid Highlight}}
