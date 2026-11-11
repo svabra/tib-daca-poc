@@ -10,7 +10,7 @@ export const SOURCING_GEOMETRY = {
   checkStart: { x: 650, y: 250 }, checkEnd: { x: 390, y: 245 },
   rawX: 1035, structuredY: 215, unstructuredY: 450,
   // The end roller sits outside the doorway; its 11 px belt cap clears the frame and sill.
-  bridgePivot: { x: 692, y: 349 }, bridgeLanding: { x: 440, y: 349 }, bridgeFoldedLength: 32,
+  bridgePivot: { x: 692, y: 349 }, bridgeLanding: { x: 468, y: 349 }, bridgeFoldedLength: 32,
 } as const;
 export type SourcingKind = 'structured' | 'unstructured';
 export interface SourcingPoint { x: number; y: number; opacity: number; }

@@ -6,11 +6,11 @@ be indefinite; renewals retain a finite end date. The migration preserves existi
 and refuses downgrade while unbounded requests exist. No manual data rewrite or database
 reset is required. See [the Catalog data model](../docs/data-model/catalog.md).
 
-The **0.3.10** release pins Catalog UI, Catalog API and Sample Data Product to matching
-0.3.10 images. Wait for the image-publication workflow to succeed before applying these
-manifests. This release adds four interactive documentation animations with shared chevron
-steps, icons, PostgreSQL sourcing and explicit Data Owner approval flows. It retains the
-0.3.9 organization-card fix and previous access/modeling improvements. It introduces no
+The **0.3.11** release pins Catalog UI, Catalog API and Sample Data Product to matching
+0.3.11 images. Wait for the image-publication workflow to succeed before applying these
+manifests. This release refines the access-request animation with connected components and
+messages, aligns icons across scenes and legends, and clarifies the Data Sourcing Task Wizard
+with a shorter conveyor. It retains the four animations introduced in 0.3.10. It introduces no
 database migration or delivery protocol; applying a manifest remains a separate PoC rollout.
 
 These manifests deploy the DaCa presentation workloads into `daai-brs-d`. They intentionally

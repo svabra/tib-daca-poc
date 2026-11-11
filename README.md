@@ -1,9 +1,10 @@
 # BIT DaCa
 
-Release **0.3.10** adds four interactive documentation animations, a complete animation index,
-shared chevron steps and icons, the PostgreSQL sourcing door/conveyor, explicit Data Owner
-approval flows and consistent German access-policy vocabulary. The version overlay summarizes
-these changes in DE/EN and preserves 0.3.9 in the searchable release archive.
+Release **0.3.11** connects discovery and access requests through animated component messages,
+keeps sources/SDAL on the left, and aligns icons and legends across all four animations.
+The sourcing assistant is named Data Sourcing Task Wizard and its conveyor leaves more
+clearance before the SDAL door. The version overlay summarizes these changes in DE/EN
+and preserves 0.3.10 in the searchable release archive.
 
 The documentation hub includes **Animierte Dokumentation** at `/documentation/animated`:
 an **All animations** list above the overview links directly to Data Pipeline (26 s),
@@ -52,6 +53,14 @@ keyboard-accessible scroll area. DaCa's central metadata, lineage and policy rol
 from platform processing and delivery. This illustrates the architecture, not live traffic.
 See [the documentation design](docs/catalog-documentation-and-responsibilities.md).
 
+All animation scenes, legends and source-topic pages use the same SVG icon library.
+Data Analyst, Data Owner, Data Consumer and personalized permission share one person outline;
+databases, buckets, files, catalog, search, applications and permissions keep the same geometry
+at every size with non-scaling 1.7 px strokes. Access-rule messages consistently use the
+checked shield, approvals the checked document, and denial the same circled cross in scene
+and legend. The shared tick is reused inside shields, checks and permission documents.
+Legend icons use theme blue; denial stays red and the product shield contrasts against gold.
+
 The overview's **06 Datenkonsumenten** layer and its detail action open the 32-second
 **Data Access Management** explanation at
 `/documentation/animated/data-consumers/access-management`. Five stations show initial denial
@@ -77,7 +86,7 @@ The other source types, merge stage and repeated acquisition-mode episodes have 
 from this explanation so it follows a single task.
 
 DAAIF sits directly above the Source Connector; its task travels vertically downwards.
-A person icon identifies the Data Analyst. In the wizard, a database, cogwheel and S3 bucket
+A person icon identifies the Data Analyst. In the Data Sourcing Task Wizard, a database, cogwheel and S3 bucket
 replace the form lines, with Source / Transformation / Target labels. They appear one after
 another during the first four seconds and remain visible for the rest of the task.
 The wizard's database icon carries a small **PG** label; the Data Lake bucket is marked
@@ -85,7 +94,7 @@ The wizard's database icon carries a small **PG** label; the Data Lake bucket is
 The access layer's door starts closed, opens after the policy decision (12-12.9 s), remains
 open while all six data points pass through, and closes at 19.1-19.8 s. The Source Connector's
 conveyor starts folded upright. As the door opens, it lowers and telescopes left into a
-bridge stopping just before the door frame, with its rounded end clear of the opening.
+shorter bridge with a visible gap before the door frame, keeping its rounded end clear of the opening.
 Moving treads and rollers carry the
 points during extraction (14-21.5 s). The bridge stays down after the door closes until all
 data has cleared, then folds up at 21.6-22.5 s. Door, bridge, conveyor and data points all use
@@ -103,7 +112,15 @@ dark styling and mobile horizontal scrolling preserve the diagram.
 The question mark beside Policy links to a separate 24-second animation at
 `/documentation/animated/data-consumers/access-request`: find data using prose metadata,
 request introspection metadata, then submit a separate electronic payload request in DaCa
-for queries or Data Sourcing Tasks. Introspection approval does not authorize payload access;
+for queries or Data Sourcing Tasks. A connected component scene replaces the isolated cards:
+Data Analyst, DaCa, Data Owner, Secure Data Access Layer and Data Source exchange animated
+searches, applications, approvals, access-rule projections and metadata. Data Source and
+SDAL stay on the left, DaCa and Data Owner above, and Data Analyst on the right, matching
+the orientation of the other animations. Sender/receiver
+frames, a current-message caption and a shared-icon legend explain each exchange. Three
+chevron stations and the same seekable clock control the full sequence. The owner approves
+introspection via DaCa; the SDAL then delivers metadata, while the rule remains in the PAP.
+Introspection approval does not authorize payload access;
 the final payload request remains pending. The same Policy help appears in Data Access
 Management. All tasks, permissions and data flows are explanatory frontend state, without
 real jobs, credentials, protected data calls, persisted DAAIF structures or new protocols.

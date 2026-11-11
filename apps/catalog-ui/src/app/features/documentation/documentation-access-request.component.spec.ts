@@ -2,7 +2,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { CatalogLanguage, UserPreferencesService } from '../../core/user-preferences.service';
-import { ACCESS_REQUEST_DURATION, sampleAccessRequest } from './documentation-access-request-animation';
+import { ACCESS_REQUEST_DURATION, ACCESS_REQUEST_MESSAGES, ACCESS_REQUEST_ROUTES, sampleAccessRequest } from './documentation-access-request-animation';
 import { DocumentationAccessRequestComponent } from './documentation-access-request.component';
 
 describe('Access request explanation', () => {
@@ -27,7 +27,10 @@ describe('Access request explanation', () => {
     expect(sampleAccessRequest(7)).toMatchObject({ station: 1, introspectionApproved: false });
     expect(sampleAccessRequest(9.5)).toMatchObject({ introspectionRequest: 1, metadataVisible: false });
     expect(sampleAccessRequest(10.5)).toMatchObject({ introspectionApproved: true, metadataVisible: false });
-    expect(sampleAccessRequest(13)).toMatchObject({ metadataVisible: true, payloadSubmitted: false });
+    expect(sampleAccessRequest(11.2)).toMatchObject({ policyStored: true, policyActive: false });
+    expect(sampleAccessRequest(11.8)).toMatchObject({ policyActive: true, metadataVisible: false });
+    expect(sampleAccessRequest(14.59).metadataVisible).toBe(false);
+    expect(sampleAccessRequest(14.6)).toMatchObject({ metadataVisible: true, payloadSubmitted: false });
     expect(sampleAccessRequest(15)).toMatchObject({ station: 2, form: 0 });
     expect(sampleAccessRequest(19.9).payloadSubmitted).toBe(false);
     expect(sampleAccessRequest(20).payloadSubmitted).toBe(true);
@@ -35,9 +38,54 @@ describe('Access request explanation', () => {
       const state = sampleAccessRequest(time);
       expect(state.payloadAuthorized).toBe(false);
       expect(state.submission > 0 ? state.metadataVisible : true).toBe(true);
-      if (state.metadataVisible) expect(state.introspectionApproved).toBe(true);
+      if (state.metadataVisible) expect(state.introspectionApproved && state.policyStored && state.policyActive).toBe(true);
     }
     for (const time of [-1, NaN, Infinity]) expect(sampleAccessRequest(time)).toEqual(sampleAccessRequest(0));
+  });
+
+  it('routes applications through DaCa and delivers metadata only through the approved SDAL', () => {
+    const itinerary = [
+      ['search', 'analyst', 'catalog'], ['prose', 'catalog', 'analyst'],
+      ['introspection-application', 'analyst', 'catalog'], ['introspection-review', 'catalog', 'owner'],
+      ['approval', 'owner', 'catalog'], ['policy', 'catalog', 'sdal'],
+      ['introspection-query', 'analyst', 'sdal'], ['source-query', 'sdal', 'source'],
+      ['source-metadata', 'source', 'sdal'], ['metadata', 'sdal', 'analyst'],
+      ['payload-application', 'analyst', 'catalog'], ['payload-review', 'catalog', 'owner'],
+    ];
+    expect(ACCESS_REQUEST_MESSAGES.map(event => {
+      const state = sampleAccessRequest((event.start + event.end) / 2);
+      expect(state.activeActors).toEqual([state.message!.from, state.message!.to]);
+      return [state.message!.id, state.message!.from, state.message!.to];
+    })).toEqual(itinerary);
+    for (const event of ACCESS_REQUEST_MESSAGES) {
+      const path = ACCESS_REQUEST_ROUTES.find(route => route.id === event.route)!;
+      expect(sampleAccessRequest(event.start).message).toMatchObject({ x: path.points[0][0], y: path.points[0][1] });
+      const end = sampleAccessRequest(event.end - .0000001).message!;
+      expect(end.x).toBeCloseTo(path.points[3][0], 2);
+      expect(end.y).toBeCloseTo(path.points[3][1], 2);
+      expect(sampleAccessRequest(event.end).message?.id).not.toBe(event.id);
+    }
+    expect(sampleAccessRequest(22)).toMatchObject({ payloadAtOwner: true, payloadAuthorized: false, activeActors: ['owner'] });
+  });
+
+  it('renders connected components, shared message icons and a permanently protected payload', () => {
+    const { fixture, component, root } = setup();
+    expect(root.querySelectorAll('.scene-component')).toHaveLength(5);
+    expect(root.querySelectorAll('.message-route')).toHaveLength(9);
+    expect(root.querySelectorAll('.request-legend li')).toHaveLength(6);
+    expect(root.querySelector('.message-token')).toBeNull();
+    for (const [time, message] of [[8.9, 'introspection-review'], [13.8, 'metadata'], [19, 'payload-application']] as const) {
+      component.seekTo(time); fixture.detectChanges();
+      expect(root.querySelector('.message-token')?.getAttribute('data-message')).toBe(message);
+      expect(root.querySelectorAll('.message-route.is-active')).toHaveLength(1);
+      expect(root.querySelectorAll('.scene-component.is-active')).toHaveLength(2);
+      expect(root.querySelector('.message-token use')?.getAttribute('href')).toContain('/animation-icons.svg#');
+      expect(root.querySelector('.payload-lock')).not.toBeNull();
+    }
+    component.seekTo(13.8); fixture.detectChanges();
+    expect(root.querySelector('.analyst-metadata')?.getAttribute('opacity')).toBe('0.15');
+    component.seekTo(14.6); fixture.detectChanges();
+    expect(root.querySelector('.analyst-metadata')?.getAttribute('opacity')).toBe('1');
   });
 
   it('selects stations, seeks backward without stale grants and describes the pending payload decision', () => {
@@ -57,7 +105,7 @@ describe('Access request explanation', () => {
     expect(component.state().metadataVisible).toBe(false);
     component.seekTo(22); fixture.detectChanges();
     expect(root.querySelector('#request-scene')!.innerHTML).toBe(end);
-    expect(root.querySelectorAll('.request-layer.is-current')).toHaveLength(1);
+    expect(root.querySelector('.scene-component.is-active')?.getAttribute('data-component')).toBe('owner');
     component.selectStation(99);
     expect(component.position()).toBe(22);
   });

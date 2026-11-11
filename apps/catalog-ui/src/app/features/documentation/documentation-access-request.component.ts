@@ -5,7 +5,7 @@ import { catalogCopy } from '../../core/catalog-localization';
 import { UserPreferencesService } from '../../core/user-preferences.service';
 import { PipelineCopy } from './documentation-pipeline';
 import { DocumentationAnimationStationsComponent } from './documentation-animation-stations.component';
-import { ACCESS_REQUEST_DURATION, ACCESS_REQUEST_STATIONS, sampleAccessRequest } from './documentation-access-request-animation';
+import { ACCESS_REQUEST_DURATION, ACCESS_REQUEST_ROUTES, ACCESS_REQUEST_STATIONS, AccessRequestMessageId, sampleAccessRequest } from './documentation-access-request-animation';
 
 @Component({
   selector: 'daca-documentation-access-request',
@@ -21,6 +21,7 @@ export class DocumentationAccessRequestComponent {
   private readonly zone = inject(NgZone);
   readonly duration = ACCESS_REQUEST_DURATION;
   readonly stationTimes = ACCESS_REQUEST_STATIONS;
+  readonly routes = ACCESS_REQUEST_ROUTES;
   readonly position = signal(0);
   readonly paused = signal(false);
   readonly reducedMotion = signal(false);
@@ -42,6 +43,42 @@ export class DocumentationAccessRequestComponent {
   readonly fields: readonly PipelineCopy[] = [
     ['Schema', 'Schéma', 'Schema', 'Schema'], ['Felder', 'Champs', 'Campi', 'Fields'], ['Datentypen', 'Types de données', 'Tipi di dati', 'Data types'],
   ];
+  readonly applicationFields: readonly PipelineCopy[] = [
+    ['Daten', 'Données', 'Dati', 'Data'], ['Zweck', 'Finalité', 'Scopo', 'Purpose'], ['Nutzung', 'Usage', 'Utilizzo', 'Usage'],
+  ];
+  readonly legend: readonly { icon: string; label: PipelineCopy }[] = [
+    { icon: 'search', label: ['Suchanfrage', 'Recherche', 'Ricerca', 'Search query'] },
+    { icon: 'document', label: ['Prosametadaten', 'Métadonnées descriptives', 'Metadati descrittivi', 'Prose metadata'] },
+    { icon: 'identity', label: ['Zugriffsantrag', 'Demande d’accès', 'Richiesta di accesso', 'Access request'] },
+    { icon: 'permission', label: ['Freigabe', 'Autorisation', 'Autorizzazione', 'Approval'] },
+    { icon: 'shield-check', label: ['Zugriffsrichtlinie', 'Politique d’accès', 'Policy di accesso', 'Access policy'] },
+    { icon: 'table', label: ['Introspektionsmetadaten', 'Métadonnées d’introspection', 'Metadati di introspezione', 'Introspection metadata'] },
+  ];
+  readonly messageCopy: Record<AccessRequestMessageId, PipelineCopy> = {
+    search: ['Data Analyst → DaCa: Suche nach Thema, Beschreibung und Zweck.', 'Data Analyst → DaCa : recherche par thème, description et finalité.', 'Data Analyst → DaCa: ricerca per tema, descrizione e scopo.', 'Data Analyst → DaCa: search by topic, description and purpose.'],
+    prose: ['DaCa → Data Analyst: Prosametadaten zu passenden Daten.', 'DaCa → Data Analyst : métadonnées descriptives des données pertinentes.', 'DaCa → Data Analyst: metadati descrittivi dei dati pertinenti.', 'DaCa → Data Analyst: prose metadata for relevant data.'],
+    'introspection-application': ['Data Analyst → DaCa: Zugriff auf Introspektionsmetadaten beantragen.', 'Data Analyst → DaCa : demander l’accès aux métadonnées d’introspection.', 'Data Analyst → DaCa: richiedere accesso ai metadati di introspezione.', 'Data Analyst → DaCa: request access to introspection metadata.'],
+    'introspection-review': ['DaCa → Data Owner: Introspektionsantrag zur Prüfung weiterleiten.', 'DaCa → Data Owner : transmettre la demande d’introspection pour examen.', 'DaCa → Data Owner: inoltrare la richiesta di introspezione per verifica.', 'DaCa → Data Owner: forward the introspection request for review.'],
+    approval: ['Data Owner → DaCa: Introspektion freigeben; Nutzlast bleibt geschützt.', 'Data Owner → DaCa : autoriser l’introspection ; les données utiles restent protégées.', 'Data Owner → DaCa: autorizzare l’introspezione; i dati effettivi restano protetti.', 'Data Owner → DaCa: approve introspection; payload stays protected.'],
+    policy: ['DaCa (PAP) → SDAL: Zugriffsrichtlinie bereitstellen. Sie bleibt zentral im DaCa gespeichert.', 'DaCa (PAP) → SDAL : fournir la politique d’accès, conservée dans DaCa.', 'DaCa (PAP) → SDAL: fornire la policy di accesso, conservata in DaCa.', 'DaCa (PAP) → SDAL: provide the access policy, retained centrally in DaCa.'],
+    'introspection-query': ['Data Analyst → SDAL: Introspektionsmetadaten mit persönlicher Berechtigung abrufen.', 'Data Analyst → SDAL : consulter les métadonnées avec son autorisation personnelle.', 'Data Analyst → SDAL: consultare i metadati con la propria autorizzazione.', 'Data Analyst → SDAL: retrieve introspection metadata with personal permission.'],
+    'source-query': ['SDAL → Data Source: Freigegebene Strukturinformationen abfragen.', 'SDAL → Data Source : interroger les informations de structure autorisées.', 'SDAL → Data Source: interrogare le informazioni strutturali autorizzate.', 'SDAL → Data Source: query the permitted structural information.'],
+    'source-metadata': ['Data Source → SDAL: Schema, Felder und Datentypen zurückgeben.', 'Data Source → SDAL : retourner le schéma, les champs et les types.', 'Data Source → SDAL: restituire schema, campi e tipi.', 'Data Source → SDAL: return schema, fields and data types.'],
+    metadata: ['SDAL → Data Analyst: Freigegebene Introspektionsmetadaten liefern. Der Zugriff wird protokolliert.', 'SDAL → Data Analyst : fournir les métadonnées autorisées. L’accès est journalisé.', 'SDAL → Data Analyst: fornire i metadati autorizzati. L’accesso viene registrato.', 'SDAL → Data Analyst: deliver permitted introspection metadata. The access is logged.'],
+    'payload-application': ['Data Analyst → DaCa: Separaten Nutzlastantrag mit Daten, Zweck und Nutzung einreichen.', 'Data Analyst → DaCa : soumettre une demande distincte précisant données, finalité et usage.', 'Data Analyst → DaCa: inviare una richiesta separata con dati, scopo e utilizzo.', 'Data Analyst → DaCa: submit a separate payload request with data, purpose and usage.'],
+    'payload-review': ['DaCa → Data Owner: Nutzlastantrag zur Entscheidung weiterleiten.', 'DaCa → Data Owner : transmettre la demande de données pour décision.', 'DaCa → Data Owner: inoltrare la richiesta di dati per decisione.', 'DaCa → Data Owner: forward the payload request for a decision.'],
+  };
+  readonly messageDescription = computed<PipelineCopy>(() => {
+    const state = this.state();
+    if (state.message) return this.messageCopy[state.message.id];
+    if (state.payloadAtOwner) return ['Data Owner prüft den Nutzlastantrag. Die Entscheidung steht aus.', 'Le Data Owner examine la demande de données. La décision est en attente.', 'Il Data Owner esamina la richiesta di dati. La decisione è in attesa.', 'The Data Owner reviews the payload request. The decision is pending.'];
+    if (state.payloadSubmitted) return ['Der Nutzlastantrag ist im DaCa eingegangen.', 'La demande de données est reçue dans DaCa.', 'La richiesta di dati è ricevuta in DaCa.', 'DaCa has received the payload request.'];
+    if (state.station === 2) return ['Data Analyst beschreibt Daten, Zweck und Nutzung im elektronischen Antrag.', 'Le Data Analyst précise données, finalité et usage dans la demande.', 'Il Data Analyst descrive dati, scopo e utilizzo nella richiesta.', 'The Data Analyst describes data, purpose and usage in the application.'];
+    if (state.metadataVisible) return ['Die Struktur ist sichtbar. Nutzlastdaten bleiben geschützt.', 'La structure est visible. Les données utiles restent protégées.', 'La struttura è visibile. I dati effettivi restano protetti.', 'The structure is visible. Payload data stays protected.'];
+    if (state.introspectionRequest >= 1) return ['Data Owner prüft den Antrag auf Introspektionsmetadaten.', 'Le Data Owner examine la demande d’introspection.', 'Il Data Owner verifica la richiesta di introspezione.', 'The Data Owner reviews the introspection request.'];
+    if (state.station === 1) return ['Data Analyst beantragt zuerst Zugriff auf Introspektionsmetadaten im DaCa.', 'Le Data Analyst demande d’abord l’accès aux métadonnées dans DaCa.', 'Il Data Analyst richiede prima l’accesso ai metadati in DaCa.', 'The Data Analyst first requests access to introspection metadata in DaCa.'];
+    return state.found ? ['Passende Daten gefunden. DaCa liefert den fachlichen Kontext.', 'Données pertinentes trouvées. DaCa fournit le contexte métier.', 'Dati pertinenti trovati. DaCa fornisce il contesto funzionale.', 'Relevant data found. DaCa provides the business context.'] : ['Data Analyst sucht passende Daten im DaCa.', 'Le Data Analyst recherche des données dans DaCa.', 'Il Data Analyst cerca dati pertinenti in DaCa.', 'The Data Analyst searches DaCa for relevant data.'];
+  });
   private frame?: number;
   private elapsed = 0;
   private lastFrame?: number;

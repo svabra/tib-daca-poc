@@ -50,7 +50,7 @@ a:focus-visible{outline:3px solid var(--daca-blue);outline-offset:4px;border-rad
 .sourcing-legend li{display:flex;align-items:center;gap:9px;min-width:0;font-size:.65rem;line-height:1.5;overflow-wrap:anywhere}
 .sourcing-legend li>span{min-width:0}.sourcing-legend strong,.sourcing-legend li>span>span{display:block}
 .sourcing-legend strong{color:var(--daca-ink);font-size:.68rem;font-weight:600}
-.sourcing-legend svg{flex:0 0 28px;width:28px;height:28px;fill:none;stroke:var(--daca-blue);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sourcing-legend svg{flex:0 0 28px;width:28px;height:28px;color:var(--daca-blue)}
 .sourcing-legend svg text{fill:var(--daca-blue);stroke:none;text-anchor:middle;font:600 9px var(--daca-font,sans-serif)}
 .sourcing-counts{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:18px;margin:8px 0 0;padding-top:18px;border-top:1px solid var(--daca-border)}
 .sourcing-counts dt{margin-bottom:6px;color:var(--daca-muted);font-size:.67rem}

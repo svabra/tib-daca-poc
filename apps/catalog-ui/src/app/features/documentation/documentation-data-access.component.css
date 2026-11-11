@@ -7,9 +7,9 @@
 .access-routes .access-application-route.is-current{opacity:.8;stroke-width:2}
 .access-surface,.gate-frame{fill:var(--daca-surface);stroke:var(--daca-border-strong);stroke-width:1.3}
 .is-current>.access-surface{stroke:color-mix(in srgb,var(--daca-blue) 55%,transparent);stroke-width:4}
-.access-application-icon{fill:var(--daca-surface);stroke:var(--daca-blue);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.access-application-icon{color:var(--daca-blue);fill:var(--daca-surface);stroke:var(--daca-blue);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .access-application-icon path{fill:none}
-.access-legend svg{width:18px;height:20px;flex:none}
+.access-legend svg{width:20px;height:20px;flex:none}
 .access-gate[data-active=true] .gate-frame{stroke:color-mix(in srgb,var(--daca-blue) 55%,transparent);stroke-width:4}
 .access-scene text{fill:var(--daca-ink);font:13px var(--daca-font,sans-serif);text-anchor:middle}
 .access-scene .svg-heading{font-size:14px;font-weight:700;fill:var(--daca-blue)}
@@ -17,14 +17,12 @@
 .access-scene .svg-status{font-size:13px;fill:var(--daca-blue)}
 .access-scene .is-denied{fill:var(--daca-red)}
 .gate-shield,.gate-tick,.person-icon,.store-icon{fill:none;stroke:var(--daca-blue);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.gate-cross{fill:none;stroke:var(--daca-red);stroke-width:2;stroke-linecap:round}
-.gate-policy-check circle{fill:var(--daca-surface);stroke:var(--daca-blue);stroke-width:1.3}
-.gate-policy-check path{fill:none;stroke:var(--daca-blue);stroke-width:1.5}
+.gate-cross{color:var(--daca-red)}
+.gate-policy-check circle{fill:var(--daca-surface);stroke:none}
 .access-request{stroke:var(--daca-blue);fill:var(--daca-surface)}
 .request-halo{stroke:none;fill:var(--daca-blue);opacity:.09}
 .request-core{stroke-width:2}
-.access-rejection{stroke:var(--daca-red);fill:none;stroke-width:2;stroke-linecap:round}
-.access-rejection circle{fill:var(--daca-surface);stroke-width:1}
+.access-rejection{color:var(--daca-red)}
 .access-data,.access-receipt{fill:#d4a017}
 .data-halo{opacity:.14}
 .data-core{stroke:var(--daca-surface);stroke-width:1.4}

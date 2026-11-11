@@ -68,9 +68,9 @@
           <rect class="gate-frame" x="-60" y="-65" width="120" height="130" rx="5"/>
           <text class="svg-heading" y="-41">SDAL</text>
           <use class="gate-shield" href="/assets/documentation/animation-icons.svg#shield" x="-35" y="-36" width="70" height="70"/>
-          <path class="gate-cross" d="m-8-4 16 16m0-16L-8 12"/>
-          <path class="gate-tick" d="m-9 2 6 7L10-7" opacity="0"/>
-          <g class="gate-policy-check" transform="translate(42 -42)" opacity="0"><circle r="7"/><path d="m-3 0 2 2 4-5"/></g>
+          <use class="gate-cross" href="/assets/documentation/animation-icons.svg#cross" x="-25" y="-23" width="50" height="50"/>
+          <use class="gate-tick" href="/assets/documentation/animation-icons.svg#tick" x="-35" y="-36" width="70" height="70" opacity="0"/>
+          <g class="gate-policy-check" transform="translate(42 -42)" opacity="0"><circle r="7"/><use href="/assets/documentation/animation-icons.svg#check" x="-10" y="-10" width="20" height="20"/></g>
           @if (lane.assigned && !lane.allowed) {
             <text class="svg-status" y="37">{{ tr(['Zugewiesen', 'Attribuée', 'Assegnata', 'Assigned']) }}</text>
             <text class="svg-status is-denied" y="54">{{ tr(['Blockiert', 'Bloqué', 'Bloccato', 'Blocked']) }}</text>
@@ -79,9 +79,9 @@
           }
         </g>
         <g class="access-request" data-packet="request" [attr.data-lane]="index" opacity="0"><circle class="request-halo" r="13"/><circle class="request-core" r="6"/></g>
-        <g class="access-rejection" data-packet="rejection" [attr.data-lane]="index" opacity="0"><circle r="12"/><path d="m-4-4 8 8m0-8-8 8"/></g>
+        <g class="access-rejection" data-packet="rejection" [attr.data-lane]="index" opacity="0"><use href="/assets/documentation/animation-icons.svg#rejected" x="-17" y="-17" width="34" height="34"/></g>
         <g class="access-data" data-packet="data" [attr.data-lane]="index" opacity="0"><circle class="data-halo" r="14"/><circle class="data-core" r="7"/></g>
-        <g class="access-policy-token" data-packet="policy" [attr.data-lane]="index" opacity="0"><use href="/assets/documentation/animation-icons.svg#document" x="-16" y="-16" width="32" height="32"/></g>
+        <g class="access-policy-token" data-packet="policy" [attr.data-lane]="index" opacity="0"><use href="/assets/documentation/animation-icons.svg#shield-check" x="-16" y="-16" width="32" height="32"/></g>
       }
       @for (lane of state().lanes; track $index; let index = $index) {
         <g class="access-store" [attr.data-lane]="index" [attr.data-in-scope]="lane.inScope" [attr.transform]="'translate(1010 ' + lane.y + ')'">
@@ -107,7 +107,7 @@
           <text class="svg-label access-owner-status" y="77">{{ tr(['Prüft den Antrag', 'Examine la demande', 'Esamina la richiesta', 'Reviewing application']) }}</text>
         } @else if (state().applicationStage === 'approved') {
           <text class="svg-status access-owner-status" y="77">{{ tr(['Zustimmung erteilt', 'Accord donné', 'Consenso concesso', 'Approval granted']) }}</text>
-          <path class="gate-tick" d="m50 12 5 5 10-12"/>
+          <use href="/assets/documentation/animation-icons.svg#permission" x="44" y="-7" width="28" height="28"/>
         }
       </g>
       <g class="access-policy-card" [class.is-current]="state().phase === 1 || state().phase === 2 || state().phase === 3">
@@ -132,15 +132,15 @@
       </g>
       <g class="access-application-token access-application-icon" opacity="0"><use href="/assets/documentation/animation-icons.svg#identity" x="-17" y="-17" width="34" height="34"/></g>
       <g class="access-review-token access-application-icon" opacity="0"><use href="/assets/documentation/animation-icons.svg#identity" x="-17" y="-17" width="34" height="34"/></g>
-      <g class="access-author-token access-policy-token" opacity="0"><use href="/assets/documentation/animation-icons.svg#document" x="-16" y="-16" width="32" height="32"/></g>
+      <g class="access-author-token access-policy-token" opacity="0"><use href="/assets/documentation/animation-icons.svg#shield-check" x="-16" y="-16" width="32" height="32"/></g>
       <text class="svg-label access-caption" x="760" y="594">{{ tr(['Jeder Zugriff passiert seinen SDAL', 'Chaque accès traverse son SDAL', 'Ogni accesso attraversa il proprio SDAL', 'Every access passes its SDAL']) }}</text>
     </svg>
   </div>
   <div class="access-legend">
     <span><i class="legend-request" aria-hidden="true"></i>{{ tr(['Leseanfrage', 'Demande de lecture', 'Richiesta di lettura', 'Read request']) }}</span>
-    <span><i class="legend-rejection" aria-hidden="true">×</i>{{ tr(['Abgelehnt', 'Refusé', 'Negato', 'Denied']) }}</span>
-    <span><svg class="access-application-icon" viewBox="-20 -20 40 40" aria-hidden="true" focusable="false"><use href="/assets/documentation/animation-icons.svg#identity" x="-17" y="-17" width="34" height="34"/></svg>{{ tr(['Zugriffsantrag', 'Demande d’accès', 'Richiesta di accesso', 'Access application']) }}</span>
-    <span><svg class="access-application-icon" viewBox="-20 -20 40 40" aria-hidden="true" focusable="false"><use href="/assets/documentation/animation-icons.svg#document" x="-20" y="-20" width="40" height="40"/></svg>{{ tr(['Zugriffsrichtlinie', 'Politique', 'Policy', 'Policy']) }} <daca-policy-help /></span>
+    <span><svg class="legend-rejection" viewBox="-20 -20 40 40" aria-hidden="true"><use href="/assets/documentation/animation-icons.svg#rejected" x="-20" y="-20" width="40" height="40"/></svg>{{ tr(['Abgelehnt', 'Refusé', 'Negato', 'Denied']) }}</span>
+    <span><svg class="access-application-icon" viewBox="-20 -20 40 40" aria-hidden="true" focusable="false"><use href="/assets/documentation/animation-icons.svg#identity" x="-20" y="-20" width="40" height="40"/></svg>{{ tr(['Zugriffsantrag', 'Demande d’accès', 'Richiesta di accesso', 'Access application']) }}</span>
+    <span><svg class="access-application-icon" viewBox="-20 -20 40 40" aria-hidden="true" focusable="false"><use href="/assets/documentation/animation-icons.svg#shield-check" x="-20" y="-20" width="40" height="40"/></svg>{{ tr(['Zugriffsrichtlinie', 'Politique', 'Policy', 'Policy']) }} <daca-policy-help /></span>
     <span><i class="legend-data" [class.is-available]="state().allowed" aria-hidden="true"></i>{{ tr(['Datenrückgabe nach Freigabe', 'Retour des données après autorisation', 'Dati restituiti dopo l’autorizzazione', 'Data returned after permission']) }}</span>
   </div>
   <dl class="access-facts" aria-live="off">

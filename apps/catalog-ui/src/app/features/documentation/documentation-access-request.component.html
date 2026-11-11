@@ -23,64 +23,121 @@
     <output class="pipeline-time" for="request-position" aria-live="off">{{ seconds(position()) }} s <span>/ {{ seconds(duration) }} s</span></output>
   </div>
   <ol daca-animation-stations class="request-stations" [steps]="stations" [times]="stationTimes" [duration]="duration" [active]="state().station" controls="request-scene" (stepSelected)="selectStation($event)"></ol>
-  <div id="request-scene" class="request-layers">
-    @for (station of stations; track $index; let index = $index) {
-      <article class="request-layer" [class.is-current]="state().station === index" [attr.data-station]="index + 1">
-        <header><p class="request-step">0{{ index + 1 }} / {{ tr(station.title) }}</p><h3>{{ tr(station.subtitle) }}</h3></header>
-        <svg class="request-art" viewBox="0 0 300 235" aria-hidden="true" focusable="false">
-          @if (index === 0) {
-            <rect class="art-surface" x="36" y="20" width="228" height="183" rx="6"/>
-            <path class="art-muted" d="M36 57h228"/><text class="art-label" x="59" y="44">DaCa</text>
-            <rect class="art-muted" x="123" y="33" width="123" height="13" rx="6"/>
-            @for (row of [0, 1, 2]; track row) {
-              <g [attr.transform]="'translate(55 ' + (74 + row * 40) + ')'">
-                <rect class="art-result" [class.selected]="row === 1 && state().found" width="190" height="31" rx="3"/>
-                <path class="art-muted" d="M13 11h101m-101 9h156"/>
-              </g>
-            }
-            <g class="art-search" [attr.transform]="'translate(' + (94 + state().search * 91) + ' ' + (82 + state().search * 40) + ')'" [attr.opacity]="state().found ? 0 : 1">
-              <use href="/assets/documentation/animation-icons.svg#search" x="-29" y="-29" width="68" height="68"/>
+  <p class="request-explanation">{{ tr(stations[state().station].detail) }}</p>
+  <div id="request-scene" class="pipeline-scroll request-scroll" role="region" tabindex="0" [attr.aria-label]="tr(['Komponenten und Nachrichten. Auf kleinen Bildschirmen seitlich scrollen.', 'Composants et messages. Faire défiler horizontalement sur petit écran.', 'Componenti e messaggi. Scorrere orizzontalmente su schermi piccoli.', 'Components and messages. Scroll horizontally on small screens.'])">
+    <svg class="request-diagram" viewBox="0 0 1200 640" role="img" aria-labelledby="request-diagram-title request-diagram-description">
+      <title id="request-diagram-title">{{ tr(['Vom Finden zum Antrag: Komponenten und Nachrichten', 'De la découverte à la demande : composants et messages', 'Dalla scoperta alla richiesta: componenti e messaggi', 'From discovery to request: components and messages']) }}</title>
+      <desc id="request-diagram-description">{{ tr(messageDescription()) }}</desc>
+      <g aria-hidden="true">
+        @for (route of routes; track route.id) {
+          <path class="message-route" [class.is-active]="state().message?.route === route.id" [attr.data-route]="route.id" [attr.d]="route.path"/>
+        }
+        <text class="route-label" x="835" y="271">{{ tr(['Suche / Antrag', 'Recherche / Demande', 'Ricerca / Richiesta', 'Search / Request']) }}</text>
+        <text class="route-label" x="785" y="387">{{ tr(['Prosametadaten', 'Métadonnées descriptives', 'Metadati descrittivi', 'Prose metadata']) }}</text>
+        <text class="route-label" x="810" y="82">{{ tr(['Prüfung', 'Examen', 'Verifica', 'Review']) }}</text>
+        <text class="route-label" x="810" y="190">{{ tr(['Freigabe', 'Autorisation', 'Autorizzazione', 'Approval']) }}</text>
+        <text class="route-label" x="355" y="235">{{ tr(['Zugriffsrichtlinie', 'Politique d’accès', 'Policy di accesso', 'Access policy']) }}</text>
+        <text class="route-label" x="600" y="382">{{ tr(['Introspektion anfragen', 'Demander l’introspection', 'Richiedere introspezione', 'Request introspection']) }}</text>
+        <text class="route-label" x="605" y="567">{{ tr(['Schema · Felder · Datentypen', 'Schéma · Champs · Types', 'Schema · Campi · Tipi', 'Schema · Fields · Types']) }}</text>
+
+        <g class="scene-component" data-component="analyst" transform="translate(885 110)" [class.is-active]="state().activeActors.includes('analyst')">
+          <rect class="component-frame" x="40" y="190" width="230" height="260" rx="7"/>
+          <use href="/assets/documentation/animation-icons.svg#person" x="135" y="211" width="40" height="40"/>
+          <text class="component-title" x="155" y="273">Data Analyst</text>
+          <rect class="inner-panel" x="60" y="293" width="190" height="134" rx="4"/>
+          @if (state().station === 0) {
+            <use href="/assets/documentation/animation-icons.svg#search" x="75" y="310" width="25" height="25"/>
+            <text class="small-label start" x="110" y="328">{{ tr(['Daten finden', 'Trouver des données', 'Trovare dati', 'Find data']) }}</text>
+            <text class="small-label" x="155" y="363">{{ tr(['Thema · Zweck', 'Thème · Finalité', 'Tema · Scopo', 'Topic · Purpose']) }}</text>
+            <g [attr.opacity]="state().proseTransfer >= 1 ? 1 : .2">
+              <use href="/assets/documentation/animation-icons.svg#document" x="78" y="382" width="25" height="25"/>
+              <text class="small-label start" x="110" y="400">{{ tr(['Daten gefunden', 'Données trouvées', 'Dati trovati', 'Data found']) }}</text>
             </g>
-            <g class="art-check" transform="translate(224 130)" [attr.opacity]="state().found ? 1 : 0"><use href="/assets/documentation/animation-icons.svg#check" x="-17" y="-17" width="34" height="34"/></g>
-            <g class="art-document" [attr.opacity]="state().proseTransfer > 0 && state().proseTransfer < 1 ? 1 : 0" [attr.transform]="'translate(' + (190 + state().proseTransfer * 95) + ' 126)'"><use href="/assets/documentation/animation-icons.svg#document" x="-18" y="-18" width="36" height="36"/></g>
-          } @else if (index === 1) {
-            <path class="art-route" d="M48 64C98 27 202 27 252 64M252 64C205 116 95 116 48 64"/>
-            <g class="art-person" transform="translate(48 64)"><use href="/assets/documentation/animation-icons.svg#person" x="-35" y="-35" width="70" height="70"/></g>
-            <g class="art-person" transform="translate(252 64)"><use href="/assets/documentation/animation-icons.svg#person" x="-35" y="-35" width="70" height="70"/></g>
-            <text class="art-small" x="12" y="104">Data Analyst</text><text class="art-small" x="218" y="104">Data Owner</text>
-            <g class="art-document" [attr.opacity]="state().introspectionRequest > 0 && state().introspectionRequest < 1 ? 1 : 0" [attr.transform]="'translate(' + (48 + state().introspectionRequest * 204) + ' ' + (64 - 30 * (1 - (2 * state().introspectionRequest - 1) ** 2)) + ')'">
-              <use href="/assets/documentation/animation-icons.svg#document" x="-18" y="-18" width="36" height="36"/>
+          } @else if (state().station === 1) {
+            <g class="analyst-metadata" [attr.opacity]="state().metadataVisible ? 1 : .15">
+              @for (field of fields; track $index) {
+                <text class="small-label start" x="77" [attr.y]="324 + $index * 36">{{ tr(field) }}</text>
+                <path class="schema-line" [attr.d]="'M185 ' + (320 + $index * 36) + 'h45'"/>
+              }
             </g>
-            <g class="art-check" transform="translate(275 45)" [attr.opacity]="state().introspectionApproved ? 1 : 0"><use href="/assets/documentation/animation-icons.svg#check" x="-14" y="-14" width="28" height="28"/></g>
-            <g class="art-document" [attr.opacity]="state().metadataTransfer > 0 && state().metadataTransfer < 1 ? 1 : 0" [attr.transform]="'translate(' + (252 - state().metadataTransfer * 204) + ' ' + (64 + 30 * (1 - (2 * state().metadataTransfer - 1) ** 2)) + ')'">
-              <use href="/assets/documentation/animation-icons.svg#table" x="-16" y="-16" width="32" height="32"/>
-            </g>
-            <rect class="art-surface" x="36" y="125" width="228" height="94" rx="5"/>
-            @for (field of fields; track $index; let row = $index) {
-              <g [attr.opacity]="state().metadataVisible ? 1 : .18"><text class="art-small" x="51" [attr.y]="148 + row * 27">{{ tr(field) }}</text><path class="art-muted" [attr.d]="'M174 ' + (145 + row * 27) + 'h70'"/></g>
-            }
-            <g class="art-lock" transform="translate(150 173)" [attr.opacity]="state().metadataVisible ? 0 : 1"><use href="/assets/documentation/animation-icons.svg#lock" x="-22" y="-22" width="44" height="44"/></g>
+            @if (!state().metadataVisible) { <use href="/assets/documentation/animation-icons.svg#lock" x="132" y="338" width="46" height="46"/> }
           } @else {
-            <g class="art-document" [attr.opacity]="1 - state().submission" [attr.transform]="'translate(' + (93 + state().submission * 135) + ' ' + (100 - state().submission * 20) + ') scale(' + (1 - state().submission * .7) + ')'">
-              <rect x="-57" y="-69" width="114" height="139" rx="5"/>
-              <path class="art-muted" d="M-38-42h76M-38-11h76M-38 20h76M-38 48h50"/>
-              @for (row of [0, 1, 2]; track row) { <path class="art-ink" [attr.d]="'M-37 ' + (-43 + row * 31) + 'h' + formWidth(row)"/> }
-            </g>
-            <g transform="translate(230 80)"><rect class="art-surface" x="-34" y="-40" width="68" height="80" rx="5"/><text class="art-label" x="-21" y="-12">DaCa</text><path class="art-muted" d="M-22 7h44m-44 12h44"/></g>
-            <g class="art-check" transform="translate(253 42)" [attr.opacity]="state().payloadSubmitted ? 1 : 0"><use href="/assets/documentation/animation-icons.svg#check" x="-17" y="-17" width="34" height="34"/></g>
-            <g class="art-lock" transform="translate(230 181)"><circle class="art-protected" r="34"/><use href="/assets/documentation/animation-icons.svg#lock" x="-22" y="-22" width="44" height="44"/></g>
-            <path class="art-route" d="M230 125v17"/>
+            @for (field of applicationFields; track $index) {
+              <text class="small-label start" x="77" [attr.y]="321 + $index * 37">{{ tr(field) }}</text>
+              <path class="schema-line" [attr.d]="'M155 ' + (317 + $index * 37) + 'h68'"/>
+              <path class="form-line" [attr.d]="'M155 ' + (317 + $index * 37) + 'h' + formWidth($index)"/>
+            }
           }
-        </svg>
-        <div class="request-stage-status" aria-live="off">
-          @if (index === 0) { {{ state().found ? tr(['Passende Daten gefunden', 'Données pertinentes trouvées', 'Dati pertinenti trovati', 'Relevant data found']) : tr(['Thema · Beschreibung · Zweck', 'Thème · Description · Finalité', 'Tema · Descrizione · Scopo', 'Topic · Description · Purpose']) }} }
-          @else if (index === 1) { {{ state().metadataVisible ? tr(['Introspektion freigegeben', 'Introspection autorisée', 'Introspezione autorizzata', 'Introspection approved']) : state().introspectionRequest >= 1 ? tr(['Data Owner prüft', 'Examen par le Data Owner', 'Verifica del Data Owner', 'Data Owner reviewing']) : tr(['Separater Antrag erforderlich', 'Demande distincte requise', 'Richiesta separata necessaria', 'Separate request required']) }} }
-          @else { {{ state().payloadSubmitted ? tr(['Antrag eingereicht', 'Demande soumise', 'Richiesta inviata', 'Request submitted']) : tr(['Queries · Data Sourcing Tasks', 'Requêtes · Data Sourcing Tasks', 'Query · Data Sourcing Tasks', 'Queries · Data Sourcing Tasks']) }} }
-        </div>
-        <p class="request-description">{{ tr(station.detail) }}</p>
-      </article>
-    }
+        </g>
+
+        <g class="scene-component" data-component="catalog" transform="translate(25 -160)" [class.is-active]="state().activeActors.includes('catalog')">
+          <rect class="component-frame" x="430" y="190" width="290" height="260" rx="7"/>
+          <text class="component-title" x="575" y="226">DaCa</text>
+          <text class="small-label" x="575" y="249">{{ tr(['Datenkatalog · PAP', 'Catalogue de données · PAP', 'Catalogo dati · PAP', 'Data catalog · PAP']) }}</text>
+          <rect class="inner-panel" x="450" y="268" width="250" height="70" rx="4"/>
+          <use href="/assets/documentation/animation-icons.svg#document" x="464" y="282" width="31" height="31"/>
+          <text class="small-label start" x="510" y="292">{{ tr(['Prosametadaten', 'Métadonnées descriptives', 'Metadati descrittivi', 'Prose metadata']) }}</text>
+          <path class="schema-line" d="M510 308h158m-158 12h115"/>
+          @if (!state().found && state().time >= 2) {
+            <use href="/assets/documentation/animation-icons.svg#search" [attr.x]="500 + state().search * 127" y="286" width="28" height="28"/>
+          }
+          @if (state().found) { <use href="/assets/documentation/animation-icons.svg#check" x="662" y="310" width="22" height="22"/> }
+          <rect class="inner-panel" x="450" y="353" width="250" height="77" rx="4"/>
+          <use [attr.href]="'/assets/documentation/animation-icons.svg#' + (state().policyStored ? 'shield-check' : 'identity')" x="464" y="369" width="31" height="31"/>
+          <text class="small-label start" x="510" y="378">{{ tr(['Anträge & Richtlinien', 'Demandes & Politiques', 'Richieste & Policy', 'Requests & Policies']) }}</text>
+          <text class="tiny-label start" x="510" y="398">{{ state().policyStored ? tr(['Introspektion gespeichert', 'Introspection enregistrée', 'Introspezione salvata', 'Introspection policy stored']) : tr(['Freigabe erforderlich', 'Autorisation requise', 'Autorizzazione necessaria', 'Approval required']) }}</text>
+          <text class="tiny-label start" x="510" y="417">{{ state().payloadSubmitted ? tr(['Nutzlastantrag eingegangen', 'Demande de données reçue', 'Richiesta di dati ricevuta', 'Payload request received']) : tr(['Zentrale Verwaltung', 'Administration centrale', 'Gestione centrale', 'Central administration']) }}</text>
+        </g>
+
+        <g class="scene-component" data-component="owner" [class.is-active]="state().activeActors.includes('owner')">
+          <rect class="component-frame" x="875" y="30" width="280" height="180" rx="7"/>
+          <use href="/assets/documentation/animation-icons.svg#person" x="995" y="49" width="40" height="40"/>
+          <text class="component-title" x="1015" y="111">Data Owner</text>
+          <text class="small-label" x="1015" y="140">{{ state().introspectionApproved ? tr(['Introspektion freigegeben', 'Introspection autorisée', 'Introspezione autorizzata', 'Introspection approved']) : state().introspectionRequest >= 1 ? tr(['Introspektionsantrag prüfen', 'Examiner l’introspection', 'Verificare introspezione', 'Review introspection request']) : tr(['Entscheidet über Freigaben', 'Décide des autorisations', 'Decide le autorizzazioni', 'Decides on access']) }}</text>
+          <text class="small-label" x="1015" y="166">{{ state().payloadAtOwner ? tr(['Nutzlast: Entscheidung offen', 'Données : décision en attente', 'Dati: decisione in attesa', 'Payload: decision pending']) : tr(['Metadaten ≠ Nutzlast', 'Métadonnées ≠ Données', 'Metadati ≠ Dati', 'Metadata ≠ Payload']) }}</text>
+          @if (state().introspectionApproved) { <use href="/assets/documentation/animation-icons.svg#permission" x="1117" y="50" width="24" height="24"/> }
+        </g>
+
+        <g class="scene-component" data-component="sdal" transform="translate(-835 -30)" [class.is-active]="state().activeActors.includes('sdal')">
+          <rect class="component-frame" x="875" y="285" width="280" height="165" rx="7"/>
+          <text class="component-title" x="1015" y="318">Secure Data Access Layer</text>
+          <text class="small-label" x="1015" y="342">PEP / PDP</text>
+          <use [attr.href]="'/assets/documentation/animation-icons.svg#' + (state().policyActive ? 'shield-check' : 'shield')" x="995" y="354" width="40" height="40"/>
+          <text class="small-label" x="1015" y="414">{{ state().policyActive ? tr(['Introspektion erlaubt', 'Introspection autorisée', 'Introspezione consentita', 'Introspection permitted']) : tr(['Zugriff wird geprüft', 'Contrôle de l’accès', 'Verifica dell’accesso', 'Access is checked']) }}</text>
+          <text class="tiny-label" x="1015" y="435">{{ tr(['Alle Zugriffe protokolliert', 'Tous les accès journalisés', 'Tutti gli accessi registrati', 'All accesses logged']) }}</text>
+        </g>
+
+        <g class="scene-component" data-component="source" transform="translate(-835 -20)" [class.is-active]="state().activeActors.includes('source')">
+          <rect class="component-frame" x="875" y="520" width="280" height="110" rx="7"/>
+          <use href="/assets/documentation/animation-icons.svg#database" x="895" y="536" width="40" height="40"/>
+          <text class="component-title start" x="953" y="551">Data Source</text>
+          <text class="tiny-label start" x="953" y="575">{{ tr(['Schema · Felder · Datentypen', 'Schéma · Champs · Types', 'Schema · Campi · Tipi', 'Schema · Fields · Types']) }}</text>
+          <use class="payload-lock" href="/assets/documentation/animation-icons.svg#lock" x="904" y="594" width="22" height="22"/>
+          <text class="small-label start" x="953" y="610">{{ tr(['Nutzlast bleibt geschützt', 'Données utiles protégées', 'Dati effettivi protetti', 'Payload stays protected']) }}</text>
+        </g>
+
+        @if (state().message; as message) {
+          <g class="message-token" [attr.data-message]="message.id" [attr.transform]="'translate(' + message.x + ' ' + message.y + ')'">
+            <circle class="message-halo" r="24"/>
+            <circle class="message-disc" r="17"/>
+            <use [attr.href]="'/assets/documentation/animation-icons.svg#' + message.icon" x="-14" y="-14" width="28" height="28"/>
+          </g>
+        }
+      </g>
+    </svg>
   </div>
+  <div class="request-message" aria-live="off">
+    <svg viewBox="0 0 40 40" aria-hidden="true"><use [attr.href]="'/assets/documentation/animation-icons.svg#' + (state().message?.icon ?? (state().payloadAtOwner ? 'person' : 'document'))" width="40" height="40"/></svg>
+    <p>{{ tr(messageDescription()) }}</p>
+  </div>
+  <section class="request-legend" aria-labelledby="request-legend-title">
+    <h3 id="request-legend-title">{{ tr(['Nachrichten', 'Messages', 'Messaggi', 'Messages']) }}</h3>
+    <ul>
+      @for (item of legend; track item.icon) {
+        <li><svg viewBox="0 0 40 40" aria-hidden="true"><use [attr.href]="'/assets/documentation/animation-icons.svg#' + item.icon" width="40" height="40"/></svg><span>{{ tr(item.label) }}</span></li>
+      }
+    </ul>
+  </section>
   <div class="request-outcome" [attr.data-submitted]="state().payloadSubmitted" aria-live="off">
     <svg viewBox="-20 -20 40 40" aria-hidden="true" focusable="false"><use href="/assets/documentation/animation-icons.svg#lock" x="-20" y="-20" width="40" height="40"/></svg>
     <div><strong>{{ state().payloadSubmitted ? tr(['Entscheidung über Nutzlastdaten ausstehend', 'Décision sur les données utiles en attente', 'Decisione sui dati effettivi in attesa', 'Payload decision pending']) : tr(['Metadatenzugriff und Datenzugriff sind getrennt', 'Métadonnées et données : des accès distincts', 'Accesso ai metadati e ai dati separati', 'Metadata and payload access are separate']) }}</strong>

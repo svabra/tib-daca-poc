@@ -16,8 +16,10 @@ describe('DaCa release history', () => {
     const releases = dacaReleaseHistory('catalog', 'de');
     expect(releases[0]?.version).toBe(DACA_VERSION);
     expect(releases.find(release => release.version === '0.2.0')?.features.some(feature => feature.title === 'Domänen an andere Personen abtreten')).toBe(true);
-    expect(releases[0]?.features).toHaveLength(5);
-    expect(releases[0]?.features.every(feature => feature.tags.includes('Animationen'))).toBe(true);
+    expect(releases[0]?.features).toHaveLength(3);
+    expect(releases[0]?.features.every(feature => feature.tags.includes('Dokumentation'))).toBe(true);
+    expect(releases.find(release => release.version === '0.3.10')?.features).toHaveLength(5);
+    expect(releases.find(release => release.version === '0.3.10')?.features.every(feature => feature.tags.includes('Animationen'))).toBe(true);
     expect(releases.find(release => release.version === '0.3.9')?.features).toHaveLength(1);
     expect(releases.find(release => release.version === '0.3.9')?.features.some(feature => feature.tags.includes('Organisationen'))).toBe(true);
     expect(releases.find(release => release.version === '0.3.8')?.features).toHaveLength(5);

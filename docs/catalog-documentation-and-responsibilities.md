@@ -229,8 +229,11 @@ results are recorded in `docs/current-status.md`; prior 24-second screenshots ar
 
 ### Animation directory, shared stations and icons
 
-Release 0.3.10 introduces this collection; the version overlay summarizes its four scenes
-and common controls in German and English, with the previous 0.3.9 notes retained separately.
+Release 0.3.10 introduced this collection. Release 0.3.11 documents the connected access-request
+scene, common icon semantics and sourcing refinements in German and English; the original
+0.3.10 notes remain in the searchable archive. Package/runtime/PWA/OpenAPI versions and
+OpenShift image pins follow the canonical release version. Main-branch CI publishes images;
+the operator applies the OpenShift rollout after publication.
 
 German animation labels use **Zugriffsrichtlinie** (plural **Zugriffsrichtlinien**) throughout
 steps, diagrams, legends, status, audit reasons and explanations. Prefer natural phrases such
@@ -263,8 +266,9 @@ Page styles must not override this component's typography, spacing or selection 
 `documentation-stations.css` now contains only the sourcing caption and Policy-help layout.
 
 `public/assets/documentation/animation-icons.svg` supplies the canonical SVG symbols for
-people, databases, buckets, files, task/policy documents, personalized applications, permission
-documents, tables, gears, shields, locks, checks, search, door/conveyor legends and controls.
+people, databases, buckets, files, task/metadata documents, personalized applications, permission
+documents, tables, gears, shields, locks, checks, search, catalog, REST API, analytics,
+applications, door/conveyor legends and controls.
 Native SVG `use` references scale those same outlines in scenes, legends and the directory.
 Ordinary symbols share a centered 40-unit view box, rounded joins and 1.7 px strokes using
 `vector-effect="non-scaling-stroke"`, so large database icons retain the same fine outline;
@@ -273,6 +277,31 @@ the product shield retaining its dark contrast on gold. Specialized animated geo
 as the matched refinement gears, moving door, telescoping conveyor, form fields and storage
 containers keeps its existing clock-driven geometry. Shared static symbols must not replace
 the moving parent groups or their selectors.
+
+The icon audit (2026-11-11) covers all four scenes, their legends, the animation index and
+the source hub/metadata pages. Standalone people already shared `person`; remaining inline
+catalog and status drawings now reference the sprite too. The semantic mapping is:
+
+| Meaning | Shared symbol |
+| --- | --- |
+| Data Analyst, Data Owner, Consumer, personalized-permission actor | `person` |
+| Electronic application / personalized authorization check | `identity` |
+| Task or prose metadata | `document` |
+| Access-rule authoring, projection and protection | `shield-check` |
+| Approval | `permission` |
+| Denied response and its legend | `rejected` |
+| Catalog context | `catalog` |
+| Introspection structure | `table` |
+
+`tick` is reused inside `permission`, `check` and `shield-check`, including the animated
+SDAL overlay; `cross` is reused inside the SDAL denial and circled rejection. Legend icons
+explicitly set their inherited `color` to theme blue, since an external SVG symbol uses
+`currentColor`, not the surrounding `stroke` declaration. Denial stays red and the gold
+product's shield stays dark. The product legend uses that same circle/shield combination.
+Validation: 75 documentation tests and the production UI build pass. Fresh Edge verification
+checks all 28 symbols and their nested references, non-scaling strokes, square display viewports,
+person reuse on every scene, matching legend colors, dark status symbols and 390 px containment.
+The six-route evidence is in `output/playwright/verify-animation-icons.cjs` and `icons-*.png`.
 
 ### Refinement gear geometry
 
@@ -403,7 +432,7 @@ UI labels spell out **Secure Data Access Layer PostgreSQL** and **Source Connect
 PostgreSQL**, with two-line headings inside the cards. DAAIF is centered at the connector's
 x-coordinate (650); its task travels vertically from the wizard's lower edge to the
 connector's upper edge. The policy-check arc runs below the wizard without crossing it.
-The Data Analyst has the same person glyph as the personalized-permission actor. The wizard
+The Data Analyst has the same person glyph as the personalized-permission actor. The Data Sourcing Task Wizard
 shows three equal columns instead of form lines and a task badge: a database above Source,
 a symmetric eight-tooth cogwheel above Transformation and an S3 bucket above Target.
 The source glyph contains a small 7-unit **PG** label between its cylinder lines. The Data
@@ -447,11 +476,11 @@ at 12 s, completing at 12.9 s. It stays open for every packet including its halo
 closes at 19.1-19.8 s. Closure signifies the end of this transfer, not revocation of the
 centrally stored policy. PEP/PDP and introspection labels remain inside the same card.
 The connector contains a hinged, telescopic conveyor with a continuous dashed tread,
-rotating rollers and a stationary support. Its pivot is (692, 349), landing at (440, 349)
+rotating rollers and a stationary support. Its pivot is (692, 349), landing at (468, 349)
 just below the payload route. Initially it stands at 90 degrees with 32 px between end
 rollers. At 12-12.9 s it lowers with exactly the door's opening progress and extends to
-252 px, forming a bridge that stops just before the doorway before any payload appears.
-Its 11 px rounded end reaches x=429, leaving a visible gap beyond the door sill at x=422;
+224 px, forming a shorter bridge before any payload appears.
+Its 11 px rounded end reaches x=457, leaving a 35 px gap beyond the door sill at x=422;
 the belt never overlaps the frame or door opening, including during folding.
 This shortened span passed all 18 sourcing tests, the production build and a fresh Edge
 check of visible clearance, lowering, reverse seek, pause, restart and repeat.
@@ -505,16 +534,21 @@ and publication invariants remain authoritative.
 ### Animated access requests: discovery, introspection, payload
 
 Route `/documentation/animated/data-consumers/access-request` is a complete, independently
-seekable 24-second explanation under consumer section 06. It uses three neutral vertical
-cards with a thick translucent active border, a compact timeline and numbered station links.
-Cards sit side by side on desktop and stack on narrow screens. Copy supports DE/FR/IT/EN
-with the existing English fallback for RM.
+seekable 24-second explanation under consumer section 06. One connected component diagram
+replaces the three isolated layer cards: Data Source and Secure Data Access Layer stay on
+the left, DaCa and Data Owner sit above, and Data Analyst sits on the right. This preserves
+the spatial orientation of the other animations. Visible routes carry the
+same canonical message icons used elsewhere. A thick translucent frame identifies both
+sender and recipient; surfaces remain neutral. Three shared chevron stations and a compact
+timeline control the diagram. A changing message caption explains the exchange and a compact
+six-icon legend explains its symbols. Small screens scroll the diagram horizontally; the
+controls, caption and legend wrap. Copy supports DE/FR/IT/EN with English fallback for RM.
 
 | Time | Illustration |
 | --- | --- |
-| 0-7 s | A search lens scans prose descriptions in DaCa. A matching catalog entry is selected at 4 s. |
-| 7-15 s | An introspection request reaches the Data Owner at 9.5 s; illustrated approval occurs at 10.5 s. Metadata returns at 11-13 s, revealing schema, fields and data types. |
-| 15-24 s | A separate payload request is filled and submitted to DaCa at 18-20 s. The final state is submitted, awaiting a Data Owner decision, with payload still locked. |
+| 0-7 s | Analyst sends a search to DaCa at 0.6-2 s. DaCa scans descriptions, selects a match at 4 s and returns prose metadata at 4.6-6.5 s. |
+| 7-15 s | Introspection application travels Analyst -> DaCa -> Data Owner at 7.2-9.5 s. Approval returns to DaCa at 10.5-11.2 s; its central PAP rule is projected to SDAL by 11.8 s. Analyst requests introspection at 11.8-12.5 s. SDAL queries the source and receives structure metadata at 12.5-13.4 s, then delivers it to the analyst at 13.4-14.6 s. Fields become visible only on arrival. |
+| 15-24 s | A separate payload request is filled at 15.5-18 s, submitted to DaCa at 18-20 s and forwarded to the Data Owner at 20.3-22 s. The final state awaits the Data Owner decision, with payload still locked. |
 
 Metadata approval is never reused as payload permission. The explanation names queries and
 Data Sourcing Tasks as payload uses, and connects to the existing Data Owner policy scene.
@@ -522,9 +556,23 @@ The explanatory footer retains central DaCa/PAP policy ownership, SDAL enforceme
 automatic access logging; it creates no real requests, policies, grants, data calls or audit
 records. No persistence or protocol changes accompany this UI.
 
-All movement and visibility come from one deterministic sampler and cancellable RAF clock.
+All movement, active routes, component frames and visibility come from one deterministic
+sampler and cancellable RAF clock. Cubic paths share their coordinates with message sampling;
+rewinding reconstructs the same token position and removes any later approval or form state.
 Pause, seek, reverse seek, endpoint play, restart, repeat, hidden-tab freezing and navigation
 cleanup retain consistent state. Reduced motion starts at zero with manual exploration.
+
+Component-scene acceptance (2026-11-11): seven focused tests verify the message itinerary,
+arrival boundaries, policy-before-metadata ordering, permanently locked payload and clock
+controls. The production Catalog UI image builds and runs locally. Fresh Edge checks cover
+all twelve message paths, sender/recipient highlighting, deterministic reverse seeking,
+metadata arrival at 14.6 s, pending owner decision, restart, pause, loop and reduced motion.
+DE/FR/IT/EN component labels fit, dark mode preserves contrast and 320/390 px mobile plus
+900 px tablet layouts scroll only the diagram. Data-model documentation and whitespace
+checks pass. Evidence: `output/playwright/request-components-*.png` and
+`output/playwright/verify-request-components*.cjs`.
+The left-source orientation also passes browser geometry checks for all nine route endpoints,
+unobstructed paths and label clearance (`output/playwright/verify-request-orientation.cjs`).
 
 Acceptance updated for the single-PG scene (2026-11-11): all 70 focused documentation tests
 pass, including the overview, access-management and access-request scenes. The production
@@ -545,5 +593,5 @@ partial poses when paused or rewound, and reset on restart/repeat. Visual checks
 desktop, dark mode, 390 px touch and 320 px French layouts, including contained scene content
 at 200% root font size. The unrelated shared header retains its existing overflow at that
 extreme enlarged size. Active frames preserve neutral surfaces; the new styles remain
-within budget. Prior access-request browser acceptance remains applicable to its unchanged
-three-stage sequence.
+within budget. These sourcing checks are retained independently of the updated access-request
+component diagram described above.

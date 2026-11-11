@@ -1,5 +1,58 @@
 # Current status
 
+Release **0.3.11** (2026-11-11) packages the connected access-request component scene,
+left-side source/SDAL orientation, consistent scene/legend icons, Data Sourcing Task Wizard
+terminology and shorter conveyor. Canonical package, runtime, OpenAPI, PWA and OpenShift
+image-pin versions are synchronized. New DE/EN release notes archive 0.3.10. Publication
+runs through the existing main-branch workflow; the operator handles the OpenShift rollout.
+Release validation: 830 frontend tests pass (824 Catalog UI, 6 Control Plane UI), both
+production web builds and their PWA release metadata checks pass, and canonical-version,
+runtime-version and generated data-model/OpenAPI checks pass. The required UI regression
+gate runs through the versioned pre-commit hook before creating the release commit.
+
+Animation icon consistency (2026-11-11): audited all four scenes and their legends, plus the
+source hub and metadata explanation. All standalone people already referenced the canonical
+`person` symbol. Remaining inline check/cross, catalog, REST, analytics and application glyphs
+now use the shared sprite. Access-rule authoring/projection and its legend use `shield-check`,
+matching the access-request scene; owner approval uses the common permission document.
+Scene and legend share the circled rejection symbol, and the overview legend uses the same
+gold product/shield combination. Legend icons explicitly inherit theme blue rather than muted
+text color. Shared outlines retain 1.7 px non-scaling strokes at different display sizes.
+Custom moving door, conveyor, meshing gears and data-storage containers retain their geometry.
+Validation: all 75 documentation tests, production Catalog UI build and data-model check pass.
+Fresh Edge checks confirm all 28 shared symbols resolve, preserve non-scaling strokes and use
+square viewports across all four scenes and both source-topic pages. Scene/legend colors match;
+390 px layouts stay contained, and light/dark checks confirm readable composite symbols.
+Evidence: `output/playwright/verify-animation-icons.cjs` and `output/playwright/icons-*.png`.
+
+Access-request component scene (2026-11-11): **Vom Finden zum Antrag** now connects Data
+Analyst, DaCa, Data Owner, Secure Data Access Layer and Data Source in one diagram. Animated
+message icons follow visible routes; thick translucent frames identify sender and recipient.
+The diagram preserves the established orientation: Data Source and SDAL on the left,
+DaCa and Data Owner above, and Data Analyst on the right. All message paths and captions
+follow those positions.
+Browser geometry checks confirm all nine paths meet their component edges, avoid crossing
+component interiors and keep route labels outside the cards.
+Applications pass through DaCa, introspection approval returns from the Data Owner, and its
+access rule stays in DaCa/PAP while the SDAL receives the projection. Only then does the
+analyst retrieve schema/fields/types through the SDAL. The separate payload application is
+forwarded to the Data Owner and remains pending. Three shared chevrons, a 24-second clock,
+message caption, icon legend and four UI languages remain; narrow screens scroll the scene.
+No backend, persistence, permissions or protocol behavior changes.
+Validation: seven focused tests, the production Catalog UI Docker build and data-model
+documentation check pass. Fresh Edge checks cover all twelve message paths, exact reverse
+seeking, delayed metadata visibility, pending payload, pause/restart/repeat and reduced motion.
+DE/FR/IT/EN labels fit their components; 320/390 px mobile and 900 px tablet views contain
+horizontal scrolling within the diagram. Light/dark evidence and browser scripts are in
+`output/playwright/request-components-*` and `output/playwright/verify-request-components*.cjs`.
+
+Sourcing conveyor spacing (2026-11-11): the deployed belt is one roller interval shorter
+(224 rather than 252 SVG units). Its end roller lands at x=468; the rounded cap at x=457
+leaves 35 units before the door sill. The connector pivot and existing motion timing remain.
+
+Sourcing terminology (2026-11-11): the DAAIF box and its explanations now use
+**Data Sourcing Task Wizard**, including the source-layer description and feature list.
+
 Release **0.3.10** (2026-11-11) packages the animated documentation: 26-second Data Pipeline,
 24-second PostgreSQL sourcing, 24-second metadata/access request and 32-second access management.
 It includes the shared animation index, chevron stations, icons, legends, seekable clocks,
@@ -84,8 +137,8 @@ retracts and folds upright at 21.6-22.5 s. Every pose derives from the seekable 
 denial leaves the door closed and the conveyor raised and idle. Neutral cards and existing
 active borders are preserved.
 
-Door-clearance adjustment: the end roller now lands at x=440 (252 px deployed span),
-leaving the rounded belt cap outside the door sill. All 18 sourcing tests, a fresh production
+Door-clearance adjustment: the end roller now lands at x=468 (224 px deployed span),
+leaving a 35 px gap from the rounded belt cap to the door sill. All 18 sourcing tests, a fresh production
 build and Edge checks pass, including visible frame clearance, synchronized lowering,
 reverse seek, pause, restart, reduced motion and repeat.
 
