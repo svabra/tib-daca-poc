@@ -50,6 +50,12 @@ Use `--keep-stack` only for local diagnosis. CI always removes containers, netwo
 The runner chooses free host ports, records the unique Compose project name, and never attaches
 to the normal DAAIF or DaCa runtime volumes.
 
+The S3 test server and client are built from DAAIF's `docker/minio/Dockerfile`. It downloads
+the pinned upstream GitHub release assets and verifies their SHA-256 digests, because the
+former `minio/minio` and `minio/mc` Docker Hub repositories are unavailable to fresh runners.
+The catalog UI also needs the sample product backend for its Nginx upstream; the dedicated
+UI workflow starts it together with OPA before checking readiness.
+
 ## Artifacts
 
 Each run writes to `output/playwright/data-analyst-journey/<run-id>/`:
@@ -60,7 +66,7 @@ Each run writes to `output/playwright/data-analyst-journey/<run-id>/`:
 - `summary.md` and `summary.json` with product URN, policy revision and both Git SHAs;
 - timestamped logs from every container.
 
-These generated files are ignored by Git. GitHub retains manual workflow artifacts for 14 days.
+These generated files are ignored by Git. GitHub retains failure artifacts for three days.
 
 ## Official run
 

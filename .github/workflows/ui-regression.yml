@@ -26,7 +26,10 @@ jobs:
         id: chromium
         uses: browser-actions/setup-chrome@v2
       - name: Start catalog UI and API
-        run: docker compose up --build --wait postgres catalog-api catalog-ui
+        run: docker compose up --build --wait postgres catalog-api opa sample-data-product catalog-ui
+      - name: Show startup diagnostics after failure
+        if: failure()
+        run: docker compose ps --all && docker compose logs --no-color --tail=100
       - name: Run logical-model UI regression
         run: >-
           npm run test:ui-regression --

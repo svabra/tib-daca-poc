@@ -178,6 +178,8 @@ services:
     depends_on:
       catalog-api:
         condition: service_healthy
+      sample-data-product:
+        condition: service_healthy
     restart: unless-stopped
 
   control-plane-ui:

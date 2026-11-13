@@ -90,7 +90,7 @@ def run_daaif_creation(page: Page, daaif_url: str, artifacts: Path) -> dict[str,
     page.reload()
     milestone(page, artifacts, 1, "daaif-electronic-cantons")
 
-    page.goto(f"{daaif_url}/ingestion-workbench")
+    page.goto(f"{daaif_url}/ingestion-workbench/manual")
     page.locator('[data-ingestion-tile="csv"]').click()
     page.locator("[data-csv-file-input]").set_input_files(csv_path)
     submit = page.locator("[data-csv-import-submit]")
