@@ -1,5 +1,10 @@
 # BIT DaCa
 
+Release **0.3.13** (2026-11-13) prevents private group identifiers from appearing in personal
+access details when a group has no active directory entry. Published membership snapshots
+still determine access; known active groups retain their names. The profile regression
+includes Jan Waser and validates distinct local portraits for all 27 selectable personas.
+
 Release **0.3.12** (2026-11-13) adds direct electronic product-creation requests, fixed and
 rolling data-basis windows, four DAAIF HTTP formats per product, personal endpoint access,
 public/private comments and searchable metadata selections. The DE/EN release archive
@@ -456,7 +461,7 @@ UI vocabulary uses **Data Owner** in German, French, Italian and English, includ
 roles, menus and help. Business terms are grouped under **Terminologie** in German
 (Terminologie / Terminologia / Terminology in French / Italian / English).
 
-All 26 selectable PoC personas have individual local portraits, including Fausto Marzo.
+All 27 selectable PoC personas have individual local portraits, including Jan Waser and Fausto Marzo.
 Fausto is selectable as Publication Approver and is the control
 person for all products owned by Marcello Hebeisa, including newly created products.
 Federal person/owner labels follow **department office organizational unit**, for example

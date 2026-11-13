@@ -20,9 +20,13 @@ Expired/future grants are excluded using the Europe/Zurich civil date. Published
 snapshots remain authoritative until a new policy activates.
 
 The safe grant response additionally contains `subjectDisplayName`, `subjectOrganization`
-and `groupId` (null for a personal grant). Names come from the existing trusted identity
-directory/group registry; no other group members, private policy or other users' requests
-are exposed. Responses use `Cache-Control: private, no-store` and `Vary: X-DaCa-User`.
+and `groupId` (null for a personal grant). Group identities are disclosed only for existing,
+active group-directory entries. A missing or inactive group uses `subjectDisplayName: Gruppe`,
+an empty `subjectOrganization` and `groupId: null`; raw policy IDs are never used as fallback
+names or mislabelled as M2M identities. This redaction does not revoke a grant: its published
+membership snapshot remains authoritative until a new policy activates. Names come from
+the existing trusted identity directory/group registry; no other group members, private
+policy or other users' requests are exposed. Responses use `Cache-Control: private, no-store` and `Vary: X-DaCa-User`.
 No persistence change is required.
 
 Cards filter the returned grants by their endpoint protocol (REST or PostgreSQL). They show

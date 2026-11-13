@@ -49,7 +49,10 @@ def test_all_selectable_poc_profiles_have_distinct_local_photos_and_canonical_la
     response = client.get("/api/v1/demo-users")
     assert response.status_code == 200
     users = {item["id"]: item for item in response.json()}
-    assert len(users) == 26
+    assert len(users) == 27
+    assert users["jan.waser"]["displayName"] == "Jan Waser"
+    assert users["jan.waser"]["organization"] == "Kanton St. Gallen"
+    assert users["jan.waser"]["avatarUrl"] == "/assets/data-owners/jan-waser.webp"
     assert users["kassandra.valdata"]["organization"] == "EFD ESTV"
     assert users["christian.spider"]["organization"] == "VBS armasuisse"
     assert users["sibilla.micheli"]["organization"] == "VBS GS"
@@ -67,7 +70,7 @@ def test_all_selectable_poc_profiles_have_distinct_local_photos_and_canonical_la
     assert users["marcello.hebeisa"]["organization"] == "EFD BIT PS CPS"
     assert users["noemie.rochat"]["organization"] == "Kanton Neuchâtel"
     assets = Path(__file__).resolve().parents[3] / "apps/catalog-ui/public"
-    assert len({user["avatarUrl"] for user in users.values()}) == 26
+    assert len({user["avatarUrl"] for user in users.values()}) == len(users)
     assert users["fausto.marzo"]["organization"] == "EFD BIT PS"
     assert users["fausto.marzo"]["roles"] == ["publication_approver"]
     assert users["fausto.marzo"]["avatarUrl"] == "/assets/data-owners/fausto-marzo.webp"

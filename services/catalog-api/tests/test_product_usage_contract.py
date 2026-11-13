@@ -90,6 +90,9 @@ def test_effective_access_is_actor_scoped_redacted_and_uses_zurich_date(
     assert payload["grants"][0] == {
         "grantId": payload["grants"][0]["grantId"],
         "subjectType": "group",
+        "subjectDisplayName": "Gruppe",
+        "subjectOrganization": "",
+        "groupId": None,
         "protocols": ["http"],
         "dataVariant": "original",
         "validFrom": "2026-08-13",

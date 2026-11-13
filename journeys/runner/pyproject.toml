@@ -1,6 +1,6 @@
 [project]
 name = "daca-journey-runner"
-version = "0.3.12"
+version = "0.3.13"
 description = "Transient cross-system Playwright journeys for DAAIF and DaCa"
 requires-python = ">=3.12"
 dependencies = [

@@ -106,6 +106,30 @@ def test_group_members_see_only_their_own_group_and_nonmembers_have_no_access(cl
         assert body["granted"] is False and body["grants"] == []
 
 
+@pytest.mark.parametrize("group_state", ["missing", "inactive"])
+def test_unavailable_group_identity_is_redacted_without_changing_published_access(
+    client, prepared, session_factory, group_state
+):
+    with session_factory() as session:
+        group = session.get(IdentityGroup, "personal-test-sg")
+        if group_state == "missing":
+            session.delete(group)
+        else:
+            group.active = False
+        session.commit()
+    response = get(client, "beat.stalder")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["granted"] and len(body["grants"]) == 1
+    grant = body["grants"][0]
+    assert grant["subjectType"] == "group"
+    assert grant["subjectDisplayName"] == "Gruppe"
+    assert grant["subjectOrganization"] == "" and grant["groupId"] is None
+    assert grant["protocols"] == ["postgresql"] and grant["dataVariant"] == "modified"
+    for private in ("personal-test-sg", "Steueranalyse SG", "M2M", "jan.waser", "memberIds"):
+        assert private not in response.text
+
+
 @pytest.mark.parametrize("broken", ["missing", "invalid", "unpublished"])
 def test_unknown_policy_never_looks_like_no_access(client, prepared, session_factory, broken):
     with session_factory() as session:

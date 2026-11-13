@@ -1,5 +1,11 @@
 # Current status
 
+Release **0.3.13** fixes the two Catalog API regressions that blocked the 0.3.12 PostgreSQL
+compatibility job. Profile validation includes all 27 selectable personas and Jan's local
+portrait. Personal access details redact group IDs and names when the directory entry is
+missing or inactive. They retain the published grant with a neutral group label, while
+known active groups keep their display information. The DE/EN release history archives 0.3.12.
+
 Release **0.3.12** (2026-11-13) groups the electronic MWST creation journey, general
 fixed/rolling data-basis requirements, four HTTP format descriptors on one DAAIF product,
 personal permissions, product comments, metadata multi-selection and welcome-area search.
