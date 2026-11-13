@@ -17,6 +17,12 @@ the requester has more than one task. Gold, Platinum and real enforcement assert
 PostgreSQL healthchecks now require TCP readiness after initialization, so fresh stacks do
 not start the APIs against the temporary socket-only initialization server.
 
+The cloud journey exposed a product-selection race: an earlier detail read could finish after
+the routed product loaded and replace the access-setting context. Completed reads now update
+their cache entry without changing a different active product or its revision. A regression
+reproduces the delayed-response ordering. The Linux CI browser also uses the required startup
+flag and reports early-exit diagnostics rather than a silent DevTools timeout.
+
 Release **0.3.13** fixes the two Catalog API regressions that blocked the 0.3.12 PostgreSQL
 compatibility job. Profile validation includes all 27 selectable personas and Jan's local
 portrait. Personal access details redact group IDs and names when the directory entry is

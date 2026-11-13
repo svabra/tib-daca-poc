@@ -263,6 +263,27 @@ describe('CatalogApiService identity refresh', () => {
     expect(api.product().createdAt).toBe('2026-08-13T08:00:00Z');
   });
 
+  it('keeps the routed product and its revision when a previous detail read finishes later', () => {
+    const selectedId = '3a2930ed-3eee-599b-82b5-e138b149d1a2';
+    const api = TestBed.inject(CatalogApiService);
+    const http = TestBed.inject(HttpTestingController);
+    flushRefresh(requestsFor(http, 'kassandra.valdata'), 'Previous product', 'Inbox', 'Task');
+    const staleDetailRequests = requestsFor(http, 'kassandra.valdata');
+
+    api.selectProduct(selectedId);
+    http.expectOne(`/api/v1/data-products/${selectedId}`).flush(
+      { ...wireProduct('Routed product', selectedId), revision: 7 },
+      { headers: { ETag: '"7"' } },
+    );
+    http.expectOne(`/api/v1/data-products/${selectedId}/endpoints`).flush([]);
+    flushProductDetail(staleDetailRequests, 'Previous product refreshed');
+
+    expect(api.product().id).toBe(selectedId);
+    expect(api.product().title).toBe('Routed product');
+    expect(api.etag()).toBe('"7"');
+    expect(api.products().find((product) => product.title === 'Previous product refreshed')).toBeDefined();
+  });
+
   it('submits a renewal with only the opaque source grant and the two editable values', () => {
     userId.set('beat.stalder');
     const api = TestBed.inject(CatalogApiService);

@@ -363,15 +363,17 @@ export class CatalogApiService {
           result.endpoints.map((endpoint) => normalizeEndpoint(endpoint)),
           true,
         );
-        this.setCurrentProduct(product);
         this.productsState.update((products) => {
           const existing = products.some((item) => item.id === product.id);
           return existing
             ? products.map((item) => (item.id === product.id ? product : item))
             : [...products, product];
         });
-        this.etag.set(result.product.headers.get('etag') ?? `"${product.revision}"`);
-        this.usingFallback.set(false);
+        if (!this.selectedProductId || this.selectedProductId === id) {
+          this.setCurrentProduct(product);
+          this.etag.set(result.product.headers.get('etag') ?? `"${product.revision}"`);
+          this.usingFallback.set(false);
+        }
         return product;
       }),
     );

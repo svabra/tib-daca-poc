@@ -18,6 +18,9 @@ remaining interface and timezone limitations.
 Domain-network object requests use bounded batches to stay below HTTP proxy URL limits
 even with large domain lists, preserving merged objects and their domain memberships.
 
+Product pages and access settings retain their selected product and revision when an older
+detail request finishes later. Delayed responses still update their own product cache entry.
+
 Tabular DAAIF products have one catalog identity and four registered HTTP formats: REST/JSON,
 CSV, Excel and Parquet. Select the format in the overview or usage page to open DAAIF and
 start that data request with the same product permission. See [HTTP formats](docs/http-product-formats.md).

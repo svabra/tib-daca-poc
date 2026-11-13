@@ -17,6 +17,8 @@ const edgePath = args.get('--edge-path')
 const remotePort = Number(args.get('--remote-debugging-port') ?? 9400 + Math.floor(Math.random() * 400));
 const screenshotDirectory = args.get('--screenshot-dir');
 const profileDirectory = await mkdtemp(path.join(tmpdir(), 'daca-edge-e2e-'));
+let browserStderr = '';
+let browserLaunchError = null;
 
 function invariant(condition, message) {
   if (!condition) throw new Error(message);
@@ -105,6 +107,9 @@ async function connectBrowser() {
   const deadline = Date.now() + 15_000;
   let lastError;
   while (Date.now() < deadline) {
+    if (browserLaunchError || edge.exitCode !== null || edge.signalCode) {
+      throw new Error(`Browser exited before DevTools was ready: ${browserLaunchError?.message ?? edge.exitCode ?? edge.signalCode}\n${browserStderr}`);
+    }
     try {
       const response = await fetch(`http://127.0.0.1:${remotePort}/json/version`);
       if (response.ok) return response.json();
@@ -113,11 +118,13 @@ async function connectBrowser() {
     }
     await sleep(150);
   }
-  throw new Error(`Microsoft Edge DevTools did not become ready: ${lastError ?? 'timeout'}`);
+  throw new Error(`Browser DevTools did not become ready: ${lastError ?? 'timeout'}\n${browserStderr}`);
 }
 
 const edge = spawn(edgePath, [
   '--headless=new',
+  // Hosted Linux CI restricts the user namespaces needed by Chrome's sandbox.
+  ...(process.platform === 'linux' && process.env.CI === 'true' ? ['--no-sandbox'] : []),
   '--disable-gpu',
   '--disable-default-apps',
   // Keep machine-installed extensions out of the isolated application regression.
@@ -130,7 +137,9 @@ const edge = spawn(edgePath, [
   '--remote-allow-origins=*',
   `--user-data-dir=${profileDirectory}`,
   'about:blank',
-], { stdio: 'ignore', windowsHide: true });
+], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+edge.stderr?.on('data', (chunk) => { browserStderr = (browserStderr + chunk.toString()).slice(-6000); });
+edge.on('error', (error) => { browserLaunchError = error; });
 
 let cdp;
 let sessionId;

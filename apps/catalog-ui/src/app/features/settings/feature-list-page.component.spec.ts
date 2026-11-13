@@ -16,8 +16,9 @@ describe('DaCa release history', () => {
     const releases = dacaReleaseHistory('catalog', 'de');
     expect(releases[0]?.version).toBe(DACA_VERSION);
     expect(releases.find(release => release.version === '0.2.0')?.features.some(feature => feature.title === 'Domänen an andere Personen abtreten')).toBe(true);
-    expect(releases[0]?.features).toHaveLength(1);
+    expect(releases[0]?.features).toHaveLength(2);
     expect(releases[0]?.features[0].title).toBe('Private Gruppenkennungen in eigenen Berechtigungen verbergen');
+    expect(releases[0]?.features[1].title).toBe('Produktkontext bei langsamen Antworten bewahren');
     const release0312 = releases.find(release => release.version === '0.3.12');
     expect(release0312?.features).toHaveLength(8);
     expect(release0312?.features.some(feature => feature.title === 'Eigene Berechtigungen pro Schnittstelle sehen')).toBe(true);

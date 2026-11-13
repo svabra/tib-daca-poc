@@ -41,6 +41,7 @@ export const DACA_FEATURE_RELEASE = {
         introduction: `DaCa ${DACA_VERSION} verbindet Metadaten, pers\u00f6nliche Suche, Dom\u00e4nennetze und kontrollierte Freigaben im zentralen Datenkatalog der Data Platform BIT.`,
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
+          { title: 'Produktkontext bei langsamen Antworten bewahren', description: 'Produktseiten und Freigaben behalten das angeforderte Datenprodukt auch bei parallelen Antworten. Alte Detailantworten wechseln weder die Ansicht noch die Revision.' },
           { title: 'Private Gruppenkennungen in eigenen Berechtigungen verbergen', description: 'Gruppen ohne aktiven Verzeichniseintrag erhalten einen neutralen Namen. Interne Kennungen und Mitglieder bleiben verborgen; die veröffentlichte Berechtigung gilt weiterhin.' },
           { title: 'Bugfix: grosse Domänennetze zuverlässig laden', description: 'Kleinere Gruppen beim Abruf zugehöriger Katalogobjekte verhindern zu lange HTTP-Adressen. Gemeinsame Objekte behalten alle Domänenzuordnungen.' },
           { title: 'Datenprodukt in vier HTTP-Formaten beziehen', description: 'REST/JSON, CSV, Excel und Parquet sind am selben DAAIF-Datenprodukt katalogisiert. Die Formatauswahl startet den Datenbezug in DAAIF. Dateien enthalten den vollständigen Produktstand; REST unterstützt seitenweise Abrufe. Eine gemeinsame individuelle oder Gruppenfreigabe gilt für alle HTTP-Formate.' },
@@ -345,6 +346,7 @@ export const DACA_FEATURE_RELEASE = {
         introduction: `DaCa ${DACA_VERSION} brings metadata, personal search, domain networks and governed approvals together in the central catalog of the BIT data platform.`,
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
+          { title: 'Preserve product context across delayed responses', description: 'Product pages and access settings keep the requested product when parallel reads finish out of order. Older detail responses update their own cache without replacing the current product or revision.' },
           { title: 'Hide private group identifiers in your permissions', description: 'Groups without an active directory entry use a neutral name. Internal identifiers and members stay hidden; the published grant still applies.' },
           { title: 'Bugfix: load large domain networks reliably', description: 'Smaller batches of related catalog objects prevent HTTP URLs from exceeding proxy limits. Shared objects retain all domain memberships.' },
           { title: 'Use one product in four HTTP formats', description: 'REST/JSON, CSV, Excel and Parquet are cataloged on the same DAAIF product. Format selection starts the request in DAAIF. Files contain the complete product snapshot; REST supports pagination. One individual or group product grant applies to every HTTP representation.' },

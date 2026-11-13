@@ -5,6 +5,11 @@ descriptions, lineage, provenance and access policies have one authoritative cat
 The administrative control-plane prototype records observations and historical configuration;
 it is outside the catalog's metadata and authorization request path.
 
+The UI caches product details by identity and product identifier. A completed read may update
+its own cache entry, but it may replace the active product and ETag only while that product
+is still selected. Responses from a previous identity are discarded before updating the cache.
+This keeps routed product pages and access settings stable when requests finish out of order.
+
 ```mermaid
 flowchart LR
   Owner[Data owner] -->|HTTP| CatalogUI[Catalog Angular PWA]
