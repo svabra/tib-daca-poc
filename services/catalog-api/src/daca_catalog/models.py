@@ -1412,6 +1412,59 @@ class GlossaryTermProposalReview(Base):
     proposal: Mapped[GlossaryTermProposal] = relationship(back_populates="reviews")
 
 
+class DataProductComment(Base):
+    __tablename__ = "data_product_comments"
+    __table_args__ = (
+        CheckConstraint("visibility IN ('public', 'private')", name="ck_product_comment_visibility"),
+        CheckConstraint("length(trim(text)) BETWEEN 1 AND 4000", name="ck_product_comment_text"),
+        Index("ix_product_comments_visible", "data_product_id", "visibility", "created_at", "id"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    data_product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("data_products.id", ondelete="CASCADE"), nullable=False)
+    author_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    visibility: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class ProductCreationRequest(Base):
+    """A commissioned new product; deliberately separate from access requests."""
+    __tablename__ = "product_creation_requests"
+    __table_args__ = (
+        CheckConstraint("status IN ('submitted', 'in_progress', 'fulfilled', 'rejected')", name="ck_product_creation_status"),
+        CheckConstraint("tax_year BETWEEN 1900 AND 2100", name="ck_product_creation_year"),
+        CheckConstraint("basis_from IS NULL OR basis_until >= basis_from", name="ck_product_creation_basis_dates"),
+        CheckConstraint("update_frequency IS NULL OR update_frequency IN ('once', 'realtime', 'hourly', 'daily', 'weekly', 'annually')", name="ck_product_creation_frequency"),
+        CheckConstraint("(basis_window_type = 'fixed' AND rolling_window_size IS NULL AND rolling_window_unit IS NULL) OR (basis_window_type = 'rolling' AND basis_from IS NULL AND basis_until IS NULL AND rolling_window_size IS NOT NULL AND rolling_window_size BETWEEN 1 AND 10000 AND rolling_window_unit IS NOT NULL AND rolling_window_unit IN ('days', 'weeks', 'months', 'years'))", name="ck_product_creation_window"),
+        CheckConstraint("(tax_year IS NOT NULL AND canton_code IS NOT NULL AND basis_window_type = 'fixed' AND basis_from IS NULL AND basis_until IS NULL AND legal_basis IS NULL AND update_frequency IS NULL) OR (tax_year IS NULL AND canton_code IS NULL AND legal_basis IS NOT NULL AND update_frequency IS NOT NULL AND ((basis_window_type = 'fixed' AND basis_from IS NOT NULL AND basis_until IS NOT NULL) OR basis_window_type = 'rolling'))", name="ck_product_creation_requirements"),
+        Index("ix_product_creation_requester", "requester_user_id", "status"),
+        Index("ix_product_creation_owner", "owner_user_id", "status"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    request_number: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    requester_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    owner_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)
+    source_product_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    proposed_title: Mapped[str] = mapped_column(String(255), nullable=False)
+    purpose: Mapped[str] = mapped_column(Text, nullable=False)
+    tax_year: Mapped[int | None] = mapped_column(Integer)
+    canton_code: Mapped[str | None] = mapped_column(String(2))
+    basis_from: Mapped[date | None] = mapped_column(Date)
+    basis_until: Mapped[date | None] = mapped_column(Date)
+    basis_window_type: Mapped[str] = mapped_column(String(16), nullable=False, default="fixed", server_default="fixed")
+    rolling_window_size: Mapped[int | None] = mapped_column(Integer)
+    rolling_window_unit: Mapped[str | None] = mapped_column(String(8))
+    legal_basis: Mapped[str | None] = mapped_column(Text)
+    update_frequency: Mapped[str | None] = mapped_column(String(32))
+    formats: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="submitted")
+    decision_comment: Mapped[str | None] = mapped_column(Text)
+    result_product_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("data_products.id", ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
 class WorkflowTask(Base):
     __tablename__ = "workflow_tasks"
     __table_args__ = (
@@ -1429,6 +1482,9 @@ class WorkflowTask(Base):
         ForeignKey("search_view_shares.id", ondelete="CASCADE"), index=True
     )
     task_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    product_creation_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("product_creation_requests.id", ondelete="RESTRICT"), index=True
+    )
     task_kind: Mapped[str] = mapped_column(String(32), nullable=False, default="action")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")
     assignee_user_id: Mapped[str] = mapped_column(ForeignKey("demo_users.id"), nullable=False)

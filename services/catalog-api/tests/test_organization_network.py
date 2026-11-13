@@ -178,7 +178,13 @@ def test_search_scopes_cover_models_domains_terms_and_consumption_without_counti
 
 def test_search_scopes_never_include_physical_tables_after_source_access_was_returned(session_factory):
     from daca_catalog.modeling_seed import VIBDBU_PHYSICAL_SOURCE_ID
-    from daca_catalog.models import PhysicalDatabase, PhysicalSchema, PhysicalSchemaSnapshot, PhysicalSourceAccessState, PhysicalTable
+    from daca_catalog.models import (
+        PhysicalDatabase,
+        PhysicalSchema,
+        PhysicalSchemaSnapshot,
+        PhysicalSourceAccessState,
+        PhysicalTable,
+    )
 
     provision(session_factory)
     with session_factory() as session:

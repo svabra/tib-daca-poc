@@ -1,0 +1,27 @@
+<div class="selection-picker" (focusout)="leave($event)">
+  <ul class="selection-tags" [attr.aria-label]="copy().selected">
+    @for (item of selected(); track item.id) {
+      <li><span>{{ item.label }}</span>@if (!disabled()) {<button type="button" [attr.aria-label]="item.label+' entfernen'" (click)="remove(item.id)">×</button>}</li>
+    } @empty {<li class="selection-empty">{{ copy().empty }}</li>}
+  </ul>
+  @if (!disabled()) {
+    <label class="selection-search">{{ copy().search }}
+      <input #searchInput type="search" role="combobox" autocomplete="off" maxlength="255" [placeholder]="copy().placeholder" [value]="query()"
+        [attr.aria-controls]="listId" [attr.aria-expanded]="expanded()" aria-autocomplete="list"
+        [attr.aria-activedescendant]="expanded()&&results().length?listId+'-'+activeIndex():null"
+        (input)="search($any($event.target).value)" (focus)="activeIndex.set(0);open.set(true)" (keydown)="keys($event)">
+    </label>
+    @if (expanded()) {
+      <p class="selection-status" role="status">{{ matches().length ? matches().length+' Treffer' : copy().noMatches }}@if (matches().length>10) { · Die ersten 10 werden angezeigt. Suche weiter eingrenzen. }</p>
+    } @else {<p class="selection-status">{{ copy().helper }}</p>}
+    <ul #resultsList class="selection-results" [id]="listId" [hidden]="!expanded()" role="listbox" [attr.aria-label]="copy().results">
+      @for (item of results(); track item.id) {
+        <li role="option" [id]="listId+'-'+$index" [attr.aria-selected]="activeIndex()===$index" [class.is-active]="activeIndex()===$index"
+          (pointerdown)="$event.preventDefault()" (click)="choose(item.id)">
+          <strong>{{ item.preferredLabel }}</strong><small>{{ item.definition }}</small>
+          @if (kind()==='term' && aliases(item); as names) {<small>Abkürzungen / Synonyme: {{ names }}</small>}
+        </li>
+      }
+    </ul>
+  }
+</div>

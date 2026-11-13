@@ -1530,6 +1530,7 @@ def data_product_response(
             )
         )
     payload = DataProductResponse.model_validate(product).model_dump(by_alias=True)
+    payload["canManage"] = bool(actor and actor in product_owners(session, product))
     owner = session.get(DemoUser, product.owner_user_id) if product.owner_user_id else None
     if owner:
         metadata = dict(product.extra_metadata or {})
@@ -4905,6 +4906,8 @@ def create_router() -> APIRouter:
         if not can_view_private_product(session, product, actor):
             raise HTTPException(404, "Data product not found")
         response.headers["ETag"] = etag_for_revision(product.revision)
+        response.headers["Cache-Control"] = "private, no-store"
+        response.headers["Vary"] = "X-DaCa-User"
         return data_product_response(session, product, actor)
 
     @router.patch(
@@ -6607,12 +6610,15 @@ def create_router() -> APIRouter:
     )
     def get_effective_access(
         product_id: uuid.UUID,
+        response: Response,
         session: SessionDep,
         actor: ActorDep,
     ) -> ProductEffectiveAccessResponse:
         """Return only the current actor's safe, active grant summary."""
         product = find_product(session, product_id)
         require_product_view(session, product, actor)
+        response.headers["Cache-Control"] = "private, no-store"
+        response.headers["Vary"] = "X-DaCa-User"
         return effective_access_response(session, product, actor)
 
     @router.get(
@@ -7095,6 +7101,10 @@ def create_app(
 
     install_problem_handlers(app)
     app.include_router(create_router())
+    from .product_creation_requests import create_product_creation_router
+    app.include_router(create_product_creation_router())
+    from .product_comments import create_product_comments_router
+    app.include_router(create_product_comments_router())
     app.include_router(create_modeling_router())
     app.include_router(create_representation_router())
     app.include_router(create_semantic_graph_router())

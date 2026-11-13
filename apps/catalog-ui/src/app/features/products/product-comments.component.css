@@ -1,0 +1,27 @@
+:host { display:block; margin-top:24px; min-width:0; }
+.comments-scope { color:var(--daca-muted); font-size:.8rem; }
+.comments-list { list-style:none; padding:0; margin:0; display:grid; gap:16px; }
+.comments-list li { padding:16px 0; border-top:1px solid var(--daca-border); min-width:0; }
+.comments-list header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.comments-list header div { display:grid; gap:3px; min-width:0; }
+.comments-list header span, .comments-list time { color:var(--daca-muted); font-size:.75rem; }
+.comment-visibility { border:1px solid var(--daca-border); padding:3px 8px; white-space:nowrap; }
+.comment-text { white-space:pre-wrap; overflow-wrap:anywhere; margin:12px 0; }
+.comment-delete-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
+.comment-delete-actions p { flex-basis:100%; margin:0; font-size:.75rem; }
+.comment-delete-actions .daca-button { padding:6px 9px; font-size:.72rem; min-height:36px; }
+.product-comment-dialog { width:min(640px,calc(100vw - 32px)); max-height:90dvh; padding:24px; border:1px solid var(--daca-border); border-top:4px solid var(--daca-red); color:var(--daca-ink); background:var(--daca-surface,#fff); overflow:auto; }
+.product-comment-dialog::backdrop { background:#00182c80; }
+.product-comment-dialog header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
+.product-comment-dialog h2 { margin:0 0 20px; font-size:1.2rem; }
+.comment-close { border:1px solid var(--daca-border); background:none; color:inherit; min-width:36px; min-height:36px; font-size:1.4rem; cursor:pointer; }
+.comment-fields { margin:0; padding:0; border:0; min-width:0; }
+.comment-fields>label { display:grid; gap:8px; font-weight:700; }
+.comment-fields textarea { width:100%; min-width:0; box-sizing:border-box; padding:10px; color:inherit; background:var(--daca-surface,#fff); border:1px solid var(--daca-border); font:inherit; resize:vertical; }
+.comment-fields small { font-size:.75rem; font-weight:400; color:var(--daca-muted); }
+.comment-visibility-options { display:grid; gap:12px; border:1px solid var(--daca-border); margin:18px 0; padding:16px; min-width:0; }
+.comment-visibility-options legend { font-weight:700; padding:0 5px; }
+.comment-visibility-options label { display:flex; align-items:flex-start; gap:10px; }
+.comment-visibility-options label span { display:grid; gap:4px; }
+.product-comment-dialog footer { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:10px; margin-top:20px; }
+@media (max-width:600px) { .product-comment-dialog { padding:16px; } .product-comment-dialog footer .daca-button { min-height:44px; } }

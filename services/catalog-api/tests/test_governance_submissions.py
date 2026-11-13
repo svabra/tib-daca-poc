@@ -216,6 +216,7 @@ def test_four_eyes_approval_activates_only_after_both_targets(
     )
     assert submission["reviewSnapshot"]["grants"][0]["groupSnapshot"]["memberIds"] == [
         "beat.stalder",
+        "jan.waser",
         "sarah.brunner",
     ]
     assert submission["reviewSnapshot"]["grants"][1]["groupSnapshot"]["memberIds"] == [

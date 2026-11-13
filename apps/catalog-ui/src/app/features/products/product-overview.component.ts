@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ViewChild, computed, effect, inject, signal, untracked } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StatusBadgeComponent } from '@bit-daca/design-system';
 import { CatalogApiService } from '../../core/catalog-api.service';
@@ -6,12 +6,19 @@ import { DemoIdentityService } from '../../core/demo-identity.service';
 import { ProductServiceLevelApiService } from '../service-level/product-service-level-api.service';
 import { ServiceLevelSummaryResponse } from '../service-level/product-service-level.models';
 import { ProductWorkspaceNavComponent } from '../../shared/product-workspace-nav.component';
+import { ProductCommentsComponent } from './product-comments.component';
+import { ProductEndpointAccessComponent } from './product-endpoint-access.component';
+import { ProductPersonalAccessService } from './product-personal-access.service';
+import { ProductAccessActionComponent } from './product-access-action.component';
+import { DaaifDownloadLinkComponent } from '../../shared/daaif-download-link.component';
+import { endpointFormatLabel } from '../../shared/daaif-http-formats';
 import { accessConsumerSummary, canTransferOwnership, DataOwnerProfile, deliveryProtocols, resolvedDataOwner, resolvedDeputyDataOwner } from './my-data-products';
 
 @Component({
   selector: 'daca-product-overview',
   standalone: true,
-  imports: [ProductWorkspaceNavComponent, RouterLink, StatusBadgeComponent],
+  imports: [DaaifDownloadLinkComponent, ProductAccessActionComponent, ProductCommentsComponent, ProductEndpointAccessComponent, ProductWorkspaceNavComponent, RouterLink, StatusBadgeComponent],
+  providers: [ProductPersonalAccessService],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './product-overview.component.css',
   template: `
@@ -28,9 +35,7 @@ import { accessConsumerSummary, canTransferOwnership, DataOwnerProfile, delivery
         <p>{{ product().description }}</p>
       </div>
       <div class="product-overview-heading-actions">
-        @if (canRequestAccess()) {
-          <a class="daca-button product-overview-request-access" [routerLink]="['/products', product().id, 'access-request']">Zugriff anfragen</a>
-        }
+        <daca-product-access-action [productId]="productId" [eligible]="requesterContext()" />
         <daca-status-badge [tone]="product().lifecycle === 'active' ? 'green' : 'orange'">
           @if (product().qualityMedal) { {{ qualityLabel() }} · }{{ product().lifecycle === 'active' ? 'Aktiv' : 'Entwurf' }} · Revision {{ product().revision }}
         </daca-status-badge>
@@ -79,8 +84,14 @@ import { accessConsumerSummary, canTransferOwnership, DataOwnerProfile, delivery
           }
           <div class="product-overview-actions">
             <a class="daca-button is-secondary" [routerLink]="['/products', product().id, 'sla']">SLA öffnen</a>
-            <a class="daca-button" [routerLink]="['/products', product().id, 'access']">Freigaben verwalten</a>
-            <a class="daca-button is-secondary" [routerLink]="['/products', product().id, 'metadata']">Metadaten bearbeiten</a>
+            @if (canManageProduct()) {
+              <a class="daca-button" [routerLink]="['/products', product().id, 'access']">Freigaben verwalten</a>
+              <a class="daca-button is-secondary" [routerLink]="['/products', product().id, 'metadata']">Metadaten bearbeiten</a>
+            }
+          </div>
+          <div class="product-overview-feedback-actions">
+            <a class="daca-button is-secondary product-overview-small-action" routerLink="/product-creation-requests/new" [queryParams]="{sourceProductId:productId}">Abgeleitetes Datenprodukt beantragen</a>
+            <button class="daca-button is-secondary product-overview-small-action" type="button" [disabled]="product().id !== productId" (click)="openComment()">Kommentar zum Datenprodukt erfassen</button>
           </div>
         </div>
       </section>
@@ -110,27 +121,39 @@ import { accessConsumerSummary, canTransferOwnership, DataOwnerProfile, delivery
     </div>
 
     <section class="daca-card product-overview-endpoints" aria-labelledby="product-endpoints-title">
-      <div class="daca-card-header"><h2 id="product-endpoints-title">Bereitgestellte Schnittstellen</h2><span>{{ product().endpoints.length }}</span></div>
+      <div class="daca-card-header"><h2 id="product-endpoints-title">Bereitgestellte Schnittstellen</h2><span>{{ product().id === productId ? product().endpoints.length : '…' }}</span></div>
       <div class="daca-card-body">
+        @if (product().id === productId) {
+        <daca-daaif-download-link [endpoints]="product().endpoints" />
         @for (endpoint of product().endpoints; track endpoint.id) {
           <article>
-            <strong>{{ endpoint.title }}</strong>
-            <span>{{ endpoint.protocol === 'http-rest' ? 'REST' : 'PostgreSQL' }}</span>
+            <div class="product-overview-endpoint-heading"><strong>{{ endpoint.title }}</strong><span>{{ endpointLabel(endpoint) }}</span></div>
+            <daca-product-endpoint-access [protocol]="endpoint.protocol" />
           </article>
         }
+        } @else { <p role="status">Schnittstellen werden geladen …</p> }
       </div>
     </section>
+    <daca-product-comments [productId]="productId" />
   `,
 })
 export class ProductOverviewComponent {
   readonly api = inject(CatalogApiService);
+  readonly personalAccess = inject(ProductPersonalAccessService);
+  readonly endpointLabel=endpointFormatLabel;
   private readonly identity = inject(DemoIdentityService);
   private readonly serviceLevelApi = inject(ProductServiceLevelApiService);
   private readonly route = inject(ActivatedRoute);
-  private readonly productId = this.route.snapshot.paramMap.get('id') ?? '';
+  readonly productId = this.route.snapshot.paramMap.get('id') ?? '';
+  @ViewChild(ProductCommentsComponent) private comments?: ProductCommentsComponent;
   readonly product = this.api.product;
-  readonly canRequestAccess = computed(() => this.product().id === this.productId
+  readonly canManageProduct = computed(() => this.product().id === this.productId
+    && this.product().canManage === true && (this.identity.userId() === this.product().ownerUserId
+      || this.identity.userId() === this.product().deputyOwnerUserId
+      || canTransferOwnership(this.product(), this.identity.userId())));
+  readonly requesterContext = computed(() => this.product().id === this.productId
     && !canTransferOwnership(this.product(), this.identity.userId()));
+  readonly canRequestAccess = computed(() => this.requesterContext() && this.personalAccess.ready());
   readonly serviceLevel = signal<ServiceLevelSummaryResponse | null>(null);
   readonly serviceLevelLoading = signal(true);
   readonly serviceLevelError = signal(false);
@@ -166,9 +189,15 @@ export class ProductOverviewComponent {
     this.api.selectProduct(this.productId);
     effect(() => {
       this.identity.userId();
+      untracked(() => this.personalAccess.load(this.productId));
+    });
+    effect(() => {
+      this.identity.userId();
       this.loadServiceLevel();
     });
   }
+
+  openComment(): void { if (this.product().id === this.productId) this.comments?.openComposer(); }
 
   saveControlPerson(): void {
     const controlPersonUserId = this.selectedControlPersonId();

@@ -69,7 +69,7 @@ Update generated sections with `npm run docs:data-model`. Validate them with
 
 | Persistence context | Storage | Tables | Alembic head | Migration fingerprint |
 |---|---|---:|---|---|
-| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 104 | `0048_open_ended_access_requests` | `686ccf00c61f32ce` |
+| [Catalog data model](catalog.md) | PostgreSQL (`daca_catalog`; 18.4 local, 17 production) | 106 | `0052_creation_windows` | `486184425801488a` |
 | [Control-plane data model](control-plane.md) | PostgreSQL (`daca_control_plane`) | 6 | `20260803_0001` | `ff3a5ea9ca863788` |
 | [Sample data-product model](sample-data-product.md) | PostgreSQL (`daca_sample`) | 4 | `0004_vibdbu_buildings` | `62c6765d78832f77` |
 
@@ -103,6 +103,7 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.canonical_ontology_versions`
 - `catalog.catalog_object_responsibilities`
 - `catalog.data_model_role_assignments`
+- `catalog.data_product_comments`
 - `catalog.data_product_domains`
 - `catalog.data_product_fields`
 - `catalog.data_product_glossary_terms`
@@ -173,6 +174,7 @@ The context prefix disambiguates names such as the two independent `audit_events
 - `catalog.policy_deployments`
 - `catalog.policy_revisions`
 - `catalog.product_context_graphs`
+- `catalog.product_creation_requests`
 - `catalog.product_quality_assessments`
 - `catalog.product_semantic_mappings`
 - `catalog.provenance_events`

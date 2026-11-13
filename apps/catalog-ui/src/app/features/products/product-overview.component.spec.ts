@@ -1,15 +1,16 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { CatalogApiService } from '../../core/catalog-api.service';
-import { DomainSummary } from '../../core/catalog.models';
+import { DomainSummary, ProductEffectiveAccessGrant, ProductEffectiveAccessResponse } from '../../core/catalog.models';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 import type { DemoUser } from '../../core/demo-identity.service';
 import { FALLBACK_PRODUCT } from '../../core/catalog.seed';
 import { ProductServiceLevelApiService } from '../service-level/product-service-level-api.service';
 import { ServiceLevelDefinition, ServiceLevelSummaryResponse } from '../service-level/product-service-level.models';
 import { ProductOverviewComponent } from './product-overview.component';
+import { ProductCommentsApiService } from './product-comments-api.service';
 
 vi.mock('@bit-daca/design-system', async () => {
   const { Component } = await import('@angular/core');
@@ -89,12 +90,14 @@ const USERS: DemoUser[] = [
 ];
 
 async function render(canEdit = true, summaryFails = false) {
-  const product = signal({ ...FALLBACK_PRODUCT, id: PRODUCT_ID, ownerUserId: 'joel.ruod', deputyOwnerUserId: 'kassandra.valdata', revision: 8, domains: [PRODUCT_DOMAIN] });
+  const product = signal({ ...FALLBACK_PRODUCT, canManage: canEdit, id: PRODUCT_ID, ownerUserId: 'joel.ruod', deputyOwnerUserId: 'kassandra.valdata', revision: 8, domains: [PRODUCT_DOMAIN] });
   const catalog = {
     product,
     products: signal([product()]),
     ownedAccessConsumers: signal([]),
     selectProduct: vi.fn(),
+    identityUserId: () => identity.userId(),
+    loadEffectiveAccess: vi.fn((_id:string):Observable<ProductEffectiveAccessResponse> => of({granted:false,asOfDate:'2026-11-12',policyRevision:null,grants:[]})),
     loadProduct: vi.fn(() => {
       product.update((value) => ({ ...value, revision: value.revision + 1 }));
       return of(product());
@@ -114,6 +117,7 @@ async function render(canEdit = true, summaryFails = false) {
       { provide: CatalogApiService, useValue: catalog },
       { provide: ProductServiceLevelApiService, useValue: serviceLevelApi },
       { provide: DemoIdentityService, useValue: identity },
+      { provide: ProductCommentsApiService, useValue: {list: () => Promise.resolve({items:[],canViewPrivate:false,nextOffset:null})} },
       { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: PRODUCT_ID }) } } },
     ],
   }).compileComponents();
@@ -141,6 +145,48 @@ describe('ProductOverviewComponent SLA control person', () => {
     expect(root.querySelector('.product-overview-request-access')).toBeNull();
   });
 
+  it('shows direct and group grants per endpoint and offers an access change instead of a new request', async () => {
+    const {fixture,component,catalog,identity,product}=await render();
+    const direct:ProductEffectiveAccessGrant={grantId:'direct',subjectType:'person',subjectDisplayName:'Jan Waser',subjectOrganization:'Kanton St. Gallen',groupId:null,
+      protocols:['http'],dataVariant:'original',validFrom:'2026-11-01',validUntil:'2027-11-12',weeklyAvailability:null,purpose:null,expiresInDays:365,expiryState:'active',
+      sourceRequestId:null,sourceRequestNumber:null,renewalEligibility:{eligible:false,reason:'sourceRequestUnavailable',renewalRequestId:null}};
+    const group:ProductEffectiveAccessGrant={...direct,grantId:'group',subjectType:'group',subjectDisplayName:'Steueranalyse SG',groupId:'steueranalyse-sg',protocols:['postgresql'],dataVariant:'modified'};
+    catalog.loadEffectiveAccess.mockReturnValue(of({granted:true,asOfDate:'2026-11-12',policyRevision:2,grants:[direct,group]}));
+    identity.userId.set('jan.waser');fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();
+    const root=fixture.nativeElement as HTMLElement;
+    const action=root.querySelector<HTMLAnchorElement>('.product-overview-request-access')!;
+    expect(action.textContent?.trim()).toBe('Zugriffänderung beantragen');
+    expect(action.getAttribute('href')).toBe(`/products/${PRODUCT_ID}/access-request?intent=change`);
+    expect(root.querySelector('.product-overview-heading-actions')?.textContent).not.toContain('Zugriff anfragen');
+    const cards=[...root.querySelectorAll('.product-overview-endpoints article')];
+    const rest=cards.find(card=>card.querySelector('.product-overview-endpoint-heading span')?.textContent==='HTTP / REST (JSON)')!;
+    const postgres=cards.find(card=>card.querySelector('.product-overview-endpoint-heading span')?.textContent==='PostgreSQL')!;
+    expect(rest.textContent).toContain('Individuell berechtigt · Jan Waser');
+    expect(rest.textContent).toContain('Originaldaten');expect(rest.textContent).toContain('12.11.2027');
+    expect(rest.textContent).not.toContain('Steueranalyse SG');
+    expect(postgres.textContent).toContain('Über Gruppe · Steueranalyse SG');expect(postgres.textContent).toContain('Modifiziert / minimiert');
+    expect(postgres.textContent).not.toContain('Jan Waser');
+    expect(component.personalAccess.granted()).toBe(true);
+    product.update(value=>({...value,id:'another-product'}));fixture.detectChanges();
+    expect(root.querySelector('daca-product-endpoint-access')).toBeNull();
+    expect(root.textContent).toContain('Schnittstellen werden geladen');
+  });
+
+  it('shows an unavailable status and no new request when permission lookup fails',async()=>{
+    const {fixture,component,catalog,identity}=await render();
+    catalog.loadEffectiveAccess.mockReturnValue(throwError(()=>new Error('private policy data')));
+    identity.userId.set('jan.waser');fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();
+    expect(component.canRequestAccess()).toBe(false);
+    expect(fixture.nativeElement.textContent).toContain('Ihre Berechtigungen sind derzeit nicht verfügbar');
+    expect(fixture.nativeElement.textContent).not.toContain('private policy data');
+    expect(fixture.nativeElement.querySelector('.product-overview-request-access')).toBeNull();
+    const heading=fixture.nativeElement.querySelector('.product-overview-heading-actions') as HTMLElement;
+    expect(heading.querySelector('[role="alert"]')?.textContent).toContain('Zugriffsstatus');
+    catalog.loadEffectiveAccess.mockReturnValue(of({granted:false,asOfDate:'2026-11-12',policyRevision:2,grants:[]}));
+    heading.querySelector<HTMLButtonElement>('button')!.click();fixture.detectChanges();
+    expect(heading.querySelector('.product-overview-request-access')?.textContent).toBe('Zugriff anfragen');
+  });
+
   it('shows the safe controller identity, organization and role and resolves duplicate names by organization', async () => {
     const { fixture, component } = await render();
     const root = fixture.nativeElement as HTMLElement;
@@ -157,6 +203,21 @@ describe('ProductOverviewComponent SLA control person', () => {
     expect(component.selectedControlPersonId()).toBe('thomas.estv');
     expect(component.activePublicationApprovers().map((user) => user.id)).toEqual(['thomas.bag', 'thomas.estv']);
     expect(root.textContent).not.toContain('Inaktiv');
+  });
+
+  it('places the two small reader actions in the footer and hides management actions for non-owners', async () => {
+    const {fixture,identity,product}=await render();
+    const root=fixture.nativeElement as HTMLElement;
+    expect([...root.querySelectorAll('.product-overview-actions a')].some(link=>link.textContent?.includes('Freigaben verwalten'))).toBe(true);
+    identity.userId.set('thomas.estv');
+    product.update(value=>({...value,canManage:false}));fixture.detectChanges();await fixture.whenStable();
+    expect(root.textContent).not.toContain('Freigaben verwalten');
+    expect(root.textContent).not.toContain('Metadaten bearbeiten');
+    expect(root.querySelector('.product-overview-heading-actions a[href*="creation-requests"]')).toBeNull();
+    const actions=root.querySelector('.product-overview-main .product-overview-feedback-actions')!;
+    expect(actions.textContent).toContain('Abgeleitetes Datenprodukt beantragen');
+    expect(actions.textContent).toContain('Kommentar zum Datenprodukt erfassen');
+    expect(actions.querySelectorAll('.product-overview-small-action')).toHaveLength(2);
   });
 
   it('refreshes the product revision after saving so a second controller update is not stale', async () => {

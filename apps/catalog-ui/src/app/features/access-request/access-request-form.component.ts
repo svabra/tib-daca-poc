@@ -1,6 +1,6 @@
 import { AccessEndDatePipe } from '../../shared/access-end-date.pipe';
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DacaGlossaryTermComponent } from '@bit-daca/design-system';
@@ -8,22 +8,25 @@ import { CatalogApiService } from '../../core/catalog-api.service';
 import { DemoIdentityService } from '../../core/demo-identity.service';
 import { AccessRequestStatus, AccessRequestSubmission, StoredAccessRequest } from '../../core/catalog.models';
 import { canTransferOwnership, deliveryProtocols, resolvedDataOwner } from '../products/my-data-products';
+import { ProductPersonalAccessService } from '../products/product-personal-access.service';
 
 @Component({
   selector: 'daca-access-request-form',
   standalone: true,
   imports: [AccessEndDatePipe, DatePipe, ReactiveFormsModule, RouterLink, DacaGlossaryTermComponent],
+  providers: [ProductPersonalAccessService],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <nav class="access-request-breadcrumb" aria-label="Brotkrümelnavigation">
-      <a routerLink="/products">Datenprodukte</a><span aria-hidden="true">›</span><span>Zugriff anfragen</span>
+      <a routerLink="/products">Datenprodukte</a><span aria-hidden="true">›</span><span>{{ isChangeRequest() ? 'Zugriffänderung beantragen' : 'Zugriff anfragen' }}</span>
     </nav>
 
     <section class="daca-page-heading access-request-heading">
       <div>
         <p class="daca-eyebrow">Zugriffsantrag</p>
-        <h1>Zugriff auf Datenprodukt anfragen</h1>
-        <p>Beschreiben Sie den vorgesehenen Datenbezug für eine persönliche <daca-glossary-term term="eIAM" />-Identität oder einen <daca-glossary-term term="M2M" />-Service. Der Data Owner prüft Identität, Rechtslage und Zugriffskonditionen.</p>
+        <h1>{{ isChangeRequest() ? 'Zugriffänderung beantragen' : 'Zugriff auf Datenprodukt anfragen' }}</h1>
+        @if (isChangeRequest()) { <p>Beschreiben Sie die gewünschte Änderung Ihres Zugriffs und deren Verwendungszweck. Der Data Owner prüft den beantragten Umfang über den bestehenden Freigabeprozess.</p> }
+        @else { <p>Beschreiben Sie den vorgesehenen Datenbezug für eine persönliche <daca-glossary-term term="eIAM" />-Identität oder einen <daca-glossary-term term="M2M" />-Service. Der Data Owner prüft Identität, Rechtslage und Zugriffskonditionen.</p> }
       </div>
     </section>
 
@@ -33,11 +36,15 @@ import { canTransferOwnership, deliveryProtocols, resolvedDataOwner } from '../p
         <p>Sie sind für dieses Datenprodukt verantwortlich und verfügen bereits über den benötigten Arbeitszugriff.</p>
         <a class="daca-button is-secondary" routerLink="/products">Zurück zu meinen Datenprodukten</a>
       </section>
+    } @else if (personalAccess.loading()) {
+      <p role="status">Ihr bestehender Zugriff wird geprüft …</p>
+    } @else if (personalAccess.error()) {
+      <section class="daca-card access-request-owner-guard"><p role="alert">Ihr bestehender Zugriff konnte nicht geprüft werden. Bitte laden Sie den Zugriffsstatus erneut.</p><button class="daca-button is-secondary" type="button" (click)="personalAccess.retry()">Erneut prüfen</button></section>
     } @else if (createdRequest(); as receipt) {
       <section class="daca-card access-request-confirmation" aria-live="polite">
         <span class="access-request-confirmation-icon" aria-hidden="true">✓</span>
         <p class="daca-eyebrow">Antrag gespeichert</p>
-        <h2>Ihre Zugriffsanfrage ist eingegangen</h2>
+        <h2>{{ isChangeRequest() ? 'Ihr Änderungsantrag ist eingegangen' : 'Ihre Zugriffsanfrage ist eingegangen' }}</h2>
         <p>Der Antrag wurde gespeichert und an den zuständigen Data Owner übergeben.</p>
         <section class="access-request-owner-contact" aria-label="Zuständiger Data Owner">
           @if (owner(); as owner) {
@@ -70,6 +77,14 @@ import { canTransferOwnership, deliveryProtocols, resolvedDataOwner } from '../p
           <header>
             <p class="daca-eyebrow">Antragsangaben</p>
             <h2>Wer benötigt welche Daten – und wofür?</h2>
+            @if (isChangeRequest()) {
+              <div aria-label="Ihr bestehender Zugriff">
+                @for (grant of personalAccess.status()?.grants; track grant.grantId) {
+                  <p><strong>{{ grant.subjectType === 'group' ? 'Über Gruppe' : 'Individuell berechtigt' }} · {{ grant.subjectDisplayName }}</strong><br>{{ grant.protocols.join(' / ').replace('http', 'REST') }} · {{ grant.dataVariant === 'original' ? 'Originaldaten' : 'Modifiziert / minimiert' }} · {{ grant.validFrom | date:'dd.MM.yyyy' }} – {{ grant.validUntil | accessEndDate }}</p>
+                }
+                <p>Die Änderung wird als neuer Antrag geprüft. Bestehende persönliche Freigaben und Gruppenfreigaben gelten bis zu einer freigegebenen Änderung weiter.</p>
+              </div>
+            }
             <p>Mit <span aria-hidden="true">*</span><span class="sr-only">Stern</span> markierte Felder sind erforderlich.</p>
           </header>
 
@@ -175,7 +190,7 @@ import { canTransferOwnership, deliveryProtocols, resolvedDataOwner } from '../p
           <footer>
             <a class="daca-button is-secondary" routerLink="/products">Abbrechen</a>
             <button class="daca-button is-primary" type="submit" [disabled]="submitting()">
-              {{ submitting() ? 'Antrag wird gespeichert…' : 'Zugriffsanfrage einreichen' }}
+              {{ submitting() ? 'Antrag wird gespeichert…' : isChangeRequest() ? 'Zugriffänderung beantragen' : 'Zugriffsanfrage einreichen' }}
             </button>
           </footer>
         </form>
@@ -226,6 +241,8 @@ export class AccessRequestFormComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly fb = inject(FormBuilder);
   readonly api = inject(CatalogApiService);
+  readonly personalAccess = inject(ProductPersonalAccessService);
+  readonly isChangeRequest = computed(() => this.personalAccess.granted());
   private readonly identity = inject(DemoIdentityService);
   readonly productId = this.route.snapshot.paramMap.get('id') ?? '';
   readonly product = computed(() => this.api.products().find((item) => item.id === this.productId) ?? this.api.product());
@@ -235,6 +252,7 @@ export class AccessRequestFormComponent {
   readonly submitting = signal(false);
   readonly submitError = signal<string | null>(null);
   private finiteEndDate='';
+  private contextGeneration = 0;
 
   readonly form = this.fb.nonNullable.group({
     consumerType: this.fb.nonNullable.control<'person' | 'machine'>('person'),
@@ -252,9 +270,36 @@ export class AccessRequestFormComponent {
   });
 
   constructor() {
-    this.form.controls.contactEmail.setValue(this.api.identityUser().email);
     this.api.selectProduct(this.productId);
-    this.api.loadMyAccessRequests(this.productId).subscribe((requests) => this.existingRequests.set(requests));
+    effect(() => {
+      const actor = this.api.identityUserId();
+      untracked(() => this.loadForActor(actor));
+    });
+    effect(() => {
+      const access = this.personalAccess.status();
+      if (!access?.granted || this.form.dirty) return;
+      const protocols = new Set(access.grants.flatMap(grant => grant.protocols));
+      const variants = new Set(access.grants.map(grant => grant.dataVariant));
+      const validUntil = access.grants.map(grant => grant.validUntil).sort().at(-1)!;
+      const openEnded = validUntil === '9999-12-31';
+      this.form.patchValue({requestedProtocol:protocols.size === 2 ? 'both' : protocols.has('postgresql') ? 'postgresql' : 'http',
+        requestedVariant:variants.size === 1 ? access.grants[0].dataVariant : 'either',validFrom:access.asOfDate,
+        validUntil:openEnded ? '' : validUntil,openEnded});
+      this.finiteEndDate = openEnded ? futureDate(372) : validUntil;
+      if (openEnded) this.form.controls.validUntil.disable();
+    });
+  }
+
+  private loadForActor(actor: string): void {
+    const generation = ++this.contextGeneration;
+    this.createdRequest.set(null); this.existingRequests.set([]); this.submitting.set(false); this.submitError.set(null);
+    this.form.reset(); this.form.controls.validUntil.enable(); this.finiteEndDate = '';
+    this.form.controls.contactEmail.setValue(this.api.identityUser().email);
+    this.consumerTypeChanged();
+    this.personalAccess.load(this.productId);
+    this.api.loadMyAccessRequests(this.productId).subscribe(requests => {
+      if (generation === this.contextGeneration && actor === this.api.identityUserId()) this.existingRequests.set(requests);
+    });
   }
 
   isOwnProduct(): boolean {
@@ -297,7 +342,8 @@ export class AccessRequestFormComponent {
 
   submit(): void {
     this.form.markAllAsTouched();
-    if (this.form.invalid || this.periodInvalid() || this.submitting()) return;
+    if (this.form.invalid || this.periodInvalid() || this.submitting() || !this.personalAccess.ready() || this.isOwnProduct()) return;
+    const generation = this.contextGeneration;
     const value = this.form.getRawValue();
     const submission: AccessRequestSubmission = {
       consumerType: value.consumerType,
@@ -316,12 +362,14 @@ export class AccessRequestFormComponent {
     this.submitError.set(null);
     this.api.createAccessRequest(this.productId, submission).subscribe({
       next: (request) => {
+        if (generation !== this.contextGeneration) return;
         this.submitting.set(false);
         this.createdRequest.set(request);
         this.existingRequests.update((requests) => [request, ...requests]);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       },
       error: (error: Error) => {
+        if (generation !== this.contextGeneration) return;
         this.submitting.set(false);
         this.submitError.set(error.message);
       },

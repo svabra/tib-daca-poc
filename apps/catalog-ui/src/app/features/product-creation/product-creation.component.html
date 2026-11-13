@@ -1,0 +1,63 @@
+<section class="daca-page-heading"><div><p class="daca-eyebrow">Data Analyst → Data Owner</p><h1>{{ isNew() ? 'Abgeleitetes Datenprodukt beantragen' : detail() ? 'Erstellungsantrag' : 'Erstellungsanträge' }}</h1><p>Ein abgeleitetes Datenprodukt beauftragen und das veröffentlichte Ergebnis nachvollziehen.</p></div></section>
+<nav class="creation-links"><a routerLink="/documentation/journeys/mwst-ertraege-st-gallen-2026">MWST-Journey</a><a routerLink="/product-creation-requests">Meine Anträge und Aufträge</a><a routerLink="/tasks">Aufgaben</a></nav>
+@if (error()) { <p class="daca-alert is-error" role="alert">{{ error() }}</p> }
+@if (loading()) { <p role="status">Wird geladen …</p> }
+@else if (isNew()) {
+  <form class="daca-card creation-form" (ngSubmit)="submit()">
+    <label>Ausgangsprodukt<select name="source" [(ngModel)]="sourceId" required><option value="">Bitte wählen</option>@for (product of products(); track product.id) {<option [value]="product.id">{{ product.title }}</option>}</select></label>
+    <p>Der zuständige Data Owner wird aus dem Ausgangsprodukt ermittelt. Der Auftrag erteilt keinen Zugriff auf die Ausgangsdaten.</p>
+    <label>Gewünschtes Datenprodukt<input name="title" [(ngModel)]="title" required minlength="3" maxlength="255"></label>
+    <fieldset class="creation-basis"><legend>Zeitspanne der Datengrundlage</legend>
+      <label>Zeitfenster<select name="basisWindowType" [ngModel]="basisWindowType" (ngModelChange)="changeWindowType($event)" required><option value="fixed">Fixes Zeitfenster</option><option value="rolling">Rollierendes Zeitfenster</option></select></label>
+      @if (basisWindowType === 'fixed') {
+        <div class="creation-scope"><label>Von<input name="basisFrom" type="date" [(ngModel)]="basisFrom" required></label><label>Bis<input name="basisUntil" type="date" [(ngModel)]="basisUntil" [min]="basisFrom" required></label></div>
+        @if (periodInvalid()) { <p class="creation-field-error" role="alert">Das Enddatum muss am oder nach dem Startdatum liegen.</p> }
+      } @else {
+        <div class="creation-scope"><label>Umfang des Zeitfensters<input name="rollingWindowSize" type="number" [(ngModel)]="rollingWindowSize" min="1" max="10000" step="1" required aria-describedby="rolling-window-hint"></label><label>Zeiteinheit<select name="rollingWindowUnit" [(ngModel)]="rollingWindowUnit" required>@for (unit of windowUnits; track unit.value) { <option [value]="unit.value">{{ unit.label }}</option> }</select></label></div>
+        <p id="rolling-window-hint" class="creation-window-hint">Beispiel: die letzten 12 Monate. Das Zeitfenster verschiebt sich mit dem Datenstand jeder Aktualisierung. Die Frequenz der Updates wählen Sie separat.</p>
+      }
+    </fieldset>
+    <label>Verwendungszweck<textarea name="purpose" [(ngModel)]="purpose" required minlength="10" maxlength="2000" rows="4" placeholder="Wofür benötigen Sie das abgeleitete Datenprodukt?"></textarea></label>
+    <label>Gesetzlicher Auftrag<textarea name="legalBasis" [(ngModel)]="legalBasis" required minlength="5" maxlength="2000" rows="3"></textarea></label>
+    <div class="creation-scope creation-delivery">
+      <div><label>Gewünschte Datenformate<select #formatPicker name="formatPicker" aria-describedby="creation-formats-hint" aria-required="true" (change)="addFormat(formatPicker.value); formatPicker.value=''">
+        <option value="">Format auswählen</option>@for (option of formatOptions; track option.value) { <option [value]="option.value" [disabled]="formats.includes(option.value)">{{ option.label }}</option> }
+      </select></label><small id="creation-formats-hint">Mehrere Formate können ausgewählt werden.</small>
+      <ul class="creation-selected-formats" aria-label="Ausgewählte Datenformate">@for (format of formats; track format) { <li>{{ formatLabel(format) }}<button type="button" (click)="removeFormat(format)" [attr.aria-label]="formatLabel(format) + ' entfernen'">×</button></li> }</ul></div>
+      <label>Frequenz der Updates<select name="updateFrequency" [(ngModel)]="frequency" required>
+        <option value="">Bitte wählen</option><option value="once">Einmalig</option><option disabled aria-hidden="true">────────────────</option>
+        @for (option of frequencyOptions.slice(1); track option.value) { <option [value]="option.value">{{ option.label }}</option> }
+      </select></label>
+    </div>
+    <button class="daca-button" type="submit" [disabled]="busy() || !canSubmit()">{{ busy() ? 'Wird eingereicht …' : 'Erstellungsantrag einreichen' }}</button>
+  </form>
+} @else if (detail(); as request) {
+  <article class="daca-card creation-detail" [attr.data-product-creation-request]="request.id">
+    <p class="daca-eyebrow">{{ request.requestNumber }} · {{ statusLabel(request.status) }}</p><h2>{{ request.proposedTitle }}</h2>
+    <dl><div><dt>Antragsteller</dt><dd>{{ request.requesterName }}</dd></div><div><dt>Data Owner</dt><dd>{{ request.ownerName }}</dd></div><div><dt>Ausgangsprodukte</dt><dd>{{ request.sourceTitles.join(' · ') }}</dd></div>
+      @if (request.basisFrom || request.basisWindowType === 'rolling') { <div><dt>Zeitspanne der Datengrundlage</dt><dd>@if (request.basisWindowType === 'rolling') { Rollierendes Zeitfenster: {{ windowLabel(request.rollingWindowSize,request.rollingWindowUnit) }}, bezogen auf den jeweiligen Datenstand } @else { Fixes Zeitfenster: {{ request.basisFrom | date:'dd.MM.yyyy' }} – {{ request.basisUntil | date:'dd.MM.yyyy' }} }</dd></div><div><dt>Gesetzlicher Auftrag</dt><dd class="creation-purpose">{{ request.legalBasis }}</dd></div><div><dt>Frequenz der Updates</dt><dd>{{ frequencyLabel(request.updateFrequency) }}</dd></div> }
+      @else { <div><dt>Ausschnitt</dt><dd>Firmenzeilen · {{ request.cantonCode }} · {{ request.taxYear }}</dd></div> }
+      <div><dt>Gewünschte Datenformate</dt><dd>@for (format of request.formats; track format) { {{ formatLabel(format) }}@if (!$last) {, } }</dd></div></dl>
+    <h3>Verwendungszweck</h3><p class="creation-purpose">{{ request.purpose }}</p>
+    @if (request.decisionComment) {<p>{{ request.decisionComment }}</p>}
+    @if (isOwner() && request.status === 'submitted') {
+      <label>Kommentar / Ablehnungsgrund<textarea [(ngModel)]="comment" rows="3"></textarea></label>
+      <div class="creation-links"><button class="daca-button" type="button" [disabled]="busy()" (click)="decide('accept')">Auftrag annehmen</button><button class="daca-button is-secondary" type="button" [disabled]="busy() || comment.trim().length < 3" (click)="decide('reject')">Mit Begründung ablehnen</button></div>
+    }
+    @if (request.status === 'in_progress' && isOwner()) {
+      <section class="creation-work"><h3>Produkt selbst in DAAIF erstellen</h3>
+      @if (request.basisWindowType === 'rolling') { <p>Das rollierende Zeitfenster von {{ windowLabel(request.rollingWindowSize,request.rollingWindowUnit) }} in der Abfrage auf den jeweiligen Datenstand beziehen und das eigene Ergebnis mit den gewünschten Formaten und Updates veröffentlichen.</p> }
+      @else if (request.basisFrom) { <p>Die angefragte Datengrundlage für {{ request.basisFrom | date:'dd.MM.yyyy' }} bis {{ request.basisUntil | date:'dd.MM.yyyy' }} aufbereiten und das eigene Ergebnis mit den gewünschten Formaten und Updates veröffentlichen.</p> }
+      @else { <p>Die bearbeitbare Abfrage auf {{ request.cantonCode }} und {{ request.taxYear }} filtern, ausführen und das gespeicherte Ergebnis als eigenes Produkt veröffentlichen. Keine Summierung.</p> }
+      @if (request.daaifNotebookUrl) {<a class="daca-button" [href]="request.daaifNotebookUrl" target="_blank" rel="noopener noreferrer">DAAIF als {{ request.ownerName }} öffnen ↗</a>} @else {<p role="alert">Die DAAIF-Adresse ist noch nicht konfiguriert.</p>}
+      <p>Danach SLA und Veröffentlichung durch die zuständige Kontrollperson freigeben lassen und {{ request.requesterName }} den Zugriff auf das Ergebnisprodukt gewähren.</p>
+      <label>Eigenes freigegebenes Ergebnisprodukt<select [(ngModel)]="resultId"><option value="">Produkt wählen</option>@for (product of ownedResults(); track product.id) {<option [value]="product.id">{{ product.title }}</option>}</select></label>
+      <button class="daca-button" type="button" [disabled]="busy() || !resultId" (click)="fulfill()">Auftrag mit Ergebnis abschliessen</button></section>
+    }
+    @if (request.resultProductId) {<a class="daca-button" [routerLink]="['/products', request.resultProductId, 'usage']">Ergebnis und Downloads öffnen</a>}
+    @if (!isOwner() && request.status === 'in_progress') {<p role="status">{{ request.ownerName }} bearbeitet den Auftrag. Nach der Veröffentlichung erhalten Sie eine Ergebnisbenachrichtigung.</p>}
+  </article>
+} @else {
+  <a class="daca-button" routerLink="/product-creation-requests/new">Abgeleitetes Datenprodukt beantragen</a>
+  <div class="creation-list">@for (request of requests(); track request.id) {<a class="daca-card" [routerLink]="['/product-creation-requests', request.id]"><small>{{ request.requestNumber }} · {{ statusLabel(request.status) }}</small><h2>{{ request.proposedTitle }}</h2><p>{{ request.requesterName }} → {{ request.ownerName }} · @if (request.basisWindowType === 'rolling') { Rollierend: {{ windowLabel(request.rollingWindowSize,request.rollingWindowUnit) }} } @else if (request.basisFrom) { {{ request.basisFrom }} – {{ request.basisUntil }} } @else { {{ request.cantonCode }}, {{ request.taxYear }} }</p></a>} @empty {<p>Noch keine Erstellungsanträge für diese Identität.</p>}</div>
+}

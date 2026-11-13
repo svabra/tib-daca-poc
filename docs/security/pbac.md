@@ -1,5 +1,57 @@
 # PBAC policy flow
 
+## Personal permissions on the product overview
+
+The overview and Freigaben headers share the same actor-scoped access action. A status
+lookup can take up to 10 seconds; loading displays a disabled checking action, and failure
+displays a safe error with retry at the same position. Unknown access never enables a
+new/change request and never implies a grant. The Freigaben reader view also shows the
+personal projection; owner request lists, setup links, metadata-channel controls and
+technical-management links render only after the scoped permission response confirms
+management rights. Readers continue to see the established public registry and history.
+
+Each endpoint card shows **Ihre Berechtigungen** for the authenticated user, independently of
+the owner-only management controls. The existing
+`GET /api/v1/data-products/{id}/effective-access` projection is the source. It selects only
+current `data.read` grants from the active published policy, matching either the person or
+membership in the grant's published group snapshot. A global Data Owner role, an approved
+request alone, machine identities and another person's grant do not create personal access.
+Expired/future grants are excluded using the Europe/Zurich civil date. Published membership
+snapshots remain authoritative until a new policy activates.
+
+The safe grant response additionally contains `subjectDisplayName`, `subjectOrganization`
+and `groupId` (null for a personal grant). Names come from the existing trusted identity
+directory/group registry; no other group members, private policy or other users' requests
+are exposed. Responses use `Cache-Control: private, no-store` and `Vary: X-DaCa-User`.
+No persistence change is required.
+
+Cards filter the returned grants by their endpoint protocol (REST or PostgreSQL). They show
+whether the grant is individual or via a named group, read access, original/modified data,
+validity including indefinite end dates, and weekly availability. This documents a published
+permission; the endpoint still evaluates the conditions at data-access time.
+
+Consumers with at least one current grant see **Zugriffänderung beantragen** in place of
+**Zugriff anfragen**. The link opens the existing request route with `intent=change`; the
+form independently reloads the authenticated user's access and derives its mode from that
+response. It shows existing grants and suggests protocols, variant and validity. Purpose,
+legal basis and explicit acceptance remain required. Submission uses the existing access
+request API and approval flow, with no new request kind or automatic policy write. A group
+member requests personal scope; existing group grants are not edited by this form. Existing
+owner/deputy management controls remain separate from permission to read product data.
+
+Loading, contradictory evidence and API failures never appear as "no access". Retry is
+available, while a new/change request is withheld until the status is known. Local component
+state, drafts and receipts are cleared on identity changes. Generation and identity checks
+discard late responses from another user or product context.
+
+Browser acceptance on 12 November 2026 covered Jan's live individual REST grant, Noémie with
+no grant, a named group response fixture, retry after an unavailable response, and mobile
+layouts at 390/320 pixels. A synthetic change request on the separate MWST SG Prüflauf product
+was submitted through the real form; the active grant remained unchanged. The owner then
+rejected that test request to close its task. Group selection and exclusion of nonmembers,
+future/expired and foreign grants were separately tested against PostgreSQL-backed API
+fixtures. The overview withholds endpoint cards until their product ID matches the route.
+
 ## Permission registry, revocation and public history
 
 `GET /api/v1/data-products/{id}/access-permissions` projects the published policy, independently

@@ -153,10 +153,11 @@ describe('DemoIdentityService', () => {
     flushPersonas(http);
 
     const users = service.users();
-    expect(users).toHaveLength(26);
+    expect(users).toHaveLength(27);
     expect(users.find((user) => user.id === 'fausto.marzo')).toEqual(expect.objectContaining({ displayName: 'Fausto Marzo', organization: 'EFD BIT PS', office: 'efd-bit-ps', roles: ['publication_approver'] }));
     const modelingIds = ['christian.spider', 'sibilla.micheli', 'cinthya.thor', 'lawrence.hill', 'hong.an.captain', 'christian.man', 'mirjam.keller', 'daniel.wenger', 'eliane.rossi', 'giuseppe.starwars', 'thomas.wikinger'];
     expect(users.every((user) => Boolean(user.avatarUrl))).toBe(true);
+    expect(users.find(user => user.id === 'jan.waser')).toEqual(expect.objectContaining({ displayName: 'Jan Waser', organization: 'Kanton St. Gallen', roles: ['data_analyst', 'data_consumer'] }));
     expect(users.filter((user) => modelingIds.includes(user.id))).toHaveLength(11);
     expect(users.filter((user) => modelingIds.includes(user.id)).every((user) => user.department === 'VBS')).toBe(true);
     expect(users.find((user) => user.id === 'sibilla.micheli')).toEqual(expect.objectContaining({ organization: 'VBS GS', office: 'vbs-gs', avatarUrl: '/assets/data-owners/sibilla-micheli.webp', roles: expect.arrayContaining(['data_owner']), modelingRoles: ['deputy_data_owner'] }));

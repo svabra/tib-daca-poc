@@ -1,5 +1,10 @@
 # Domains and business glossary
 
+Domain-network object reads send at most 100 domain UUIDs per GET, so request lines remain
+below the HTTP proxy's 8 KiB limit even for large networks. Responses merge by object key
+and preserve the union of domain memberships and any truncation notice. Identity headers
+and actor-scoped API authorization apply to every request; the API and stored model are unchanged.
+
 All context-menu navigation follows the shared Control-click convention: no permanent
 new-tab icon or forced new-tab target; hold Control to reveal the indicator on navigable
 links. An always-reserved 16px icon column prevents text wrapping and row-height changes
@@ -747,3 +752,23 @@ to that source with its snapshot and table IDs; inspecting the tooltip never nav
 General logical/physical model searches open result targets through native new-tab
 anchors with external-link icons. The original Mapping remains open. Non-selection model results use this behavior by default; semantic connection searches still emit the chosen card and retain their existing draft
 behavior. The modal focus trap includes result links and origin-info buttons.
+
+## Product metadata editing
+
+Description appears first in the product metadata form. Semantic suggestions appear after
+title/Data Owner and before the domain and terminology sections; accepting one remains explicit.
+Both Fachdomänen and Terminologie use the same searchable multi-selection component. Type a
+name, abbreviation or definition and choose a result by click or arrow keys/Enter; Escape
+closes the results. Search matches all registered language labels and aliases, including
+accent-insensitive matching. At most ten results appear at once, with a refinement hint
+when more match. Selected tags stay visible when the query changes and are removed individually.
+Neither section renders a checkbox list. Terminology results contain only active accepted
+terms of the selected domains, with aliases visible on matching entries. Clearing the last
+domain hides terminology search and explains the domain prerequisite. Changing domains resets
+the term search and prunes incompatible selected term IDs through the existing rules.
+
+Only the trusted product Data Owner/deputy may change assignments; readers see selected
+entries without editing controls. Domain/term IDs and the existing save/revision flow are
+reused. Searching alone never changes metadata. Governed term proposals and derivation remain
+available below the terminology selection. The form, tags and search results wrap on narrow
+mobile screens. No API or persistence schema changes are required.

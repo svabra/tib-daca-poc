@@ -54,6 +54,7 @@ const KASSANDRA: DemoUser = {
   roles: ['data_owner', 'data_consumer'],
 };
 const POC_USERS: readonly DemoUser[] = [
+  { id: 'jan.waser', displayName: 'Jan Waser', organization: 'Kanton St. Gallen', email: 'jan.waser@sg.ch', phone: null, avatarUrl: '/assets/data-owners/jan-waser.webp', roles: ['data_analyst', 'data_consumer'] },
   KASSANDRA,
   { id: 'ariane.keller', displayName: 'Ariane Keller', organization: 'ESTV', email: 'ariane.keller@estv.admin.ch', phone: '+41 58 000 00 12', avatarUrl: '/assets/data-owners/ariane-keller.webp', roles: ['data_owner', 'data_consumer'] },
   { id: 'beat.stalder', displayName: 'Beat Stalder', organization: 'Kanton St. Gallen', email: 'beat.stalder@sg.ch', phone: '+41 58 000 00 71', avatarUrl: '/assets/data-owners/beat-stalder.webp', roles: ['data_owner', 'data_consumer'] },

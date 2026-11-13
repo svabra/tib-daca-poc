@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting, TestRequest } from '@a
 import { computed, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { CatalogApiService, resolveProductQuality } from './catalog-api.service';
+import { DomainNetworkObject } from './catalog.models';
 import { DemoIdentityService } from './demo-identity.service';
 
 describe('CatalogApiService quality normalization', () => {
@@ -82,6 +83,30 @@ describe('CatalogApiService identity refresh', () => {
     expect(results.map(item=>item.title)).toEqual(['First page','Second page']);
     expect(api.products().map(item=>item.title)).toEqual(['Home product']);
   });
+  it('loads large domain networks below proxy URL limits and merges shared objects', () => {
+    const api=TestBed.inject(CatalogApiService),http=TestBed.inject(HttpTestingController);
+    flushRefresh(requestsFor(http,'kassandra.valdata'),'Home product','Inbox','Task');
+    flushProductDetail(requestsFor(http,'kassandra.valdata'),'Home product');
+    const ids=Array.from({length:201},(_,index)=>`00000000-0000-4000-8000-${String(index+1).padStart(12,'0')}`);
+    let result:{items:DomainNetworkObject[];truncated:boolean}|undefined;
+    api.loadDomainNetworkObjects(ids).subscribe(value=>result=value);
+    const requests=http.match(request=>request.url==='/api/v1/domain-network/objects');
+    expect(requests.length).toBeGreaterThan(1);
+    expect(requests.flatMap(request=>request.request.params.getAll('domain_id')??[])).toEqual(ids);
+    const projectedDomains:string[]=[];
+    for(const [index,request] of requests.entries()){
+      expect(new TextEncoder().encode(request.request.urlWithParams).length).toBeLessThan(8000);
+      expect(request.request.headers.get('X-DaCa-User')).toBe('kassandra.valdata');
+      expect(result).toBeUndefined();
+      const domainId=request.request.params.getAll('domain_id')![0];
+      projectedDomains.push(domainId);
+      request.flush({items:[{key:'term:shared',id:'shared',kind:'term',label:'Shared term',description:'',ownerName:'Data Owner',urn:'urn:daca:term:shared',route:['/domains/terminology'],params:{},domainIds:[domainId]}],truncated:index===requests.length-1});
+    }
+    expect(result?.items).toHaveLength(1);
+    expect(result?.items[0].domainIds).toEqual(projectedDomains);
+    expect(result?.truncated).toBe(true);
+  });
+
   it('keeps the newest identity data when older product, inbox and task requests finish later', () => {
     const api = TestBed.inject(CatalogApiService);
     const http = TestBed.inject(HttpTestingController);

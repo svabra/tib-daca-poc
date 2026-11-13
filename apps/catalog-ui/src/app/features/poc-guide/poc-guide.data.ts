@@ -1,4 +1,5 @@
 import { PocGuideCapability, PocGuideStatus, PocJourney } from './poc-guide.models';
+import { MWST_JOURNEY } from './mwst-journey';
 
 const IMAGE_ROOT = '/assets/poc-guide';
 const DATA_ANALYST_JOURNEY_PRODUCT_ID = '3a2930ed-3eee-599b-82b5-e138b149d1a2';
@@ -87,6 +88,7 @@ export const POC_GUIDE_LIMITS: readonly PocGuideCapability[] = [
 ];
 
 export const POC_JOURNEYS: readonly PocJourney[] = [
+  MWST_JOURNEY,
   {
     id: 'understand-and-use-product',
     tags: ['Datenprodukt', 'Suche', 'Datennutzung'],

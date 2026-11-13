@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StatusBadgeComponent } from '@bit-daca/design-system';
@@ -13,11 +13,13 @@ import { recentProductActivity } from './metadata-activity-preview';
 import { termsForDomains, toggleSemanticSelection, validSelectedTermIds } from './domain-selection';
 import { MetadataTermCandidate, metadataTermCandidates } from './metadata-term-candidates';
 import { GlossaryProposalFormComponent, GlossaryProposalFormValue } from '../domains/glossary-proposal-form.component';
+import { DomainPickerComponent } from './domain-picker.component';
+import { SemanticPickerComponent } from './semantic-picker.component';
 
 @Component({
   selector: 'daca-metadata-studio',
   standalone: true,
-  imports: [DatePipe, GlossaryProposalFormComponent, ProductWorkspaceNavComponent, ReactiveFormsModule, RouterLink, StatusBadgeComponent],
+  imports: [DatePipe, DomainPickerComponent, SemanticPickerComponent, GlossaryProposalFormComponent, ProductWorkspaceNavComponent, ReactiveFormsModule, RouterLink, StatusBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <daca-product-workspace-nav
@@ -30,7 +32,7 @@ import { GlossaryProposalFormComponent, GlossaryProposalFormValue } from '../dom
       <div>
         <p class="daca-eyebrow">Datenprodukt · Metadaten</p>
         <h1>Metadaten</h1>
-        <p>Bearbeiten Sie den DCAT-AP-CH-kompatiblen Katalogeintrag. Änderungen erzeugen eine neue Revision und einen Audit-Eintrag.</p>
+        <p>{{ canEditMetadata() ? 'Bearbeiten Sie den DCAT-AP-CH-kompatiblen Katalogeintrag. Änderungen erzeugen eine neue Revision und einen Audit-Eintrag.' : 'Metadaten zur Ansicht. Änderungen sind dem zuständigen Data Owner und dessen Stellvertretung vorbehalten.' }}</p>
       </div>
       <div class="metadata-revision">
         <daca-status-badge tone="green">{{ product().lifecycle }}</daca-status-badge>
@@ -52,57 +54,61 @@ import { GlossaryProposalFormComponent, GlossaryProposalFormValue } from '../dom
           <span class="metadata-required">* Required fields</span>
         </div>
         <div class="daca-card-body metadata-form-grid">
+          <label class="metadata-field metadata-field-wide">Description *
+            <textarea rows="5" formControlName="description"></textarea>
+            <span class="metadata-counter">{{ form.controls.description.value.length }} characters</span>
+          </label>
           <label class="metadata-field metadata-field-wide">Title *
             <input formControlName="title" autocomplete="off">
             @if (form.controls.title.touched && form.controls.title.invalid) { <small>Enter a product title.</small> }
           </label>
           <label class="metadata-field">Data Owner *<input formControlName="owner" autocomplete="organization"></label>
-          <fieldset class="metadata-field metadata-field-wide semantic-picker">
-            <legend>Fachdomains</legend>
+          <section class="metadata-field metadata-field-wide suggestion-panel" aria-labelledby="semantic-suggestion-title">
+            <div><div><p class="daca-eyebrow">Regelbasiert · PoC</p><h3 id="semantic-suggestion-title">Semantische Vorschläge</h3></div><button class="daca-button is-secondary" type="button" [disabled]="suggestionsLoading()" (click)="loadSuggestions()">{{ suggestionsLoading() ? 'Analysiert …' : 'Neu analysieren' }}</button></div>
+            @if (suggestionsError()) { <p class="semantic-error">{{ suggestionsError() }}</p> }
+            @else if (suggestions().length) { <ul>@for (suggestion of suggestions(); track suggestion.kind + suggestion.id) { <li><span><strong>{{ suggestion.label }}</strong><small>{{ suggestion.kind === 'domain' ? 'Fachdomäne' : 'Terminologiebegriff' }} · {{ suggestion.score }} % · {{ suggestion.reason }}</small></span><button type="button" (click)="applySuggestion(suggestion)" [disabled]="!canEditMetadata() || suggestionApplied(suggestion)">{{ suggestionApplied(suggestion) ? 'Ausgewählt' : 'Übernehmen' }}</button></li> }</ul> }
+            @else if (!suggestionsLoading()) { <p>Keine ausreichend ähnlichen aktiven Fachdomänen oder Terminologiebegriffe gefunden.</p> }
+            <small>Die Auswahl wird nie automatisch verändert.</small>
+          </section>
+          <fieldset class="metadata-field metadata-field-wide semantic-picker" [disabled]="!canEditMetadata()">
+            <legend>Fachdomänen</legend>
             <p>Domains sind fachliche Einordnungen und keine Organisationen. Ein Entwurf darf ohne Domain gespeichert werden; für vollständige Business-Metadaten ist mindestens eine nötig.</p>
             @if (semanticsLoading()) { <span role="status">Domains werden geladen …</span> }
             @else if (semanticsError()) { <span class="semantic-error">{{ semanticsError() }}</span> }
-            @else { <div class="semantic-options">@for (domain of availableDomains(); track domain.id) { <label><input type="checkbox" [checked]="selectedDomainIds().includes(domain.id)" (change)="toggleDomain(domain.id)"><span><strong>{{ domain.preferredLabel }}</strong><small>{{ domain.definition }}</small></span></label> } @empty { <span>Keine aktiven Domains verfügbar.</span> }</div> }
+            @else { <daca-domain-picker [domains]="availableDomains()" [existingDomains]="product().domains" [selectedIds]="selectedDomainIds()" [disabled]="!canEditMetadata()" [contextKey]="domainPickerContext()" (domainToggle)="toggleDomain($event)" /> }
           </fieldset>
           <fieldset class="metadata-field metadata-field-wide semantic-picker">
             <legend>Terminologie</legend>
-            <p>Akzeptierte Begriffe werden anhand der gewählten Domains angeboten. Keywords bleiben davon unabhängig.</p>
+            <p>Akzeptierte Terminologiebegriffe werden anhand der gewählten Fachdomänen angeboten. Keywords bleiben davon unabhängig.</p>
+            @if (semanticsLoading()) { <span role="status">Terminologiebegriffe werden geladen …</span> }
+            @else if (semanticsError()) { <span class="semantic-error">{{ semanticsError() }}</span> }
+            @else {
+              <daca-semantic-picker kind="term" [items]="termsForSelection()" [existingItems]="knownTerms()"
+                [selectedIds]="selectedTermIds()" [disabled]="!canEditMetadata() || !selectedDomainIds().length"
+                [contextKey]="termPickerContext()" (selectionToggle)="toggleTerm($event)" />
+              @if (!selectedDomainIds().length) {<p>Wählen Sie zuerst mindestens eine Fachdomäne.</p>}
+            }
             <div class="semantic-proposal-actions">
-              <button class="daca-button is-secondary" type="button" [disabled]="!productReady() || !selectedDomainIds().length" (click)="openProposal()">Term vorschlagen</button>
+              <button class="daca-button is-secondary" type="button" [disabled]="!productReady() || !selectedDomainIds().length" (click)="openProposal()">Terminologiebegriff vorschlagen</button>
               <button class="semantic-derive-action" type="button" [disabled]="!productReady()" (click)="deriveTermCandidates()">Begriffe aus Metadaten ableiten</button>
               @if (!selectedDomainIds().length) {
-                <small>Wählen Sie mindestens eine Fachdomain, damit der zuständige Data Owner den Vorschlag prüfen kann.</small>
+                <small>Wählen Sie mindestens eine Fachdomäne, damit der zuständige Data Owner den Vorschlag prüfen kann.</small>
               } @else if (canAutoAttach()) {
                 <small>Akzeptierte Vorschläge können automatisch an dieses Produkt angehängt werden.</small>
               } @else {
                 <small>Sie dürfen einen Begriff vorschlagen. Automatisch anhängen dürfen nur Data Owner oder deren Stellvertretung.</small>
               }
             </div>
-            <label class="semantic-term-search">Akzeptierte Terme durchsuchen
-              <input type="search" [value]="termQuery()" (input)="termQuery.set(inputValue($event))" placeholder="Begriff, Abkürzung oder Definition">
-            </label>
-            <div class="semantic-options">@for (term of filteredTerms(); track term.id) { <label><input type="checkbox" [checked]="selectedTermIds().includes(term.id)" (change)="toggleTerm(term.id)"><span><strong>{{ term.preferredLabel }}</strong><small>{{ termLanguages(term) }}@if(termAlternativeLabels(term)){ · {{ termAlternativeLabels(term) }}} · {{ term.definition }}</small></span></label> } @empty { <span>{{ selectedDomainIds().length ? (termQuery().trim() ? 'Keine passenden akzeptierten Terme.' : 'Keine akzeptierten Terme für diese Domains.') : 'Wählen Sie zuerst mindestens eine Domain.' }}</span> }</div>
             @if (derivedCandidates().length) {
               <ul class="metadata-term-candidates" aria-label="Aus Metadaten abgeleitete Termkandidaten">
                 @for (candidate of derivedCandidates(); track candidate.label) {
-                  <li><span><strong>{{ candidate.label }}</strong><small>{{ candidate.reason }}</small></span><button type="button" [disabled]="!selectedDomainIds().length" (click)="openProposal(candidate.label, candidate.reason)">Als Term vorschlagen</button></li>
+                  <li><span><strong>{{ candidate.label }}</strong><small>{{ candidate.reason }}</small></span><button type="button" [disabled]="!selectedDomainIds().length" (click)="openProposal(candidate.label, candidate.reason)">Als Terminologiebegriff vorschlagen</button></li>
                 }
               </ul>
             } @else if (derivationAttempted()) {
               <p class="metadata-derivation-empty">Aus dem aktuellen Titel und den Keywords liessen sich keine geeigneten Kandidaten ableiten.</p>
             }
           </fieldset>
-          <section class="metadata-field metadata-field-wide suggestion-panel" aria-labelledby="semantic-suggestion-title">
-            <div><div><p class="daca-eyebrow">Regelbasiert · PoC</p><h3 id="semantic-suggestion-title">Semantische Vorschläge</h3></div><button class="daca-button is-secondary" type="button" [disabled]="suggestionsLoading()" (click)="loadSuggestions()">{{ suggestionsLoading() ? 'Analysiert …' : 'Neu analysieren' }}</button></div>
-            @if (suggestionsError()) { <p class="semantic-error">{{ suggestionsError() }}</p> }
-            @else if (suggestions().length) { <ul>@for (suggestion of suggestions(); track suggestion.kind + suggestion.id) { <li><span><strong>{{ suggestion.label }}</strong><small>{{ suggestion.kind === 'domain' ? 'Domain' : 'Term' }} · {{ suggestion.score }} % · {{ suggestion.reason }}</small></span><button type="button" (click)="applySuggestion(suggestion)" [disabled]="suggestionApplied(suggestion)">{{ suggestionApplied(suggestion) ? 'Ausgewählt' : 'Übernehmen' }}</button></li> }</ul> }
-            @else if (!suggestionsLoading()) { <p>Keine ausreichend ähnlichen aktiven Domains oder Terme gefunden.</p> }
-            <small>Die Auswahl wird nie automatisch verändert.</small>
-          </section>
-          <label class="metadata-field metadata-field-wide">Description *
-            <textarea rows="5" formControlName="description"></textarea>
-            <span class="metadata-counter">{{ form.controls.description.value.length }} characters</span>
-          </label>
           <label class="metadata-field">Lifecycle
             <select formControlName="lifecycle"><option value="draft">Draft</option><option value="active">Active</option><option value="deprecated">Deprecated</option><option value="retired">Retired</option></select>
           </label>
@@ -117,9 +123,9 @@ import { GlossaryProposalFormComponent, GlossaryProposalFormValue } from '../dom
         </div>
         <div class="metadata-form-actions">
           <span>@if (form.dirty) { Unsaved changes } @else { All fields reflect revision {{ product().revision }} }</span>
-          <button class="daca-button" type="submit" [disabled]="form.invalid || saving() || !productReady()">
+          @if (canEditMetadata()) {<button class="daca-button" type="submit" [disabled]="form.invalid || saving() || !productReady()">
             {{ saving() ? 'Saving…' : 'Save new revision' }}
-          </button>
+          </button>}
         </div>
       </form>
 
@@ -190,7 +196,7 @@ import { GlossaryProposalFormComponent, GlossaryProposalFormValue } from '../dom
     </div>
 
     <dialog #termDialog class="daca-card term-dialog" aria-labelledby="metadata-term-dialog-title" (close)="resetProposal()">
-      <div class="daca-card-header"><div><p class="daca-eyebrow">Terminologie-Governance</p><h2 id="metadata-term-dialog-title">Term vorschlagen</h2></div><button type="button" aria-label="Dialog schliessen" (click)="closeProposal()">×</button></div>
+      <div class="daca-card-header"><div><p class="daca-eyebrow">Terminologie-Governance</p><h2 id="metadata-term-dialog-title">Terminologiebegriff vorschlagen</h2></div><button type="button" aria-label="Dialog schliessen" (click)="closeProposal()">×</button></div>
       <div class="daca-card-body">
         @if (proposalContext()) { <p class="term-proposal-context"><strong>Aus den Metadaten abgeleitet:</strong> {{ proposalContext() }}</p> }
         <daca-glossary-proposal-form
@@ -212,6 +218,16 @@ import { GlossaryProposalFormComponent, GlossaryProposalFormValue } from '../dom
   `,
   styles: [`
     .semantic-picker{border:1px solid #c9ced3;padding:1rem}.semantic-picker legend{font-weight:800}.semantic-picker>p{margin-top:0;color:#535b63}.semantic-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:.5rem;margin:.75rem 0}.semantic-options label{display:flex;gap:.65rem;padding:.65rem;border:1px solid #d7dadd;border-radius:.25rem}.semantic-options input{margin-top:.2rem}.semantic-options span{display:grid}.semantic-options small{font-weight:400;color:#59616a}.semantic-proposal-actions{display:flex;align-items:center;flex-wrap:wrap;gap:.65rem}.semantic-proposal-actions small{flex-basis:100%;color:#59616a}.semantic-term-search{display:grid;gap:.35rem;max-width:32rem;margin-top:1rem;font-weight:700}.semantic-derive-action{border:0;background:none;color:#006699;text-decoration:underline;text-underline-offset:.16rem;cursor:pointer;font:inherit;font-weight:700}.semantic-derive-action:disabled{color:#747b81;cursor:not-allowed}.metadata-term-candidates{list-style:none;margin:1rem 0 0;padding:0;border-top:1px solid #d7dadd}.metadata-term-candidates li{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:.65rem 0;border-bottom:1px solid #d7dadd}.metadata-term-candidates li span{display:grid}.metadata-term-candidates small,.metadata-derivation-empty{color:#59616a}.metadata-term-candidates button{border:0;background:none;color:#006699;text-decoration:underline;cursor:pointer;font:inherit;font-weight:700}.metadata-term-candidates button:disabled{color:#747b81;cursor:not-allowed}.semantic-error{color:#b00020;font-weight:700}.suggestion-panel{padding:1rem;background:#f2f6f8;border-left:4px solid #006699}.suggestion-panel>div,.suggestion-panel li{display:flex;align-items:center;justify-content:space-between;gap:1rem}.suggestion-panel h3{margin:.1rem 0}.suggestion-panel ul{list-style:none;padding:0}.suggestion-panel li{padding:.55rem 0;border-top:1px solid #cbd3d8}.suggestion-panel li span{display:grid}.term-dialog{width:min(70rem,calc(100vw - 2rem));max-height:92vh;padding:0;border:0;overflow:auto}.term-dialog::backdrop{background:#0008}.term-dialog .daca-card-header button{font-size:1.75rem;border:0;background:none}.term-proposal-context{padding:.65rem;background:#eef5f8;border-left:3px solid #006699}
+    .semantic-proposal-actions { margin-top:1rem; padding-top:1rem; border-top:1px solid var(--daca-border); }
+    .semantic-proposal-actions .daca-button { max-width:100%; min-height:36px; padding:8px 12px; font-size:.8rem; white-space:normal; }
+    .semantic-derive-action { max-width:100%; overflow-wrap:anywhere; text-align:left; }
+    @media (max-width:640px) {
+      .metadata-form,.metadata-field,.metadata-field > * { min-width:0; }
+      .metadata-form > .daca-card-header { flex-wrap:wrap; }
+      .semantic-options { grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr)); }
+      .semantic-options span,.suggestion-panel li span { min-width:0; overflow-wrap:anywhere; }
+      .suggestion-panel > div,.suggestion-panel li { flex-wrap:wrap; }
+    }
   `],
 })
 export class MetadataStudioComponent {
@@ -228,6 +244,9 @@ export class MetadataStudioComponent {
     endpoints: [],
   });
   readonly productReady = signal(false);
+  private readonly loadedForActor = signal('');
+  readonly canEditMetadata = computed(() => this.productReady() && this.product().canManage === true
+    && this.loadedForActor() === this.identity.userId());
   readonly saving = signal(false);
   readonly message = signal('');
   readonly messageTone = signal<'info' | 'error'>('info');
@@ -237,7 +256,11 @@ export class MetadataStudioComponent {
   readonly availableDomains = signal<readonly DomainSummary[]>([]);
   readonly availableTerms = signal<readonly GlossaryTermSummary[]>([]);
   readonly selectedDomainIds = signal<readonly string[]>([]);
+  readonly domainPickerContext = computed(()=>this.routeProductId+':'+this.identity.userId());
   readonly selectedTermIds = signal<readonly string[]>([]);
+  readonly termPickerContext = computed(()=>this.domainPickerContext()+':'+this.selectedDomainIds().join(','));
+  readonly termsForSelection = computed(()=>termsForDomains(this.availableTerms(),this.selectedDomainIds()));
+  readonly knownTerms = computed(()=>[...this.product().glossaryTerms,...this.availableTerms()]);
   readonly semanticsLoading = signal(true);
   readonly semanticsError = signal('');
   readonly suggestions = signal<readonly SemanticSuggestion[]>([]);
@@ -249,17 +272,6 @@ export class MetadataStudioComponent {
   readonly proposalContext = signal('');
   readonly proposalSaving = signal(false);
   readonly proposalTarget = signal<GlossaryTermSummary | null>(null);
-  readonly termQuery = signal('');
-  readonly filteredTerms = computed(() => {
-    const terms = termsForDomains(this.availableTerms(), this.selectedDomainIds());
-    const query = this.termQuery().trim().toLocaleLowerCase('de-CH');
-    if (!query) return terms;
-    return terms.filter((term) => term.labels.some((label) => [
-      label.preferredLabel,
-      label.definition,
-      ...label.alternativeLabels,
-    ].some((value) => value.toLocaleLowerCase('de-CH').includes(query))));
-  });
   readonly canAutoAttach = computed(() => {
     const product = this.product();
     const userId = this.identity.userId();
@@ -283,23 +295,13 @@ export class MetadataStudioComponent {
   });
 
   constructor() {
-    this.api.loadProduct(this.routeProductId).subscribe({
-      next: (product) => {
-        if (product.id !== this.routeProductId) {
-          this.messageTone.set('error');
-          this.message.set('Das geladene Datenprodukt stimmt nicht mit der angeforderten Metadatenseite überein.');
-          return;
-        }
-        this.product.set(product);
-        this.productReady.set(true);
-        this.selectedDomainIds.set(product.domains.map((domain) => domain.id));
-        this.selectedTermIds.set(product.glossaryTerms.map((term) => term.id));
-        this.loadSuggestions();
-      },
-      error: () => {
-        this.messageTone.set('error');
-        this.message.set('Die Produktmetadaten konnten nicht geladen werden. Es werden keine Ersatzdaten angezeigt.');
-      },
+    effect(() => {
+      const actor = this.identity.userId();
+      untracked(() => this.loadProductForActor(actor));
+    });
+    effect(() => {
+      if (this.canEditMetadata()) this.form.enable({emitEvent:false});
+      else this.form.disable({emitEvent:false});
     });
     this.loadSemantics();
     this.loadRecentActivity();
@@ -322,9 +324,36 @@ export class MetadataStudioComponent {
     });
   }
 
+  private productLoadGeneration = 0;
+  private loadProductForActor(actor: string): void {
+    const generation = ++this.productLoadGeneration;
+    this.productReady.set(false); this.loadedForActor.set('');
+    this.api.loadProduct(this.routeProductId).subscribe({
+      next: (product) => {
+        if (generation !== this.productLoadGeneration || actor !== this.identity.userId()) return;
+        if (product.id !== this.routeProductId) {
+          this.messageTone.set('error');
+          this.message.set('Das geladene Datenprodukt stimmt nicht mit der angeforderten Metadatenseite überein.');
+          return;
+        }
+        this.product.set(product);
+        this.loadedForActor.set(actor);
+        this.productReady.set(true);
+        this.selectedDomainIds.set(product.domains.map((domain) => domain.id));
+        this.selectedTermIds.set(product.glossaryTerms.map((term) => term.id));
+        this.loadSuggestions();
+      },
+      error: () => {
+        if (generation !== this.productLoadGeneration || actor !== this.identity.userId()) return;
+        this.messageTone.set('error');
+        this.message.set('Die Produktmetadaten konnten nicht geladen werden. Es werden keine Ersatzdaten angezeigt.');
+      },
+    });
+  }
+
   save(): void {
     this.form.markAllAsTouched();
-    if (this.form.invalid || this.saving() || !this.productReady()) return;
+    if (this.form.invalid || this.saving() || !this.canEditMetadata()) return;
     const value = this.form.getRawValue();
     const current = this.product();
     this.saving.set(true);
@@ -354,13 +383,13 @@ export class MetadataStudioComponent {
   }
 
   toggleDomain(domainId: string): void {
+    if (!this.canEditMetadata()) return;
     this.selectedDomainIds.update((ids) => toggleSemanticSelection(ids, domainId));
     this.selectedTermIds.update((ids) => validSelectedTermIds(this.availableTerms(), this.selectedDomainIds(), ids));
     this.form.markAsDirty();
   }
 
-  toggleTerm(termId: string): void { this.selectedTermIds.update((ids) => toggleSemanticSelection(ids, termId)); this.form.markAsDirty(); }
-  termLanguages(term: GlossaryTermSummary): string { return term.labels.map((label) => `${label.language.toUpperCase()}: ${label.preferredLabel}`).join(' · '); }
+  toggleTerm(termId: string): void { if (!this.canEditMetadata()) return; this.selectedTermIds.update((ids) => toggleSemanticSelection(ids, termId)); this.form.markAsDirty(); }
   suggestionApplied(suggestion: SemanticSuggestion): boolean { return suggestion.kind === 'domain' ? this.selectedDomainIds().includes(suggestion.id) : this.selectedTermIds().includes(suggestion.id); }
   applySuggestion(suggestion: SemanticSuggestion): void { if (suggestion.kind === 'domain' && !this.selectedDomainIds().includes(suggestion.id)) this.toggleDomain(suggestion.id); if (suggestion.kind === 'glossaryTerm' && !this.selectedTermIds().includes(suggestion.id)) this.toggleTerm(suggestion.id); }
 
@@ -406,9 +435,6 @@ export class MetadataStudioComponent {
       },
     });
   }
-
-  inputValue(event: Event): string { return (event.target as HTMLInputElement).value; }
-  termAlternativeLabels(term: GlossaryTermSummary): string { return term.labels.flatMap((label) => label.alternativeLabels).join(', '); }
 
   loadRecentActivity(): void {
     this.activityLoading.set(true);

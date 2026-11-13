@@ -11,6 +11,10 @@ export function catalogNotifications(tasks:readonly WorkflowTaskWire[], requests
   const result=new Map<string,DacaNotification>();
   for(const task of tasks){
     if(task.status==='completed')continue;
+    if(task.productCreationRequestId){
+      result.set(`task:${task.id}`, {id:`task:${task.id}`,title:task.title,detail:task.detail,createdAt:task.createdAt,route:`/product-creation-requests/${task.productCreationRequestId}`});
+      continue;
+    }
     const requestId=task.taskType==='access_request_review'?task.accessRequestId:null;
     const id=requestId?`request:${requestId}`:`task:${task.id}`;
     if(isAccessRequestDecisionTask(task.taskType) && task.dataProductId && task.accessRequestId){

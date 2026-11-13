@@ -1,5 +1,60 @@
 # BIT DaCa
 
+Release **0.3.12** (2026-11-13) adds direct electronic product-creation requests, fixed and
+rolling data-basis windows, four DAAIF HTTP formats per product, personal endpoint access,
+public/private comments and searchable metadata selections. The DE/EN release archive
+retains 0.3.11. See the [MWST journey](docs/mwst-journey.md) for the verified flow and
+remaining interface and timezone limitations.
+
+Domain-network object requests use bounded batches to stay below HTTP proxy URL limits
+even with large domain lists, preserving merged objects and their domain memberships.
+
+Tabular DAAIF products have one catalog identity and four registered HTTP formats: REST/JSON,
+CSV, Excel and Parquet. Select the format in the overview or usage page to open DAAIF and
+start that data request with the same product permission. See [HTTP formats](docs/http-product-formats.md).
+
+The product metadata editor starts with Description. Semantic suggestions appear before
+Fachdomänen and Terminologie. Both fields share a searchable multi-selection with persistent
+selected tags, individual removal and keyboard selection instead of checkbox lists.
+
+Derived-product requests support fixed or rolling data-basis windows, including a duration
+in days, weeks, months or years. The saved choice reaches the owner and DAAIF publication.
+
+MWST source products require an explicit access grant: Jan Waser has no pre-granted access
+to the Swiss time series or company source. The Freigaben page shows readers their own
+access and request action, while owner-only request lists and management links stay hidden.
+Loading and retry states keep the access entry point visible when status is unavailable.
+
+Jan Waser uses a local synthetic profile portrait, shared with DAAIF; its generation prompt
+is recorded in `apps/catalog-ui/public/assets/data-owners/portraits.provenance.json`.
+
+The start-page search lives in the welcome area. Hiding that area moves the same search
+beside the data landscape; showing it again gives the landscape the full available width.
+Search text/results and the current landscape view are retained when switching.
+
+[Derived-product requests](docs/product-creation-requests.md) start with an empty product name
+and collect data-basis dates, purpose, legal mandate, selectable Parquet/HTTP REST API/CSV/Excel
+formats and one-off or recurring update frequency. The owner sees the same saved requirements.
+
+Product endpoint cards show the signed-in user's individual and published group permissions,
+including variant, validity and weekly window. Users with an active grant see
+**Zugriffänderung beantragen** and a prefilled change form in the existing request workflow.
+Unknown access status is shown explicitly. See [personal permission display](docs/security/pbac.md#personal-permissions-on-the-product-overview).
+
+Product overviews place small **Abgeleitetes Datenprodukt beantragen** and comment actions
+in the summary footer. Management actions follow trusted product-specific owner/deputy
+capabilities; other readers see metadata read-only. [Product comments](docs/product-comments.md)
+support public visibility or private delivery exclusively to the responsible Data Owner and
+deputy, including when the comment author is another reader.
+The public option explains later deletion; authors can delete their own public comments.
+
+The [MWST creation journey](docs/mwst-journey.md) starts with Jan Waser's direct electronic
+request for a new data product. Kassandra Valdata prepares the separate 60-company SG
+product in DAAIF, follows Thomas Kriegli's approval flow and completes the order once the
+product is ready for Jan. Creation requests have private requester/owner views,
+revision checks, tasks and result notifications. DaCa remains authoritative for SLA and
+governance; Excel, Parquet and CSV are delivered by DAAIF on port 8011.
+
 Release **0.3.11** connects discovery and access requests through animated component messages,
 keeps sources/SDAL on the left, and aligns icons and legends across all four animations.
 The sourcing assistant is named Data Sourcing Task Wizard and its conveyor leaves more

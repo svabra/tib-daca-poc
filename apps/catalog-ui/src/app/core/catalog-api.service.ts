@@ -162,9 +162,10 @@ type ProposalReviewWire = { canDecide?: boolean; domainId: string; proposalRevis
 type ProposalWire = Omit<GlossaryTermProposal, 'requesterName' | 'reviews'> & { reviews: ProposalReviewWire[] };
 
 export interface WorkflowTaskWire {
+  productCreationRequestId?: string | null;
   id: string;
   searchViewShareId?: string | null;
-  taskType: 'search_view_shared' | 'metadata_quality' | 'access_governance' | 'access_request_review' | 'access_request_approved' | 'access_request_granted' | 'access_request_rejected' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed' | 'publication_approval' | 'governance_correction' | 'service_level_approval' | 'source_access_review' | 'physical_source_access_review' | 'domain_change_review' | 'domain_change_decision' | 'glossary_term_review' | 'glossary_term_collaboration' | 'glossary_term_decision' | 'logical_model_review' | 'logical_model_changes_requested' | 'logical_mapping_inconsistency' | 'logical_mapping_investigation';
+  taskType: 'product_creation_review' | 'product_creation_result' | 'search_view_shared' | 'metadata_quality' | 'access_governance' | 'access_request_review' | 'access_request_approved' | 'access_request_granted' | 'access_request_rejected' | 'simulation_quality_alert' | 'simulation_discoverability_alert' | 'simulation_isbo_restriction' | 'group_membership_changed' | 'publication_approval' | 'governance_correction' | 'service_level_approval' | 'source_access_review' | 'physical_source_access_review' | 'domain_change_review' | 'domain_change_decision' | 'glossary_term_review' | 'glossary_term_collaboration' | 'glossary_term_decision' | 'logical_model_review' | 'logical_model_changes_requested' | 'logical_mapping_inconsistency' | 'logical_mapping_investigation';
   kind?: 'action' | 'collaboration' | 'information';
   taskKind?: 'action' | 'collaboration' | 'information';
   status: 'open' | 'in_progress' | 'completed';
@@ -422,7 +423,9 @@ export class CatalogApiService {
   saveDomainNetworkView(value:DomainNetworkView):Observable<DomainNetworkView>{return this.http.put<DomainNetworkView>(`/api/v1/domain-network/view`,value,{headers:this.identity.headers()});}
   loadDomainNetworkObjects(ids:readonly string[]):Observable<{items:DomainNetworkObject[];truncated:boolean}>{
     if(!ids.length)return of({items:[],truncated:false});
-    return forkJoin(Array.from({length:Math.ceil(ids.length/200)},(_,index)=>this.http.get<{items:DomainNetworkObject[];truncated:boolean}>(`/api/v1/domain-network/objects`,{headers:this.identity.headers(),params:{domain_id:ids.slice(index*200,index*200+200)}}))).pipe(map(pages=>({items:[...pages.flatMap(page=>page.items).reduce((items,item)=>{const existing=items.get(item.key);items.set(item.key,existing?{...existing,domainIds:[...new Set([...existing.domainIds,...item.domainIds])]}:item);return items;},new Map<string,DomainNetworkObject>()).values()],truncated:pages.some(page=>page.truncated)})));
+    // Repeated UUID query parameters must stay below the proxy's 8 KiB request-line limit.
+    const batchSize=100;
+    return forkJoin(Array.from({length:Math.ceil(ids.length/batchSize)},(_,index)=>this.http.get<{items:DomainNetworkObject[];truncated:boolean}>(`/api/v1/domain-network/objects`,{headers:this.identity.headers(),params:{domain_id:ids.slice(index*batchSize,(index+1)*batchSize)}}))).pipe(map(pages=>({items:[...pages.flatMap(page=>page.items).reduce((items,item)=>{const existing=items.get(item.key);items.set(item.key,existing?{...existing,domainIds:[...new Set([...existing.domainIds,...item.domainIds])]}:item);return items;},new Map<string,DomainNetworkObject>()).values()],truncated:pages.some(page=>page.truncated)})));
   }
   loadSemanticGraph(kind:'domains'|'concepts'|'organizations',domainId?:string):Observable<SemanticGraphState>{
     return this.http.get<SemanticGraphState>(`/api/v1/semantic-graphs/${kind}${domainId?'/'+encodeURIComponent(domainId):''}`,{headers:this.identity.headers()});
@@ -1020,7 +1023,7 @@ export class CatalogApiService {
     return this.http.get<ProductEffectiveAccessResponse>(
       `/api/v1/data-products/${encodeURIComponent(productId)}/effective-access`,
       { headers: this.identity.headers() },
-    ).pipe(timeout(3000));
+    ).pipe(timeout(10000));
   }
 
   loadProductPermissions(productId:string):Observable<import('./catalog.models').ProductPermissionsResponse>{
@@ -1109,6 +1112,7 @@ export class CatalogApiService {
     return {
       ...FALLBACK_PRODUCT,
       ...product,
+      canManage: product.canManage === true,
       globalId: product.globalId ?? product.urn ?? FALLBACK_PRODUCT.globalId,
       contact: typeof product.contact === 'string' ? product.contact : product.contact?.email ?? FALLBACK_PRODUCT.contact,
       license: product.license ?? FALLBACK_PRODUCT.license,

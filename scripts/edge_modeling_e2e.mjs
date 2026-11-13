@@ -3998,8 +3998,8 @@ async function recentWorkFlow(){
   for(const group of expected)for(const item of group.items){
     invariant(await evaluate(`(()=>{const row=document.querySelector('.recent-category[data-category="${group.id}"] [data-work-id="${item.id}"]'),a=row?.querySelector('a'),url=a?new URL(a.href):null;return !!url&&url.pathname===${JSON.stringify(item.route)}&&Object.entries(${JSON.stringify(item.queryParams)}).every(([key,value])=>url.searchParams.get(key)===value)&&row.querySelector('time')?.getAttribute('datetime')===${JSON.stringify(item.editedAt)};})()`),'recent-work link or timestamp differs from its current authorized item');
   }
-  invariant(await evaluate("(()=>{const canvas=document.querySelector('daca-organization-canvas').getBoundingClientRect(),search=document.querySelector('.welcome-search').getBoundingClientRect(),work=document.querySelector('.recent-work').getBoundingClientRect();return search.left>=canvas.right-2&&work.top>=search.bottom-2;})()"),'recent work is not below the right-hand search');
-  await capturePageSegmentScreenshot('.welcome-workspace','recent-work-desktop.png',1440,1100);
+  invariant(await evaluate("(()=>{const canvas=document.querySelector('daca-organization-canvas').getBoundingClientRect(),search=document.querySelector('.welcome-search').getBoundingClientRect(),work=document.querySelector('.recent-work').getBoundingClientRect();return document.querySelector('.welcome-intro')?!!document.querySelector('.welcome-intro .welcome-search')&&work.top>=canvas.bottom-2:search.left>=canvas.right-2&&work.top>=search.bottom-2;})()"),'recent work does not follow the active welcome/search layout');
+  await capturePageSegmentScreenshot('daca-recent-work','recent-work-desktop.png',1440,1100);
   let term=read.body.categories.find(group=>group.id==='terms')?.items[0];
   let visualFixture=null;
   // Only this isolated browser response is mocked: current user history remains
@@ -4025,7 +4025,7 @@ async function recentWorkFlow(){
   await navigate('/',actor,390,850);
   await waitFor("document.querySelector('daca-recent-work')&&!document.querySelector('daca-recent-work .recent-state[role=status]')",'mobile recent work did not load');
   invariant(await evaluate("(()=>{const search=document.querySelector('.welcome-search').getBoundingClientRect(),work=document.querySelector('.recent-work').getBoundingClientRect();return work.top>=search.bottom-2&&document.documentElement.scrollWidth<=innerWidth+1;})()"),'recent work causes mobile overflow');
-  await capturePageSegmentScreenshot('.welcome-sidebar',visualFixture?'recent-work-twelve-rows-fixture-mobile.png':'recent-work-mobile.png',390,1000);
+  await capturePageSegmentScreenshot('daca-recent-work',visualFixture?'recent-work-twelve-rows-fixture-mobile.png':'recent-work-mobile.png',390,1000);
   if(visualFixture){await cdp.call('Fetch.disable',{},sessionId);cdp.mockReadResponses=null;}
   await navigate('/','fausto.marzo',1440,1000);
   const other=expectStatus(await api('fausto.marzo','/api/v1/me/recent-work'),200,'read switched identity work').body;
@@ -4911,9 +4911,13 @@ async function organizationExplorerFlow() {
   for(const domain of officeAssignments){
     const office=domain.label.startsWith('ROHS ')?'efd-bit':'efd-estv',code=office==='efd-bit'?'BIT':'ESTV';
     invariant(domain.organizationIds.includes(office),'trusted domain ancestry lacks '+code+': '+domain.label);
+    // The office field scrolls when all organizations and domains are shown.
+    // Connections for clipped bubbles are intentionally omitted until visible.
+    await evaluate(`document.querySelector('.org-domain-bubble[data-domain-id="${domain.id}"]').scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'})`);
     await waitFor(`document.querySelector('.org-domain-thread[data-domain-id="${domain.id}"][data-source-id="${office}"]')`,'domain line does not project to its visible assigned office: '+domain.label);
     invariant(await evaluate(`document.querySelector('.org-domain-bubble[data-domain-id="${domain.id}"] .org-domain-assignment')?.textContent.includes('${code}')`),'domain bubble lacks its visible office assignment: '+domain.label);
   }
+  await evaluate("document.querySelector('.org-office-field').scrollTop=0");await settleFrames();
   const organizationLinkLengths=await evaluate("[...document.querySelectorAll('.org-thread')].map(line=>line.getTotalLength())");
   console.log('Organization link lengths:',organizationLinkLengths.map(value=>Math.round(value)).join(', '));
   const placementView=expectStatus(await api(actor,'/api/v1/organization-network/view'),200,'read personal placement constraints').body;
@@ -4954,7 +4958,7 @@ async function organizationExplorerFlow() {
   await waitFor("document.querySelector('.org-focus')?.textContent.includes('Kantone')&&document.querySelectorAll('.org-office').length>0",'overview did not drill into the canton group');
   await evaluate("document.querySelector('.org-home').click();document.querySelector('.org-own-home').click()");
   await waitFor("document.querySelector('.org-focus')?.textContent.includes('EFD')",'own area did not return from the overview');
-  invariant(await evaluate("(()=>{const canvas=document.querySelector('daca-organization-canvas').getBoundingClientRect(),search=document.querySelector('.welcome-workspace .welcome-search').getBoundingClientRect();return search.left>=canvas.right-2&&search.right<=innerWidth;})()"),'search is not aligned at the right of the canvas');
+  invariant(await evaluate("(()=>{const canvas=document.querySelector('daca-organization-canvas').getBoundingClientRect(),workspace=document.querySelector('.welcome-workspace').getBoundingClientRect();return !!document.querySelector('.welcome-intro .welcome-search')&&!document.querySelector('.welcome-sidebar')&&Math.abs(canvas.width-workspace.width)<4;})()"),'visible welcome must contain search and leave the full workspace width to the canvas');
   invariant(await evaluate("document.querySelector('.welcome-context').textContent.includes('V, armasuisse, ASTRA, ESTV und BIT')&&!document.querySelector('.welcome-context').textContent.includes('PoC Data Catalog')"),'welcome credit or duplicate PoC wording is wrong');
   invariant(await evaluate("document.querySelectorAll('.org-thread').length>0"),'existing catalog relationships have no thread');
   await evaluate("document.querySelector('.welcome-intro-dismiss').focus()");
@@ -4977,6 +4981,7 @@ async function organizationExplorerFlow() {
   await evaluate("document.querySelector('.welcome-intro-dismiss').click()");
   await clickText('.welcome-intro-confirm button','Ja, ausblenden');
   await waitFor("!document.querySelector('.welcome-intro')&&!!document.querySelector('#catalog-search')&&!!document.querySelector('.org-stage')",'confirmed dismissal removed the canvas/search or retained the intro');
+  invariant(await evaluate("(()=>{const canvas=document.querySelector('daca-organization-canvas').getBoundingClientRect(),search=document.querySelector('.welcome-sidebar .welcome-search')?.getBoundingClientRect();return !!search&&search.left>=canvas.right-2;})()"),'hiding welcome did not move search beside the canvas');
   await navigate('/',actor,1440,1000);
   await waitFor("document.querySelector('.org-stage')&&!document.querySelector('.welcome-intro')",'welcome visibility was not persisted');
   await waitFor("!document.querySelector('.org-domain-bubble')&&document.querySelector('.org-layer [aria-checked=false]')",'domains must start hidden after reopening the data landscape');

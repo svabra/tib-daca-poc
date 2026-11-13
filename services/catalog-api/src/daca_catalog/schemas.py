@@ -112,6 +112,7 @@ class GlossaryTermReference(ApiModel):
 
 
 class DataProductResponse(ApiModel):
+    can_manage: bool = False
     id: uuid.UUID
     urn: str
     origin_catalog: str
@@ -820,6 +821,9 @@ class AccessRenewalCreate(ApiModel):
 class EffectiveAccessGrantResponse(ApiModel):
     grant_id: str
     subject_type: Literal["person", "machine", "group"]
+    subject_display_name: str
+    subject_organization: str
+    group_id: str | None = None
     protocols: list[Literal["http", "postgresql"]] = Field(min_length=1)
     data_variant: Literal["original", "modified"]
     valid_from: date
@@ -1538,6 +1542,8 @@ class SemanticSuggestionResponse(ApiModel):
 class WorkflowTaskResponse(ApiModel):
     id: uuid.UUID
     task_type: Literal[
+        "product_creation_review",
+        "product_creation_result",
         "search_view_shared",
         "metadata_quality",
         "access_governance",
@@ -1574,6 +1580,7 @@ class WorkflowTaskResponse(ApiModel):
     governance_submission_id: uuid.UUID | None = None
     service_level_revision_id: uuid.UUID | None = None
     source_access_request_id: uuid.UUID | None = None
+    product_creation_request_id: uuid.UUID | None = None
     physical_source_access_request_id: uuid.UUID | None = None
     domain_change_request_id: uuid.UUID | None = None
     glossary_term_proposal_id: uuid.UUID | None = None

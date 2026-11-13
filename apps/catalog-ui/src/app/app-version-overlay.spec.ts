@@ -29,9 +29,13 @@ describe('Catalog runtime version overlay', () => {
     const dialog = fixture.nativeElement.querySelector('.daca-feature-dialog') as HTMLDialogElement;
     expect(dialog.hasAttribute('open')).toBe(true);
     expect(dialog.textContent).toContain(`V${DACA_VERSION}`);
-    expect(dialog.textContent).toContain('Vom Finden zum Antrag als Nachrichtenaustausch');
-    expect(dialog.textContent).toContain('Gleiche Symbole in allen Animationen');
-    expect(dialog.textContent).toContain('Data Sourcing klarer darstellen');
+    expect(dialog.textContent).toContain('MWST-Produkt für St. Gallen elektronisch bestellen');
+    expect(dialog.textContent).toContain('Abgeleitete Datenprodukte flexibel beantragen');
+    expect(dialog.textContent).toContain('Datenprodukt in vier HTTP-Formaten beziehen');
+    expect(dialog.textContent).toContain('Bugfix: grosse Domänennetze zuverlässig laden');
+    expect(dialog.textContent).not.toContain('Vom Finden zum Antrag als Nachrichtenaustausch');
+    expect(dialog.textContent).not.toContain('Gleiche Symbole in allen Animationen');
+    expect(dialog.textContent).not.toContain('Data Sourcing klarer darstellen');
     expect(dialog.textContent).not.toContain('Die Data Pipeline als Animation entdecken');
     expect(dialog.textContent).not.toContain('PostgreSQL Data Sourcing nachvollziehen');
     expect(dialog.textContent).not.toContain('Bugfix: Organisationskarten ohne überlappenden Text');

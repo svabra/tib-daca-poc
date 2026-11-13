@@ -1,5 +1,133 @@
 # Current status
 
+Release **0.3.12** (2026-11-13) groups the electronic MWST creation journey, general
+fixed/rolling data-basis requirements, four HTTP format descriptors on one DAAIF product,
+personal permissions, product comments, metadata multi-selection and welcome-area search.
+Jan requests a new product directly in DaCa; Kassandra completes the order once the
+published result is accessible to Jan. The DE/EN version overlay archives 0.3.11 separately.
+The [MWST walkthrough](mwst-journey.md#known-limitations-from-the-13-november-2026-replay)
+records the missing MWST publication-submission UI entry point, the UTC/Zurich date
+mismatch and incorrect breadcrumb/person labels observed during the completed replay.
+
+The release regression exposed HTTP 414 when a large domain network sent 176 UUID filters
+in one GET request. Object reads now use batches of 100 domains, keeping request lines below
+the proxy's 8 KiB limit while merging shared objects and memberships as before.
+
+DAAIF registers tabular product representations as four HTTP endpoint records on one existing
+product: REST/JSON, CSV, Excel and Parquet. The overview and usage pages provide a format selector
+and direct DAAIF launch links. DAAIF carries the selected demo identity, automatically starts
+the chosen download or displays the REST response, and checks the same product-level HTTP
+policy before reading data. Legacy products receive missing endpoints through the existing
+owner API, including revision checks and audit; no product, SLA or policy is replaced.
+Validation passed: 66 DAAIF backend tests (plus 18 subtests), 28 targeted frontend tests,
+the production UI build and the data-model documentation check. Browser acceptance launched
+REST and all three actual downloads from DaCa, checked the usage page and 390/320 px layouts,
+and confirmed an unauthorized launch produced no file. Files were read back and matched REST
+across every field: 60 SG rows and all 2,860 company-year rows, including CHF totals. Jan's
+eight national/company-source REST/download requests returned 403; missing identity returned
+401 for all formats. Existing MWST active policy revisions were unchanged.
+
+Description is the first product metadata field. Semantic suggestions follow title/Data Owner
+and appear before both Fachdomänen and Terminologie. Both selections share the same search
+component matching labels, abbreviations and definitions, with persistent selected tags and
+individual removal. Neither renders a checkbox list. Terminology search offers only accepted
+terms in selected domains and shows matching aliases. Keyboard arrows/Enter/Escape work in both;
+readers see assigned entries without editing controls. Domain changes still prune terminology
+outside the remaining selection. Governed term proposals and explicit suggestion acceptance remain available.
+Validation passed: 10 targeted frontend tests and the production UI build. Browser checks
+verified suggestion order, terminology abbreviation search, keyboard/mouse/touch selection,
+multiple persistent tags, removal, domain-dependent pruning, governed proposal opening and
+explicit suggestion acceptance. Both 390/320 px layouts and Jan's read-only view passed.
+The MWST company description was preserved; acceptance wrote no product revisions and
+recorded no page errors.
+
+The data-basis period in derived-product requests now distinguishes fixed dates from a
+rolling window relative to each data-as-of point. Duration units are days/weeks/months/years.
+Migration 0052 preserves old requests, adds complete-window constraints and prevents a lossy
+downgrade. Detail/list views and the DAAIF banner/publication preserve the same choice;
+fulfillment matches the published window. Delivery frequency and access validity stay separate.
+Validation passed: 7 form tests, 23 creation-request API tests and 16 DAAIF context/export tests,
+plus the data-model documentation check. Existing request contents matched their pre-migration
+checksum after upgrade. Browser acceptance saved a rolling 12-month request, verified requester
+and owner details and the DAAIF bridge, and checked fixed/rolling controls at 390/320 px. The
+synthetic request was closed by its owner; it did not grant Jan access to the source product.
+
+The accidental Jan grant on MWST-Erträge Schweiz was revoked through Kassandra's existing
+revocation workflow and Thomas's independent approval. Policy revision 2 is confirmed by
+OPA and PostgreSQL; Jan's effective access is false. Fresh MWST setup grants only Kassandra
+access to both source products; Jan's separate finished SG example remains independent.
+The Freigaben workspace now uses scoped management evidence: readers see personal access,
+the request action and public permission evidence, without fetching private owner requests.
+Overview and Freigaben share an access action with loading, error and retry states; the
+status lookup uses a 10-second timeout instead of silently losing the button after 3 seconds.
+Validation passed: 854 frontend tests, the permission-registry/effective-access API suites,
+and 13 DAAIF tests. Live Jan requests to the national REST endpoint and CSV/XLSX/Parquet
+downloads return 403; the company source is also denied, while Kassandra's national access
+and Jan's independent SG example still return 200. Browser acceptance covered Jan's overview,
+reader Freigaben without private owner calls, a usable unsubmitted request draft, Kassandra's
+management controls, unavailable/retry and a delayed status response, plus 390/320 px layouts.
+
+Jan Waser's profile and persona selector use a locally stored synthetic portrait, also used
+by DAAIF. The existing portrait backfill fills missing images without replacing personal photos.
+The 23 identity/release frontend tests and DAAIF identity-context test passed. Browser checks
+verified the loaded 256 px portrait in both applications' headers and profile cards.
+
+Start-page search follows the welcome preference: inside the welcome area while it is shown,
+beside the data landscape only while it is hidden. With no search sidebar the landscape
+uses the full width. One shared search template retains the query/results and avoids
+duplicate IDs; the existing canvas instance stays mounted. Recent work moves below the
+full-width landscape, or stays beneath search when the sidebar is present.
+Validation: all 853 frontend tests and the recent-work browser flow passed. Browser
+acceptance covered search, hide/cancel/restore, persisted preference and 390/320 px layouts.
+The wider organization-explorer flow still fails its automatic EFD link-length limit;
+the same 499/467-unit links occur at the former sidebar width and the new full width.
+
+Derived-product requests now use general requirements: empty proposed name, data-basis date
+interval, purpose, legal mandate, multi-select format dropdown and update frequency. One-off
+delivery is separated from realtime/hourly/daily/weekly/annual updates. Migration 0051 adds
+the requirements while preserving explicitly scoped old canton/year requests. All fields are
+shown to the assigned owner and passed through DAAIF's existing context bridge. See the
+[form, persistence and API contract](product-creation-requests.md).
+This form change passed all 852 frontend tests and 21 creation-request API tests. Browser
+acceptance covered actual submission, saved owner detail, DAAIF context and 390/320-pixel
+layouts; existing request IDs survived the migration.
+
+The product overview now shows the current user's published permissions below each endpoint,
+separating direct grants from named group grants and showing protocol-specific variants,
+validity and weekly windows. The header offers **Zugriffänderung beantragen** when any current
+grant exists; otherwise it offers the initial request after a successful status check. The
+existing request form displays current grants and suggests the existing scope for a change.
+Identity changes discard permissions, form drafts and receipts; unavailable or contradictory
+evidence offers a retry and no request. See [policy projection and API](security/pbac.md#personal-permissions-on-the-product-overview).
+Current verification: 850 frontend tests and 18 focused comment/personal-access API tests
+passed, including actual browser submission/deletion and a change request preserving the
+active permission. The broad UI regression passed product flows but stopped at an existing
+model hold-connection navigation with a browser-evaluation timeout; it is not fully green.
+
+Product overview feedback actions now sit in the summary footer as small buttons. Full
+permission management and metadata editing use the actor-specific `canManage` capability;
+readers cannot use owner controls, including through the metadata route. Product comments
+are stored by additive migration 0050. Public comments are visible to product readers;
+private comments are visible only to current object-scoped Data Owners/deputies, with no
+author exception. API filtering precedes pagination, responses are not cached and identity
+switches discard comment drafts and stale private responses. See [API and visibility rules](product-comments.md).
+Public comment authors can delete their own entries after confirmation; the visibility option
+explains this before submission. Deletion removes comment text while preserving text-free
+audit events. Other people's comments and private comments cannot use the deletion route.
+Browser acceptance on 2026-11-12 covered five identities, actual public/private submissions,
+direct metadata navigation and 390/320-pixel mobile layouts. The full UI regression, 840
+frontend tests and 23 comment/permission/governance API tests passed.
+
+The MWST journey starts with Jan Waser (Data Analyst, Kanton St. Gallen) directly submitting
+a private electronic request for a new data product. Kassandra uses the linked editable
+DAAIF filter notebook and completes the order once the new product is ready and accessible
+to Jan, who then receives the result notification. Requests
+move from submitted to in progress, fulfilled or rejected, with revision-checked decisions,
+existing tasks and requester notifications. Fulfillment checks the approved SLA, published
+scope and Jan's effective access. The separate ready example leaves the manual SG product
+slug available. See [setup, API and manual steps](mwst-journey.md). Migration 0049 is additive;
+payloads and Excel/Parquet/CSV exports remain in DAAIF, metadata and governance in DaCa.
+
 Release **0.3.11** (2026-11-11) packages the connected access-request component scene,
 left-side source/SDAL orientation, consistent scene/legend icons, Data Sourcing Task Wizard
 terminology and shorter conveyor. Canonical package, runtime, OpenAPI, PWA and OpenShift

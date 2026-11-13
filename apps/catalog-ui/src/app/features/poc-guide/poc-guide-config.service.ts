@@ -26,10 +26,11 @@ export class PocGuideConfigService {
     });
   }
 
-  externalHref(target: PocGuideActionTarget): string | null {
+  externalHref(target: PocGuideActionTarget, path?: string, queryParams?: Readonly<Record<string, string>>): string | null {
     const base = this.state().daaifUiUrl;
-    if (!base || (target !== 'daaif-notebook' && target !== 'daaif-loader' && target !== 'daaif-source-explorer')) return null;
-    const suffix = target === 'daaif-notebook'
+    if (!base || target === 'internal') return null;
+    if (target === 'daaif-page' && (!path || !path.startsWith('/') || path.startsWith('//') || /[?#\\]/.test(path))) return null;
+    const suffix = target === 'daaif-page' ? path! : target === 'daaif-notebook'
       ? '/notebooks/data-analysts-journey-cantonal-business-tax'
       : target === 'daaif-loader'
         ? '/loader-workbench'
@@ -37,7 +38,7 @@ export class PocGuideConfigService {
     try {
       const url = new URL(base);
       url.pathname = `${url.pathname.replace(/\/$/, '')}${suffix}`;
-      url.search = '';
+      url.search = queryParams ? new URLSearchParams(queryParams).toString() : '';
       url.hash = '';
       return url.toString();
     } catch {

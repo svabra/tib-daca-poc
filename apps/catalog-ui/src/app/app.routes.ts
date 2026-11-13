@@ -35,6 +35,8 @@ export const routes: Routes = [
     title: 'Aufgaben | DaCa',
   },
   ...DOMAIN_ROUTES,
+  { path: 'product-creation-requests', pathMatch: 'full', loadComponent: () => import('./features/product-creation/product-creation.component').then(m => m.ProductCreationComponent), title: 'Erstellungsanträge | DaCa' },
+  { path: 'product-creation-requests/:id', loadComponent: () => import('./features/product-creation/product-creation.component').then(m => m.ProductCreationComponent), title: 'Datenprodukt beantragen | DaCa' },
   { path: 'documentation', pathMatch: 'full', loadComponent: () => import('./features/documentation/documentation-home.component').then((m) => m.DocumentationHomeComponent), title: 'Dokumentation Datenkatalog | DaCa' },
   { path: 'documentation/animated', pathMatch: 'full', loadComponent: () => import('./features/documentation/documentation-animated.component').then((m) => m.DocumentationAnimatedComponent), title: 'Animierte Dokumentation | DaCa' },
   { path: 'documentation/animated/data-sources', pathMatch: 'full', loadComponent: () => import('./features/documentation/documentation-source-topics.component').then((m) => m.DocumentationSourceTopicsComponent), title: 'Datenquellen entdecken | DaCa' },

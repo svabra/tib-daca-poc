@@ -1,5 +1,49 @@
 # Catalog data model
 
+## HTTP format representations
+
+DAAIF tabular products use four existing `endpoints` rows on one product ID. All retain
+`http-rest`; `connection.mediaType` and `connection.path` distinguish REST/JSON, CSV, Excel
+and Parquet. Existing endpoint revisions/audit and product-level HTTP grants apply unchanged.
+No new persistence fields or migration are introduced. See [HTTP formats](../http-product-formats.md).
+
+## Product comments and actor capabilities
+
+Migration `0050_product_comments` adds `data_product_comments` with product and author foreign
+keys, plain text (1–4,000 trimmed characters), `public`/`private` visibility and UTC creation
+time. Comment creation does not revise product metadata. Authors can delete their own public
+comments; creation and deletion audit records remain append-only and contain no comment text. The
+current trusted object ownership assignments determine private visibility on every read;
+authorship, another product's Data Owner role or publication control role grants no private
+access. Filtering happens before pagination. Comment text is excluded from audit details,
+product metadata and shared search projections. Product retirement preserves the row;
+an existing administrative hard deletion of a product cascades its contained comments.
+
+`DataProductResponse.canManage` is calculated for the authenticated actor and is not
+persisted or accepted by metadata write payloads. Product detail and comment responses use
+`Cache-Control: private, no-store` and vary on the demo identity header.
+
+## Product creation requests
+
+Migration `0051_creation_requirements` adds `basis_from`, `basis_until`, `legal_basis`
+and `update_frequency` and makes `tax_year`/`canton_code` nullable compatibility fields.
+New general requests require a complete ordered inclusive date interval, a legal mandate and
+one of `once/realtime/hourly/daily/weekly/annually`. Formats may also include `http-rest`.
+Existing requests retain their old scope and audit history. A database constraint forbids
+partial or mixed scopes. Request text remains requester/owner private; only reviewed result
+metadata carries the requested publication period. See [API and form](../product-creation-requests.md).
+
+Migration `0049_product_creation_requests` adds `product_creation_requests` and the nullable
+`workflow_tasks.product_creation_request_id` reference. Requester and Data Owner are trusted
+user references; the owner is derived from all source products. `source_product_ids` is a
+bounded UUID array, `formats` a unique subset of `xlsx`, `parquet`, `csv`. Purpose and proposed
+title remain requester/owner private. Tax year and canton describe a requested product scope,
+not a general row authorization rule. `revision` supports `If-Match`; decisions lock the row.
+State is `submitted`, `in_progress`, `fulfilled` or `rejected`. A fulfilled request references
+an independently approved result product. Existing task and audit tables record transitions;
+the result's publication evidence includes `daca:productScope` with canton, year and request
+ID. No DAAIF payload rows are persisted in the catalog.
+
 Permission management reuses policy, deployment, governance, task and audit records without a
 new migration. `audit_events.resource_type=access-permission` uses the product UUID as
 `resource_id`. `action=policy-activated` has a deterministic UUID per policy and
@@ -542,10 +586,10 @@ reads it from the actual footer. It never denotes the number of S3 objects (`obj
 <!-- BEGIN GENERATED: data-model. DO NOT EDIT. -->
 
 - SQLAlchemy source: [`services/catalog-api/src/daca_catalog/models.py`](../../services/catalog-api/src/daca_catalog/models.py)
-- Alembic head: `0048_open_ended_access_requests`
-- Schema fingerprint: `ea262c712d6ccacc`
-- Migration fingerprint: `686ccf00c61f32ce`
-- Tables: `104`
+- Alembic head: `0052_creation_windows`
+- Schema fingerprint: `7dea6598c46679da`
+- Migration fingerprint: `486184425801488a`
+- Tables: `106`
 
 ## Domain status vocabulary
 
@@ -565,6 +609,7 @@ reads it from the actual footer. It never denotes the number of S3 objects (`obj
 
 ## Persisted structured values
 
+- `product_creation_requests.source_product_ids` is a bounded array of catalog UUIDs; `formats` contains unique parquet/http-rest/csv/xlsx values. General requirements use basis_window_type=fixed with inclusive basis_from/basis_until, or basis_window_type=rolling with integer rolling_window_size (1..10000) and rolling_window_unit (days/weeks/months/years). Mixed windows are rejected. Both modes require legal_basis and update_frequency; legacy tax_year/canton_code remain nullable compatibility fields. Published `daca:productScope` carries creationRequestId and matching fixed dates or rolling discriminator/duration/unit; old fixed scopes may omit the discriminator. This describes owner-reviewed data basis, not automatic filtering, scheduling or access validity. Fulfillment checks matching scope, deliveries, published SLA and effective requester access. Tasks reference product_creation_request_id; audit events retain identifiers and state transitions without private purpose or legal-mandate text.
 - `domain_network_views.configuration` has schemaVersion=1, addedDomainIds (max 200 existing UUIDs), hiddenDomainIds (max 2000), positions keyed by domain:<existing UUID> or product/term/logical/physical:<readable UUID> with bounded finite x/y; changed object anchors use current catalog/source read scope, unchanged inaccessible anchors may be retained, and transient canvas selection is never stored, and unique visibleKinds product/term/logical/physical (product default). The user primary key is derived from trusted authentication; no supplied user ID, relationship or object payload is accepted. Audit details contain counts only. Shared domain relationships remain in semantic_graph_states. The rohs-cps-catalog-v1 seed marker preserves later changes to synthetic CPS catalog fixtures, scoped roles and registry memberships.
 - `search_views.configuration` is a strict schemaVersion=1 object: query (max 200 chars), mode (context/focus), kind (all/product/logical/structure/field/term/domain/source), organization/domain IDs or all, status (all/active), connection (all/connected/metadata), sort (relevance/name). `search_view_shares.snapshot` freezes name, description and that configuration at send time. No result rows, credentials or permission grants are copied. Recipient acceptance deep-copies this JSON; later source/copy edits and deletion do not synchronize. Private phrases, messages and descriptions are excluded from append-only audit details.
 - `data_products.keywords` is a string array; `contact`, `quality` and physical `metadata` hold DCAT-friendly extension objects.
@@ -741,6 +786,14 @@ erDiagram
         string role
         string delegated_owner_user_id FK
         boolean active
+        datetime created_at
+    }
+    data_product_comments {
+        uuid id PK
+        uuid data_product_id FK
+        string author_user_id FK
+        text text
+        string visibility
         datetime created_at
     }
     data_product_domains {
@@ -1579,6 +1632,31 @@ erDiagram
         string confirmed_by
         datetime updated_at
     }
+    product_creation_requests {
+        uuid id PK
+        string request_number UK
+        integer revision
+        string requester_user_id FK
+        string owner_user_id FK
+        json source_product_ids
+        string proposed_title
+        text purpose
+        integer tax_year
+        string canton_code
+        date basis_from
+        date basis_until
+        string basis_window_type
+        integer rolling_window_size
+        string rolling_window_unit
+        text legal_basis
+        string update_frequency
+        json formats
+        string status
+        text decision_comment
+        uuid result_product_id FK
+        datetime created_at
+        datetime updated_at
+    }
     product_quality_assessments {
         uuid data_product_id PK,FK
         boolean access_management_defined
@@ -1830,6 +1908,7 @@ erDiagram
         uuid id PK
         uuid search_view_share_id FK
         string task_type
+        uuid product_creation_request_id FK
         string task_kind
         string status
         string assignee_user_id FK
@@ -1882,6 +1961,8 @@ erDiagram
     demo_users ||--o{ data_model_role_assignments : "user_id"
     administrative_organizations ||--o{ data_model_role_assignments : "organization_id"
     demo_users o|--o{ data_model_role_assignments : "delegated_owner_user_id"
+    data_products ||--o{ data_product_comments : "data_product_id"
+    demo_users ||--o{ data_product_comments : "author_user_id"
     data_products ||--o| data_product_domains : "data_product_id"
     domains ||--o| data_product_domains : "domain_id"
     demo_users ||--o{ data_product_domains : "assigned_by_user_id"
@@ -2012,6 +2093,9 @@ erDiagram
     policy_revisions ||--o{ policy_deployments : "policy_revision_id"
     data_products ||--o{ policy_revisions : "data_product_id"
     data_products ||--o| product_context_graphs : "data_product_id"
+    demo_users ||--o{ product_creation_requests : "requester_user_id"
+    demo_users ||--o{ product_creation_requests : "owner_user_id"
+    data_products o|--o{ product_creation_requests : "result_product_id"
     data_products ||--o| product_quality_assessments : "data_product_id"
     data_products ||--o{ product_semantic_mappings : "data_product_id"
     data_product_fields o|--o{ product_semantic_mappings : "data_product_field_id"
@@ -2053,6 +2137,7 @@ erDiagram
     terminology_term_versions o|--o{ terminology_terms : "latest_version_id"
     demo_users ||--o{ terminology_terms : "creator_user_id"
     search_view_shares o|--o{ workflow_tasks : "search_view_share_id"
+    product_creation_requests o|--o{ workflow_tasks : "product_creation_request_id"
     demo_users ||--o{ workflow_tasks : "assignee_user_id"
     data_products o|--o{ workflow_tasks : "data_product_id"
     access_requests o|--o{ workflow_tasks : "access_request_id"
@@ -2405,6 +2490,27 @@ Constraints and indexes:
 - Foreign key `organization_id` → `administrative_organizations.id`; on delete `RESTRICT`
 - Foreign key `delegated_owner_user_id` → `demo_users.id`; on delete `SET NULL`
 - Index `ix_data_model_role_scope` on `department_code, organization_id, role`
+
+### `data_product_comments`
+
+Product-scoped plain-text comments with immutable author, visibility and creation time. Public comments follow catalog read access; private comments are returned only to current active object-scoped Data Owners/deputies, never merely because the reader authored them. Audit records exclude comment text.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `data_product_id` | `CHAR(32)` | no | FK | — |
+| `author_user_id` | `VARCHAR(200)` | no | FK | — |
+| `text` | `TEXT` | no | — | — |
+| `visibility` | `VARCHAR(16)` | no | — | — |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Check `ck_product_comment_text`: `length(trim(text)) BETWEEN 1 AND 4000`
+- Check `ck_product_comment_visibility`: `visibility IN ('public', 'private')`
+- Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
+- Foreign key `author_user_id` → `demo_users.id`
+- Index `ix_product_comments_visible` on `data_product_id, visibility, created_at, id`
 
 ### `data_product_domains`
 
@@ -4175,6 +4281,51 @@ Constraints and indexes:
 
 - Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
 
+### `product_creation_requests`
+
+Revision-controlled requester/owner-private derived-product workflow. Trusted sources determine the Data Owner. General requests store either inclusive fixed data-basis dates or a rolling duration/unit relative to each data-as-of point, plus legal mandate, formats and update frequency. Old fixed-period and canton/year requests remain readable. Fulfillment links an approved independently authorized result with matching window. No payload rows are stored.
+
+| Column | Type | Null | Keys | Default |
+|---|---|:---:|---|---|
+| `id` | `CHAR(32)` | no | PK | — |
+| `request_number` | `VARCHAR(40)` | no | UK | — |
+| `revision` | `INTEGER` | no | — | `1` |
+| `requester_user_id` | `VARCHAR(200)` | no | FK | — |
+| `owner_user_id` | `VARCHAR(200)` | no | FK | — |
+| `source_product_ids` | `JSON` | no | — | — |
+| `proposed_title` | `VARCHAR(255)` | no | — | — |
+| `purpose` | `TEXT` | no | — | — |
+| `tax_year` | `INTEGER` | yes | — | — |
+| `canton_code` | `VARCHAR(2)` | yes | — | — |
+| `basis_from` | `DATE` | yes | — | — |
+| `basis_until` | `DATE` | yes | — | — |
+| `basis_window_type` | `VARCHAR(16)` | no | — | `fixed` |
+| `rolling_window_size` | `INTEGER` | yes | — | — |
+| `rolling_window_unit` | `VARCHAR(8)` | yes | — | — |
+| `legal_basis` | `TEXT` | yes | — | — |
+| `update_frequency` | `VARCHAR(32)` | yes | — | — |
+| `formats` | `JSON` | no | — | — |
+| `status` | `VARCHAR(32)` | no | — | `submitted` |
+| `decision_comment` | `TEXT` | yes | — | — |
+| `result_product_id` | `CHAR(32)` | yes | FK | — |
+| `created_at` | `DATETIME` | no | — | `utc_now` |
+| `updated_at` | `DATETIME` | no | — | `utc_now` |
+
+Constraints and indexes:
+
+- Unique `unnamed`: `request_number`
+- Check `ck_product_creation_basis_dates`: `basis_from IS NULL OR basis_until >= basis_from`
+- Check `ck_product_creation_frequency`: `update_frequency IS NULL OR update_frequency IN ('once', 'realtime', 'hourly', 'daily', 'weekly', 'annually')`
+- Check `ck_product_creation_requirements`: `(tax_year IS NOT NULL AND canton_code IS NOT NULL AND basis_window_type = 'fixed' AND basis_from IS NULL AND basis_until IS NULL AND legal_basis IS NULL AND update_frequency IS NULL) OR (tax_year IS NULL AND canton_code IS NULL AND legal_basis IS NOT NULL AND update_frequency IS NOT NULL AND ((basis_window_type = 'fixed' AND basis_from IS NOT NULL AND basis_until IS NOT NULL) OR basis_window_type = 'rolling'))`
+- Check `ck_product_creation_status`: `status IN ('submitted', 'in_progress', 'fulfilled', 'rejected')`
+- Check `ck_product_creation_window`: `(basis_window_type = 'fixed' AND rolling_window_size IS NULL AND rolling_window_unit IS NULL) OR (basis_window_type = 'rolling' AND basis_from IS NULL AND basis_until IS NULL AND rolling_window_size IS NOT NULL AND rolling_window_size BETWEEN 1 AND 10000 AND rolling_window_unit IS NOT NULL AND rolling_window_unit IN ('days', 'weeks', 'months', 'years'))`
+- Check `ck_product_creation_year`: `tax_year BETWEEN 1900 AND 2100`
+- Foreign key `requester_user_id` → `demo_users.id`
+- Foreign key `owner_user_id` → `demo_users.id`
+- Foreign key `result_product_id` → `data_products.id`; on delete `RESTRICT`
+- Index `ix_product_creation_owner` on `owner_user_id, status`
+- Index `ix_product_creation_requester` on `requester_user_id, status`
+
 ### `product_quality_assessments`
 
 Server-computed evidence and medal for the six quality conditions.
@@ -4687,6 +4838,7 @@ Owner and approver work items, recipient-private search-view messages, and ackno
 | `id` | `CHAR(32)` | no | PK | — |
 | `search_view_share_id` | `CHAR(32)` | yes | FK | — |
 | `task_type` | `VARCHAR(64)` | no | — | — |
+| `product_creation_request_id` | `CHAR(32)` | yes | FK | — |
 | `task_kind` | `VARCHAR(32)` | no | — | `action` |
 | `status` | `VARCHAR(32)` | no | — | `open` |
 | `assignee_user_id` | `VARCHAR(200)` | no | FK | — |
@@ -4713,6 +4865,7 @@ Constraints and indexes:
 
 - Check `ck_workflow_task_kind`: `task_kind IN ('action', 'information')`
 - Foreign key `search_view_share_id` → `search_view_shares.id`; on delete `CASCADE`
+- Foreign key `product_creation_request_id` → `product_creation_requests.id`; on delete `RESTRICT`
 - Foreign key `assignee_user_id` → `demo_users.id`
 - Foreign key `data_product_id` → `data_products.id`; on delete `CASCADE`
 - Foreign key `access_request_id` → `access_requests.id`; on delete `CASCADE`
@@ -4733,6 +4886,7 @@ Constraints and indexes:
 - Index `ix_workflow_task_product` on `data_product_id`
 - Index `ix_workflow_task_source_access_request` on `source_access_request_id`
 - Index `ix_workflow_tasks_physical_source_access_request_id` on `physical_source_access_request_id`
+- Index `ix_workflow_tasks_product_creation_request_id` on `product_creation_request_id`
 - Index `ix_workflow_tasks_search_view_share_id` on `search_view_share_id`
 
 <!-- END GENERATED: data-model. -->

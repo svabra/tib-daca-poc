@@ -1,0 +1,47 @@
+<section class="daca-card product-comments" aria-labelledby="product-comments-title">
+  <div class="daca-card-header"><h2 id="product-comments-title">Kommentare zum Datenprodukt</h2></div>
+  <div class="daca-card-body">
+    @if (notice()) { <p class="daca-alert" role="status">{{ notice() }}</p> }
+    @if (canViewPrivate()) { <p class="comments-scope">Als zuständiger Data Owner oder Stellvertretung sehen Sie öffentliche und private Kommentare.</p> }
+    @if (error()) { <p class="daca-alert is-error" role="alert">{{ error() }}</p><button class="daca-button is-secondary" type="button" (click)="load()">Erneut laden</button> }
+    @if (deletionError()) { <p class="daca-alert is-error" role="alert">{{ deletionError() }}</p> }
+    @if (!loading() && !error() && !items().length) { <p>{{ canViewPrivate() ? 'Noch keine Kommentare vorhanden.' : 'Noch keine öffentlichen Kommentare vorhanden.' }}</p> }
+    <ol class="comments-list">
+      @for (comment of items(); track comment.id) {
+        <li [attr.data-comment-id]="comment.id" [attr.data-comment-visibility]="comment.visibility">
+          <header><div><strong>{{ comment.authorName }}</strong><span>{{ comment.authorOrganization }}</span></div><span class="comment-visibility">{{ comment.visibility === 'private' ? 'Privat' : 'Öffentlich' }}</span></header>
+          <p class="comment-text">{{ comment.text }}</p>
+          <time [attr.datetime]="comment.createdAt">{{ comment.createdAt | date:'dd.MM.yyyy, HH:mm' }}</time>
+          @if (canDelete(comment)) {
+            <div class="comment-delete-actions">
+              @if (pendingDeletion() === comment.id) {
+                <p>Öffentlichen Kommentar dauerhaft löschen?</p>
+                <button class="daca-button is-secondary" type="button" [disabled]="deleting()" (click)="pendingDeletion.set(null); deletionError.set('')">Abbrechen</button>
+                <button class="daca-button" type="button" [disabled]="deleting()" (click)="deletePublicComment(comment)">{{ deleting() ? 'Wird gelöscht …' : 'Kommentar endgültig löschen' }}</button>
+              } @else {
+                <button class="daca-button is-secondary" type="button" [disabled]="deleting()" (click)="pendingDeletion.set(comment.id); deletionError.set('')">Kommentar löschen</button>
+              }
+            </div>
+          }
+        </li>
+      }
+    </ol>
+    @if (loading()) { <p role="status">Kommentare werden geladen …</p> }
+    @if (nextOffset() !== null) { <button class="daca-button is-secondary" type="button" [disabled]="loading()" (click)="load(nextOffset()!)">Weitere Kommentare laden</button> }
+  </div>
+</section>
+
+<dialog #composer class="product-comment-dialog" aria-labelledby="product-comment-dialog-title" (close)="clearDraft()">
+  <form (ngSubmit)="saveComment()">
+    <header><h2 id="product-comment-dialog-title">Kommentar zum Datenprodukt erfassen</h2><button class="comment-close" type="button" aria-label="Schliessen" (click)="closeComposer()">×</button></header>
+    <fieldset [disabled]="saving()" class="comment-fields">
+      <label [for]="'comment-text-' + productId()">Kommentar<textarea [id]="'comment-text-' + productId()" name="text" [(ngModel)]="text" required maxlength="4000" rows="5"></textarea><small>{{ text.length }}/4000 Zeichen</small></label>
+      <fieldset class="comment-visibility-options"><legend>Sichtbarkeit</legend>
+        <label><input type="radio" name="visibility" value="private" [(ngModel)]="visibility"><span><strong>Privat</strong><small>Nur der zuständige Data Owner und dessen Stellvertretung können den gespeicherten Kommentar lesen.</small></span></label>
+        <label><input type="radio" name="visibility" value="public" [(ngModel)]="visibility"><span><strong>Öffentlich</strong><small>Für alle Leser dieses Datenprodukts sichtbar. Sie können Ihren öffentlichen Kommentar später wieder löschen.</small></span></label>
+      </fieldset>
+    </fieldset>
+    @if (formError()) { <p class="daca-alert is-error" role="alert">{{ formError() }}</p> }
+    <footer><button class="daca-button is-secondary" type="button" (click)="closeComposer()">Abbrechen</button><button class="daca-button" type="submit" [disabled]="saving() || !text.trim() || text.length > 4000">{{ saving() ? 'Wird gespeichert …' : 'Kommentar erfassen' }}</button></footer>
+  </form>
+</dialog>

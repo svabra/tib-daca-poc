@@ -1,0 +1,23 @@
+import { PocJourney } from './poc-guide.models';
+
+export const MWST_JOURNEY: PocJourney = {
+  id: 'mwst-ertraege-st-gallen-2026', number: 'MWST', title: 'MWST-Erträge für St. Gallen',
+  summary: 'Jan Waser beantragt in DaCa direkt elektronisch ein neues Datenprodukt. Kassandra Valdata erstellt den SG-Ausschnitt in DAAIF und schliesst den Auftrag ab, sobald das Produkt für Jan bereitsteht.',
+  tags: ['MWST', 'Erstellungsantrag', 'St. Gallen', 'DAAIF'], duration: '15–25 Minuten', difficulty: 'Mittel', systems: ['DaCa', 'DAAIF'],
+  roles: [
+    { name: 'Jan Waser', responsibility: 'Data Analyst · Kanton St. Gallen' },
+    { name: 'Kassandra Valdata', responsibility: 'Data Owner · ESTV' },
+    { name: 'Thomas Kriegli', responsibility: 'Kontrollperson · Publication Approver' },
+  ],
+  prerequisites: ['Der MWST-Loader und die Ausgangsprodukte sind eingerichtet.', 'Alle Daten sind synthetisch; 2026 ist vorläufig per 12.11.2026.'],
+  outcome: 'Jan erhält 60 Firmenzeilen aus SG für 2026 als Excel, Parquet oder CSV. Er benötigt keinen Zugriff auf die schweizweiten Firmenzeilen.',
+  repeatability: 'Der fertige Beispielstand besitzt einen eigenen Produktnamen. Das eigene SG-Produkt wird durch Kassandra erstellt. Loader-Wiederholungen löschen keine Anträge, Produkte oder Auditverläufe.',
+  steps: [
+    { title: 'Ausgangsprodukte entdecken', status: 'implemented', description: 'Als Jan die MWST-Erträge Schweiz 2016–2026 und das Firmenprodukt finden. Beschreibung, Kontakt und SLA lesen: 260 Firmen aus 26 Kantonen, darunter 60 aus SG; historische Jahreswerte 2016–2025 und vorläufige Werte 2026.', actions: [{label:'Datenprodukte als Jan öffnen',target:'internal',path:'/products',demoUserId:'jan.waser'}], checkpoint: 'Jan versteht Datenstand und Firmensitz-Zuordnung; Kassandra ist Data Owner.' },
+    { title: 'Neues Datenprodukt elektronisch beantragen', status: 'implemented', description: 'Jan stellt direkt in DaCa einen elektronischen Antrag für ein neues Datenprodukt mit den Firmenzeilen aus SG für 2026. Er begründet den Verwendungszweck und wählt Excel, Parquet und CSV.', actions: [{label:'Als Jan Erstellungsantrag öffnen',target:'internal',path:'/product-creation-requests/new',demoUserId:'jan.waser',queryParams:{source:'daaif:mwst-ertraege-firmen-2016-2026:v1'}}], checkpoint: 'Ein gespeicherter Antrag für ein neues Datenprodukt mit Nummer und Data Owner liegt vor.' },
+    { title: 'Auftrag als Kassandra annehmen', status: 'implemented', description: 'Kassandra öffnet die Aufgabe, prüft den Antrag und nimmt ihn an. Der Knopf im Antrag führt zum DAAIF-Notizbuch mit dem Antragsbezug.', actions: [{label:'Kassandras Aufgaben',target:'internal',path:'/tasks',demoUserId:'kassandra.valdata'}], checkpoint: 'Der Antrag steht auf In Bearbeitung.' },
+    { title: 'SG-Ausschnitt selbst erstellen', status: 'implemented', description: "Kassandra führt die bearbeitbare Abfrage mit WHERE tax_year = 2026 AND canton_code = 'SG' selbst aus. Keine Summierung: 60 einzelne Firmenzeilen bleiben erhalten. Das gespeicherte Parquet-Ergebnis über Publish data product veröffentlichen.", actions: [{label:'DAAIF-Journey öffnen',target:'daaif-page',path:'/documentation/journeys/mwst-ertraege-st-gallen-2026',demoUserId:'kassandra.valdata'}], checkpoint: 'Das eigene Datenprodukt verweist auf den gespeicherten SG-Ausschnitt; das Beispielprodukt bleibt getrennt.' },
+    { title: 'SLA und Veröffentlichung kontrollieren', status: 'implemented', description: 'Kassandra ergänzt die produktspezifische SLA und bereitet die Freigabe für Jan vor. Thomas kontrolliert SLA und Veröffentlichung über das vorhandene Vier-Augen-Verfahren.', actions: [{label:'Thomas’ Aufgaben',target:'internal',path:'/tasks',demoUserId:'thomas.kriegli'}], checkpoint: 'SLA ist publiziert, das Produkt ist aktiv und Jans Freigabe technisch wirksam.' },
+    { title: 'Auftrag abschliessen und Dateien herunterladen', status: 'implemented', description: 'Sobald das neue Datenprodukt veröffentlicht und für Jan freigegeben ist, ordnet Kassandra es dem Antrag zu und schliesst den Auftrag ab. Jan erhält die Ergebnisbenachrichtigung und kann die 60 SG-Firmen als Excel, Parquet oder CSV herunterladen.', actions: [{label:'Jans Anträge und Ergebnisse',target:'internal',path:'/product-creation-requests',demoUserId:'jan.waser'},{label:'Fertigen Beispielstand in DAAIF öffnen',target:'daaif-page',path:'/dataproducts/mwst-ertraege-firmen-sg-2026-beispiel',demoUserId:'jan.waser'}], checkpoint: 'Der Auftrag ist abgeschlossen und verlinkt das bereitgestellte Produkt. Alle drei Downloads enthalten ausschliesslich SG, 2026 und identische CHF-Beträge.' },
+  ],
+};

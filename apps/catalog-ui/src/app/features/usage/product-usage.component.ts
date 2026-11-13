@@ -1,4 +1,6 @@
 import { AccessEndDatePipe } from '../../shared/access-end-date.pipe';
+import { DaaifDownloadLinkComponent } from '../../shared/daaif-download-link.component';
+import { endpointFormatLabel } from '../../shared/daaif-http-formats';
 import { DOCUMENT, DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -42,7 +44,7 @@ import {
 @Component({
   selector: 'daca-product-usage',
   standalone: true,
-  imports: [AccessEndDatePipe, DatePipe, ProductWorkspaceNavComponent, QualityMedalComponent, RouterLink],
+  imports: [DaaifDownloadLinkComponent, AccessEndDatePipe, DatePipe, ProductWorkspaceNavComponent, QualityMedalComponent, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <daca-product-workspace-nav
@@ -62,6 +64,7 @@ import {
       }
     </section>
 
+    @if (product(); as downloadProduct) { <daca-daaif-download-link [endpoints]="downloadProduct.endpoints" /> }
     <section class="daca-card product-usage-safety" aria-labelledby="usage-safety-title">
       <div>
         <p class="daca-eyebrow">Sicherer Schnellstart</p>
@@ -189,7 +192,7 @@ import {
             @for (endpoint of currentProduct.endpoints; track endpoint.id) {
               <article class="daca-card product-endpoint-card">
                 <header>
-                  <div><span>{{ endpoint.protocol === 'http-rest' ? 'REST' : 'PostgreSQL' }}</span><h3>{{ endpoint.title }}</h3></div>
+                  <div><span>{{ endpointLabel(endpoint) }}</span><h3>{{ endpoint.title }}</h3></div>
                   @if (isInternal(endpoint)) { <strong class="product-endpoint-internal">Nur internes Netzwerk</strong> }
                 </header>
 
@@ -265,6 +268,7 @@ import {
   `,
 })
 export class ProductUsageComponent implements OnDestroy {
+  readonly endpointLabel=endpointFormatLabel;
   readonly api = inject(CatalogApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly clipboard = inject(ClipboardService);

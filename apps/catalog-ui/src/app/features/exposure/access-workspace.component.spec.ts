@@ -43,6 +43,7 @@ function apiStub(consumers = of<readonly OwnedAccessConsumer[]>(CONSUMERS)) {
     ownerAccessRequests: signal([]),
     selectProduct: vi.fn(),
     identityUserId: vi.fn(() => 'kassandra.valdata'),
+    loadEffectiveAccess: vi.fn(() => of({granted:false,asOfDate:'2026-08-20',policyRevision:7,grants:[]})),
     loadProductAccessRequests: vi.fn(() => of([])),
     loadProductPermissions: vi.fn(() => consumers.pipe(map(rows=>({productId:PRODUCT_ID,asOfDate:'2026-08-20',policyRevision:7,latestRevision:7,state:'confirmed' as const,canManage:true,canRevoke:true,items:rows.flatMap(consumer=>consumer.grants.map(grant=>({grantId:grant.grantId,displayName:consumer.displayName,organization:consumer.organization,groupMembers:[],grant:{subject:{type:consumer.consumerType,id:consumer.identityId},actions:['data.read'],protocols:grant.protocol==='both'?['http' as const,'postgresql' as const]:[grant.protocol],validFrom:grant.validFrom,validUntil:grant.validUntil,dataVariant:grant.variant,metadataChannels:{kobyMcp:false,i14y:false}}})))})))),
     loadPermissionLog:vi.fn(()=>of({items:[],total:0})),
@@ -67,6 +68,25 @@ async function render(api = apiStub()) {
 
 describe('AccessWorkspaceComponent access expiry', () => {
   afterEach(() => TestBed.resetTestingModule());
+
+  it('offers a reader an initial request and personal status without requesting private owner lists or showing management links', async () => {
+    const api = apiStub();
+    api.identityUserId.mockReturnValue('jan.waser');
+    api.product.update(product => ({...product,canManage:false}));
+    const permissions = api.loadProductPermissions;
+    const ownerRead = permissions.getMockImplementation()!;
+    permissions.mockImplementation(() => ownerRead().pipe(map(state => ({...state,canManage:false,canRevoke:false}))));
+    const {fixture} = await render(api);
+    const root=fixture.nativeElement as HTMLElement;
+    expect(api.loadProductAccessRequests).not.toHaveBeenCalled();
+    expect(root.querySelector('daca-product-access-requests')).toBeNull();
+    expect(root.querySelector('.product-overview-request-access')?.textContent).toBe('Zugriff anfragen');
+    expect(root.querySelector('.product-overview-request-access')?.getAttribute('href')).toBe(`/products/${PRODUCT_ID}/access-request`);
+    expect(root.textContent).toContain('keine gültige persönliche oder Gruppenfreigabe');
+    expect(root.querySelector('.product-access-nav')?.textContent).not.toContain('Zugriff einstellen');
+    expect(root.querySelector('.access-workspace-technical')).toBeNull();
+    expect(root.querySelector('daca-product-permissions')).not.toBeNull();
+  });
 
   it('shows expiring policy-authoritative entitlements with consumer and expiry context', async () => {
     const { fixture } = await render();

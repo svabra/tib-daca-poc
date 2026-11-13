@@ -254,6 +254,8 @@ def effective_access_response(
     *,
     on_date: date | None = None,
 ) -> ProductEffectiveAccessResponse:
+    from .product_permissions import identity_label
+
     today = on_date or zurich_today()
     policy = active_published_policy(session, product)
     if policy is None:
@@ -311,10 +313,14 @@ def effective_access_response(
         else:
             eligibility = RenewalEligibility(eligible=True, reason="eligible")
 
+        label = identity_label(session, subject.type, subject.id)
         projected.append(
             EffectiveAccessGrantResponse(
                 grant_id=policy_grant_id(policy, grant),
                 subject_type=subject.type,
+                subject_display_name=label.display_name,
+                subject_organization=label.organization,
+                group_id=subject.id if indirect_group else None,
                 protocols=list(dict.fromkeys(grant.protocols)),
                 data_variant=grant.data_variant,
                 valid_from=grant.valid_from,

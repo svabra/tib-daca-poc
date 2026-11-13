@@ -69,7 +69,7 @@ async function setup(userId = 'product.owner') {
   const api = {
     product: signal(product),
     usingFallback: signal(false),
-    loadProduct: vi.fn(() => of(product)),
+    loadProduct: vi.fn(() => of({...product,canManage:['product.owner','product.deputy'].includes(activeUserId())})),
     loadDomains: vi.fn(() => of([DOMAIN])),
     loadGlossaryTerms: vi.fn(() => of([])),
     loadSemanticSuggestions: vi.fn(() => of([])),
@@ -94,11 +94,55 @@ async function setup(userId = 'product.owner') {
     showModal: { value: vi.fn(() => dialog.setAttribute('open', '')) },
     close: { value: vi.fn(() => { dialog.removeAttribute('open'); dialog.dispatchEvent(new Event('close')); }) },
   });
-  return { fixture, component: fixture.componentInstance, activeUserId, createGlossaryTermProposal };
+  return { fixture, component: fixture.componentInstance, activeUserId, createGlossaryTermProposal, api };
 }
 
 describe('MetadataStudioComponent glossary proposals', () => {
   afterEach(() => TestBed.resetTestingModule());
+
+  it('starts with Description and selects domains through search without checkboxes or losing existing selections',async()=>{
+    const {fixture,component}=await setup();const root=fixture.nativeElement as HTMLElement;
+    const other:DomainSummary={...DOMAIN,id:'other-domain',preferredLabel:'Kantonale Finanzplanung',definition:'Planung der kantonalen Finanzen.',
+      labels:[{language:'de',preferredLabel:'Kantonale Finanzplanung',alternativeLabels:['KFin'],definition:'Planung der kantonalen Finanzen.'}]};
+    component.availableDomains.set([DOMAIN,other]);component.availableTerms.set([TERM]);component.selectedTermIds.set([TERM.id]);fixture.detectChanges();
+    expect(root.querySelector('.metadata-form-grid [formcontrolname]')?.getAttribute('formcontrolname')).toBe('description');
+    const picker=root.querySelector('daca-domain-picker')!;
+    expect(picker.querySelector('input[type="checkbox"]')).toBeNull();
+    const search=picker.querySelector<HTMLInputElement>('[role="combobox"]')!;
+    search.value='kfin';search.dispatchEvent(new Event('input'));fixture.detectChanges();
+    expect(picker.querySelectorAll('[role="option"]')).toHaveLength(1);
+    expect(picker.querySelector('[role="option"]')?.textContent).toContain('Kantonale Finanzplanung');
+    const enter=new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true});search.dispatchEvent(enter);fixture.detectChanges();
+    expect(enter.defaultPrevented).toBe(true);expect(component.selectedDomainIds()).toEqual([DOMAIN.id,other.id]);
+    expect(component.selectedTermIds()).toEqual([TERM.id]);expect(component.form.dirty).toBe(true);
+    expect(search.value).toBe('');expect(picker.querySelectorAll('[role="option"]')).toHaveLength(0);
+    picker.querySelector<HTMLButtonElement>('button[aria-label="Kantonale Finanzplanung entfernen"]')!.click();fixture.detectChanges();
+    expect(component.selectedDomainIds()).toEqual([DOMAIN.id]);expect(component.selectedTermIds()).toEqual([TERM.id]);
+    picker.querySelector<HTMLButtonElement>('button[aria-label="Direkte Bundessteuer entfernen"]')!.click();fixture.detectChanges();
+    expect(component.selectedDomainIds()).toEqual([]);expect(component.selectedTermIds()).toEqual([]);
+    search.value='DBST';search.dispatchEvent(new Event('input'));fixture.detectChanges();
+    search.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));fixture.detectChanges();
+    search.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));fixture.detectChanges();
+    expect(search.getAttribute('aria-expanded')).toBe('false');expect(component.selectedDomainIds()).toEqual([]);
+    search.dispatchEvent(new FocusEvent('focus'));fixture.detectChanges();
+    picker.querySelector<HTMLElement>('[role="option"]')!.click();fixture.detectChanges();
+    expect(component.selectedDomainIds()).toEqual([DOMAIN.id]);
+  });
+
+  it('keeps metadata read-only for readers, including a direct route and identity switch', async () => {
+    const {fixture,component,activeUserId,api}=await setup('other.owner');
+    expect(component.canEditMetadata()).toBe(false);expect(component.form.disabled).toBe(true);
+    expect((fixture.nativeElement as HTMLElement).querySelector('.metadata-form button[type="submit"]')).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('daca-domain-picker input')).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('daca-domain-picker button')).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('daca-semantic-picker[kind="term"] input')).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('daca-semantic-picker[kind="term"] button')).toBeNull();
+    component.save();expect(api.updateProductMetadata).not.toHaveBeenCalled();
+    activeUserId.set('product.owner');fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();
+    expect(component.canEditMetadata()).toBe(true);expect(component.form.enabled).toBe(true);
+    activeUserId.set('other.owner');fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();
+    expect(component.form.disabled).toBe(true);
+  });
 
   it('keeps automatic attachment eligibility owner-bound in the reusable governed form', async () => {
     const { fixture, component, activeUserId } = await setup();
@@ -154,15 +198,56 @@ describe('MetadataStudioComponent glossary proposals', () => {
     expect(component.form.dirty).toBe(true);
   });
 
-  it('filters accepted domain terms by abbreviation and exposes that abbreviation in the picker', async () => {
-    const { fixture, component } = await setup();
-    component.availableTerms.set([TERM]);
-    component.termQuery.set('GepFz');
-    fixture.detectChanges();
+  it('places suggestions first and selects domain-bound terminology through search with persistent selected tags', async () => {
+    const {fixture,component,api}=await setup();
+    const root=fixture.nativeElement as HTMLElement;
+    const foreign:GlossaryTermSummary={...TERM,id:'foreign-term',domains:[{...DOMAIN,id:'foreign-domain'}]};
+    component.availableTerms.set([TERM,foreign]);fixture.detectChanges();
+    const picker=root.querySelector('daca-semantic-picker[kind="term"]')!;
+    const domains=root.querySelector('daca-domain-picker')!.closest('fieldset')!;
+    const suggestions=root.querySelector('.suggestion-panel')!;
+    expect(suggestions.compareDocumentPosition(domains)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(suggestions.compareDocumentPosition(picker)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(root.querySelector('.metadata-form-grid input[type="checkbox"]')).toBeNull();
+    const search=picker.querySelector<HTMLInputElement>('[role="combobox"]')!;
+    search.value='GepFz';search.dispatchEvent(new Event('input'));fixture.detectChanges();
+    expect(picker.querySelectorAll('[role="option"]')).toHaveLength(1);
+    expect(picker.querySelector('[role="option"]')?.textContent).toContain('GepFz');
+    const enter=new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true});
+    search.dispatchEvent(enter);fixture.detectChanges();
+    expect(enter.defaultPrevented).toBe(true);
+    expect(component.selectedTermIds()).toEqual([TERM.id]);expect(component.form.dirty).toBe(true);
+    expect(api.updateProductMetadata).not.toHaveBeenCalled();
+    expect(search.value).toBe('');
+    const remove=picker.querySelector<HTMLButtonElement>('button[aria-label="Gepanzertes Fahrzeug entfernen"]')!;
+    expect(remove).not.toBeNull();
+    search.value='unbekannt';search.dispatchEvent(new Event('input'));fixture.detectChanges();
+    expect(picker.querySelector('[role="status"]')?.textContent).toContain('Keine weiteren passenden Terminologiebegriffe.');
+    expect(picker.contains(remove)).toBe(true);
+    remove.click();fixture.detectChanges();expect(component.selectedTermIds()).toEqual([]);
+    search.value='Armored';search.dispatchEvent(new Event('input'));fixture.detectChanges();
+    picker.querySelector<HTMLElement>('[role="option"]')!.click();fixture.detectChanges();
+    expect(component.selectedTermIds()).toEqual([TERM.id]);
+    search.value='GepFz';search.dispatchEvent(new Event('input'));fixture.detectChanges();
+    expect(picker.querySelectorAll('[role="option"]')).toHaveLength(0);
+    component.toggleDomain(DOMAIN.id);fixture.detectChanges();
+    expect(component.selectedTermIds()).toEqual([]);
+    expect(picker.querySelector('input')).toBeNull();
+    expect(root.textContent).toContain('Wählen Sie zuerst mindestens eine Fachdomäne.');
+  });
 
-    expect(component.filteredTerms()).toEqual([TERM]);
-    expect(component.termAlternativeLabels(TERM)).toContain('GepFz');
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('GepFz');
+  it('reflects an explicitly accepted semantic suggestion in the terminology selection',async()=>{
+    const {fixture,component}=await setup();
+    component.availableTerms.set([TERM]);
+    component.suggestions.set([{kind:'glossaryTerm',id:TERM.id,label:TERM.preferredLabel,score:95,
+      matchedFields:['title'],reason:'Passender Titel',source:'deterministic-fuzzy'}]);
+    fixture.detectChanges();
+    const root=fixture.nativeElement as HTMLElement;
+    const apply=[...root.querySelectorAll<HTMLButtonElement>('.suggestion-panel button')].find(button=>button.textContent?.trim()==='Übernehmen')!;
+    apply.click();fixture.detectChanges();
+    expect(root.querySelector('daca-semantic-picker[kind="term"]')?.textContent).toContain(TERM.preferredLabel);
+    expect(component.selectedTermIds()).toEqual([TERM.id]);
+    expect(apply.disabled).toBe(true);expect(apply.textContent?.trim()).toBe('Ausgewählt');
   });
 
   it('switches a duplicate hint to an update in the same dialog without losing metadata edits', async () => {

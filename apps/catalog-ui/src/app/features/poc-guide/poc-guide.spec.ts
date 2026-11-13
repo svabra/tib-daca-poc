@@ -19,8 +19,9 @@ const journeyMenuProviders = [
 ];
 
 describe('PoC guide contract', () => {
-  it('defines fourteen complete, uniquely addressable journeys and twenty-nine screenshot contracts', () => {
+  it('defines fifteen complete, uniquely addressable journeys and twenty-nine screenshot contracts', () => {
     expect(POC_JOURNEYS.map((journey) => journey.id)).toEqual([
+      'mwst-ertraege-st-gallen-2026',
       'understand-and-use-product',
       'data-analysts-journey',
       'consumer-access-request',
@@ -36,13 +37,14 @@ describe('PoC guide contract', () => {
       'resolve-logical-mapping-inconsistency',
       'import-physical-model-ada',
     ]);
-    expect(POC_JOURNEYS.map((journey) => journey.number)).toEqual(['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14']);
-    expect(POC_JOURNEYS[1].verification?.label).toBe('Durchgängig verifiziert');
-    expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(14);
-    expect(POC_JOURNEYS[9].title).toBe('Logisches Datenmodell erfassen');
-    expect(POC_JOURNEYS[9].steps.flatMap((step) => step.actions ?? []).some((action) => action.path?.startsWith('/physical-models'))).toBe(false);
-    expect(POC_JOURNEYS[10].steps.flatMap((step) => step.actions ?? []).some((action) => action.path?.includes('adf4a86e-7ab3-5035-b2cc-c8c907e79468'))).toBe(true);
-    expect(POC_JOURNEYS[11].steps.flatMap((step) => step.actions ?? []).some((action) => action.path === '/settings/role-changes')).toBe(true);
+    expect(POC_JOURNEYS.map((journey) => journey.number)).toEqual(['MWST', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14']);
+    expect(POC_JOURNEYS.find(journey => journey.id === 'data-analysts-journey')?.verification?.label).toBe('Durchgängig verifiziert');
+    expect(new Set(POC_JOURNEYS.map((journey) => journey.id)).size).toBe(15);
+    const logicalJourney = POC_JOURNEYS.find(journey => journey.id === 'create-data-model')!;
+    expect(logicalJourney.title).toBe('Logisches Datenmodell erfassen');
+    expect(logicalJourney.steps.flatMap((step) => step.actions ?? []).some((action) => action.path?.startsWith('/physical-models'))).toBe(false);
+    expect(POC_JOURNEYS.find(journey => journey.id === 'derive-logical-model')!.steps.flatMap((step) => step.actions ?? []).some((action) => action.path?.includes('adf4a86e-7ab3-5035-b2cc-c8c907e79468'))).toBe(true);
+    expect(POC_JOURNEYS.find(journey => journey.id === 'overview-access-responsibility')!.steps.flatMap((step) => step.actions ?? []).some((action) => action.path === '/settings/role-changes')).toBe(true);
     const screenshots = POC_JOURNEYS.flatMap((journey) => journey.steps.flatMap((step) => step.screenshots ?? []));
     expect(screenshots.length).toBe(29);
     expect(screenshots.slice(0, 4).map((screenshot) => screenshot.src)).toEqual([
@@ -56,7 +58,7 @@ describe('PoC guide contract', () => {
       '/assets/poc-guide/journey-08-domain-register.webp',
       '/assets/poc-guide/journey-09-sibilla-profile.webp',
     ]);
-    const consumerActions = POC_JOURNEYS[0].steps.flatMap((step) => step.actions ?? []);
+    const consumerActions = POC_JOURNEYS.find(journey => journey.id === 'understand-and-use-product')!.steps.flatMap((step) => step.actions ?? []);
     expect(consumerActions).toContainEqual(expect.objectContaining({
       path: '/products/3a2930ed-3eee-599b-82b5-e138b149d1a2/sla',
       demoUserId: 'beat.stalder',
@@ -100,7 +102,7 @@ describe('PoC guide contract', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('h1')?.textContent).toContain('User Journeys');
     const journeyCards = root.querySelectorAll('[data-poc-guide-journey]');
-    expect(journeyCards.length).toBe(14);
+    expect(journeyCards.length).toBe(15);
     const adaCard = root.querySelector('#journey-import-physical-model-ada')!;
     expect(adaCard.querySelector('daca-physical-import-journey')).not.toBeNull();
     expect(adaCard.querySelector('a daca-physical-import-journey')).toBeNull();
@@ -108,11 +110,11 @@ describe('PoC guide contract', () => {
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     fixture.componentInstance.restartAdaImport({organizationId:'vbs-verteidigung'});
     expect(navigate).toHaveBeenCalledWith(['/physical-models'], {queryParams:{importCsv:'1',organizationId:'vbs-verteidigung'}});
-    expect(journeyCards.item(0).getAttribute('data-poc-guide-journey')).toBe('understand-and-use-product');
-    expect(journeyCards.item(9).getAttribute('data-poc-guide-journey')).toBe('create-data-model');
-    expect(journeyCards.item(10).getAttribute('data-poc-guide-journey')).toBe('derive-logical-model');
-    expect(journeyCards.item(11).getAttribute('data-poc-guide-journey')).toBe('overview-access-responsibility');
-    expect(journeyCards.item(8).textContent).toContain('Terminologiebegriff gemeinsam prüfen');
+    expect(journeyCards.item(0).getAttribute('data-poc-guide-journey')).toBe('mwst-ertraege-st-gallen-2026');
+    expect(root.querySelector('[data-poc-guide-journey="create-data-model"]')).not.toBeNull();
+    expect(root.querySelector('[data-poc-guide-journey="derive-logical-model"]')).not.toBeNull();
+    expect(root.querySelector('[data-poc-guide-journey="overview-access-responsibility"]')).not.toBeNull();
+    expect(root.querySelector('[data-poc-guide-journey="glossary-governance"]')?.textContent).toContain('Terminologiebegriff gemeinsam prüfen');
     expect(root.textContent).toContain('Das können Sie testen');
     expect(root.textContent).toContain('Das ist nicht Teil des PoC');
     expect(root.querySelector('a[href="/poc-simulation"]')).not.toBeNull();
@@ -164,6 +166,9 @@ describe('PoC guide public configuration', () => {
     expect(service.externalHref('daaif-loader')).toBe('https://daaif.example.test/base/loader-workbench');
     expect(service.externalHref('daaif-source-explorer')).toBe('https://daaif.example.test/base/catalog/sources/bit-shared-pg/explorer');
     expect(service.externalHref('internal')).toBeNull();
+    expect(service.externalHref('daaif-page', '/documentation/journeys/mwst-ertraege-st-gallen-2026', {demoUser:'kassandra.valdata', creationRequest:'request-id'})).toBe('https://daaif.example.test/base/documentation/journeys/mwst-ertraege-st-gallen-2026?demoUser=kassandra.valdata&creationRequest=request-id');
+    expect(service.externalHref('daaif-page', '//other.example')).toBeNull();
+    expect(service.externalHref('daaif-page', '/page?inject=1')).toBeNull();
     http.verify();
   });
 
@@ -302,7 +307,7 @@ describe('PoC guide detail', () => {
     expect(links.some((link) => link.pathname.endsWith('/sla'))).toBe(true);
     expect(links.some((link) => link.hash === '#endpoint-quickstart')).toBe(true);
 
-    const searchAction = POC_JOURNEYS[0].steps[0].actions?.[0];
+    const searchAction = POC_JOURNEYS.find(journey => journey.id === 'understand-and-use-product')!.steps[0].actions?.[0];
     expect(searchAction).toBeDefined();
     expect(fixture.componentInstance.internalQueryParams(searchAction!)).toEqual({
       q: 'Gewerbesteuer',
@@ -373,7 +378,7 @@ describe('PoC guide detail', () => {
     })).toBe(true);
     expect(links.every((link) => !link.pathname.includes('/access-renewal/'))).toBe(true);
 
-    const thomasAction = POC_JOURNEYS[6].steps[4].actions?.[0];
+    const thomasAction = POC_JOURNEYS.find(journey => journey.id === 'access-renewal')!.steps[4].actions?.[0];
     expect(thomasAction).toBeDefined();
     expect(fixture.componentInstance.internalHref(thomasAction!)).toContain('demoUser=thomas.kriegli');
   });

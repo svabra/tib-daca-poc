@@ -1,6 +1,12 @@
 .product-overview-heading > div:first-child { min-width:0; }
 .product-overview-heading-actions { display:flex; flex-direction:column; align-items:flex-end; flex-shrink:0; gap:12px; max-width:100%; }
 .product-overview-request-access { min-height:44px; }
+.product-overview-endpoints article { display:block; min-width:0; }
+.product-overview-endpoint-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+.product-overview-endpoint-heading strong { min-width:0; overflow-wrap:anywhere; }
+.product-overview-endpoint-heading span { flex-shrink:0; }
+.product-overview-feedback-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:16px; }
+.product-overview-feedback-actions .product-overview-small-action { min-height:36px; max-width:100%; white-space:normal; padding:7px 10px; font-size:.75rem; line-height:1.35; font-weight:650; }
 @media (max-width:760px) {
   .product-overview-heading-actions { align-items:flex-start; }
 }

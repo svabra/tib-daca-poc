@@ -140,6 +140,11 @@ FEDERAL_ORGANIZATIONS = (
 
 DEMO_USERS = (
     {
+        "id": "jan.waser", "display_name": "Jan Waser", "organization": "Kanton St. Gallen",
+        "email": "jan.waser@sg.ch", "phone": None, "avatar_url": "/assets/data-owners/jan-waser.webp",
+        "roles": ["data_analyst", "data_consumer"], "selectable": True,
+    },
+    {
         "id": "kassandra.valdata",
         "display_name": "Kassandra Valdata",
         "organization": "ESTV",
@@ -316,6 +321,7 @@ DEMO_USERS = (
 
 
 DIRECTORY_ENTRIES = (
+    ("jan.waser", "Jan Waser", "Kanton St. Gallen", "jan.waser@sg.ch", "cantonal", "Kantonales Personalverzeichnis"),
     ("kassandra.valdata", "Kassandra Valdata", "ESTV", "kassandra.valdata@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("ariane.keller", "Ariane Keller", "ESTV", "ariane.keller@estv.admin.ch", "federal", "Bundespersonalverzeichnis"),
     ("daniel.aebischer", "Daniel Aebischer", "EFV", "daniel.aebischer@efv.admin.ch", "federal", "Bundespersonalverzeichnis"),
@@ -359,7 +365,7 @@ DIRECTORY_ORGANIZATION_IDS = {
 
 DIRECTORY_GROUPS = (
     ("kanton-neuchatel", "Kanton Neuchâtel", "Mitarbeitende der kantonalen Verwaltung Neuchâtel", "cantonal", ("noemie.rochat", "lucien.morel")),
-    ("kanton-st-gallen", "Kanton St. Gallen", "Mitarbeitende der kantonalen Verwaltung St. Gallen", "cantonal", ("beat.stalder", "sarah.brunner")),
+    ("kanton-st-gallen", "Kanton St. Gallen", "Mitarbeitende der kantonalen Verwaltung St. Gallen", "cantonal", ("beat.stalder", "sarah.brunner", "jan.waser")),
     ("estv-data-stewards", "ESTV Data Stewards", "Verantwortliche für Metadatenqualität und Governance der ESTV", "federal", ("kassandra.valdata", "ariane.keller")),
     ("bund-forschung", "Forschung Bund", "Bundesmitarbeitende mit Aufgaben in Analyse und Forschung", "federal", ("daniel.aebischer", "kassandra.valdata")),
     ("efd-efv-bundestresorerie", "EFD – EFV / Bundestresorerie", "Systemverwaltete Empfängergruppe der Eidgenössischen Finanzverwaltung", "federal", ("daniel.aebischer",)),
@@ -452,6 +458,16 @@ ORACLE_SOURCE_SPECS = oracle_source_specs()
 TERM_DEFINITIONS = (
     ("DirectFederalTaxAssessmentDataset", "class", "Direkte Bundessteuer – Veranlagungsdaten", "Aggregierte Veranlagungsdaten zur direkten Bundessteuer."),
     ("VatSectorIndicatorDataset", "class", "Mehrwertsteuer-Branchenindikatoren", "Aggregierte Indikatoren der Mehrwertsteuer nach Branche."),
+    ("VatCompanyRevenueDataset", "class", "MWST-Erträge nach Firmen", "Synthetische jährliche MWST-Erträge fiktiver Firmen nach Sitzkanton."),
+    ("VatNationalRevenueDataset", "class", "MWST-Erträge Schweiz", "Schweizer Jahressummen der synthetischen Firmen-Jahreswerte."),
+    ("CompanyId", "property", "Firmenkennung", "Stabile Kennung einer synthetischen Firma; keine reale UID."),
+    ("CompanyName", "property", "Firmenname", "Name einer fiktiven Firma."),
+    ("ReportingPeriodStart", "property", "Periodenbeginn", "Erster Tag des dargestellten Berichtszeitraums."),
+    ("ReportingPeriodEnd", "property", "Periodenende", "Letzter berücksichtigter Tag des Berichtszeitraums."),
+    ("VatRevenueAmount", "property", "MWST-Ertrag", "Synthetischer MWST-Ertrag in CHF mit zwei Dezimalstellen."),
+    ("CurrencyCode", "property", "Währung", "Währungscode des Betrags."),
+    ("IsProvisional", "property", "Vorläufig", "Kennzeichen eines noch nicht abgeschlossenen Berichtsjahres."),
+    ("IsSynthetic", "property", "Synthetisch", "Kennzeichen für ausschliesslich erzeugte Beispieldaten."),
     ("WithholdingTaxRefundDataset", "class", "Verrechnungssteuer-Rückerstattungen", "Status und Volumen von Rückerstattungen der Verrechnungssteuer."),
     ("NeuchatelWithholdingTaxDataset", "class", "Quellensteuer Neuchâtel", "Quellensteuerdaten des Kantons Neuchâtel."),
     ("NeuchatelCorporateTaxDataset", "class", "Unternehmenssteuer Neuchâtel", "Steuerfaktoren juristischer Personen im Kanton Neuchâtel."),

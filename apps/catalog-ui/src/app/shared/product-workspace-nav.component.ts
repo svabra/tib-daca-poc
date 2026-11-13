@@ -62,8 +62,11 @@ export type ProductAccessView = 'overview' | 'grant' | 'technical' | null;
             [class.is-active]="accessView() === 'overview'"
             [attr.aria-current]="accessView() === 'overview' ? 'page' : null"
           >Übersicht</a>
+          @if (manageAccess()) {
           <a [routerLink]="['/products', productId(), 'access']" fragment="access-requests">Zugriffsanfragen</a>
+          }
           <a [routerLink]="['/products', productId(), 'access']" fragment="consumers">Datenkonsumenten</a>
+          @if (manageAccess()) {
           <a
             [routerLink]="['/products', productId(), 'access', 'grant']"
             [class.is-active]="accessView() === 'grant'"
@@ -76,6 +79,7 @@ export type ProductAccessView = 'overview' | 'grant' | 'technical' | null;
             [class.is-active]="accessView() === 'technical'"
             [attr.aria-current]="accessView() === 'technical' ? 'page' : null"
           >Technische Durchsetzung</a>
+          }
         </nav>
       }
     </div>
@@ -86,4 +90,5 @@ export class ProductWorkspaceNavComponent {
   readonly productTitle = input.required<string>();
   readonly activeSection = input.required<ProductWorkspaceSection>();
   readonly accessView = input<ProductAccessView>(null);
+  readonly manageAccess = input(true);
 }

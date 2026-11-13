@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { DacaGlossaryTermComponent, StatusBadgeComponent } from '@bit-daca/design-system';
@@ -42,7 +42,7 @@ function selectSessionHeroTheme() {
 @Component({
   selector: 'daca-welcome-page',
   standalone: true,
-  imports: [DatePipe, RouterLink, StatusBadgeComponent, DacaGlossaryTermComponent, OrganizationCanvasComponent, TooltipDirective, RecentWorkComponent],
+  imports: [DatePipe, NgTemplateOutlet, RouterLink, StatusBadgeComponent, DacaGlossaryTermComponent, OrganizationCanvasComponent, TooltipDirective, RecentWorkComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="welcome-page">
@@ -51,53 +51,7 @@ function selectSessionHeroTheme() {
         <p>{{ i18n.t('welcomeHideExplanation') }}</p>
         <div><button type="button" class="daca-button is-secondary" (click)="introDialog.close()">{{ i18n.t('welcomeCancel') }}</button><button type="button" class="daca-button" (click)="landing.setWelcome(false); introDialog.close()">{{ i18n.t('welcomeHideConfirm') }}</button></div>
       </dialog>
-      @if (landing.welcomeVisible()) {
-      <section class="welcome-hero welcome-intro" aria-labelledby="welcome-title">
-        <picture class="welcome-hero-background" [class.is-loaded]="heroImageLoaded()" aria-hidden="true">
-          <source
-            type="image/avif"
-            [srcset]="heroAvifSrcset"
-            sizes="(max-width: 760px) 960px, 1600px"
-          >
-          <source
-            type="image/webp"
-            [srcset]="heroWebpSrcset"
-            sizes="(max-width: 760px) 960px, 1600px"
-          >
-          <img
-            [src]="heroFallbackSrc"
-            width="1600"
-            height="800"
-            alt=""
-            loading="lazy"
-            decoding="async"
-            fetchpriority="low"
-            (load)="heroImageLoaded.set(true)"
-          >
-        </picture>
-          <div class="welcome-hero-copy">
-            <p class="daca-eyebrow"><daca-glossary-term term="DaCa" /></p>
-            <h1 id="welcome-title">{{ i18n.t('welcomeTitle') }}</h1>
-            <p class="welcome-lead">
-              {{ i18n.t('welcomeLead') }}
-            </p>
-            <div class="welcome-hero-actions">
-              <a class="daca-button" routerLink="/products">{{ i18n.t('openMyProducts') }}</a>
-              <a class="daca-button is-secondary" [routerLink]="['/products', product().id, 'access']">{{ i18n.t('manageAccess') }}</a>
-            </div>
-            <p class="welcome-context">
-              <span>Proof of Concept</span>
-              {{ i18n.t('welcomeContext') }}
-            </p>
-          </div>
-
-          <button type="button" class="welcome-intro-dismiss" (click)="introDialog.showModal()" [attr.aria-label]="i18n.t('welcomeHideTitle')" [dacaTooltip]="i18n.t('welcomeHideTooltip')">×</button>
-      </section>
-      }
-      @if (landing.storageError()) { <p role="status" class="welcome-preference-notice">{{ i18n.t('welcomeStorageError') }}</p> }
-      <section class="welcome-workspace" [attr.aria-label]="i18n.t('welcomeWorkspace')">
-          <daca-organization-canvas />
-          <aside class="welcome-sidebar">
+      <ng-template #catalogSearch>
           <form
             class="welcome-search"
             role="search"
@@ -170,9 +124,62 @@ function selectSessionHeroTheme() {
               <strong>{{ i18n.t('openExpertSearch') }}</strong>
             </a>
           </form>
+      </ng-template>
+      @if (landing.welcomeVisible()) {
+      <section class="welcome-hero welcome-intro" aria-labelledby="welcome-title">
+        <picture class="welcome-hero-background" [class.is-loaded]="heroImageLoaded()" aria-hidden="true">
+          <source
+            type="image/avif"
+            [srcset]="heroAvifSrcset"
+            sizes="(max-width: 760px) 960px, 1600px"
+          >
+          <source
+            type="image/webp"
+            [srcset]="heroWebpSrcset"
+            sizes="(max-width: 760px) 960px, 1600px"
+          >
+          <img
+            [src]="heroFallbackSrc"
+            width="1600"
+            height="800"
+            alt=""
+            loading="lazy"
+            decoding="async"
+            fetchpriority="low"
+            (load)="heroImageLoaded.set(true)"
+          >
+        </picture>
+          <div class="welcome-hero-copy">
+            <p class="daca-eyebrow"><daca-glossary-term term="DaCa" /></p>
+            <h1 id="welcome-title">{{ i18n.t('welcomeTitle') }}</h1>
+            <p class="welcome-lead">
+              {{ i18n.t('welcomeLead') }}
+            </p>
+            <div class="welcome-hero-actions">
+              <a class="daca-button" routerLink="/products">{{ i18n.t('openMyProducts') }}</a>
+              <a class="daca-button is-secondary" [routerLink]="['/products', product().id, 'access']">{{ i18n.t('manageAccess') }}</a>
+            </div>
+            <p class="welcome-context">
+              <span>Proof of Concept</span>
+              {{ i18n.t('welcomeContext') }}
+            </p>
+          </div>
+          <ng-container [ngTemplateOutlet]="catalogSearch" />
+
+          <button type="button" class="welcome-intro-dismiss" (click)="introDialog.showModal()" [attr.aria-label]="i18n.t('welcomeHideTitle')" [dacaTooltip]="i18n.t('welcomeHideTooltip')">×</button>
+      </section>
+      }
+      @if (landing.storageError()) { <p role="status" class="welcome-preference-notice">{{ i18n.t('welcomeStorageError') }}</p> }
+      <section class="welcome-workspace" [class.is-full-width]="landing.welcomeVisible()" [attr.aria-label]="i18n.t('welcomeWorkspace')">
+          <daca-organization-canvas />
+          @if (!landing.welcomeVisible()) {
+          <aside class="welcome-sidebar">
+          <ng-container [ngTemplateOutlet]="catalogSearch" />
           <daca-recent-work />
           </aside>
+          }
       </section>
+      @if (landing.welcomeVisible()) { <daca-recent-work class="welcome-recent-work-full" /> }
 
       <section id="handlungsbedarf" class="welcome-alerts" aria-labelledby="welcome-alerts-title">
         <div class="welcome-alerts-heading">

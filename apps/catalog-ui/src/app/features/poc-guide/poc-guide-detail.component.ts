@@ -169,7 +169,7 @@ export class PocGuideDetailComponent {
   }
 
   externalHref(action: PocGuideAction): string | null {
-    return this.guideConfig.externalHref(action.target);
+    return this.guideConfig.externalHref(action.target, action.path, this.internalQueryParams(action) ?? undefined);
   }
 
   internalQueryParams(action: PocGuideAction): Readonly<Record<string, string>> | null {

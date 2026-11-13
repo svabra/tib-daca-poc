@@ -239,6 +239,8 @@ export class OwnerTasksComponent {
 
   taskLabel(value: string): string {
     return ({
+      product_creation_review: 'Datenprodukt erstellen',
+      product_creation_result: 'Erstellungsantrag · Ergebnis',
       search_view_shared: 'View erhalten',
       metadata_quality: 'Qualität',
       access_governance: 'Governance',
@@ -267,7 +269,8 @@ export class OwnerTasksComponent {
     return value === 'collaboration' ? 'Mitarbeit' : value === 'information' ? 'Zur Kenntnis' : 'Entscheid nötig';
   }
 
-  taskRoute(task: { taskType: string; dataProductId: string | null; governanceSubmissionId?: string | null; domainChangeRequestId?: string | null; glossaryTermProposalId?: string | null; logicalModelReviewId?: string | null; logicalModelId?: string | null }): unknown[] {
+  taskRoute(task: { taskType: string; dataProductId: string | null; productCreationRequestId?: string | null; governanceSubmissionId?: string | null; domainChangeRequestId?: string | null; glossaryTermProposalId?: string | null; logicalModelReviewId?: string | null; logicalModelId?: string | null }): unknown[] {
+    if (task.productCreationRequestId) return ['/product-creation-requests', task.productCreationRequestId];
     if (task.taskType === 'search_view_shared') return ['/search'];
     if (task.taskType.startsWith('logical_mapping_') && task.logicalModelId) return ['/models', task.logicalModelId, 'mappings'];
     if (task.taskType === 'logical_model_review' && task.logicalModelReviewId) return ['/model-reviews', task.logicalModelReviewId];

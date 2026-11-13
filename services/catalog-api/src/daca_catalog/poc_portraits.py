@@ -3,6 +3,7 @@
 from .models import DemoUser
 
 PORTRAIT_USER_IDS = (
+    "jan.waser",
     "christian.man", "christian.spider", "cinthya.thor", "daniel.wenger", "fausto.marzo",
     "eliane.rossi", "giuseppe.starwars", "hong.an.captain", "lawrence.hill",
     "marcello.hebeisa", "matteo.duca", "mirjam.keller", "sibilla.micheli", "thomas.wikinger",

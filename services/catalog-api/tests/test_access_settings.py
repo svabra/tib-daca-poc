@@ -197,7 +197,7 @@ def test_group_snapshot_and_postgresql_projection_are_server_generated(
     assert grant["groupSnapshot"] == {
         "groupId": "kanton-st-gallen",
         "membershipRevision": 1,
-        "memberIds": ["beat.stalder", "sarah.brunner"],
+        "memberIds": ["beat.stalder", "jan.waser", "sarah.brunner"],
     }
     with session_factory():
         result = project_to_postgresql(
@@ -215,13 +215,13 @@ def test_group_snapshot_and_postgresql_projection_are_server_generated(
             response.json()["definition"],
         )
     assert result.state == "deployed"
-    assert {"beat.stalder", "sarah.brunner"}.issubset(
+    assert {"beat.stalder", "jan.waser", "sarah.brunner"}.issubset(
         {item["subjectId"] for item in captured["payload"]["entitlements"]}
     )
     group_rows = [
         item
         for item in captured["payload"]["entitlements"]
-        if item["subjectId"] in {"beat.stalder", "sarah.brunner"}
+        if item["subjectId"] in {"beat.stalder", "jan.waser", "sarah.brunner"}
     ]
     assert {item["subjectType"] for item in group_rows} == {"person"}
 

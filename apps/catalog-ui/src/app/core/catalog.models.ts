@@ -71,6 +71,9 @@ export interface WeeklyAvailability {
 export interface ProductEffectiveAccessGrant {
   grantId: string;
   subjectType: AccessSubjectType;
+  subjectDisplayName?: string;
+  subjectOrganization?: string;
+  groupId?: string | null;
   protocols: ('http' | 'postgresql')[];
   dataVariant: 'original' | 'modified';
   validFrom: string;
@@ -109,6 +112,7 @@ export interface AccessRenewalFixtureState {
 }
 
 export interface DataProduct {
+  canManage?: boolean;
   id: string;
   globalId: string;
   originCatalog: string;

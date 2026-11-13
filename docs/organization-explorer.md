@@ -1,5 +1,22 @@
 # Start-page organization explorer
 
+The catalog search is in the welcome area while that area is enabled. Only hiding the
+welcome area places search in a right-hand sidebar beside the data landscape. Otherwise
+the sidebar is absent and the landscape uses the full available width. Recent work is
+below the full-width landscape, or below search in the sidebar. A shared search template
+preserves its query and results across preference changes without duplicate controls.
+The canvas remains mounted so the focused organization and unsaved layout are retained.
+The established narrow-screen layout stacks the welcome/search or landscape/sidebar.
+Narrow-screen grid tracks and welcome copy can shrink and wrap without clipping text.
+
+Verified on 12 November 2026: live search and submission, cancelling/confirming hide,
+restoration in Settings, persisted hidden preference, one search/feedback ID, retained
+canvas instance and query/results, full-width layout, and 390/320 px screenshots. All
+853 frontend tests and the recent-work browser flow passed. The broader
+`organization-explorer` flow still fails its existing automatic EFD connection-length
+limit (499/467 units versus less than 400); comparison at both the former sidebar width
+and the new full width gives the same lengths. The placement algorithm is unchanged.
+
 External organization cards use content-driven height just like inner cards. Do not bind a
 fixed percentage height to satellite buttons: the type caption, organization name and two
 localized product-count rows must fit inside the border with 6px vertical padding, including
