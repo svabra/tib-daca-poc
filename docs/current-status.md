@@ -11,6 +11,9 @@ The GitHub Actions follow-up restores fresh-runner journey startup: MinIO server
 are built from pinned, checksum-verified upstream assets through the shared DAAIF Dockerfile.
 The catalog UI now waits for the sample product backend required by its Nginx configuration;
 the dedicated UI workflow starts that backend and OPA and prints startup logs on a failure.
+The cross-system browser script follows the current manual-import and catalog routes, assigns
+an active domain, selects all products explicitly and opens the exact access request when
+the requester has more than one task. Gold, Platinum and real enforcement assertions remain.
 
 Release **0.3.13** fixes the two Catalog API regressions that blocked the 0.3.12 PostgreSQL
 compatibility job. Profile validation includes all 27 selectable personas and Jan's local

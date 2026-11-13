@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -43,12 +44,6 @@ def milestone(page: Page, artifacts: Path, sequence: int, name: str) -> None:
         full_page=True,
         animations="disabled",
     )
-
-
-def select_demo_user(page: Page, user_id: str) -> None:
-    selector = page.get_by_label("Demo-Benutzer wechseln")
-    expect(selector).to_be_visible()
-    selector.select_option(user_id)
 
 
 def run_daaif_creation(page: Page, daaif_url: str, artifacts: Path) -> dict[str, Any]:
@@ -142,6 +137,21 @@ def run_daaif_creation(page: Page, daaif_url: str, artifacts: Path) -> dict[str,
 def complete_quality(
     page: Page, catalog_url: str, product_id: str, artifacts: Path
 ) -> dict[str, Any]:
+    page.goto(f"{catalog_url}/products/{product_id}/metadata?demoUser=joel.ruod")
+    domain_picker = page.locator("daca-domain-picker")
+    domain_label = "Data Analytics Rapid Prototyping"
+    domain_picker.get_by_role("combobox").fill(domain_label)
+    domain_picker.get_by_role("option").filter(has_text=domain_label).click()
+    with page.expect_response(
+        lambda response: (
+            response.url.endswith(f"/data-products/{product_id}")
+            and response.request.method == "PATCH"
+        )
+    ) as metadata_response:
+        page.get_by_role("button", name="Save new revision").click()
+    metadata = metadata_response.value.json()
+    assert any(domain["preferredLabel"] == domain_label for domain in metadata["domains"])
+
     page.goto(f"{catalog_url}/products/{product_id}/quality?demoUser=joel.ruod")
     expect(page.get_by_role("heading", name="Von DAAIF zu Platinum")).to_be_visible()
 
@@ -210,7 +220,6 @@ def complete_quality(
 def submit_beat_request(
     page: Page, catalog_url: str, product_id: str, artifacts: Path
 ) -> tuple[dict[str, Any], date, date]:
-    select_demo_user(page, "beat.stalder")
     with page.expect_response(
         lambda response: (
             "/api/v1/data-products?" in response.url
@@ -218,10 +227,10 @@ def submit_beat_request(
             and response.status == 200
         )
     ) as products_response:
-        page.goto(f"{catalog_url}/?demoUser=beat.stalder")
+        page.goto(f"{catalog_url}/products?demoUser=beat.stalder")
     product_items = products_response.value.json().get("items", [])
     assert any(item.get("id") == product_id for item in product_items)
-    page.wait_for_timeout(500)
+    page.get_by_role("button", name=re.compile(r"^Alle Datenprodukte \d+$")).click()
     search = page.get_by_label("Suchbegriff")
     search.fill("Gewerbesteuer")
     expect(page.get_by_text(PRODUCT_TITLE)).to_be_visible(timeout=30_000)
@@ -261,11 +270,12 @@ def submit_and_approve_governance(
     access_request: dict[str, Any],
     artifacts: Path,
 ) -> dict[str, Any]:
-    select_demo_user(page, "joel.ruod")
     page.goto(f"{catalog_url}/tasks?demoUser=joel.ruod")
     task = page.get_by_role("heading", name="Beat Stalder", exact=True).locator(
         "xpath=ancestor::article"
-    )
+    ).filter(has=page.locator(
+        f'a[href="/products/{product_id}/access/grant?request={access_request["id"]}"]'
+    ))
     expect(task).to_be_visible()
     task.get_by_role("link", name="In Zugriffseinstellung übernehmen").click()
     expect(page.get_by_test_id("journey-linked-access-request")).to_contain_text(
@@ -287,7 +297,6 @@ def submit_and_approve_governance(
     assert submission["archiveEvidence"]["retentionYears"] == 20
     milestone(page, artifacts, 8, "daca-governance-submitted")
 
-    select_demo_user(page, "thomas.kriegli")
     page.goto(
         f"{catalog_url}/governance-submissions/{submission['id']}?demoUser=thomas.kriegli"
     )

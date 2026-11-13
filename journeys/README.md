@@ -10,7 +10,8 @@ It is part of the DaCa repository and is not a nested Git repository.
 1. Joel Ruod generates 25 electronic canton sources in DAAIF and manually imports Aargau CSV.
 2. The prepared notebook produces 130 canton/year aggregates, Parquet output and a chart.
 3. DAAIF publishes the product through DaCa's real metadata publication endpoint.
-4. Joel completes DCAT-AP-CH, ontology and KOBY Graphify evidence; the product reaches Gold.
+4. Joel assigns the active Data Analytics Rapid Prototyping domain and completes DCAT-AP-CH,
+   ontology and KOBY Graphify evidence; the product reaches Gold.
 5. Beat finds the metadata and requests personal REST access for 365 days.
 6. Joel submits one immutable policy snapshot for two groups and Thomas Kriegli.
 7. Thomas approves; OPA and PostgreSQL confirm the same revision; the product reaches Platinum.
