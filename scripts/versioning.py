@@ -131,12 +131,6 @@ PACKAGE_LOCK_EXPECTATIONS = {
             "@bit-daca/design-system",
         }
     ),
-    Path("apps/catalog-ui/package-lock.json"): frozenset(
-        {"@daca/catalog-ui", "@bit-daca/design-system"}
-    ),
-    Path("apps/control-plane-ui/package-lock.json"): frozenset(
-        {"@daca/control-plane-ui", "@bit-daca/design-system"}
-    ),
 }
 
 PYPROJECT_PATHS = (

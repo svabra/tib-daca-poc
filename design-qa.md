@@ -185,7 +185,7 @@ Initial functional checks passed: exact 3000ms animation duration, wall-clock pl
 - The saturated band was softened to a 25% blue surface mix at 0.7 opacity, with a lighter edge and retained feathered glow.
 - Packet heads now remain bright (0.9-1 opacity), use a 3.5-unit radius and retain a white outline. The fading tail uses `userSpaceOnUse` coordinates, correcting the zero-height line gradient issue.
 - Fresh browser capture at the same viewport/state: `output/ui-regression/organization-highway-final/highway-comparison-canvas.png`.
-- Final combined full-view/focused comparison: `docs/mockups/data-highway/comparison.png`; durable implementation capture: `docs/mockups/data-highway/implemented-canvas.png`. The contact sheet was opened and reviewed after the fixes. The two P2 differences above are resolved; no actionable P0/P1/P2 difference remains within the connection-treatment scope.
+- Historical full-view and focused comparisons were reviewed after the fixes and later removed during repository cleanup. The retained final implementation is `docs/mockups/data-highway/slimmer-smooth-canvas.png`. The two P2 differences above are resolved; no actionable P0/P1/P2 difference remains within the connection-treatment scope.
 - Required fidelity surfaces were rechecked: existing Noto Sans/card labels preserved; smooth perimeter-to-perimeter layout; translucent blue band/centerline/glow; crisp native editable graph geometry and existing icon components; authoritative catalog counts/directions. Cards are intentionally denser than the illustrative mock, and no mock-only dashboard copy/legend was introduced.
 - Final browser checks: `organization-highway` (including the live 3000ms clock check, curve tracking, two separate heads, hover/keyboard tooltip, fullscreen, reduced motion, dark mode and 390px local canvas scrolling), `protected-buildings` (real image-seeded counterflow between armasuisse and Verteidigung) and `organization-view-options` all passed without runtime exceptions.
 - Focused tests: 34 passed across organization canvas, highway routing and flow timing. Production image build and version consistency check passed. No persistence changes, remote publication or PoC rollout were performed.
@@ -210,9 +210,9 @@ final result: passed
 
 Source visual truth: `docs/mockups/data-highway/reference-option-2.png` (1322 x 1190 pixels), plus the user's annotated endpoint screenshot and explicit pale-blue area / hidden end caps / tails / blue-white gradient requirements. The existing compact cards, real data counts and saved layout remain the implementation context.
 
-Browser capture: `docs/mockups/data-highway/implemented-canvas-v2.png`, captured from localhost:8080 in a 1440 x 1100 CSS-pixel viewport at device scale factor 1. The SVG stage uses a 960 x 650 coordinate space. Actual raster size is recorded by the source PNG; the comparison sheet normalizes each full view to an 800-pixel maximum width and labels its 2x rendered detail.
+The intermediate browser capture used a 1440 x 1100 CSS-pixel viewport at device scale factor 1 and an SVG stage of 960 x 650. It was superseded by the final captures indexed in `docs/mockups/README.md`; historical intermediate images remain in Git.
 
-Combined full-view and focused evidence: `docs/mockups/data-highway/comparison-v2.png`. Additional browser states are in `output/ui-regression/organization-highway-refined/` (`highway-dark.png`, `highway-mobile.png`, reciprocal fullscreen tooltip and reduced-motion captures).
+The current retained highway capture is `docs/mockups/data-highway/slimmer-smooth-canvas.png`. Regenerate full, dark, mobile, fullscreen-tooltip and reduced-motion states with the `organization-highway` browser flow and a screenshot directory under `output/ui-regression/`.
 
 ## Changes and findings
 
@@ -262,7 +262,7 @@ final result: passed
 
 Source: the user's close-up of crowded St. Gallen / ESTV packet heads. The base phase gap increases from 7.5% to 18% of a three-second cycle. Short paths aim for 32 SVG world units between heads, capped at 45% of a cycle and by the product count, preserving exactly one head per product and the fixed transit time. This leaves room for the glow and tapered tails.
 
-Browser evidence: `docs/mockups/data-highway/packet-spacing.png` (canvas capture from a 1440 x 1100 CSS viewport at device scale factor 1); full states are in `output/ui-regression/highway-packet-spacing/`. The rendered two-head stream was opened and visually checked: heads and trails are clearly separated. Layout, colors, typography, organization counts and data direction are unchanged.
+The rendered two-head stream was opened and visually checked: heads and trails are clearly separated. The intermediate spacing capture was superseded by `docs/mockups/data-highway/slimmer-smooth-canvas.png`; the `organization-highway` browser flow verifies packet separation. Layout, colors, typography, organization counts and data direction are unchanged.
 
 Both focused flow tests passed, along with the production image build and the `organization-highway` browser check. Browser validation retains exact 3000ms wall-clock transit, distinct one/two-product streams, reciprocal directions, curve tracking, tooltips, fullscreen, dark/mobile states and static reduced motion. The long-path visual fixture now enforces more than 28 pixels between the two heads.
 
@@ -279,7 +279,7 @@ Source: the user's annotated diagonally offset St. Gallen / ESTV connection, hig
 
 The previous ribbon joined straight under-card segments to a curved flight. An initial tangent-matched continuation removed the literal angle, but the rendered offset-card case still showed a small wave near the card. This was treated as an actionable P2 and replaced with a single continuous cubic from one organization to the other. The flight is now an exact cubic subdivision of that same ribbon, clipped at measured card bounds, so there are no attached end segments or curvature changes at a join. Focused-title attachments remain text-safe.
 
-Combined before/after full-view and focused evidence: `docs/mockups/data-highway/smooth-offset-comparison.png`. Final browser images: `slimmer-smooth-offset.png` and `slimmer-smooth-canvas.png` in the same folder. Original browser viewport: 1440 x 1100 CSS pixels, device scale factor 1; comparison full views are normalized to 800px width, and details are enlarged 2x. The final images were opened and inspected after the geometry replacement.
+Final browser images: `docs/mockups/data-highway/slimmer-smooth-offset.png` and `docs/mockups/data-highway/slimmer-smooth-canvas.png`. Original browser viewport: 1440 x 1100 CSS pixels, device scale factor 1. The final images were opened and inspected after the geometry replacement; the superseded before/after comparison remains in Git.
 
 The offset case now has one smooth S-curve entering/leaving each card, without the earlier angular/wavy neck. Main band width is 12 SVG units instead of 18 (one-third slimmer), edge 14 instead of 20, glow 18 instead of 24 with a smaller blur. The wider invisible tooltip hit target remains accessible.
 

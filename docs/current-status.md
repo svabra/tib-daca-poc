@@ -1,5 +1,12 @@
 # Current status
 
+Repository cleanup on 13 November 2026 removes the unrouted overview prototype and its unused
+styles, the standalone modern design deck, superseded screenshot variants and retired portrait
+and background assets. JavaScript workspaces now use only the authoritative root lockfile;
+versioning fixtures follow the same layout. Current visual references, executable journeys,
+standalone Python service lockfiles and all active authorization regressions remain. See
+[repository maintenance](repository-maintenance.md) for scope and verification commands.
+
 Release **0.3.13** fixes the two Catalog API regressions that blocked the 0.3.12 PostgreSQL
 compatibility job. Profile validation includes all 27 selectable personas and Jan's local
 portrait. Personal access details redact group IDs and names when the directory entry is

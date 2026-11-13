@@ -1,0 +1,2 @@
+# PostgreSQL executes the bind-mounted initialization script inside Linux containers.
+*.sh text eol=lf

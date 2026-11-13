@@ -2,7 +2,8 @@
 
 `fausto-marzo.webp` is the synthetic profile portrait for Fausto Marzo, generated with the
 built-in Imagegen tool. Its exact prompt is recorded in the provenance JSON below. The old
-`fausto-marzo.svg` initials asset is retained for historical references; current profiles use WebP.
+initials asset has been retired; current profiles use WebP. The seed still upgrades the old URL
+in existing profile records.
 
 The named PoC personas use individual synthetic profile photographs. The 14 additions on
 2026-10-31 were generated with the built-in `image_gen` tool and exported as 256 × 256 WebP

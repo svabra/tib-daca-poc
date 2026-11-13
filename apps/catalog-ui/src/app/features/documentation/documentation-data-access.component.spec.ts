@@ -163,7 +163,11 @@ describe('DocumentationDataAccessComponent', () => {
     component.togglePlayback();
     fixture.detectChanges();
     expect(component.position()).toBe(0);
-    vi.advanceTimersByTime(33000);
+    // Cross the cycle boundary without repainting a full 33 seconds in JSDOM.
+    component.seekTo(ACCESS_CYCLE - 1);
+    component.togglePlayback();
+    fixture.detectChanges();
+    vi.advanceTimersByTime(2000);
     fixture.detectChanges();
     expect(component.position()).toBeGreaterThan(.8);
     expect(component.position()).toBeLessThan(1.1);

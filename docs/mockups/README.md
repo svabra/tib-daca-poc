@@ -1,65 +1,43 @@
-# Verified design mockups
+# Current visual references
 
-These PNGs are browser captures of the running Angular applications, not generated concept art.
-They use the shared BIT/Swiss federal design package and live/fallback-labelled POC data.
+This directory keeps the supplied design references and the latest selected implementation
+captures. Historical initial-screen captures, the standalone modern HTML prototype deck,
+unused role-view concepts and superseded intermediate comparisons were removed during the
+13 November 2026 repository cleanup. Their history remains available in Git.
 
-| Concept | Route | Desktop | Mobile |
-|---|---|---|---|
-| Product 360 / Metadata Studio | `http://localhost:8080/metadata` | `01-product-360-desktop.png` (1440×1000) | `01-product-360-mobile.png` (390×844) |
-| Lineage & Provenance Explorer | `http://localhost:8080/lineage` | `02-lineage-provenance-desktop.png` (1440×1000) | `02-lineage-provenance-mobile.png` (390×844) |
-| Historical control-plane prototype | `http://localhost:8081/federation` | `03-security-federation-desktop.png` (1440×1000) | `03-security-federation-mobile.png` (390×844) |
-| Data-product exposure / KOBY MCP consent | `http://localhost:8080/exposure` | `04-data-product-exposure-desktop.png` (1440×1200) | `04-data-product-exposure-mobile.png` (390×844) |
-
-The lineage canvas intentionally supports horizontal touch/trackpad exploration on narrow screens
-so labels remain readable instead of shrinking the full graph to illegible text.
-The current implementation uses wrapped cards, semantic colors, shared hover summaries and
-directional impulses; see [lineage behavior and validation](../lineage-explorer.md). The captures
-above are historical references; current test captures are written under ignored `output/ui-regression/`.
-
-## Logical-model and mapping references
-
-The logical-model extension is grounded in the existing federal-CI capture and three supplied
-desktop interaction references. The graph is the primary desktop mapping reference, the matrix is
-the complete keyboard/screen-reader alternative, and the split view defines the separation of
-dataset, field, physical-column, and mapping details.
+## Supplied references
 
 | Purpose | Reference |
-|---|---|
-| Existing DaCa visual baseline | `daca-current-poc.png` |
-| Logical/physical split and field details | `logical-model-mapping-split.png` (1774×887) |
-| Primary graphical mapping workspace | `logical-model-mapping-graph.png` (1774×887) |
-| Accessible table/matrix workflow | `logical-model-mapping-matrix.png` (1774×887) |
+| --- | --- |
+| Logical/physical split and field details | `logical-model-mapping-split.png` |
+| Graphical mapping workspace | `logical-model-mapping-graph.png` |
+| Accessible table/matrix workflow | `logical-model-mapping-matrix.png` |
+| Organization highway visual source | `data-highway/reference-option-2.png` |
+| Lineage domain-card visual source | `lineage-highway/domain-card-reference.png` |
 
-The three mapping files are design references rather than claims of already implemented browser
-captures. Verified implementation captures are compared against them at matching viewports.
+The supplied images are design references. They are not claims about implemented routes.
 
-### Verified Microsoft Edge captures
+## Selected implementation captures
 
-The implementation was exercised in Microsoft Edge 152.0.4191.66 against a freshly migrated,
-twice-seeded fixture database. Full-page captures preserve navigation and model context; focused
-captures place the graph or matrix and inspector together for direct comparison with the supplied
-references.
+- Mapping: `edge-qa/logical-model-field-table-1440x900.png`,
+  `edge-qa/physical-derived-form-1440x900.png`,
+  `edge-qa/mappings-workspace-1774x887.png` and
+  `edge-qa/mappings-workspace-390x844.png`.
+- Organization highway: `data-highway/slimmer-smooth-canvas.png`,
+  `data-highway/slimmer-smooth-offset.png` and `data-highway/packets-under-boxes.png`.
+- Lineage: `lineage-highway/canvas.png`, `dark.png`, `mobile.png`,
+  `lineage-card-comparison.png`, `packets-under-boxes.png` and `product-owner.png`.
+- Organization layout: `organization-heading-space/heading-space-de.png`,
+  `heading-space-fr.png`, `heading-space-fullscreen.png`,
+  `organization-toolbar/compact-toolbar.png` and `compact-toolbar-mobile.png`.
+- Mobile canvas controls: `canvas-controls/mobile-mapping-actions.png`.
 
-| State | Full page | Focused workspace |
-|---|---|---|
-| Graph at 1774×887 | `edge-qa/mappings-1774x887.png` | `edge-qa/mappings-workspace-1774x887.png` |
-| Matrix at 1440×900 | `edge-qa/mappings-1440x900.png` | `edge-qa/mappings-workspace-1440x900.png` |
-| Mobile matrix at 390×844 | `edge-qa/mappings-390x844.png` | `edge-qa/mappings-workspace-390x844.png` |
-| Model inventory at 1774×887 | `edge-qa/models-1774x887.png` | — |
+See [design QA](../../design-qa.md), [lineage behavior](../lineage-explorer.md) and
+[organization behavior](../organization-explorer.md) for the verified invariants.
 
-The reproducible flow and the measured responsive invariants are recorded in
-`apps/catalog-ui/design-qa.md` and implemented by `scripts/edge_modeling_e2e.mjs`.
+## Reproduce current browser evidence
 
-## Modern combined-workspace explorations
-
-The `modern/` deck explores five denser desktop directions in which metadata editing, delivery
-interfaces, lineage, and provenance remain visible together. These are browser-rendered design
-concepts rather than implemented Angular routes.
-
-| Direction | PNG | HTML variant |
-|---|---|---|
-| Swiss Grid Workspace | `modern/01-swiss-grid-workspace.png` (1600×900) | `modern/index.html?view=grid` |
-| Alpine Control Canvas | `modern/02-alpine-control-canvas.png` (1600×900) | `modern/index.html?view=canvas` |
-| Federal Evidence Dossier | `modern/03-federal-evidence-dossier.png` (1600×900) | `modern/index.html?view=dossier` |
-| Glass Observatory | `modern/04-glass-observatory.png` (1600×900) | `modern/index.html?view=glass` |
-| Red Glass Federal Workspace | `modern/05-red-glass-federal-workspace.png` (1600×900) | `modern/index.html?view=redglass` |
+Run `npm run test:ui-regression -- --screenshot-dir output/ui-regression` against a healthy
+local catalog UI/API. The runner also supports focused `--flow` checks. New generated captures
+belong in ignored `output/ui-regression/`; replace a retained baseline only when deliberately
+updating that design reference.

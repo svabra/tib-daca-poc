@@ -1,5 +1,9 @@
 # BIT DaCa
 
+Supported entry points, retained reference material and cleanup verification are documented in
+[repository maintenance](docs/repository-maintenance.md). JavaScript workspaces share the root
+`package-lock.json`; run npm commands from the repository root.
+
 Release **0.3.13** (2026-11-13) prevents private group identifiers from appearing in personal
 access details when a group has no active directory entry. Published membership snapshots
 still determine access; known active groups retain their names. The profile regression

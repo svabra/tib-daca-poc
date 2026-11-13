@@ -150,14 +150,6 @@ def _create_repository_fixture(repo: Path, release_version: str = "0.1.0") -> No
             "@daca/control-plane-ui",
             "@bit-daca/design-system",
         ),
-        "apps/catalog-ui/package-lock.json": (
-            "@daca/catalog-ui",
-            "@bit-daca/design-system",
-        ),
-        "apps/control-plane-ui/package-lock.json": (
-            "@daca/control-plane-ui",
-            "@bit-daca/design-system",
-        ),
     }
     for relative_path, names in lock_names.items():
         lock_packages: dict[str, object] = {
