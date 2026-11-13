@@ -14,6 +14,8 @@ the dedicated UI workflow starts that backend and OPA and prints startup logs on
 The cross-system browser script follows the current manual-import and catalog routes, assigns
 an active domain, selects all products explicitly and opens the exact access request when
 the requester has more than one task. Gold, Platinum and real enforcement assertions remain.
+PostgreSQL healthchecks now require TCP readiness after initialization, so fresh stacks do
+not start the APIs against the temporary socket-only initialization server.
 
 Release **0.3.13** fixes the two Catalog API regressions that blocked the 0.3.12 PostgreSQL
 compatibility job. Profile validation includes all 27 selectable personas and Jan's local

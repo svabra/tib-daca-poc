@@ -56,6 +56,8 @@ the pinned upstream GitHub release assets and verifies their SHA-256 digests, be
 former `minio/minio` and `minio/mc` Docker Hub repositories are unavailable to fresh runners.
 The catalog UI also needs the sample product backend for its Nginx upstream; the dedicated
 UI workflow starts it together with OPA before checking readiness.
+PostgreSQL readiness probes use TCP on `127.0.0.1`; the temporary socket-only server used
+during database initialization must not release API dependencies before initialization ends.
 
 ## Artifacts
 

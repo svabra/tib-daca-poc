@@ -18,7 +18,7 @@ services:
       - daca-postgres-data:/var/lib/postgresql
       - ${DACA_REPO}/infra/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U daca_admin -d postgres"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U daca_admin -d postgres"]
       interval: 3s
       timeout: 3s
       retries: 40
@@ -115,7 +115,7 @@ services:
       - daaif-postgres-data:/var/lib/postgresql/data
       - ${DAAIF_REPO}/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U evo1 -d postgres"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U evo1 -d postgres"]
       interval: 3s
       timeout: 3s
       retries: 40
