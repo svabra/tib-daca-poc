@@ -22,6 +22,14 @@ jobs:
           cache: npm
       - name: Install JavaScript dependencies
         run: npm ci
+      - name: Set up uv and Python for CLI regressions
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.29"
+          python-version: "3.14"
+          enable-cache: true
+      - name: Install locked Python workspace dependencies
+        run: uv sync --all-packages --locked
       - name: Install Chromium for the CDP regression browser
         id: chromium
         uses: browser-actions/setup-chrome@v2

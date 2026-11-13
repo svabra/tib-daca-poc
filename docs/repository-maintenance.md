@@ -79,3 +79,6 @@ Verified on 13 November 2026:
 
 `npm ci` also reports 22 existing npm audit advisories (9 moderate, 10 high, 3 critical).
 JavaScript dependency versions were not changed by this cleanup.
+
+The dedicated UI workflow also prepares uv 0.11.29, Python 3.14 and the locked workspace
+dependencies: its AdA browser flow invokes the real import-journey CLI through `uv run`.

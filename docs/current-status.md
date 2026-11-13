@@ -22,6 +22,8 @@ the routed product loaded and replace the access-setting context. Completed read
 their cache entry without changing a different active product or its revision. A regression
 reproduces the delayed-response ordering. The Linux CI browser also uses the required startup
 flag and reports early-exit diagnostics rather than a silent DevTools timeout.
+The dedicated UI workflow installs the locked uv/Python workspace before its browser checks,
+including the import-journey CLI preview and reset regressions.
 
 Release **0.3.13** fixes the two Catalog API regressions that blocked the 0.3.12 PostgreSQL
 compatibility job. Profile validation includes all 27 selectable personas and Jan's local
