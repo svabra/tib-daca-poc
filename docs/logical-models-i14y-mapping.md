@@ -1,5 +1,16 @@
 # Logical models, I14Y concepts, physical models, and mappings
 
+The [BASPO starter catalog](baspo-starter-catalog.md) provides five logical drafts:
+J+S offerings/participation, J+S training/recognitions, facility inventory/bookings,
+athlete development/support, and sport grant applications/contributions. Each has
+three entities with typed, described fields, business identifiers and documented
+reference cardinalities. Their DCAT dataset versions assign them to active BASPO
+domains. Suitable fields and entities pin published starter business-object
+versions; generic course/camp or association/club entities retain their broader
+meaning. No official NDS physical schema is inferred. Domain review and later
+physical imports/mappings remain BASPO's work. The initial package creates no
+physical source, snapshot, mapping, data product or access grant.
+
 The mapping inspector offers **Entwurf speichern** and **Speichern & zur Prüfung einreichen**
 for unsaved mappings. Both reuse the atomic workspace draft save, including other pending
 workspace edits. Type conflicts and semantic warnings remain visible but never prevent draft

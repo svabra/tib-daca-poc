@@ -782,6 +782,10 @@ async function logicalFirstFlow() {
     "document.querySelector('.review-owner-info')?.textContent.includes('Christiano Stadello') && document.querySelector('.review-owner-info')?.textContent.includes('Sibilla Di Ciesa')",
     'domain-bound primary owner and deputy were not rendered',
   );
+  await waitFor(`(() => {
+    const selects = [...document.querySelectorAll('.field-list select[formcontrolname="entityBusinessObjectVersionId"], .field-list select[formcontrolname="businessObjectVersionId"]')];
+    return selects.length === 2 && selects.every(select => [...select.options].some(option => option.value));
+  })()`, 'Versioned business-object choices did not finish loading');
   const businessObjectsSelected = await evaluate(`(() => {
     const selects = [...document.querySelectorAll('.field-list select[formcontrolname="entityBusinessObjectVersionId"], .field-list select[formcontrolname="businessObjectVersionId"]')];
     for (const select of selects) {

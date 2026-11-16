@@ -16,9 +16,14 @@ describe('DaCa release history', () => {
     const releases = dacaReleaseHistory('catalog', 'de');
     expect(releases[0]?.version).toBe(DACA_VERSION);
     expect(releases.find(release => release.version === '0.2.0')?.features.some(feature => feature.title === 'Domänen an andere Personen abtreten')).toBe(true);
-    expect(releases[0]?.features).toHaveLength(2);
-    expect(releases[0]?.features[0].title).toBe('Private Gruppenkennungen in eigenen Berechtigungen verbergen');
-    expect(releases[0]?.features[1].title).toBe('Produktkontext bei langsamen Antworten bewahren');
+    expect(releases[0]?.features).toHaveLength(3);
+    expect(releases[0]?.features.every(feature => feature.tags.includes('BASPO'))).toBe(true);
+    expect(releases[0]?.features[1].title).toBe('TERMDAT-Herkunft am Ribbon erkennen');
+    expect(dacaReleaseHistory('catalog', 'en')[0]?.features[2].description).toContain('BASPO supplies physical representations');
+    const release0313 = releases.find(release => release.version === '0.3.13');
+    expect(release0313?.features).toHaveLength(2);
+    expect(release0313?.features[0].title).toBe('Private Gruppenkennungen in eigenen Berechtigungen verbergen');
+    expect(release0313?.features[1].title).toBe('Produktkontext bei langsamen Antworten bewahren');
     const release0312 = releases.find(release => release.version === '0.3.12');
     expect(release0312?.features).toHaveLength(8);
     expect(release0312?.features.some(feature => feature.title === 'Eigene Berechtigungen pro Schnittstelle sehen')).toBe(true);

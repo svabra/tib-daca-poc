@@ -1,5 +1,20 @@
 # DaCa persistent data model
 
+The [BASPO starter package](../baspo-starter-catalog.md) uses the existing
+organization, membership, modeling-role, domain, glossary, terminology and logical
+model tables. `vbs-baspo` is attached to `vbs`; both new personas hold scoped
+`data_owner` assignments. Explicit owner/deputy responsibilities retain office
+scope independently of home-organization changes. The 30 starter glossary roots
+and corresponding versioned terminology roots share deterministic UUIDs as an
+onboarding convention, with no new cross-table foreign key or automatic sync.
+`TerminologyExternalReference.text_snapshot` stores only attested TERMDAT
+designations and their entry/collection/status/modification evidence; the reference
+also records retrieval time. The source hash covers that snapshot. Locally authored definitions remain separate.
+Logical drafts pin suitable published business-object versions and use existing
+DCAT domain references. No new tables, migrations, physical representations or
+authorization grants are introduced. A committed seed marker preserves future
+editorial changes and revocations.
+
 The confirmed PoC personas use their actual home organizations independently of scoped object duties:
 Sibilla Di Ciesa is in GS-VBS (`vbs-gs`) and holds the VBS Local Data Steward Department (LDSD)
 mandate. Christiano Stadello (`christian.spider`, stable ID retained) belongs to armasuisse and

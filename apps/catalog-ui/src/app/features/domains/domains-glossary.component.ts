@@ -16,6 +16,7 @@ import { DomainTransferDialogComponent } from './domain-transfer-dialog.componen
 import { DomainCardAction, DomainCardActionsComponent } from './domain-card-actions.component';
 import { TooltipDirective } from '../../shared/tooltip.directive';
 import { LoadingIndicatorComponent } from '../../shared/loading-indicator.component';
+import { TermdatRibbonComponent, termdatSourceUri } from '../../shared/termdat-ribbon.component';
 
 export type SemanticTab = 'domains' | 'terms' | 'governance';
 
@@ -31,7 +32,7 @@ export function resolveSemanticTab(routeTab: unknown, legacyTab: string | null):
 @Component({
   selector: 'daca-domains-glossary',
   standalone: true,
-  imports: [NgTemplateOutlet, ReactiveFormsModule, RouterLink, StatusBadgeComponent, DomainCardActionsComponent, TermCardActionsComponent, OrganizationTermNetworkComponent, DomainNetworkComponent, DomainTransferDialogComponent, TooltipDirective, LoadingIndicatorComponent],
+  imports: [TermdatRibbonComponent, NgTemplateOutlet, ReactiveFormsModule, RouterLink, StatusBadgeComponent, DomainCardActionsComponent, TermCardActionsComponent, OrganizationTermNetworkComponent, DomainNetworkComponent, DomainTransferDialogComponent, TooltipDirective, LoadingIndicatorComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="daca-page-heading">
@@ -101,7 +102,7 @@ export function resolveSemanticTab(routeTab: unknown, legacyTab: string | null):
       @if (filteredTerms().length) {
         <div class="semantic-grid">
           @for (term of filteredTerms(); track term.id) {
-            <article class="daca-card semantic-card term-card" [attr.data-term-id]="term.id"><div class="daca-card-header"><div><p class="daca-eyebrow">SKOS Concept</p><h2>{{ term.preferredLabel }}</h2></div><daca-status-badge [tone]="term.status === 'active' ? 'green' : 'neutral'">{{ term.status }}</daca-status-badge></div><div class="daca-card-body"><p>{{ term.definition || 'Noch keine Definition hinterlegt.' }}</p><div class="semantic-chips">@for (domain of term.domains; track domain.id) { <a [routerLink]="['/domains', domain.id]">{{ domain.preferredLabel }}</a> }</div><dl>@if(term.ownerUserId){<div><dt>Data Owner</dt><dd>{{personName(term.ownerUserId)}}</dd></div>}@if(term.deputyOwnerUserId){<div><dt>Stellvertretung</dt><dd>{{personName(term.deputyOwnerUserId)}}</dd></div>}<div><dt>Sprachen</dt><dd>{{ languages(term) }}</dd></div><div><dt>Abkürzungen</dt><dd>{{ alternativeLabels(term) || '–' }}</dd></div><div><dt>Relationen</dt><dd>{{ term.relations.length }}</dd></div></dl>@if(term.status==='active'){<div class="domain-actions term-actions"><daca-term-card-actions [term]="term" [busy]="saving()" (action)="requestTermRetirement(term)"/></div>}</div></article>
+            <article class="daca-card semantic-card term-card" [attr.data-term-id]="term.id"><div class="daca-card-header"><div><p class="daca-eyebrow">SKOS Concept <daca-termdat-ribbon [sourceUri]="termdatSourceUri(term)"/></p><h2>{{ term.preferredLabel }}</h2></div><daca-status-badge [tone]="term.status === 'active' ? 'green' : 'neutral'">{{ term.status }}</daca-status-badge></div><div class="daca-card-body"><p>{{ term.definition || 'Noch keine Definition hinterlegt.' }}</p><div class="semantic-chips">@for (domain of term.domains; track domain.id) { <a [routerLink]="['/domains', domain.id]">{{ domain.preferredLabel }}</a> }</div><dl>@if(term.ownerUserId){<div><dt>Data Owner</dt><dd>{{personName(term.ownerUserId)}}</dd></div>}@if(term.deputyOwnerUserId){<div><dt>Stellvertretung</dt><dd>{{personName(term.deputyOwnerUserId)}}</dd></div>}<div><dt>Sprachen</dt><dd>{{ languages(term) }}</dd></div><div><dt>Abkürzungen</dt><dd>{{ alternativeLabels(term) || '–' }}</dd></div><div><dt>Relationen</dt><dd>{{ term.relations.length }}</dd></div></dl>@if(term.status==='active'){<div class="domain-actions term-actions"><daca-term-card-actions [term]="term" [busy]="saving()" (action)="requestTermRetirement(term)"/></div>}</div></article>
           }
         </div>
       } @else if (!officeLoading() && !officeError()) { <div class="daca-card semantic-state">{{ i18n.t('noMatchingTerm') }}</div> }
@@ -138,6 +139,7 @@ export function resolveSemanticTab(routeTab: unknown, legacyTab: string | null):
   `],
 })
 export class DomainsGlossaryComponent {
+  readonly termdatSourceUri = termdatSourceUri;
   private loadRequest?:Subscription;
   readonly api = inject(CatalogApiService);
   private readonly host=inject<ElementRef<HTMLElement>>(ElementRef);

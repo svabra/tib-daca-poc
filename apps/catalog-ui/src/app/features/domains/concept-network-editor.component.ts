@@ -16,6 +16,7 @@ import { printMappingCanvas } from '../data-models/mapping-canvas-print';
 import { CatalogObjectBrowserComponent, CatalogObjectKind, CatalogObjectResult } from './catalog-object-browser.component';
 import { CanvasHoldGesture } from './canvas-hold-gesture';
 import { SemanticCreateDialogComponent, SemanticCreation } from './semantic-create-dialog.component';
+import { TermdatRibbonComponent, termdatSourceUri } from '../../shared/termdat-ribbon.component';
 interface Point {
     x: number;
     y: number;
@@ -25,6 +26,7 @@ interface Node extends Point {
     label: string;
     definition: string;
     kind: 'domain' | 'product' | 'term' | 'relation' | 'pending';
+    termdatSourceUri?: string | null;
 }
 interface Edge {
     id: string;
@@ -62,7 +64,7 @@ export const RELATION_DESCRIPTIONS: Record<SkosRelationType, string> = {
     closeMatch: 'Die Bedeutungen sind ähnlich, aber nicht vollständig gleich.',
 };
 export function relationLabel(value: string): string { return ({ broader: 'hat Oberbegriff', narrower: 'hat Unterbegriff', related: 'verwandt mit', exactMatch: 'entspricht exakt', closeMatch: 'entspricht annähernd' } as Record<string, string>)[value] ?? value; }
-@Component({ selector: 'daca-concept-network-editor', standalone: true, imports: [CanvasSelectionHintComponent,CanvasSelectionDirective,RouterLink, FormsModule,TooltipDirective,CatalogObjectBrowserComponent,SemanticCreateDialogComponent], changeDetection: ChangeDetectionStrategy.OnPush,
+@Component({ selector: 'daca-concept-network-editor', standalone: true, imports: [TermdatRibbonComponent,CanvasSelectionHintComponent,CanvasSelectionDirective,RouterLink, FormsModule,TooltipDirective,CatalogObjectBrowserComponent,SemanticCreateDialogComponent], changeDetection: ChangeDetectionStrategy.OnPush,
     templateUrl: './concept-network-editor.component.html', styleUrls: ['./concept-network-editor.component.css','../../shared/canvas-controls.css'] })
 export class ConceptNetworkEditorComponent {
     readonly selection:CanvasSelectionAdapter={
@@ -277,7 +279,7 @@ export class ConceptNetworkEditorComponent {
     } {
         const domain = this.domain(), organization=this.organization(), nodes = new Map<string, Node>(), edges: Edge[] = [];
         const domainId = domain?`domain:${domain.id}`:'';
-        const add = (id: string, label: string, definition: string, kind: Node['kind']) => nodes.set(id, { id, label, definition, kind, x: 0, y: 0 });
+        const add = (id: string, label: string, definition: string, kind: Node['kind'], sourceUri: string | null = null) => nodes.set(id, { id, label, definition, kind, termdatSourceUri: sourceUri, x: 0, y: 0 });
         for(const item of this.networkDomains())add('domain:'+item.id,item.preferredLabel,item.definition,'domain');
         if(organization)for(const link of organization.links)if(nodes.has('domain:'+link.sourceId)&&nodes.has('domain:'+link.targetId))edges.push({id:`domain-link:${link.sourceId}:${link.targetId}`,source:'domain:'+link.sourceId,target:'domain:'+link.targetId,label:domainRelationLabel(link.relationType,this.i18n)});
         if (this.showLinkedDomains()) {
@@ -291,7 +293,7 @@ export class ConceptNetworkEditorComponent {
         }
         for (const term of this.values()) {
             const id = `term:${term.id}`;
-            add(id, term.preferredLabel, term.definition, 'term');
+            add(id, term.preferredLabel, term.definition, 'term', termdatSourceUri(term));
             if(organization){for(const item of term.domains)if(nodes.has('domain:'+item.id))edges.push({id:`domain-term:${item.id}:${term.id}`,source:'domain:'+item.id,target:id,label:'verwaltet'});}
             else if(domain)edges.push({ id: `domain-term:${term.id}`, source: domainId, target: id, label:term.domains.some(item=>item.id===domain.id)?'verwaltet':'zeigt Referenz' });
         }

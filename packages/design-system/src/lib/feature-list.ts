@@ -41,6 +41,7 @@ export const DACA_FEATURE_RELEASE = {
         introduction: `DaCa ${DACA_VERSION} verbindet Metadaten, pers\u00f6nliche Suche, Dom\u00e4nennetze und kontrollierte Freigaben im zentralen Datenkatalog der Data Platform BIT.`,
         pocNote: 'Hinweis: Diese Liste beschreibt den aktuellen PoC-Stand. Einzelne Abläufe sind simuliert und noch keine produktive Leistung.',
         features: [
+          { title: 'BASPO mit Terminologie und logischen Modellen starten', description: 'Roland Maestro und Davide Partito sind Data Owner des BASPO unter dem VBS. Acht Domänen, 30 verknüpfte Terminologiebegriffe mit belegten TERMDAT-Bezeichnungen und Quellen-Ribbon sowie fünf zugeordnete logische Entwürfe bilden den Anfang. Physische Repräsentationen ergänzt BASPO selbst.' },
           { title: 'Produktkontext bei langsamen Antworten bewahren', description: 'Produktseiten und Freigaben behalten das angeforderte Datenprodukt auch bei parallelen Antworten. Alte Detailantworten wechseln weder die Ansicht noch die Revision.' },
           { title: 'Private Gruppenkennungen in eigenen Berechtigungen verbergen', description: 'Gruppen ohne aktiven Verzeichniseintrag erhalten einen neutralen Namen. Interne Kennungen und Mitglieder bleiben verborgen; die veröffentlichte Berechtigung gilt weiterhin.' },
           { title: 'Bugfix: grosse Domänennetze zuverlässig laden', description: 'Kleinere Gruppen beim Abruf zugehöriger Katalogobjekte verhindern zu lange HTTP-Adressen. Gemeinsame Objekte behalten alle Domänenzuordnungen.' },
@@ -346,6 +347,7 @@ export const DACA_FEATURE_RELEASE = {
         introduction: `DaCa ${DACA_VERSION} brings metadata, personal search, domain networks and governed approvals together in the central catalog of the BIT data platform.`,
         pocNote: 'Note: This list describes the current PoC. Some workflows are simulated and are not yet a production service.',
         features: [
+          { title: 'Start BASPO with terminology and logical models', description: 'Roland Maestro and Davide Partito are BASPO Data Owners under DDPS. Eight domains, 30 connected terms with verified TERMDAT designations and source ribbons, and five assigned logical drafts provide the starter content. BASPO supplies physical representations.' },
           { title: 'Preserve product context across delayed responses', description: 'Product pages and access settings keep the requested product when parallel reads finish out of order. Older detail responses update their own cache without replacing the current product or revision.' },
           { title: 'Hide private group identifiers in your permissions', description: 'Groups without an active directory entry use a neutral name. Internal identifiers and members stay hidden; the published grant still applies.' },
           { title: 'Bugfix: load large domain networks reliably', description: 'Smaller batches of related catalog objects prevent HTTP URLs from exceeding proxy limits. Shared objects retain all domain memberships.' },

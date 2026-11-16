@@ -839,6 +839,7 @@ def seed_active_access_consumers(session: Session) -> bool:
 def main() -> None:
     # Imported lazily to keep the foundational catalog seed reusable by the
     # modeling seed without creating a module import cycle.
+    from .baspo_seed import seed_baspo_catalog
     from .modeling_seed import seed_modeling_catalog
     from .poc_portraits import seed_poc_portraits
     from .rohs_cps_seed import seed_rohs_cps_catalog
@@ -858,6 +859,7 @@ def main() -> None:
         from .building_demand_seed import seed_building_demand_product
         seed_building_demand_product(session)
         seed_rohs_cps_catalog(session)
+        seed_baspo_catalog(session)
         seed_poc_portraits(session)
         from .office_governance import (
             seed_rapid_prototyping_domain,

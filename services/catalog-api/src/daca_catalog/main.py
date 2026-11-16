@@ -7058,6 +7058,8 @@ def create_app(
                 seed_building_demand_product(session)
                 from .rohs_cps_seed import seed_rohs_cps_catalog
                 seed_rohs_cps_catalog(session)
+                from .baspo_seed import seed_baspo_catalog
+                seed_baspo_catalog(session)
                 seed_poc_portraits(session)
                 seed_requested_steward_mandates(session)
                 seed_rapid_prototyping_domain(session)

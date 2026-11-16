@@ -1,5 +1,15 @@
 # Domains and business glossary
 
+[BASPO onboarding](baspo-starter-catalog.md) installs eight explicitly scoped
+domains and 30 terms with 40 connected, acyclic editorial relationships. All
+30 preferred designations have concrete TERMDAT evidence; definitions are local
+summaries. A shared source ribbon on term cards and term-network nodes follows
+an explicit `exactMatch` to a recognized HTTPS TERMDAT entry and links to that
+source. It does not infer provenance from the label or claim external validation.
+Sources with website-only sport collections are frozen in the reviewed fixture;
+seeding does not depend on live TERMDAT availability. Roles, retirement, revised
+content and later changes survive restarts.
+
 Domain-network object reads send at most 100 domain UUIDs per GET, so request lines remain
 below the HTTP proxy's 8 KiB limit even for large networks. Responses merge by object key
 and preserve the union of domain memberships and any truncation notice. Identity headers

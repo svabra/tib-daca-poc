@@ -1,5 +1,28 @@
 # Current status
 
+Release **0.3.14** (16 November 2026) packages BASPO onboarding and source ribbons.
+The DE/EN release overlay covers the organization, terminology and five logical
+drafts; the previous 0.3.13 notes remain in the searchable archive. The canonical
+version script synchronizes package manifests, lockfiles, service versions,
+service-worker metadata, publication OpenAPI versions and deployment image pins.
+
+BASPO onboarding (16 November 2026) adds Roland Maestro and Davide Partito as
+selectable Data Owner personas in `vbs-baspo`, fixes that existing office's VBS
+parent, and installs eight owned domains, 30 source-verified TERMDAT designations
+and 40 editorial term relationships. Five logical drafts with typed fields,
+reference descriptions and business-object links are assigned to BASPO domains.
+TERMDAT ribbons on terminology cards and network cards link to concrete source
+entries; definitions are local editorial summaries, and external validation status
+is preserved in source evidence. There are no provisioned BASPO physical models
+or access grants. Both startup paths and a standalone idempotent seed support
+existing installations. See [content, sources and application](baspo-starter-catalog.md).
+Verification passed: four BASPO tests, five related seed regressions, 34 targeted
+Angular tests, the production build, Ruff, data-model documentation checks and the
+complete UI regression. The logical-first regression now waits for asynchronous
+business-object options before selecting them.
+Release checks also cover the synchronized version surfaces, runtime version and
+the seed CLI contract including BASPO; the new DE/EN notes retain the 0.3.13 archive.
+
 Repository cleanup on 13 November 2026 removes the unrouted overview prototype and its unused
 styles, the standalone modern design deck, superseded screenshot variants and retired portrait
 and background assets. JavaScript workspaces now use only the authoritative root lockfile;

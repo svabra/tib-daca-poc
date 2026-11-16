@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 
 from daca_catalog import (
+    baspo_seed,
     building_demand_seed,
     estv_sg_seed,
     modeling_seed,
@@ -52,6 +53,7 @@ def test_catalog_seed_cli_runs_foundational_and_modeling_seeds(monkeypatch, caps
         monkeypatch.setattr(module, function, lambda actual_session, label=label: calls.append((label, actual_session)))
     monkeypatch.setattr(poc_portraits, "seed_poc_portraits", lambda actual_session: calls.append(("portraits", actual_session)))
     monkeypatch.setattr(rohs_cps_seed, "seed_rohs_cps_catalog", lambda actual_session: calls.append(("rohs-cps", actual_session)))
+    monkeypatch.setattr(baspo_seed, "seed_baspo_catalog", lambda actual_session: calls.append(("baspo", actual_session)))
 
     monkeypatch.setattr(office_governance, "seed_requested_steward_mandates", lambda actual_session: calls.append(("mandates", actual_session)))
     monkeypatch.setattr(office_governance, "seed_rapid_prototyping_domain", lambda actual_session: calls.append(("rapid-domain", actual_session)))
@@ -66,6 +68,7 @@ def test_catalog_seed_cli_runs_foundational_and_modeling_seeds(monkeypatch, caps
         ("protected-buildings", session),
         ("building-demand", session),
         ("rohs-cps", session),
+        ("baspo", session),
         ("portraits", session),
         ("mandates", session),
         ("rapid-domain", session),

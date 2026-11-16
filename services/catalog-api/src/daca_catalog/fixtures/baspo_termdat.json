@@ -1,0 +1,742 @@
+{
+  "retrievedAt": "2026-11-16T08:26:40.221784+00:00",
+  "source": "TERMDAT, Bundeskanzlei, www.termdat.ch",
+  "retrievalMethod": "Public TERMDAT website HTTP entry reads; the v2 API does not expose most sports collections.",
+  "definitionOrigin": "Local editorial BASPO summaries; no TERMDAT definitions imported.",
+  "entries": {
+    "3116": {
+      "entryId": 3116,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/3116",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/3116",
+      "modified": "2024-05-27T07:21:12.031782Z",
+      "status": 1,
+      "collectionCode": "ADFA23",
+      "collectionName": "Bezeichnungen der Organisationseinheiten der Bundesverwaltung",
+      "designations": {
+        "de": [
+          "Bundesamt für Sport"
+        ],
+        "fr": [
+          "Office fédéral du sport"
+        ],
+        "it": [
+          "Ufficio federale dello sport"
+        ],
+        "rm": [
+          "Uffizi federal da sport"
+        ],
+        "en": [
+          "Federal Office of Sport"
+        ]
+      },
+      "abbreviation": "BASPO"
+    },
+    "153663": {
+      "entryId": 153663,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/153663",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/153663",
+      "modified": "2014-12-10T16:12:54.03Z",
+      "status": 0,
+      "collectionCode": "SSM08",
+      "collectionName": "Terminologie der Eidgenössischen Sportschule Magglingen",
+      "designations": {
+        "de": [
+          "Sportförderung"
+        ],
+        "fr": [
+          "promotion du sport",
+          "encouragement du sport"
+        ],
+        "en": [
+          "sports promotion"
+        ]
+      },
+      "abbreviation": null
+    },
+    "153599": {
+      "entryId": 153599,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/153599",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/153599",
+      "modified": "2008-01-29T00:00:00Z",
+      "status": 0,
+      "collectionCode": "SSM08",
+      "collectionName": "Terminologie der Eidgenössischen Sportschule Magglingen",
+      "designations": {
+        "de": [
+          "Sportverband"
+        ],
+        "fr": [
+          "association sportive"
+        ]
+      },
+      "abbreviation": null
+    },
+    "92589": {
+      "entryId": 92589,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/92589",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/92589",
+      "modified": "2019-02-27T14:59:14.267Z",
+      "status": 1,
+      "collectionCode": "MIS08",
+      "collectionName": "Miszellen: Einträge unterschiedlicher Thematik aus Pressemitteilungen",
+      "designations": {
+        "de": [
+          "Finanzhilfe"
+        ],
+        "fr": [
+          "aide financière"
+        ],
+        "it": [
+          "aiuto finanziario"
+        ],
+        "rm": [
+          "agid finanzial"
+        ],
+        "en": [
+          "financial assistance",
+          "financial aid"
+        ]
+      },
+      "abbreviation": null
+    },
+    "2884": {
+      "entryId": 2884,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/2884",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/2884",
+      "modified": "2024-05-22T07:59:06.274444Z",
+      "status": 1,
+      "collectionCode": "ADFB23",
+      "collectionName": "Bezeichnungen der Organisationseinheiten der Bundesverwaltung",
+      "designations": {
+        "de": [
+          "Jugend+Sport"
+        ],
+        "fr": [
+          "Jeunesse+Sport"
+        ],
+        "it": [
+          "Gioventù+Sport"
+        ],
+        "rm": [
+          "Giuventetgna+Sport"
+        ],
+        "en": [
+          "Youth+Sports"
+        ]
+      },
+      "abbreviation": "J+S"
+    },
+    "144557": {
+      "entryId": 144557,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/144557",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/144557",
+      "modified": "2004-03-23T00:00:00Z",
+      "status": 0,
+      "collectionCode": "SSM01",
+      "collectionName": "Terminologie der Eidgenössischen Sportschule Magglingen",
+      "designations": {
+        "de": [
+          "J+S-Kurs"
+        ],
+        "fr": [
+          "cours J+S"
+        ]
+      },
+      "abbreviation": null
+    },
+    "130499": {
+      "entryId": 130499,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/130499",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/130499",
+      "modified": "2025-05-28T19:17:33.233039Z",
+      "status": 0,
+      "collectionCode": "SSM14",
+      "collectionName": "Terminologie des BASPO",
+      "designations": {
+        "de": [
+          "J+S-Lager"
+        ],
+        "fr": [
+          "camp J+S"
+        ],
+        "it": [
+          "campo G+S"
+        ]
+      },
+      "abbreviation": null
+    },
+    "380981": {
+      "entryId": 380981,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/380981",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/380981",
+      "modified": "2013-11-01T10:42:22.89Z",
+      "status": 0,
+      "collectionCode": "SSM01",
+      "collectionName": "Terminologie der Eidgenössischen Sportschule Magglingen",
+      "designations": {
+        "de": [
+          "J+S-Coach"
+        ],
+        "it": [
+          "coach G+S"
+        ]
+      },
+      "abbreviation": null
+    },
+    "93981": {
+      "entryId": 93981,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/93981",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/93981",
+      "modified": "2019-01-31T07:51:00.937Z",
+      "status": 1,
+      "collectionCode": "SPORT18",
+      "collectionName": "Sportterminologie",
+      "designations": {
+        "de": [
+          "J+S-Leiter"
+        ],
+        "fr": [
+          "moniteur J+S"
+        ],
+        "it": [
+          "monitore G+S"
+        ],
+        "rm": [
+          "manader G+S"
+        ],
+        "en": [
+          "J+S leader"
+        ]
+      },
+      "abbreviation": null
+    },
+    "155912": {
+      "entryId": 155912,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/155912",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/155912",
+      "modified": "2003-12-09T00:00:00Z",
+      "status": 0,
+      "collectionCode": "SSM95",
+      "collectionName": "Terminologie der Eidgenössischen Sportschule Magglingen",
+      "designations": {
+        "de": [
+          "Sportart"
+        ],
+        "fr": [
+          "discipline sportive"
+        ],
+        "en": [
+          "type of sport"
+        ]
+      },
+      "abbreviation": null
+    },
+    "153665": {
+      "entryId": 153665,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/153665",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/153665",
+      "modified": "2014-12-02T14:28:31.083Z",
+      "status": 0,
+      "collectionCode": "SSM08",
+      "collectionName": "Terminologie der Eidgenössischen Sportschule Magglingen",
+      "designations": {
+        "de": [
+          "Bewegungsförderung"
+        ],
+        "fr": [
+          "promotion de l'activité physique",
+          "encouragement de l'activité physique"
+        ],
+        "en": [
+          "exercise promotion"
+        ]
+      },
+      "abbreviation": null
+    },
+    "155820": {
+      "entryId": 155820,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/155820",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/155820",
+      "modified": "2023-03-07T11:35:04.260048Z",
+      "status": 0,
+      "collectionCode": "SSM95",
+      "collectionName": "Terminologie der Eidgenössischen Sportschule Magglingen",
+      "designations": {
+        "de": [
+          "Breitensport"
+        ],
+        "fr": [
+          "sport de masse",
+          "sport populaire",
+          "sport pour tous"
+        ],
+        "it": [
+          "sport popolare"
+        ],
+        "en": [
+          "grassroots sport",
+          "recreational sport",
+          "amateur sport"
+        ]
+      },
+      "abbreviation": null
+    },
+    "384003": {
+      "entryId": 384003,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/384003",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/384003",
+      "modified": "2014-12-09T11:48:56.533Z",
+      "status": 0,
+      "collectionCode": "ALLG14",
+      "collectionName": "Punktuelle Einträge",
+      "designations": {
+        "de": [
+          "Erwachsenensport"
+        ],
+        "en": [
+          "adult sport"
+        ]
+      },
+      "abbreviation": null
+    },
+    "155940": {
+      "entryId": 155940,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/155940",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/155940",
+      "modified": "2015-03-26T15:01:08.737Z",
+      "status": 1,
+      "collectionCode": "SSM14",
+      "collectionName": "Terminologie des BASPO",
+      "designations": {
+        "de": [
+          "Sportverein",
+          "Verein"
+        ],
+        "fr": [
+          "société sportive",
+          "société",
+          "club de sport",
+          "association sportive"
+        ],
+        "it": [
+          "società sportiva",
+          "società"
+        ],
+        "rm": [
+          "uniun da sport"
+        ],
+        "en": [
+          "sport club"
+        ]
+      },
+      "abbreviation": null
+    },
+    "3117": {
+      "entryId": 3117,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/3117",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/3117",
+      "modified": "2024-05-22T07:57:53.417947Z",
+      "status": 1,
+      "collectionCode": "ADFB23",
+      "collectionName": "Bezeichnungen der Organisationseinheiten der Bundesverwaltung",
+      "designations": {
+        "de": [
+          "Eidgenössische Hochschule für Sport Magglingen"
+        ],
+        "fr": [
+          "Haute école fédérale de sport de Macolin"
+        ],
+        "it": [
+          "Scuola universitaria federale dello sport di Macolin"
+        ],
+        "rm": [
+          "Scola auta federala da sport a Magglingen"
+        ],
+        "en": [
+          "Swiss Federal Institute of Sport Magglingen"
+        ]
+      },
+      "abbreviation": "EHSM"
+    },
+    "135157": {
+      "entryId": 135157,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/135157",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/135157",
+      "modified": "2003-12-02T00:00:00Z",
+      "status": 0,
+      "collectionCode": "SSM01",
+      "collectionName": "Terminologie der Eidgenössischen Sportschule Magglingen",
+      "designations": {
+        "de": [
+          "Trainerbildung"
+        ],
+        "fr": [
+          "formation des entraîneurs"
+        ],
+        "en": [
+          "Coaches Education (SOA)",
+          "Training for Trainers"
+        ]
+      },
+      "abbreviation": null
+    },
+    "153874": {
+      "entryId": 153874,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/153874",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/153874",
+      "modified": "2019-01-31T07:51:00.937Z",
+      "status": 1,
+      "collectionCode": "SPORT18",
+      "collectionName": "Sportterminologie",
+      "designations": {
+        "de": [
+          "Weiterbildung"
+        ],
+        "fr": [
+          "formation continue"
+        ],
+        "it": [
+          "formazione continua"
+        ],
+        "rm": [
+          "furmaziun supplementara"
+        ]
+      },
+      "abbreviation": null
+    },
+    "144071": {
+      "entryId": 144071,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/144071",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/144071",
+      "modified": "2019-01-31T07:51:00.937Z",
+      "status": 1,
+      "collectionCode": "SPORT18",
+      "collectionName": "Sportterminologie",
+      "designations": {
+        "de": [
+          "Anerkennung"
+        ],
+        "fr": [
+          "reconnaissance"
+        ],
+        "it": [
+          "riconoscimento"
+        ],
+        "rm": [
+          "renconuschientscha"
+        ]
+      },
+      "abbreviation": null
+    },
+    "384004": {
+      "entryId": 384004,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/384004",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/384004",
+      "modified": "2022-04-12T15:20:20.92Z",
+      "status": 0,
+      "collectionCode": "SPORT18",
+      "collectionName": "Sportterminologie",
+      "designations": {
+        "de": [
+          "Leistungssport"
+        ],
+        "fr": [
+          "sport d'élite"
+        ],
+        "en": [
+          "elite sport"
+        ]
+      },
+      "abbreviation": null
+    },
+    "88529": {
+      "entryId": 88529,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/88529",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/88529",
+      "modified": "2022-08-12T13:13:06.988442Z",
+      "status": 0,
+      "collectionCode": "SPORT18",
+      "collectionName": "Sportterminologie",
+      "designations": {
+        "de": [
+          "Nachwuchssport"
+        ],
+        "fr": [
+          "relève",
+          "relève sportive",
+          "sport de la relève"
+        ],
+        "it": [
+          "sport giovanile"
+        ],
+        "en": [
+          "youth sport"
+        ]
+      },
+      "abbreviation": null
+    },
+    "155909": {
+      "entryId": 155909,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/155909",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/155909",
+      "modified": "2021-04-21T11:42:51.367Z",
+      "status": 0,
+      "collectionCode": "SSM95",
+      "collectionName": "Terminologie der Eidgenössischen Sportschule Magglingen",
+      "designations": {
+        "de": [
+          "Spitzensport",
+          "Hochleistungssport"
+        ],
+        "fr": [
+          "sport d'élite",
+          "sport de haut niveau"
+        ],
+        "en": [
+          "top sport",
+          "high performance sports"
+        ]
+      },
+      "abbreviation": null
+    },
+    "154085": {
+      "entryId": 154085,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/154085",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/154085",
+      "modified": "2003-12-09T00:00:00Z",
+      "status": 0,
+      "collectionCode": "SSM95",
+      "collectionName": "Terminologie der Eidgenössischen Sportschule Magglingen",
+      "designations": {
+        "de": [
+          "Training"
+        ],
+        "fr": [
+          "entraînement"
+        ],
+        "it": [
+          "allenamento"
+        ],
+        "en": [
+          "training"
+        ]
+      },
+      "abbreviation": null
+    },
+    "127708": {
+      "entryId": 127708,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/127708",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/127708",
+      "modified": "2024-01-15T07:32:37.500645Z",
+      "status": 0,
+      "collectionCode": "RAU02",
+      "collectionName": "Terminologie der Raumplanung (ARE)",
+      "designations": {
+        "de": [
+          "Sportanlage"
+        ],
+        "fr": [
+          "installation sportive"
+        ],
+        "it": [
+          "impianto sportivo",
+          "installazione sportiva"
+        ],
+        "rm": [
+          "stabiliment da sport"
+        ]
+      },
+      "abbreviation": null
+    },
+    "134746": {
+      "entryId": 134746,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/134746",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/134746",
+      "modified": "2007-03-25T00:00:00Z",
+      "status": 0,
+      "collectionCode": "SSM01",
+      "collectionName": "Terminologie der Eidgenössischen Sportschule Magglingen",
+      "designations": {
+        "de": [
+          "Nationales Sportanlagenkonzept"
+        ],
+        "fr": [
+          "Conception des installations sportives d'importance nationale"
+        ],
+        "it": [
+          "Concezione degli impianti sportivi d'importanza nazionale"
+        ],
+        "rm": [
+          "RM: concept dals implants da sport d'impurtanza naziunala"
+        ],
+        "en": [
+          "National Sports Facilities Programme"
+        ]
+      },
+      "abbreviation": "NASAK"
+    },
+    "3118": {
+      "entryId": 3118,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/3118",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/3118",
+      "modified": "2024-05-22T07:58:06.299634Z",
+      "status": 1,
+      "collectionCode": "ADFB23",
+      "collectionName": "Bezeichnungen der Organisationseinheiten der Bundesverwaltung",
+      "designations": {
+        "de": [
+          "Nationales Jugendsportzentrum Tenero"
+        ],
+        "fr": [
+          "Centre sportif national de la jeunesse Tenero"
+        ],
+        "it": [
+          "Centro sportivo nazionale della gioventù Tenero"
+        ],
+        "rm": [
+          "Center sportiv naziunal da la giuventetgna Tenero"
+        ],
+        "en": [
+          "National Youth Sports Centre Tenero"
+        ]
+      },
+      "abbreviation": "CST"
+    },
+    "155941": {
+      "entryId": 155941,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/155941",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/155941",
+      "modified": "2022-03-22T13:09:56.163Z",
+      "status": 1,
+      "collectionCode": "SPORT18",
+      "collectionName": "Sportterminologie",
+      "designations": {
+        "de": [
+          "Sportwissenschaft",
+          "Sportwissenschaften"
+        ],
+        "fr": [
+          "sciences du sport",
+          "science du sport"
+        ],
+        "it": [
+          "scienze dello sport"
+        ],
+        "rm": [
+          "scienza dal sport",
+          "scienzas dal sport"
+        ],
+        "en": [
+          "sport science",
+          "sports science"
+        ]
+      },
+      "abbreviation": null
+    },
+    "486184": {
+      "entryId": 486184,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/486184",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/486184",
+      "modified": "2021-11-17T12:24:10.063Z",
+      "status": 0,
+      "collectionCode": "TVS22",
+      "collectionName": "Terminologie der Staatskanzlei des Kantons Wallis",
+      "designations": {
+        "de": [
+          "Leistungsdiagnostik"
+        ],
+        "fr": [
+          "diagnostic de performance"
+        ]
+      },
+      "abbreviation": null
+    },
+    "154482": {
+      "entryId": 154482,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/154482",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/154482",
+      "modified": "2003-12-09T00:00:00Z",
+      "status": 0,
+      "collectionCode": "SSM95",
+      "collectionName": "Terminologie der Eidgenössischen Sportschule Magglingen",
+      "designations": {
+        "de": [
+          "Sportmedizin"
+        ],
+        "fr": [
+          "médecine sportive"
+        ],
+        "en": [
+          "sports medicine"
+        ]
+      },
+      "abbreviation": null
+    },
+    "151557": {
+      "entryId": 151557,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/151557",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/151557",
+      "modified": "2004-12-28T00:00:00Z",
+      "status": 0,
+      "collectionCode": "SSM01",
+      "collectionName": "Terminologie der Eidgenössischen Sportschule Magglingen",
+      "designations": {
+        "de": [
+          "Ethik-Charta",
+          "Charta Ethik im Sport"
+        ],
+        "fr": [
+          "charte d'éthique du sport"
+        ]
+      },
+      "abbreviation": null
+    },
+    "5965": {
+      "entryId": 5965,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/5965",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/5965",
+      "modified": "2025-10-02T13:51:58.456773Z",
+      "status": 1,
+      "collectionCode": "ANG17",
+      "collectionName": "Anglizismen",
+      "designations": {
+        "de": [
+          "Doping"
+        ],
+        "fr": [
+          "dopage"
+        ],
+        "it": [
+          "doping"
+        ],
+        "rm": [
+          "doping"
+        ],
+        "en": [
+          "dope",
+          "doping"
+        ]
+      },
+      "abbreviation": null
+    },
+    "402031": {
+      "entryId": 402031,
+      "sourceUri": "https://www.termdat.bk.admin.ch/entry/402031",
+      "retrievedFrom": "https://www.termdat.bk.admin.ch/api/entries/402031",
+      "modified": "2019-04-08T09:13:01.037Z",
+      "status": 0,
+      "collectionCode": "TGR16",
+      "collectionName": "Terminologie der Standeskanzlei Graubünden",
+      "designations": {
+        "de": [
+          "Unfallverhütung",
+          "Unfallprävention"
+        ],
+        "rm": [
+          "prevenziun d'accidents"
+        ]
+      },
+      "abbreviation": null
+    }
+  }
+}

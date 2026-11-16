@@ -1,5 +1,12 @@
 # BIT DaCa
 
+Release **0.3.14** (2026-11-16) introduces the
+[BASPO starter catalog](docs/baspo-starter-catalog.md). It adds Roland Maestro and
+Davide Partito as Data Owner, places BASPO below VBS, and loads eight domains,
+30 connected TERMDAT-sourced designations with source ribbons, and five domain-assigned
+logical drafts. BASPO supplies the physical representations after reviewing the models.
+The DE/EN version overlay describes the BASPO content and archives release 0.3.13.
+
 Supported entry points, retained reference material and cleanup verification are documented in
 [repository maintenance](docs/repository-maintenance.md). JavaScript workspaces share the root
 `package-lock.json`; run npm commands from the repository root.

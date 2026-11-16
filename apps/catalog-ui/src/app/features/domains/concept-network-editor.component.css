@@ -30,6 +30,7 @@
 .graph-node.is-domain{border-top-color:var(--daca-canvas-domain)}
 .graph-node.is-product{border-top-color:var(--daca-canvas-product)}
 .graph-node.is-term,.graph-node.is-pending{border-top-color:var(--daca-canvas-term)}
+.graph-source{position:absolute;top:3px;right:7px}
 .graph-node.is-relation{border-top-color:#6d4b92}
 .graph-node.is-selected{outline:2px solid #006699}
 .graph-node header{padding:.45rem .7rem .15rem;cursor:grab;user-select:none;touch-action:none}
