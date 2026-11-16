@@ -23,6 +23,12 @@ business-object options before selecting them.
 Release checks also cover the synchronized version surfaces, runtime version and
 the seed CLI contract including BASPO; the new DE/EN notes retain the 0.3.13 archive.
 
+The catalog version-overlay regression compares the exact rendered feature headings
+and single version label with the current release in DE and EN. It no longer pins
+an archived release's title; release-specific BASPO content and history remain
+covered by the feature-list tests. The complete frontend suite passes: 858 Catalog
+tests and six Control Plane tests.
+
 Repository cleanup on 13 November 2026 removes the unrouted overview prototype and its unused
 styles, the standalone modern design deck, superseded screenshot variants and retired portrait
 and background assets. JavaScript workspaces now use only the authoritative root lockfile;

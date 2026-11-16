@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { DacaAppUpdateService } from '../../../../packages/design-system/src/lib/app-update.service';
 import { FederalShellComponent } from '../../../../packages/design-system/src/lib/federal-shell.component';
+import { dacaReleaseHistory } from '../../../../packages/design-system/src/lib/release-history';
 import { DACA_VERSION } from '../../../../packages/design-system/src/lib/version';
 
 describe('Catalog runtime version overlay', () => {
@@ -29,36 +30,18 @@ describe('Catalog runtime version overlay', () => {
     const dialog = fixture.nativeElement.querySelector('.daca-feature-dialog') as HTMLDialogElement;
     expect(dialog.hasAttribute('open')).toBe(true);
     expect(dialog.textContent).toContain(`V${DACA_VERSION}`);
-    expect(dialog.textContent).toContain('Private Gruppenkennungen in eigenen Berechtigungen verbergen');
-    expect(dialog.textContent).not.toContain('MWST-Produkt für St. Gallen elektronisch bestellen');
-    expect(dialog.textContent).not.toContain('Abgeleitete Datenprodukte flexibel beantragen');
-    expect(dialog.textContent).not.toContain('Datenprodukt in vier HTTP-Formaten beziehen');
-    expect(dialog.textContent).not.toContain('Bugfix: grosse Domänennetze zuverlässig laden');
-    expect(dialog.textContent).not.toContain('Vom Finden zum Antrag als Nachrichtenaustausch');
-    expect(dialog.textContent).not.toContain('Gleiche Symbole in allen Animationen');
-    expect(dialog.textContent).not.toContain('Data Sourcing klarer darstellen');
-    expect(dialog.textContent).not.toContain('Die Data Pipeline als Animation entdecken');
-    expect(dialog.textContent).not.toContain('PostgreSQL Data Sourcing nachvollziehen');
-    expect(dialog.textContent).not.toContain('Bugfix: Organisationskarten ohne überlappenden Text');
-    expect(dialog.textContent).not.toContain('Mehr Platz unterhalb der Organisationsbox');
-    expect(dialog.textContent).not.toContain('Datenprodukte mit passendem Startfilter');
-    expect(dialog.textContent).not.toContain('Zugriffsanfragen direkt bei den Freigaben verfolgen');
-    expect(dialog.textContent).not.toContain('Bugfix: Mappings trotz Typkonflikten speichern');
-    expect(dialog.textContent).not.toContain('Berechtigte durchsuchen und einzelne Freigaben entziehen');
-    expect(dialog.textContent).not.toContain('Zugriff direkt auf der Produktseite anfragen');
-    expect(dialog.textContent).not.toContain('Bugfix: logische Felder in der Expertensuche finden');
-    expect(dialog.textContent).not.toContain('Externe Organisationen ausserhalb der Grenze halten');
-    expect(dialog.textContent).not.toContain('ROHS-Beispiele in bestehenden PoC-Katalogen bereitstellen');
-    expect(dialog.textContent).not.toContain('Stellvertretung innerhalb desselben Amts erhalten');
-    expect(dialog.textContent).not.toContain('Data-Highways als Lichtband');
-    expect(dialog.textContent).not.toContain('Pers\u00f6nliche Such-Views speichern und teilen');
-    expect(dialog.textContent).not.toContain('Expertensuche nach Kontext oder Fokus');
-    expect(dialog.textContent).not.toContain('Domänen an andere Personen abtreten');
-    expect(dialog.textContent).not.toContain('AdA-Import-Journey wiederholen');
-    expect(dialog.textContent).not.toContain('Quellenberechtigungen zurückgeben');
-    expect(dialog.textContent).not.toContain('Strukturinventare importieren und verwalten');
-    expect(dialog.textContent).not.toContain('Begriffsnetz als editierbarer Graph');
-    expect(dialog.textContent).not.toContain('Feldbearbeitung und Co-Design');
+    // Release-specific content is checked by the feature-list page tests. Here
+    // verify that the overlay renders exactly the current release, in each locale.
+    const featureTitles = () => Array.from(dialog.querySelectorAll('h3'), heading => heading.textContent?.trim());
+    for (const locale of ['de', 'en'] as const) {
+      fixture.componentRef.setInput('locale', locale);
+      fixture.detectChanges();
+      const latest = dacaReleaseHistory('catalog', locale)[0];
+      expect(latest.version).toBe(DACA_VERSION);
+      expect(latest.features.length).toBeGreaterThan(0);
+      expect(featureTitles()).toEqual(latest.features.map(feature => feature.title));
+      expect(Array.from(dialog.querySelectorAll('.daca-feature-dialog-release'), label => label.textContent?.trim())).toEqual([`V${DACA_VERSION}`]);
+    }
     expect(dialog.querySelector('a')?.getAttribute('href')).toBe('/settings/features');
   });
 
